@@ -1,0 +1,17 @@
+{
+  "name": "ws-rooms",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "socket.io 联机小房间——隧道路径 WebSocket 透传的 fixture（DESIGN §4.3）",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node check.mjs"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.1"
+  }
+}

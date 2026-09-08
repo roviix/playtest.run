@@ -1,0 +1,48 @@
+[package]
+name = "playtest-common"
+version = "0.1.0"
+description = "playtest 各组件共享的类型：版本清单、对象存储布局、API 请求与响应、哈希与校验"
+license = "Apache-2.0"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "playtest_common"
+path = "src/lib.rs"
+
+[features]
+# 隧道的字节流适配（WebSocket ↔ yamux）。edge 与 cli 开，api 不需要。
+# tokio 的这三个 feature 只有这一层要：驾驭 yamux 连接的是一个 spawn 出去的任务（rt），
+# 句柄靠 channel 和它说话（sync），保活靠流里面自己的一个定时器（time）。
+tunnel-io = [
+    "dep:tokio-tungstenite",
+    "dep:yamux",
+    "dep:futures",
+    "dep:tokio-util",
+    "dep:bytes",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
+]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+thiserror = "2"
+tokio = { version = "1", features = ["fs", "io-util"] }
+ed25519-dalek = "3"
+base64 = "0.22"
+getrandom = "0.4"
+tokio-tungstenite = { version = "0.30", optional = true }
+yamux = { version = "0.14", optional = true }
+futures = { version = "0.3", optional = true }
+tokio-util = { version = "0.7", features = ["compat", "io"], optional = true }
+bytes = { version = "1", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread", "net", "time"] }
+tempfile = "3"

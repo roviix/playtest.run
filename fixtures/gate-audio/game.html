@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>游戏页（还没跑探针）</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<h1>游戏页</h1>
+<p class="hint">加载完就立刻做那四件事，不等任何点击。</p>
+<div id="out"></div>
+<script src="probe.js"></script>
+<script>
+// 参数：v=变体名，delay=创建 AudioContext 之前先干等多少毫秒（V5），bonus=1 顺带测全屏与横屏锁定。
+// 被 gate.html 用 innerHTML 塞进同一个文档时，location.search 是门禁页的，一样能读出变体名。
+(() => {
+  const q = new URLSearchParams(location.search);
+  const label = window.__gateAudioVariant || q.get('v') || 'game';
+  const opts = { delayMs: Number(q.get('delay')) || 0, bonus: q.get('bonus') === '1' };
+  const go = () => window.gateAudioProbe.run(label, opts);
+  // 注入进已经加载完的文档时不会再有 load 事件，所以就地跑。
+  if (document.readyState === 'complete') go();
+  else window.addEventListener('load', go);
+})();
+</script>
+</body>
+</html>

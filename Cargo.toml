@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = ["common", "api", "edge", "cli"]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.85"
+repository = "https://github.com/roviix/playtest.run"
+
+# 调试信息只留行号：完整调试信息会让 target/ 大三到五倍，这台开发机磁盘很紧。
+[profile.dev]
+debug = "line-tables-only"
+
+# 不开 LTO、不压 codegen-units：发布镜像在 2 GB 内存的服务器上构建，链接期内存和时间比几个百分点的
+# 二进制体积重要得多；这个规模下性能不是判据（DESIGN §4.7）。
+[profile.release]
+strip = "symbols"

@@ -1,0 +1,48 @@
+[package]
+name = "playtest-edge"
+version = "0.1.0"
+description = "playtest 边缘：泛域名入口、门禁页、按清单分发静态文件、隧道接入"
+license = "AGPL-3.0-only"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "playtest_edge"
+path = "src/lib.rs"
+
+[[bin]]
+name = "playtest-edge"
+path = "src/main.rs"
+
+[dependencies]
+playtest-common = { path = "../common", features = ["tunnel-io"] }
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+tower-http = { version = "0.6", features = ["trace"] }
+# 隧道：自己做 WebSocket 升级（不开任何 TLS feature，边缘只听明文，TLS 在前面的 Caddy），
+# 用 hyper 的 HTTP/1.1 客户端把玩家的请求写进 yamux 流。
+tokio-tungstenite = "0.30"
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+bytes = "1"
+mime_guess = "2"
+percent-encoding = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
+rand = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+# 隧道的集成测试要一个假的「开发者的 dev server」（含一个 WebSocket 回显）和一个假的 CLI。
+axum = { version = "0.8", features = ["ws"] }
+futures = "0.3"

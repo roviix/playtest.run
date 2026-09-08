@@ -1,0 +1,339 @@
+{
+  "browser": "chrome-strict",
+  "version": "152.0.7977.76",
+  "variants": 8,
+  "missing": [],
+  "rows": [
+    {
+      "browser": "chrome-strict",
+      "version": "152.0.7977.76",
+      "bonus": false,
+      "variant": "v0",
+      "what": "直接打开 game.html，不点任何东西",
+      "url": "http://localhost:9301/game.html?v=v0&xo=http%3A%2F%2Flocalhost%3A9302",
+      "result": {
+        "label": "v0",
+        "href": "http://localhost:9301/game.html?v=v0&xo=http%3A%2F%2Flocalhost%3A9302",
+        "referrer": "(空)",
+        "frame": "top",
+        "actBefore": {
+          "isActive": false,
+          "hasBeenActive": false
+        },
+        "acStateNew": "suspended",
+        "resume": "一直挂着(>2000ms 没 resolve 也没 reject)",
+        "acStateAfterResume": "suspended",
+        "clockAdvance": 0,
+        "clockWaitedMs": 1522,
+        "acStateAfterOsc": "suspended",
+        "oscHeard": false,
+        "audioPlay": "NotAllowedError",
+        "audioAdvanced": 0,
+        "audioPaused": true,
+        "audioHeard": false,
+        "actAfter": {
+          "isActive": false,
+          "hasBeenActive": false
+        },
+        "title": "[v0] ac=suspended→suspended(resume 一直挂着(>2000ms 没 resolve 也没 reject)) osc=哑(suspended,+0s) audio=NotAllowedError/哑 act=false/false→false/false frame=top ref=(空)"
+      },
+      "title": "[v0] ac=suspended→suspended(resume 一直挂着(>2000ms 没 resolve 也没 reject)) osc=哑(suspended,+0s) audio=NotAllowedError/哑 act=false/false→false/false frame=top ref=(空)",
+      "titleFromBrowser": "[v0] ac=suspended→suspended(resume 一直挂着(>2000ms 没 resolve 也没 reject)) osc=哑(suspended,+0s) audio=NotAllowedError/哑 act=false/false→false/false frame=top ref=(空)",
+      "finalUrl": "http://localhost:9301/game.html?v=v0&xo=http%3A%2F%2Flocalhost%3A9302",
+      "console": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "browser": "chrome-strict",
+      "version": "152.0.7977.76",
+      "bonus": false,
+      "variant": "v1-direct",
+      "what": "点击回调里就地跑那四件事",
+      "url": "http://localhost:9301/gate.html?v=v1-direct&xo=http%3A%2F%2Flocalhost%3A9302",
+      "result": {
+        "label": "v1-direct",
+        "href": "http://localhost:9301/gate.html?v=v1-direct&xo=http%3A%2F%2Flocalhost%3A9302",
+        "referrer": "(空)",
+        "frame": "top",
+        "actBefore": {
+          "isActive": true,
+          "hasBeenActive": true
+        },
+        "acStateNew": "running",
+        "resume": "resolved",
+        "acStateAfterResume": "running",
+        "clockAdvance": 0.091,
+        "clockWaitedMs": 154,
+        "acStateAfterOsc": "running",
+        "oscHeard": true,
+        "audioPlay": "ok",
+        "audioAdvanced": 0.207,
+        "audioPaused": false,
+        "audioHeard": true,
+        "actAfter": {
+          "isActive": true,
+          "hasBeenActive": true
+        },
+        "title": "[v1-direct] ac=running→running(resume resolved) osc=响(running,+0.091s) audio=ok/响 act=true/true→true/true frame=top ref=(空)"
+      },
+      "title": "[v1-direct] ac=running→running(resume resolved) osc=响(running,+0.091s) audio=ok/响 act=true/true→true/true frame=top ref=(空)",
+      "titleFromBrowser": "[v1-direct] ac=running→running(resume resolved) osc=响(running,+0.091s) audio=ok/响 act=true/true→true/true frame=top ref=(空)",
+      "finalUrl": "http://localhost:9301/gate.html?v=v1-direct&xo=http%3A%2F%2Flocalhost%3A9302",
+      "console": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "browser": "chrome-strict",
+      "version": "152.0.7977.76",
+      "bonus": false,
+      "variant": "v1-fetch",
+      "what": "点击回调里 await fetch + 换 body + 重跑 script",
+      "url": "http://localhost:9301/gate.html?v=v1-fetch&xo=http%3A%2F%2Flocalhost%3A9302",
+      "result": {
+        "label": "v1-fetch",
+        "href": "http://localhost:9301/gate.html?v=v1-fetch&xo=http%3A%2F%2Flocalhost%3A9302",
+        "referrer": "(空)",
+        "frame": "top",
+        "actBefore": {
+          "isActive": true,
+          "hasBeenActive": true
+        },
+        "acStateNew": "running",
+        "resume": "resolved",
+        "acStateAfterResume": "running",
+        "clockAdvance": 0.096,
+        "clockWaitedMs": 101,
+        "acStateAfterOsc": "running",
+        "oscHeard": true,
+        "audioPlay": "ok",
+        "audioAdvanced": 0.21,
+        "audioPaused": false,
+        "audioHeard": true,
+        "actAfter": {
+          "isActive": true,
+          "hasBeenActive": true
+        },
+        "title": "[v1-fetch] ac=running→running(resume resolved) osc=响(running,+0.096s) audio=ok/响 act=true/true→true/true frame=top ref=(空)"
+      },
+      "title": "[v1-fetch] ac=running→running(resume resolved) osc=响(running,+0.096s) audio=ok/响 act=true/true→true/true frame=top ref=(空)",
+      "titleFromBrowser": "[v1-fetch] ac=running→running(resume resolved) osc=响(running,+0.096s) audio=ok/响 act=true/true→true/true frame=top ref=(空)",
+      "finalUrl": "http://localhost:9301/gate.html?v=v1-fetch&xo=http%3A%2F%2Flocalhost%3A9302",
+      "console": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "browser": "chrome-strict",
+      "version": "152.0.7977.76",
+      "bonus": false,
+      "variant": "v2",
+      "what": "location.href 导航到同源 game.html",
+      "url": "http://localhost:9301/gate.html?v=v2&xo=http%3A%2F%2Flocalhost%3A9302",
+      "result": {
+        "label": "v2",
+        "href": "http://localhost:9301/game.html?v=v2",
+        "referrer": "http://localhost:9301/gate.html?v=v2&xo=http%3A%2F%2Flocalhost%3A9302",
+        "frame": "top",
+        "actBefore": {
+          "isActive": false,
+          "hasBeenActive": true
+        },
+        "acStateNew": "running",
+        "resume": "resolved",
+        "acStateAfterResume": "running",
+        "clockAdvance": 0.053,
+        "clockWaitedMs": 102,
+        "acStateAfterOsc": "running",
+        "oscHeard": true,
+        "audioPlay": "ok",
+        "audioAdvanced": 0.206,
+        "audioPaused": false,
+        "audioHeard": true,
+        "actAfter": {
+          "isActive": false,
+          "hasBeenActive": true
+        },
+        "title": "[v2] ac=running→running(resume resolved) osc=响(running,+0.053s) audio=ok/响 act=false/true→false/true frame=top ref=http://localhost:9301/gate.html?v=v2&xo=http%3A%2F%2Flocalhost%3A9302"
+      },
+      "title": "[v2] ac=running→running(resume resolved) osc=响(running,+0.053s) audio=ok/响 act=false/true→false/true frame=top ref=http://localhost:9301/gate.html?v=v2&xo=http%3A%2F%2Flocalhost%3A9302",
+      "titleFromBrowser": "[v2] ac=running→running(resume resolved) osc=响(running,+0.053s) audio=ok/响 act=false/true→false/true frame=top ref=http://localhost:9301/gate.html?v=v2&xo=http%3A%2F%2Flocalhost%3A9302",
+      "finalUrl": "http://localhost:9301/game.html?v=v2",
+      "console": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "browser": "chrome-strict",
+      "version": "152.0.7977.76",
+      "bonus": false,
+      "variant": "v2b",
+      "what": "表单 POST → 服务端 303 → game.html（边缘现在的做法）",
+      "url": "http://localhost:9301/gate.html?v=v2b&xo=http%3A%2F%2Flocalhost%3A9302",
+      "result": {
+        "label": "v2b",
+        "href": "http://localhost:9301/game.html?v=v2b",
+        "referrer": "http://localhost:9301/gate.html?v=v2b&xo=http%3A%2F%2Flocalhost%3A9302",
+        "frame": "top",
+        "actBefore": {
+          "isActive": false,
+          "hasBeenActive": true
+        },
+        "acStateNew": "running",
+        "resume": "resolved",
+        "acStateAfterResume": "running",
+        "clockAdvance": 0.053,
+        "clockWaitedMs": 51,
+        "acStateAfterOsc": "running",
+        "oscHeard": true,
+        "audioPlay": "ok",
+        "audioAdvanced": 0.209,
+        "audioPaused": false,
+        "audioHeard": true,
+        "actAfter": {
+          "isActive": false,
+          "hasBeenActive": true
+        },
+        "title": "[v2b] ac=running→running(resume resolved) osc=响(running,+0.053s) audio=ok/响 act=false/true→false/true frame=top ref=http://localhost:9301/gate.html?v=v2b&xo=http%3A%2F%2Flocalhost%3A9302"
+      },
+      "title": "[v2b] ac=running→running(resume resolved) osc=响(running,+0.053s) audio=ok/响 act=false/true→false/true frame=top ref=http://localhost:9301/gate.html?v=v2b&xo=http%3A%2F%2Flocalhost%3A9302",
+      "titleFromBrowser": "[v2b] ac=running→running(resume resolved) osc=响(running,+0.053s) audio=ok/响 act=false/true→false/true frame=top ref=http://localhost:9301/gate.html?v=v2b&xo=http%3A%2F%2Flocalhost%3A9302",
+      "finalUrl": "http://localhost:9301/game.html?v=v2b",
+      "console": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "browser": "chrome-strict",
+      "version": "152.0.7977.76",
+      "bonus": false,
+      "variant": "v3",
+      "what": "同源 iframe",
+      "url": "http://localhost:9301/gate.html?v=v3&xo=http%3A%2F%2Flocalhost%3A9302",
+      "result": {
+        "label": "v3",
+        "href": "http://localhost:9301/game.html?v=v3",
+        "referrer": "http://localhost:9301/gate.html?v=v3&xo=http%3A%2F%2Flocalhost%3A9302",
+        "frame": "iframe同源",
+        "actBefore": {
+          "isActive": true,
+          "hasBeenActive": true
+        },
+        "acStateNew": "running",
+        "resume": "resolved",
+        "acStateAfterResume": "running",
+        "clockAdvance": 0.091,
+        "clockWaitedMs": 103,
+        "acStateAfterOsc": "running",
+        "oscHeard": true,
+        "audioPlay": "ok",
+        "audioAdvanced": 0.205,
+        "audioPaused": false,
+        "audioHeard": true,
+        "actAfter": {
+          "isActive": true,
+          "hasBeenActive": true
+        },
+        "title": "[v3] ac=running→running(resume resolved) osc=响(running,+0.091s) audio=ok/响 act=true/true→true/true frame=iframe同源 ref=http://localhost:9301/gate.html?v=v3&xo=http%3A%2F%2Flocalhost%3A9302"
+      },
+      "title": "[v3] ac=running→running(resume resolved) osc=响(running,+0.091s) audio=ok/响 act=true/true→true/true frame=iframe同源 ref=http://localhost:9301/gate.html?v=v3&xo=http%3A%2F%2Flocalhost%3A9302",
+      "titleFromBrowser": "[v3] ac=running→running(resume resolved) osc=响(running,+0.091s) audio=ok/响 act=true/true→true/true frame=iframe同源 ref=http://localhost:9301/gate.html?v=v3&xo=http%3A%2F%2Flocalhost%3A9302",
+      "parentTitle": "父页收到→ [v3] ac=running→running(resume resolved) osc=响(running,+0.091s) audio=ok/响 act=true/true→true/true frame=iframe同源 ref=http://localhost:9301/gate.html?v=v3&xo=http%3A%2F%2Flocalhost%3A9302",
+      "finalUrl": "http://localhost:9301/gate.html?v=v3&xo=http%3A%2F%2Flocalhost%3A9302",
+      "console": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "browser": "chrome-strict",
+      "version": "152.0.7977.76",
+      "bonus": false,
+      "variant": "v4",
+      "what": "跨源 iframe（另一个端口）",
+      "url": "http://localhost:9301/gate.html?v=v4&xo=http%3A%2F%2Flocalhost%3A9302",
+      "result": {
+        "label": "v4",
+        "href": "http://localhost:9302/game.html?v=v4",
+        "referrer": "http://localhost:9301/",
+        "frame": "iframe跨源",
+        "actBefore": {
+          "isActive": true,
+          "hasBeenActive": true
+        },
+        "acStateNew": "running",
+        "resume": "resolved",
+        "acStateAfterResume": "running",
+        "clockAdvance": 0.096,
+        "clockWaitedMs": 102,
+        "acStateAfterOsc": "running",
+        "oscHeard": true,
+        "audioPlay": "ok",
+        "audioAdvanced": 0.205,
+        "audioPaused": false,
+        "audioHeard": true,
+        "actAfter": {
+          "isActive": true,
+          "hasBeenActive": true
+        },
+        "title": "[v4] ac=running→running(resume resolved) osc=响(running,+0.096s) audio=ok/响 act=true/true→true/true frame=iframe跨源 ref=http://localhost:9301/"
+      },
+      "title": "[v4] ac=running→running(resume resolved) osc=响(running,+0.096s) audio=ok/响 act=true/true→true/true frame=iframe跨源 ref=http://localhost:9301/",
+      "titleFromBrowser": "[v4] ac=running→running(resume resolved) osc=响(running,+0.096s) audio=ok/响 act=true/true→true/true frame=iframe跨源 ref=http://localhost:9301/",
+      "parentTitle": "父页收到→ [v4] ac=running→running(resume resolved) osc=响(running,+0.096s) audio=ok/响 act=true/true→true/true frame=iframe跨源 ref=http://localhost:9301/",
+      "finalUrl": "http://localhost:9301/gate.html?v=v4&xo=http%3A%2F%2Flocalhost%3A9302",
+      "console": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "browser": "chrome-strict",
+      "version": "152.0.7977.76",
+      "bonus": false,
+      "variant": "v5",
+      "what": "导航之后游戏页干等 3 秒再碰音频",
+      "url": "http://localhost:9301/gate.html?v=v5&xo=http%3A%2F%2Flocalhost%3A9302&delay=3000",
+      "result": {
+        "label": "v5",
+        "href": "http://localhost:9301/game.html?v=v5&delay=3000",
+        "referrer": "http://localhost:9301/gate.html?v=v5&xo=http%3A%2F%2Flocalhost%3A9302&delay=3000",
+        "frame": "top",
+        "actBefore": {
+          "isActive": false,
+          "hasBeenActive": true
+        },
+        "delayMs": 3000,
+        "actAfterDelay": {
+          "isActive": false,
+          "hasBeenActive": true
+        },
+        "acStateNew": "running",
+        "resume": "resolved",
+        "acStateAfterResume": "running",
+        "clockAdvance": 0.096,
+        "clockWaitedMs": 102,
+        "acStateAfterOsc": "running",
+        "oscHeard": true,
+        "audioPlay": "ok",
+        "audioAdvanced": 0.206,
+        "audioPaused": false,
+        "audioHeard": true,
+        "actAfter": {
+          "isActive": false,
+          "hasBeenActive": true
+        },
+        "title": "[v5] ac=running→running(resume resolved) osc=响(running,+0.096s) audio=ok/响 act=false/true→false/true frame=top ref=http://localhost:9301/gate.html?v=v5&xo=http%3A%2F%2Flocalhost%3A9302&delay=3000"
+      },
+      "title": "[v5] ac=running→running(resume resolved) osc=响(running,+0.096s) audio=ok/响 act=false/true→false/true frame=top ref=http://localhost:9301/gate.html?v=v5&xo=http%3A%2F%2Flocalhost%3A9302&delay=3000",
+      "titleFromBrowser": "[v5] ac=running→running(resume resolved) osc=响(running,+0.096s) audio=ok/响 act=false/true→false/true frame=top ref=http://localhost:9301/gate.html?v=v5&xo=http%3A%2F%2Flocalhost%3A9302&delay=3000",
+      "finalUrl": "http://localhost:9301/game.html?v=v5&delay=3000",
+      "console": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    }
+  ]
+}

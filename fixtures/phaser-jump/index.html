@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#10131a" />
+    <title>phaser-jump</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #10131a;
+        overflow: hidden;
+        /* 手机上连点会被当成双击缩放，跳跃手感就没了 */
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #game {
+        width: 100%;
+        height: 100%;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

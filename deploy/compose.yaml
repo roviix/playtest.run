@@ -1,0 +1,115 @@
+# 一台机器跑通 playtest（DESIGN §7 承诺的自托管形态，也是我们自己的香港边缘）。
+#
+#   deploy/push.sh 会把镜像装载到主机、同步这个目录、然后在主机上：
+#   SERVER_TAG=<标签> CADDY_TAG=<标签> docker compose up -d
+#
+# 变量来自同目录的 .env（只在服务器上，不入库；样例见 .env.example）。
+name: playtest
+
+services:
+  caddy:
+    image: playtest-caddy:${CADDY_TAG:-local}
+    restart: unless-stopped
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      API_HOST: ${API_HOST:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites.active:/etc/caddy/sites.active:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - console_dist:/srv/console:ro
+    depends_on:
+      - edge
+      - api
+      - console
+
+  # 一次性容器：把控制台的静态产物拷进共享卷就退出。Caddy 从卷里托管 /console/。
+  console:
+    image: playtest-console:${CONSOLE_TAG:-local}
+    restart: "no"
+    volumes:
+      - console_dist:/out
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api:
+    image: playtest-server:${SERVER_TAG:-local}
+    command: ["playtest-api"]
+    restart: unless-stopped
+    # 进程只接 Ctrl-C 那个信号；compose 默认发 SIGTERM 会等满超时再强杀。
+    stop_signal: SIGINT
+    environment:
+      PLAYTEST_API_LISTEN: 0.0.0.0:8787
+      PLAYTEST_DATA_DIR: /data
+      PLAYTEST_SITE_URL_TEMPLATE: ${PLAYTEST_SITE_URL_TEMPLATE}
+      RUST_LOG: ${RUST_LOG:-info}
+    ports:
+      # 只绑主机回环：API_HOST 没配时 CLI 走 ssh -L 隧道用；api.playtest.sh 上线后可删。
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - ${PLAYTEST_DATA_HOST_DIR:-/home/ubuntu/playtest-data}:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8787/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  edge:
+    image: playtest-server:${SERVER_TAG:-local}
+    command: ["playtest-edge"]
+    restart: unless-stopped
+    stop_signal: SIGINT
+    environment:
+      PLAYTEST_EDGE_LISTEN: 0.0.0.0:8443
+      PLAYTEST_DATA_DIR: /data
+      PLAYTEST_HOST_SUFFIX: ${PLAYTEST_HOST_SUFFIX}
+      PLAYTEST_PUBLIC_SCHEME: ${PLAYTEST_PUBLIC_SCHEME:-https}
+      # 边缘的第一层事件每 60 秒送到控制面：同一台机器，走 compose 内网明文。
+      PLAYTEST_API_INTERNAL_URL: http://api:8787
+      # 玩家浏览器里的 SDK 往哪发事件（/_playtest/me 告诉它）。没有公网控制面时留空，SDK 会安静地不发。
+      PLAYTEST_API_PUBLIC_URL: ${PLAYTEST_API_PUBLIC_URL:-}
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      # 和 api 同一个目录：api 写 store/，edge 读 store/、写 edge-events.jsonl。
+      - ${PLAYTEST_DATA_HOST_DIR:-/home/ubuntu/playtest-data}:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-H", "Host: ${PLAYTEST_HOST_SUFFIX}", "http://127.0.0.1:8443/_playtest/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:
+  console_dist:

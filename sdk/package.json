@@ -1,0 +1,17 @@
+{
+  "name": "playtest-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "playtest.js：错误、加载用时、自定义事件、反馈按钮。零运行时依赖。",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs && node tools/size.mjs",
+    "check": "tsc --noEmit",
+    "dev": "node tools/serve.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10",
+    "typescript": "^5.9.3"
+  }
+}

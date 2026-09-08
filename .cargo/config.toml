@@ -1,0 +1,4 @@
+# 增量编译的缓存在这台开发机上会堆到 2 GB 以上，而我们自己的 crate 很小，全量重编只多几十秒。
+# 需要时 CARGO_INCREMENTAL=1 cargo build 覆盖。
+[build]
+incremental = false

@@ -1,0 +1,30 @@
+# 系统
+.DS_Store
+Thumbs.db
+
+# 构建产物
+node_modules/
+dist/
+build/
+target/
+bin/
+*.log
+
+# 测试用的真实导出物要进仓库；Unity 布局里的 Build/ 在不区分大小写的文件系统上会被上面的 build/ 误伤
+!fixtures/**/export/**
+
+# SDK 的产物进仓库：边缘用 include_bytes! 把它编进二进制，服务器上不装 Node。控制台的 dist 不进，服务器构建时生成。
+!sdk/dist/
+
+# 密钥与本地配置
+.env
+.env.*
+!.env.example
+
+# 本机开发时 api / edge 的数据（对象存储、SQLite、事件日志）
+.data/
+
+# 编辑器
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,4 @@
+# pnpm 默认不让依赖跑安装脚本。Vite 用的 esbuild 要跑一次来放平台二进制，
+# 这里点名放行它一个，别的依赖照旧不许跑。
+allowBuilds:
+  esbuild: true

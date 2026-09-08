@@ -1,0 +1,26 @@
+# 控制面与控制台，同一个域名（AGENTS 第 7 条：登录、令牌、控制台只在 playtest.sh）。
+# 只在 .env 设置了 API_HOST 时启用；买到域名前 CLI 走 ssh 隧道访问 127.0.0.1:8787，控制台先不上。
+{$API_HOST} {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	# 控制台：纯静态，SPA 回退到 index.html。产物由 console 镜像拷进共享卷。
+	handle_path /console/* {
+		root * /srv/console
+		encode zstd gzip
+		try_files {path} /index.html
+		file_server
+	}
+	redir /console /console/ permanent
+
+	# 其余全是 API。上传的 blob 最大 200 MB，逐块转发，不在 Caddy 里攒；
+	# 玩家浏览器里的 SDK 也往这里发事件（CORS 由 api 自己按内容域后缀判）。
+	handle {
+		reverse_proxy api:8787 {
+			flush_interval -1
+		}
+	}
+}

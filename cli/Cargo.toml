@@ -1,0 +1,46 @@
+[package]
+name = "playtest"
+version = "0.1.0"
+description = "一条命令，把你手上这个能玩的版本放到别人面前"
+license = "Apache-2.0"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "playtest"
+path = "src/main.rs"
+
+[dependencies]
+playtest-common = { path = "../common", features = ["tunnel-io"] }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+indicatif = "0.17"
+# 只要 render::unicode 那一个渲染器；默认特性会拖进 image 和 svg，用不上。
+qrcode = { version = "0.14", default-features = false }
+# MCP 官方 Rust SDK（modelcontextprotocol/rust-sdk）。只开「跑一个 server」和「stdio 通道」，
+# HTTP 传输、客户端、OAuth 一概不要。
+rmcp = { version = "3", default-features = false, features = ["server", "macros", "transport-io"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls-no-provider"] }
+# reqwest 0.13 的 "rustls" 特性绑死 aws-lc-rs（要 C 工具链、构建产物大），
+# 所以走 rustls-no-provider，自己在 main 里装 ring。绝不引入 openssl / native-tls。
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# 只解析 RFC 3339 和取本地时区；显示成「2026-09-08 11:30」是自己拼的，不用 formatting。
+time = { version = "0.3", features = ["parsing", "local-offset"] }
+tokio = { version = "1", features = ["full"] }
+# 隧道那条 WebSocket。默认特性（connect + handshake）之外只加 __rustls-tls：
+# rustls-tls-webpki-roots 会自己拖一份旧的 webpki-roots 0.26 进来，我们已经有 1.x 了。
+# native-tls / aws-lc 一概不要，加密后端复用 main 里装的 ring。
+tokio-tungstenite = { version = "0.30", features = ["__rustls-tls"] }
+tokio-util = { version = "0.7", features = ["io"] }
+walkdir = "2"
+# 根证书。系统信任库要 rustls-platform-verifier，三个平台各一套代码；内置一份反而更可预测。
+webpki-roots = "1"
+
+[dev-dependencies]
+axum = "0.8"
+tempfile = "3"

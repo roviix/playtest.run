@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>门禁页</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<h1>某某 邀请你试玩《手势实验》</h1>
+<p class="hint" id="what"></p>
+<div id="btn"></div>
+<div id="out"></div>
+<script src="probe.js"></script>
+<script>
+// 变体全在这一页里，用 ?v= 选。除了 v2b 走真表单，其余都在点击回调里做各自的事。
+(() => {
+  const q = new URLSearchParams(location.search);
+  const variant = q.get('v') || 'v1-direct';
+  const bonus = q.get('bonus') === '1';
+  const delay = Number(q.get('delay')) || 0;
+  // 跨源那一份从另一个端口来；端口不同就已经是另一个源。
+  const other = q.get('xo') || 'http://localhost:9302';
+
+  const gameUrl = (base) => {
+    const u = new URL('game.html', base || location.href);
+    u.searchParams.set('v', variant);
+    if (delay) u.searchParams.set('delay', String(delay));
+    if (bonus) u.searchParams.set('bonus', '1');
+    return u.toString();
+  };
+
+  const desc = {
+    'v1-direct': '点「开始」后，在同一个文档里直接把游戏那四件事跑一遍。',
+    'v1-fetch': '点「开始」后 await fetch 拿到 game.html，换掉 body，再把它的 script 重新执行一遍。',
+    v2: '点「开始」后 location.href 导航到同源的 game.html。',
+    v2b: '点「开始」提交表单到 /start，服务端 303 到 game.html——边缘现在就是这么做的。',
+    v3: '点「开始」后插入一个同源 iframe 加载 game.html。',
+    v4: '点「开始」后插入一个跨源 iframe（另一个端口）加载 game.html。',
+    v5: '点「开始」后导航到同源 game.html，游戏页先干等 3 秒再碰音频。',
+  };
+  document.getElementById('what').textContent = `${variant}：${desc[variant] || '未知变体'}`;
+
+  const slot = document.getElementById('btn');
+  if (variant === 'v2b') {
+    // 一行 JS 都不用：原生表单 POST，服务端 303 回来。
+    const to = new URL(gameUrl());
+    slot.innerHTML =
+      '<form method="post" action="/start">' +
+      `<input type="hidden" name="to" value="${to.pathname}${to.search}">` +
+      '<button type="submit">开始</button></form>';
+    return;
+  }
+
+  const button = document.createElement('button');
+  button.textContent = '开始';
+  slot.appendChild(button);
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    if (variant === 'v1-direct') {
+      await window.gateAudioProbe.run(variant, { delayMs: delay, bonus });
+    } else if (variant === 'v1-fetch') {
+      await swapInGamePage(variant);
+    } else if (variant === 'v3' || variant === 'v4') {
+      const frame = document.createElement('iframe');
+      frame.src = gameUrl(variant === 'v4' ? other : null);
+      document.getElementById('out').appendChild(frame);
+    } else {
+      location.href = gameUrl();
+    }
+  });
+
+  // 同文档替换：把 game.html 的 body 搬过来，再手动重建 script 让它们真的执行
+  // （innerHTML 塞进去的 <script> 浏览器不跑）。delay / bonus 由门禁页自己的 URL 带着，
+  // 搬过来的引导脚本读 location.search 就能拿到。
+  async function swapInGamePage(label) {
+    const html = await fetch(gameUrl(), { cache: 'no-store' }).then((r) => r.text());
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const scripts = [...doc.body.querySelectorAll('script')];
+    for (const s of scripts) s.remove();
+    window.__gateAudioVariant = label;
+    document.body.innerHTML = doc.body.innerHTML;
+    for (const old of scripts) {
+      const s = document.createElement('script');
+      for (const a of old.attributes) s.setAttribute(a.name, a.value);
+      s.textContent = old.textContent;
+      const done = old.src ? new Promise((res) => { s.onload = res; s.onerror = res; }) : null;
+      document.body.appendChild(s);
+      if (done) await done;
+    }
+  }
+
+  // iframe 里的探针把结果发回来，父页面也看得见。
+  addEventListener('message', (e) => {
+    const r = e.data && e.data.__probe;
+    if (!r) return;
+    document.title = '父页收到→ ' + r.title;
+    const pre = document.createElement('pre');
+    pre.className = 'probe';
+    pre.textContent = 'iframe 里的探针发回：\n' + r.title;
+    document.getElementById('out').appendChild(pre);
+  });
+})();
+</script>
+</body>
+</html>

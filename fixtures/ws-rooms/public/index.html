@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="theme-color" content="#0e1117" />
+    <title>ws-rooms · 联机小房间</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0e1117;
+        color: #e6e9ef;
+        /* 手指在画布上拖动就是移动，不能被滚动和双击缩放抢走 */
+        touch-action: none;
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-user-select: none;
+        user-select: none;
+        font: 14px/1.5 system-ui, -apple-system, sans-serif;
+      }
+      #bar {
+        position: fixed;
+        inset: 0 0 auto 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px 10px;
+        background: rgba(14, 17, 23, 0.82);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid #222834;
+        font-variant-numeric: tabular-nums;
+      }
+      #dot {
+        width: 9px;
+        height: 9px;
+        flex: none;
+        border-radius: 50%;
+        background: #3ddc84;
+        box-shadow: 0 0 8px #3ddc84;
+      }
+      #bar.down {
+        color: #ff6b6b;
+        border-bottom-color: #4a2226;
+      }
+      #bar.down #dot {
+        background: #ff6b6b;
+        box-shadow: 0 0 8px #ff6b6b;
+      }
+      #hint {
+        position: fixed;
+        inset: auto 0 0 0;
+        z-index: 2;
+        padding: 10px 14px calc(env(safe-area-inset-bottom, 0px) + 10px);
+        text-align: center;
+        color: #7c8698;
+        font-size: 12px;
+        pointer-events: none;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="bar"><span id="dot"></span><span id="text">连接中…</span></div>
+    <canvas id="stage"></canvas>
+    <div id="hint">手指或鼠标移动 = 你的位置 · 点一下 = 一圈涟漪</div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      (function () {
+        'use strict';
+
+        var bar = document.getElementById('bar');
+        var text = document.getElementById('text');
+        var canvas = document.getElementById('stage');
+        var ctx = canvas.getContext('2d');
+
+        // 给无头 Chrome 读的：connected / transport / rtt / players
+        var pt = (window.__pt = { connected: false, transport: '-', rtt: null, players: [] });
+
+        var me = null;
+        var others = new Map(); // id -> {name, color, x, y, rx, ry}  rx/ry 是插值后的显示位置
+        var ripples = [];
+        var myPos = { x: 0.5, y: 0.5 };
+        var lastSent = 0;
+        var dirty = false;
+
+        // socket.io 默认就是 polling 起手再升级 websocket，这里不覆盖 transports——
+        // 隧道要过的关卡就是这次升级。
+        var socket = io();
+
+        socket.on('connect', function () {
+          pt.connected = true;
+          pt.transport = socket.io.engine.transport.name;
+          socket.io.engine.on('upgrade', function (transport) {
+            pt.transport = transport.name;
+            render();
+          });
+          paint();
+        });
+
+        socket.on('disconnect', function (reason) {
+          pt.connected = false;
+          pt.rtt = null;
+          others.clear();
+          pt.players = [];
+          text.textContent = '已断开 · ' + reason + ' · 重连中…';
+          bar.classList.add('down');
+        });
+
+        socket.io.on('reconnect_attempt', function (n) {
+          text.textContent = '已断开 · 第 ' + n + ' 次重连…';
+        });
+
+        socket.on('connect_error', function (err) {
+          pt.connected = false;
+          text.textContent = '连不上 · ' + err.message;
+          bar.classList.add('down');
+        });
+
+        socket.on('welcome', function (msg) {
+          me = msg.you;
+          myPos.x = me.x;
+          myPos.y = me.y;
+        });
+
+        socket.on('players', function (list) {
+          pt.players = list;
+          var seen = new Set();
+          list.forEach(function (p) {
+            seen.add(p.id);
+            if (me && p.id === me.id) return;
+            var o = others.get(p.id);
+            if (o) {
+              o.name = p.name;
+              o.color = p.color;
+            } else {
+              others.set(p.id, { name: p.name, color: p.color, x: p.x, y: p.y, rx: p.x, ry: p.y });
+            }
+          });
+          others.forEach(function (_, id) {
+            if (!seen.has(id)) others.delete(id);
+          });
+          paint();
+        });
+
+        socket.on('move', function (m) {
+          var o = others.get(m.id);
+          if (o) {
+            o.x = m.x;
+            o.y = m.y;
+          }
+        });
+
+        socket.on('tap', function (t) {
+          ripples.push({ x: t.x, y: t.y, color: t.color, t0: performance.now() });
+        });
+
+        // 服务器每秒一个 tick，收到就打一个 ack 回去量真实往返
+        socket.on('tick', function () {
+          var sent = performance.now();
+          var probe = new Uint8Array([1, 2, 3, 4]);
+          socket.emit('echo', sent, probe, function (reply) {
+            pt.rtt = Math.round(performance.now() - sent);
+            // 服务器 ack 里那 8 字节是独立的二进制帧，能解回时间戳才算二进制没被改
+            pt.binOk = !!reply && stampOf(reply.stamp) === reply.serverTime;
+            paint();
+          });
+        });
+
+        function stampOf(v) {
+          if (!v) return NaN;
+          if (v instanceof ArrayBuffer) return new DataView(v).getFloat64(0, true);
+          if (ArrayBuffer.isView(v)) return new DataView(v.buffer, v.byteOffset, v.byteLength).getFloat64(0, true);
+          return NaN;
+        }
+
+        function paint() {
+          if (!pt.connected) return;
+          bar.classList.remove('down');
+          text.textContent =
+            '已连接 · ' +
+            pt.transport +
+            ' · 往返 ' +
+            (pt.rtt === null ? '…' : pt.rtt + ' ms') +
+            ' · ' +
+            pt.players.length +
+            ' 人在线';
+        }
+        var render = paint;
+
+        // ------------------------------------------------ 输入
+
+        function toRoom(ev) {
+          var r = canvas.getBoundingClientRect();
+          return {
+            x: Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)),
+            y: Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height)),
+          };
+        }
+
+        canvas.addEventListener('pointermove', function (ev) {
+          var p = toRoom(ev);
+          myPos.x = p.x;
+          myPos.y = p.y;
+          dirty = true;
+        });
+
+        canvas.addEventListener('pointerdown', function (ev) {
+          ev.preventDefault();
+          var p = toRoom(ev);
+          myPos.x = p.x;
+          myPos.y = p.y;
+          dirty = true;
+          socket.emit('tap', p);
+        });
+
+        // ------------------------------------------------ 画
+
+        function resize() {
+          var dpr = Math.min(window.devicePixelRatio || 1, 2);
+          canvas.width = Math.round(window.innerWidth * dpr);
+          canvas.height = Math.round(window.innerHeight * dpr);
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function blob(x, y, r, color, name, self) {
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.globalAlpha = self ? 1 : 0.85;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          if (self) {
+            ctx.beginPath();
+            ctx.arc(x, y, r + 5, 0, Math.PI * 2);
+            ctx.strokeStyle = '#e6e9ef';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+          ctx.fillStyle = '#e6e9ef';
+          ctx.font = '12px system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(name + (self ? '（你）' : ''), x, y - r - 8);
+        }
+
+        function frame(now) {
+          var w = window.innerWidth;
+          var h = window.innerHeight;
+          ctx.clearRect(0, 0, w, h);
+
+          for (var i = ripples.length - 1; i >= 0; i--) {
+            var age = (now - ripples[i].t0) / 900;
+            if (age >= 1) {
+              ripples.splice(i, 1);
+              continue;
+            }
+            ctx.beginPath();
+            ctx.arc(ripples[i].x * w, ripples[i].y * h, 12 + age * 110, 0, Math.PI * 2);
+            ctx.strokeStyle = ripples[i].color;
+            ctx.globalAlpha = 1 - age;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+          }
+
+          others.forEach(function (o) {
+            // 网络包是离散的，插值一下才不像在跳帧
+            o.rx += (o.x - o.rx) * 0.25;
+            o.ry += (o.y - o.ry) * 0.25;
+            blob(o.rx * w, o.ry * h, 16, o.color, o.name, false);
+          });
+
+          if (me) blob(myPos.x * w, myPos.y * h, 18, me.color, me.name, true);
+
+          if (dirty && now - lastSent > 33) {
+            socket.emit('move', { x: myPos.x, y: myPos.y });
+            lastSent = now;
+            dirty = false;
+          }
+
+          requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+      })();
+    </script>
+  </body>
+</html>

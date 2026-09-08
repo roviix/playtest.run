@@ -1,0 +1,5 @@
+# pnpm 11 装包时默认不跑依赖自带的安装脚本，要在这里逐个表态，不表态它会直接报错。
+# esbuild 那段脚本只做一件事：把 bin/esbuild 换成本机可执行文件，省一层进程。
+# 我们从 tools/build.mjs 走 JS 接口，用不到那个 bin，所以不跑——少跑一个第三方脚本。
+allowBuilds:
+  esbuild: false

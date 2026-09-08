@@ -1,0 +1,21 @@
+# 玩家看到的一切：根域介绍页与每个作品的 <slug>.playtest.run。
+# 泛域名证书走 DNS-01（Cloudflare API），一张证书覆盖所有 slug。
+playtest.run, *.playtest.run {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+		# 用公共解析器查 TXT 记录是否已生效，避免主机本地 DNS 缓存拖慢签发。
+		resolvers 1.1.1.1 1.0.0.1
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# 不在这里做 encode：edge 自己按目录里的 .br/.gz 预压缩文件发 Content-Encoding，
+	# 并负责 ETag、Range、Content-Length；再叠一层实时压缩会破坏 Range 语义。
+	reverse_proxy edge:8443 {
+		# 大文件下载与将来的 WebSocket 都是长连接，不做缓冲。
+		flush_interval -1
+	}
+}

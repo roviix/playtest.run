@@ -1,0 +1,350 @@
+/* 手机优先：所有尺寸先按 375 宽写，宽屏只放宽容器和把点名册的一行摊平。
+   没有图表，所以也没有画布、没有颜色刻度——这里的颜色只用来区分「该看的」和「其它」。 */
+
+:root {
+  --bg: #fbfaf8;
+  --panel: #ffffff;
+  --ink: #17181a;
+  --muted: #6b7076;
+  --line: #e3e1dc;
+  --warn: #a8400f;
+  --warn-bg: #fdf1e8;
+  --good: #1c6b4a;
+  --good-bg: #e9f5ee;
+  --link: #1b52b8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131416;
+    --panel: #1b1d20;
+    --ink: #ecebe8;
+    --muted: #9aa0a6;
+    --line: #2e3237;
+    --warn: #f0a071;
+    --warn-bg: #33231a;
+    --good: #7fd0a6;
+    --good-bg: #16291f;
+    --link: #8fb4ff;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+a {
+  color: var(--link);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code,
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+}
+
+.shell {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0 1rem env(safe-area-inset-bottom);
+}
+
+.top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+
+.brand {
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+
+main {
+  padding: 1rem 0 3rem;
+}
+
+h1 {
+  font-size: 1.35rem;
+  margin: 0.2rem 0 0.3rem;
+}
+
+p {
+  margin: 0.35rem 0;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.page-head {
+  margin-bottom: 1rem;
+}
+
+.cards,
+.sessions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  padding: 0.9rem 1rem;
+}
+
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.card-head {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* 那段话。行距松一点，一句一行，读起来像人写的。 */
+.says {
+  margin: 0.3rem 0;
+}
+
+.versus {
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--line);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+  margin-top: 0.7rem;
+  font-size: 0.92rem;
+}
+
+.button {
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+}
+
+.button.primary {
+  background: var(--ink);
+  color: var(--panel);
+  border-color: var(--ink);
+}
+
+.notice,
+.empty {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  padding: 0.9rem 1rem;
+  margin: 0.75rem 0;
+}
+
+.notice {
+  border-color: var(--warn);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.switch {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.switch button {
+  font: inherit;
+  font-size: 0.9rem;
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.switch button.on {
+  color: var(--ink);
+  border-color: var(--ink);
+  font-weight: 600;
+}
+
+/* 点名册 */
+
+.session {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  padding: 0.6rem 0.8rem 0.7rem;
+}
+
+.session-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.2rem 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dwell {
+  flex: 0 0 auto;
+  min-width: 4.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-who {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.session-who > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.35rem 0 0;
+}
+
+.tag {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  padding: 0.05rem 0.45rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.tag.warn {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: transparent;
+}
+
+.tag.good {
+  color: var(--good);
+  background: var(--good-bg);
+  border-color: transparent;
+}
+
+.events {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+
+.events ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.events li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.event-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 反馈 */
+
+.quote {
+  font-size: 1.05rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.feedback.done .quote {
+  color: var(--muted);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.field input {
+  font: inherit;
+  padding: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+@media (min-width: 40rem) {
+  .session-who {
+    flex-direction: row;
+    gap: 0.6rem;
+    align-items: baseline;
+  }
+}

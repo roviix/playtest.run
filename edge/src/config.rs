@@ -1,0 +1,103 @@
+//! 边缘的运行配置。
+//!
+//! 全部来自环境变量且都有默认值：从仓库根目录 `cargo run -p playtest-edge` 不写任何配置
+//! 就该能起来，这是 KICKOFF §3 的本机约定。
+
+use std::net::SocketAddr;
+use std::path::PathBuf;
+
+use anyhow::Context;
+
+pub const DEFAULT_LISTEN: &str = "127.0.0.1:8443";
+pub const DEFAULT_DATA_DIR: &str = ".data";
+pub const DEFAULT_HOST_SUFFIX: &str = "localhost";
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub listen: SocketAddr,
+    pub data_dir: PathBuf,
+    /// 泛域名后缀。本机是 `localhost`，上线是 `playtest.run`。
+    pub host_suffix: String,
+    /// 拼 OG 链接与角标链接用。边缘自己永远只听明文，这个值说的是玩家在地址栏里看到的东西。
+    pub public_scheme: String,
+}
+
+impl Config {
+    pub fn from_env() -> anyhow::Result<Self> {
+        let listen_raw = env_or("PLAYTEST_EDGE_LISTEN", DEFAULT_LISTEN);
+        let listen = listen_raw
+            .parse::<SocketAddr>()
+            .with_context(|| format!("PLAYTEST_EDGE_LISTEN 不是「地址:端口」的形式：{listen_raw}"))?;
+        let host_suffix = env_or("PLAYTEST_HOST_SUFFIX", DEFAULT_HOST_SUFFIX).to_ascii_lowercase();
+        let public_scheme = std::env::var("PLAYTEST_PUBLIC_SCHEME")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| default_scheme(&host_suffix).to_string());
+        Ok(Self {
+            listen,
+            data_dir: PathBuf::from(env_or("PLAYTEST_DATA_DIR", DEFAULT_DATA_DIR)),
+            host_suffix,
+            public_scheme,
+        })
+    }
+
+    /// 对象存储根，只读。api 往里写。
+    pub fn store_root(&self) -> PathBuf {
+        self.data_dir.join("store")
+    }
+
+    /// 第一层数据先落这里，第三周再送控制面（DESIGN §3.4）。
+    pub fn events_path(&self) -> PathBuf {
+        self.data_dir.join("edge-events.jsonl")
+    }
+
+    /// 隧道令牌的验签公钥。控制面第一次启动时写进对象存储，边缘只读
+    /// （DESIGN §4.5：只验签不回源）。环境变量 `PLAYTEST_TUNNEL_VERIFYING_KEY`
+    /// 优先于它，见 `tunnel::keys`。
+    pub fn tunnel_key_path(&self) -> PathBuf {
+        self.store_root()
+            .join(playtest_common::tunnel::key_files::VERIFYING_KEY_OBJECT)
+    }
+
+    /// 隧道「上次在线」的记录。放边缘自己的目录、不放对象存储：
+    /// 这是边缘的观察，api 既不写也不读它。
+    pub fn tunnels_dir(&self) -> PathBuf {
+        self.data_dir.join("tunnels")
+    }
+
+    /// 边缘事件往哪送（`ship.rs`）。`PLAYTEST_API_INTERNAL_URL`，例如 compose 里的 `http://api:8787`；
+    /// 没设就不送，只落本地 JSONL——本机一个人调试时用不着。
+    pub fn api_internal_url() -> Option<String> {
+        std::env::var("PLAYTEST_API_INTERNAL_URL")
+            .ok()
+            .filter(|s| !s.is_empty())
+    }
+}
+
+fn env_or(key: &str, fallback: &str) -> String {
+    std::env::var(key)
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| fallback.to_string())
+}
+
+/// `*.localhost` 在 Chrome / Firefox 里是安全上下文但走明文，本机链接得写 `http`。
+pub fn default_scheme(host_suffix: &str) -> &'static str {
+    if host_suffix == "localhost" || host_suffix.ends_with(".localhost") {
+        "http"
+    } else {
+        "https"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scheme_follows_suffix() {
+        assert_eq!(default_scheme("localhost"), "http");
+        assert_eq!(default_scheme("edge.localhost"), "http");
+        assert_eq!(default_scheme("playtest.run"), "https");
+    }
+}

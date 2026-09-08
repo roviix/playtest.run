@@ -1,0 +1,10 @@
+target/
+.data/
+.git/
+docs/
+fixtures/
+scripts/
+deploy/
+node_modules/
+*.md
+.env*
