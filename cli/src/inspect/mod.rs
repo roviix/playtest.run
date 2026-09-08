@@ -88,6 +88,8 @@ pub struct Report {
     pub engine: Option<Engine>,
     /// 要跨源隔离（也就是 `--isolated`）才跑得起来；`None` 表示没看出这个需要。
     pub threads: Option<Threads>,
+    /// `index.html` 的 `<title>`，去掉了引擎模板的默认值。没给 `--name` 时它比目录名更像作品名。
+    pub page_title: Option<String>,
     pub findings: Vec<Finding>,
 }
 
@@ -123,8 +125,29 @@ pub fn inspect(input: Input<'_>, read: ReadPrefix<'_>) -> Report {
     Report {
         engine,
         threads,
+        page_title: index
+            .as_deref()
+            .and_then(html::title)
+            .filter(|t| !is_template_title(t)),
         findings,
     }
+}
+
+/// 引擎模板默认的标题，没有作品名的信息量，不拿来当作品名。
+fn is_template_title(title: &str) -> bool {
+    let t = title.trim().to_ascii_lowercase();
+    t.is_empty()
+        || t == "vite + ts"
+        || t == "vite app"
+        || t == "vite + vue + ts"
+        || t == "vite + react + ts"
+        || t.starts_with("unity webgl player")
+        || t == "godot"
+        || t == "phaser game"
+        || t == "document"
+        || t == "index"
+        || t == "untitled"
+        || t.len() > 80
 }
 
 /// 目录里像是源码而不是导出物吗。文件多得离谱时用它换一句更有用的提示。

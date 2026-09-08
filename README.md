@@ -36,6 +36,18 @@ Rust 一个 Cargo workspace（`cargo test --workspace`），控制台与 SDK 是
 
 根目录 `LICENSE` 是 Apache-2.0；`api/`、`edge/` 各自带 AGPL-3.0。
 
+## 安装与第一次使用
+
+预编译的单文件在 [Releases](https://github.com/roviix/playtest.run/releases)（macOS arm64 / x86_64、Linux x86_64 / arm64 musl、Windows x86_64）。解开后把 `playtest` 放进 PATH：
+
+```
+cd 你的导出目录        # Godot / Unity / Phaser / Vite 导出的那个，里面有 index.html
+playtest .            # 几秒后：链接 + 二维码；第一次运行自动拿一个 24 小时的匿名链接
+playtest 5173         # 或者把正在跑的本地开发服务器接出去
+```
+
+结果在 [`playtest.roviix.com/console/`](https://playtest.roviix.com/console/)，令牌在 `~/.config/playtest/config.json` 里。
+
 ## 本机跑一遍
 
 ```

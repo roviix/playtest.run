@@ -235,7 +235,7 @@ struct Control<'a> {
 impl<'a> Control<'a> {
     async fn start(args: &'a UploadArgs) -> Result<Control<'a>> {
         let here = std::env::current_dir().context("看不了当前目录")?;
-        let title = upload::title_for(args, &here).map_err(output::as_bad_input)?;
+        let title = upload::title_for(args, &here, None).map_err(output::as_bad_input)?;
         let api = args::api_base(args.api.as_deref());
         let config_path = config::default_path()?;
         let mut config = config::load(&config_path)?;

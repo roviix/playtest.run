@@ -27,6 +27,30 @@ pub fn local_references(html: &str) -> Vec<String> {
     found
 }
 
+/// `<title>` 里的文字，去掉首尾空白、把 HTML 实体里最常见的几个还原。
+/// 目录叫 `dist` / `export` 的时候，这是唯一能拿到的作品名；引擎模板默认的那几个（`Unity WebGL Player`、
+/// `Vite + TS`）没什么信息量，调用方自己判断要不要用。
+pub fn title(html: &str) -> Option<String> {
+    let lower = html.to_ascii_lowercase();
+    let open = lower.find("<title")?;
+    let start = open + lower[open..].find('>')? + 1;
+    let end = start + lower[start..].find("</title")?;
+    let raw = html[start..end].trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let text = raw
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    Some(text)
+}
+
 /// 引擎写在 HTML 里的配置项，取 `key` 后面第一个带引号的串。
 ///
 /// Unity 的 `index.html` 长这样：`dataUrl: buildUrl + "/Build/game.data.br"`——
@@ -119,6 +143,20 @@ fn as_local_path(raw: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_title_and_normalises_it() {
+        assert_eq!(
+            title("<html><head><title>\n  跳一跳 &amp; 跑酷  </title></head>"),
+            Some("跳一跳 & 跑酷".to_string())
+        );
+        assert_eq!(
+            title("<TITLE lang=\"en\">Deep   Space</TITLE>"),
+            Some("Deep Space".to_string())
+        );
+        assert_eq!(title("<title></title>"), None);
+        assert_eq!(title("<h1>没有 title</h1>"), None);
+    }
 
     #[test]
     fn picks_up_scripts_styles_and_images() {

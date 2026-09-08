@@ -8,7 +8,9 @@
 - 仓库已 `git init`，尚无提交。代码：Rust workspace `common/`、`api/`、`edge/`、`cli/` 都已落地，`cargo test --workspace` 153 条全绿（2026-09-07）。
 - **第一周目标在本机成立**：`playtest <目录>` → 控制面 → 边缘 → 真实 Chrome 点开门禁页进游戏，见 `docs/spikes/2026-09-07-e2e-upload-localhost.md`。四个引擎导出物只有 Phaser 与 Vite，缺 Godot、Unity（本机没引擎）。
 - **第二周主干同日完成**：`playtest <端口>` 隧道在本机与香港边缘都通，socket.io 联机穿过去了，见 `docs/spikes/2026-09-07-tunnel-e2e.md`。差两台手机对局、开发者侧断网恢复、真 Vite。
-- **第三周「结果」那一半提前完成**（2026-09-08）：门禁页硬线与熔断、上传前检查、`--json` 与 MCP、SDK 与写入端点、结果端点与控制台，以及边缘事件每 60 秒上报——在本机接成一条线（`docs/spikes/2026-09-08-sdk-ingest-results.md`），并已部署到香港。`cargo test --workspace` 387 条全绿。**第一次 git 提交在此之后。**
+- **第三周「结果」那一半提前完成**（2026-09-08）：门禁页硬线与熔断、上传前检查、`--json` 与 MCP、SDK 与写入端点、结果端点与控制台，以及边缘事件每 60 秒上报——在本机接成一条线（`docs/spikes/2026-09-08-sdk-ingest-results.md`），并已部署到香港。
+- **开发者这一侧上线**（2026-09-08）：`playtest.roviix.com` 承载介绍页、控制台、控制面；CLI 默认指向它，不再需要 ssh 隧道（`docs/spikes/2026-09-08-developer-host-online.md`）。
+- **CI 与发布**：每次推送跑全量测试、clippy `-D warnings`、`cargo fmt --check`、控制台与 SDK 构建；`v*` 标签出五个目标的 CLI 单文件到 GitHub Releases。`v0.1.0` 已打。仓库已有三次提交，`cargo test --workspace` 388 条全绿。
 - 域名 `playtest.run`（内容）**已购买、解析已在 Cloudflare（DNS-only）指向香港机器**；开发者侧用 `playtest.roviix.com`（2026-09-08 定，不买 `playtest.sh`），已解析到同一台机器，控制面与控制台有了公网入口。
 - **香港边缘已上线**：Caddy + api + edge 跑在 `playtest-hk` 上，`*.playtest.run` 泛域名证书已签，三个真链接在线（`docs/spikes/2026-09-07-hk-online-first-links.md`，部署方式见 `deploy/README.md`）。没有 OAuth 应用；对象存储是机器磁盘。
 - 竞品图见 DESIGN §2，2026-09-07 的快照；调研原文在 `docs/research/`（13 条线，综合在 `docs/research/README.md`）。**DESIGN 已于同日下午按调研修订**：微信可玩降为待验证、香港不作卖点、上传与隧道一等公民、`--json` 与 `playtest mcp` 进 v0.1、免费档 10 GB + 匿名 1 GB/24h + 每 slug 每小时熔断、结果层改点名册句式、时刻表加 M2b「让对方敢点开」、留门与指标更新（DESIGN §9 有清单）。

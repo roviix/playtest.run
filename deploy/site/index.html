@@ -44,7 +44,10 @@ playtest 5173       <span class="c"># 把正在跑的本地开发服务器或联
 <p>控制台需要一个令牌：在作品目录里运行一次 <code>playtest</code>，它会自己申请一个，令牌就在 <code>~/.config/playtest/config.json</code> 里。</p>
 
 <h2>安装</h2>
-<p>私测阶段还没有预编译包。有 Rust 工具链的话，克隆仓库后 <code>cargo build -p playtest</code>，二进制在 <code>target/debug/playtest</code>。公开发布时会有 macOS、Linux、Windows 三平台的单文件下载。</p>
+<p>一个单文件，macOS（Apple Silicon 与 Intel）、Linux（x86_64 与 arm64）、Windows 各一份，在 <a href="https://github.com/roviix/playtest.run/releases">GitHub Releases</a> 下载，解开后把 <code>playtest</code> 放到 PATH 里。私测阶段仓库是私有的，链接只有受邀的人打得开；macOS 第一次运行若被拦，在「系统设置 → 隐私与安全性」里放行一次（还没有签名与公证）。</p>
+<pre><code><span class="c"># macOS / Linux：解开、放进 PATH、发一个</span>
+tar -xzf playtest-*.tar.gz &amp;&amp; sudo mv playtest-*/playtest /usr/local/bin/
+cd 你的导出目录 &amp;&amp; playtest .</code></pre>
 
 <footer>玩家看到的东西全在 <code>*.playtest.run</code> 上；登录、令牌、控制台只在这个域名下。我们从不运行你的代码，只分发文件和转发连接；不记玩家 IP，不收集位置。数据默认保留 90 天。<br>一个 <a href="https://roviix.com">roviix</a> 出品。</footer>
 </main>

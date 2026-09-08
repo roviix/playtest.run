@@ -82,7 +82,8 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     output::say_findings(&checked.findings);
     let isolated = choose_isolated(&mut checked, cli_args);
 
-    let title = title_for(cli_args, &root).map_err(output::as_bad_input)?;
+    let title =
+        title_for(cli_args, &root, checked.page_title.as_deref()).map_err(output::as_bad_input)?;
     check_note(cli_args).map_err(output::as_bad_input)?;
 
     let api = args::api_base(cli_args.api.as_deref());
@@ -287,13 +288,38 @@ fn ask_yes(question: &str) -> Option<bool> {
     Some(answer != "n" && answer != "no")
 }
 
-pub(crate) fn title_for(cli_args: &UploadArgs, root: &Path) -> Result<String> {
-    let title = match &cli_args.name {
-        Some(name) => name.trim().to_string(),
-        None => root
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "未命名".to_string()),
+/// 作品名：`--name` 最优先；没给就看 `index.html` 的 `<title>`；再没有才用目录名。
+/// 目录名叫 `dist` / `export` / `build` / `www` / `public` 时不用它——玩家在门禁页上看到「邀请你试玩《dist》」
+/// 会以为链接发错了；这种目录名的作品，页面标题多半才是它真正的名字。
+pub(crate) fn title_for(
+    cli_args: &UploadArgs,
+    root: &Path,
+    page_title: Option<&str>,
+) -> Result<String> {
+    let dir_name = root
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .filter(|n| !n.is_empty() && n != ".");
+    let generic_dir = dir_name.as_deref().is_none_or(|n| {
+        matches!(
+            n.to_ascii_lowercase().as_str(),
+            "dist"
+                | "export"
+                | "build"
+                | "www"
+                | "public"
+                | "out"
+                | "html"
+                | "web"
+                | "webgl"
+                | "release"
+                | "output"
+        )
+    });
+    let title = match (&cli_args.name, page_title) {
+        (Some(name), _) => name.trim().to_string(),
+        (None, Some(page)) if generic_dir => page.to_string(),
+        (None, _) => dir_name.unwrap_or_else(|| "未命名".to_string()),
     };
     if title.is_empty() {
         bail!("作品名不能是空的。");

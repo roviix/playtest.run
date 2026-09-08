@@ -57,7 +57,9 @@ jobs:
             cp LICENSE README.md "dist/$name/"
             (cd dist && tar -czf "$name.tar.gz" "$name")
           fi
-          (cd dist && (shasum -a 256 "$name."* 2>/dev/null || sha256sum "$name."*) > "$name.sha256")
+          # 只算压缩包本身；`$name.*` 会把正在写的 .sha256 也算进去。
+          archive="$name.${{ matrix.archive }}"
+          (cd dist && (shasum -a 256 "$archive" 2>/dev/null || sha256sum "$archive") > "$name.sha256")
           ls -la dist
       - uses: actions/upload-artifact@v4
         with:
