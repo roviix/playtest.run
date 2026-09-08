@@ -73,8 +73,16 @@ pub async fn versions(target: &str, api_flag: Option<&str>) -> Result<()> {
         return Ok(());
     }
     for v in &list.versions {
-        let mark = if v.current { "← 玩家现在看到的" } else { "" };
-        let note = v.note.as_deref().map(|n| format!("  「{n}」")).unwrap_or_default();
+        let mark = if v.current {
+            "← 玩家现在看到的"
+        } else {
+            ""
+        };
+        let note = v
+            .note
+            .as_deref()
+            .map(|n| format!("  「{n}」"))
+            .unwrap_or_default();
         ui::say(&format!(
             "v{:<3} {}  {} 个文件 {}{}  {}",
             v.version,
