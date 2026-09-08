@@ -32,10 +32,7 @@ pub fn strip_port(authority: &str) -> &str {
 /// 端口部分，拼本机链接时要带上（本机边缘在 8443，丢了端口链接就点不开）。
 pub fn port_of(authority: &str) -> Option<&str> {
     let after_bracket = if authority.starts_with('[') {
-        match authority.find(']') {
-            Some(i) => &authority[i + 1..],
-            None => return None,
-        }
+        &authority[authority.find(']')? + 1..]
     } else {
         authority
     };
