@@ -6,6 +6,9 @@
 //!
 //! 真机上用浏览器和 curl 走的那一遍记在 `docs/spikes/2026-09-07-sdk-ingest.md`。
 
+// 测试脚手架：`from_edge` / `from_sdk` 是「以边缘 / SDK 的身份发一批」，名字比 clippy 的命名惯例更说明问题。
+#![allow(clippy::wrong_self_convention)]
+
 use axum::body::{Body, Bytes};
 use axum::http::{header, Request, StatusCode};
 use axum::Router;
@@ -25,7 +28,8 @@ use serde::Serialize;
 use tower::ServiceExt;
 
 const INDEX_HTML: &[u8] = b"<!doctype html><meta charset=utf-8><canvas id=game></canvas>";
-const PLAYER_UA: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 \
+const PLAYER_UA: &str =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 \
                          (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49(0x18003128)";
 
 struct Harness {
@@ -142,7 +146,12 @@ impl Harness {
             .await
             .json();
         let site: Site = self
-            .developer("POST", paths::SITES, &token.token, &CreateSiteRequest::default())
+            .developer(
+                "POST",
+                paths::SITES,
+                &token.token,
+                &CreateSiteRequest::default(),
+            )
             .await
             .json();
         self.publish(&site.slug, &token.token).await;
@@ -360,7 +369,10 @@ async fn a_session_gets_stitched_together_from_both_sides() {
             },
         )
         .await;
-    assert_eq!((device.as_str(), browser.as_str(), os.as_str()), ("phone", "wechat", "ios"));
+    assert_eq!(
+        (device.as_str(), browser.as_str(), os.as_str()),
+        ("phone", "wechat", "ios")
+    );
     assert_eq!(referrer, "wechat");
     assert_eq!(wechat, 1);
     assert_eq!(gate, at(0));
@@ -372,7 +384,8 @@ async fn a_session_gets_stitched_together_from_both_sides() {
 
     assert_eq!(h.count("SELECT COUNT(*) FROM session_events").await, 6);
     assert_eq!(
-        h.count("SELECT COUNT(*) FROM session_events WHERE source = 'edge'").await,
+        h.count("SELECT COUNT(*) FROM session_events WHERE source = 'edge'")
+            .await,
         2
     );
     let fingerprint: String = h
@@ -399,7 +412,12 @@ async fn the_version_comes_from_the_server_not_the_client() {
         .await
         .json();
     let site: Site = h
-        .developer("POST", paths::SITES, &token.token, &CreateSiteRequest::default())
+        .developer(
+            "POST",
+            paths::SITES,
+            &token.token,
+            &CreateSiteRequest::default(),
+        )
         .await
         .json();
     h.publish(&site.slug, &token.token).await;
@@ -448,14 +466,18 @@ async fn the_version_comes_from_the_server_not_the_client() {
         .json::<Accepted>();
     }
     assert_eq!(
-        h.count(&format!("SELECT version FROM sessions WHERE id = '{older}'"))
-            .await,
+        h.count(&format!(
+            "SELECT version FROM sessions WHERE id = '{older}'"
+        ))
+        .await,
         1,
         "旧版本是真的，照记"
     );
     assert_eq!(
-        h.count(&format!("SELECT version FROM sessions WHERE id = '{faked}'"))
-            .await,
+        h.count(&format!(
+            "SELECT version FROM sessions WHERE id = '{faked}'"
+        ))
+        .await,
         2,
         "比当前版本还新的按当前版本记"
     );
@@ -542,7 +564,9 @@ async fn one_page_cannot_flood_us() {
         events: vec![event("event")],
     };
     assert_eq!(
-        h.from_player(ingest_paths::EVENTS, &slug, &other).await.status,
+        h.from_player(ingest_paths::EVENTS, &slug, &other)
+            .await
+            .status,
         StatusCode::OK
     );
 }
@@ -559,14 +583,19 @@ async fn junk_batches_are_refused_line_by_line() {
         slug: slug.clone(),
         events: vec![event("load"), event("pageview"), event("input")],
     };
-    let accepted: Accepted = h.from_player(ingest_paths::EVENTS, &slug, &mixed).await.json();
+    let accepted: Accepted = h
+        .from_player(ingest_paths::EVENTS, &slug, &mixed)
+        .await
+        .json();
     assert_eq!(accepted.accepted, 2);
 
     // 一批 51 条：整批退。
     let too_many = EventBatch {
         session: sid.clone(),
         slug: slug.clone(),
-        events: (0..=ingest::MAX_EVENTS_PER_BATCH).map(|_| event("event")).collect(),
+        events: (0..=ingest::MAX_EVENTS_PER_BATCH)
+            .map(|_| event("event"))
+            .collect(),
     };
     let body = h
         .from_player(ingest_paths::EVENTS, &slug, &too_many)
@@ -696,7 +725,11 @@ async fn feedback_is_one_sentence_and_stops_at_three() {
         )
         .await
         .error(StatusCode::TOO_MANY_REQUESTS, ErrorCode::QuotaExceeded);
-    assert!(fourth.message.contains("谢谢"), "拦也要好好说话：{}", fourth.message);
+    assert!(
+        fourth.message.contains("谢谢"),
+        "拦也要好好说话：{}",
+        fourth.message
+    );
     assert_eq!(h.count("SELECT COUNT(*) FROM feedback").await, 3);
 
     // 空的一条：什么都不必填，但总得写点什么。

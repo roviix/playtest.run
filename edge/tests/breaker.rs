@@ -112,7 +112,9 @@ impl Site {
 
     fn events(&self) -> Vec<serde_json::Value> {
         let raw = std::fs::read_to_string(self.app.events.path()).unwrap_or_default();
-        raw.lines().map(|l| serde_json::from_str(l).unwrap()).collect()
+        raw.lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
     }
 }
 
@@ -143,7 +145,9 @@ fn nav(path: &str) -> axum::http::request::Builder {
 }
 
 fn asset(path: &str) -> axum::http::request::Builder {
-    base(path).header("accept", "*/*").header("sec-fetch-dest", "script")
+    base(path)
+        .header("accept", "*/*")
+        .header("sec-fetch-dest", "script")
 }
 
 #[tokio::test]
@@ -151,12 +155,18 @@ async fn serving_a_file_counts_toward_the_hour() {
     let site = Site::plain().await;
     assert_eq!(site.app.breaker.total(SLUG), 0);
 
-    site.send(asset("/game.js").body(Body::empty()).unwrap()).await;
+    site.send(asset("/game.js").body(Body::empty()).unwrap())
+        .await;
     assert_eq!(site.app.breaker.total(SLUG), GAME_JS.len() as u64);
 
     // HEAD 不出体，不记账。
-    site.send(asset("/game.js").method("HEAD").body(Body::empty()).unwrap())
-        .await;
+    site.send(
+        asset("/game.js")
+            .method("HEAD")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
     assert_eq!(site.app.breaker.total(SLUG), GAME_JS.len() as u64);
 
     // 304 也不。
@@ -182,7 +192,10 @@ async fn a_navigation_gets_a_page_a_subresource_gets_nothing() {
     // 浏览器默认的错误页只会让他以为是自己的网络坏了。
     let page = site.send(nav("/").body(Body::empty()).unwrap()).await;
     assert_eq!(page.status, StatusCode::TOO_MANY_REQUESTS);
-    assert_eq!(page.header("content-type"), Some("text/html; charset=utf-8"));
+    assert_eq!(
+        page.header("content-type"),
+        Some("text/html; charset=utf-8")
+    );
     assert_eq!(page.header("cache-control"), Some("no-store"));
     assert!(page.header("retry-after").is_some());
     assert!(page.text().contains("这一小时的流量用完了"));
@@ -195,7 +208,9 @@ async fn a_navigation_gets_a_page_a_subresource_gets_nothing() {
         assert_eq!(reply.status, StatusCode::TOO_MANY_REQUESTS, "{path}");
         assert!(reply.body.is_empty(), "{path}：熔断给子资源发了正文");
         assert_ne!(
-            reply.header("content-type").map(|t| t.starts_with("text/html")),
+            reply
+                .header("content-type")
+                .map(|t| t.starts_with("text/html")),
             Some(true),
             "{path}"
         );
@@ -209,7 +224,9 @@ async fn the_report_form_stays_open() {
     let site = Site::plain().await;
     site.burn_the_hour(limits::SLUG_HOURLY_BYTES);
 
-    let form = site.send(nav("/_playtest/report").body(Body::empty()).unwrap()).await;
+    let form = site
+        .send(nav("/_playtest/report").body(Body::empty()).unwrap())
+        .await;
     assert_eq!(form.status, StatusCode::OK);
     assert!(form.text().contains("<select name=\"reason\">"));
 
@@ -242,7 +259,8 @@ async fn the_trip_is_written_once_not_once_per_request() {
     site.burn_the_hour(limits::SLUG_HOURLY_BYTES);
 
     for _ in 0..20 {
-        site.send(asset("/game.js").body(Body::empty()).unwrap()).await;
+        site.send(asset("/game.js").body(Body::empty()).unwrap())
+            .await;
     }
     site.send(nav("/").body(Body::empty()).unwrap()).await;
 
@@ -268,7 +286,7 @@ async fn the_trip_is_written_once_not_once_per_request() {
 async fn anonymous_links_trip_earlier() {
     // 匿名链接 24 小时总共才 1 GiB（DESIGN §6），每小时的闸门跟着更紧。
     let site = Site::build(|m| m.expires_at = Some("2099-01-01T00:00:00Z".into())).await;
-    assert!(limits::ANON_SLUG_HOURLY_BYTES < limits::SLUG_HOURLY_BYTES);
+    const { assert!(limits::ANON_SLUG_HOURLY_BYTES < limits::SLUG_HOURLY_BYTES) };
 
     site.burn_the_hour(limits::ANON_SLUG_HOURLY_BYTES);
     let reply = site.send(nav("/").body(Body::empty()).unwrap()).await;
@@ -284,7 +302,9 @@ async fn anonymous_links_trip_earlier() {
 #[tokio::test]
 async fn one_slug_tripping_does_not_touch_the_others() {
     let site = Site::plain().await;
-    site.app.breaker.record("keen-gecko-9", limits::SLUG_HOURLY_BYTES);
+    site.app
+        .breaker
+        .record("keen-gecko-9", limits::SLUG_HOURLY_BYTES);
 
     let reply = site.send(nav("/").body(Body::empty()).unwrap()).await;
     assert_eq!(reply.status, StatusCode::OK);

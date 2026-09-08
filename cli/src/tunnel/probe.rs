@@ -75,7 +75,12 @@ pub async fn look(port: u16) -> Page {
     let Some(http) = local_client() else {
         return Page::default();
     };
-    let Ok(response) = http.get(root_url(port)).header(HOST, host(port)).send().await else {
+    let Ok(response) = http
+        .get(root_url(port))
+        .header(HOST, host(port))
+        .send()
+        .await
+    else {
         return Page::default();
     };
     if !response.status().is_success() {
@@ -227,7 +232,8 @@ fn same_origin_path(value: &str) -> Option<String> {
     if value.is_empty() || value.starts_with("//") || value.contains("://") {
         return None;
     }
-    if value.starts_with("data:") || value.starts_with("blob:") || value.starts_with("javascript:") {
+    if value.starts_with("data:") || value.starts_with("blob:") || value.starts_with("javascript:")
+    {
         return None;
     }
     if value.starts_with('/') {
@@ -283,7 +289,9 @@ mod tests {
         assert!(looks_like_vite(
             r#"<html><script type="module" src="/@vite/client"></script></html>"#
         ));
-        assert!(!looks_like_vite("<html><script src=\"/main.js\"></script></html>"));
+        assert!(!looks_like_vite(
+            "<html><script src=\"/main.js\"></script></html>"
+        ));
     }
 
     #[test]
@@ -308,10 +316,7 @@ mod tests {
             <script src="/main.js"></script>
             <script src="/main.js"></script>
         "#;
-        assert_eq!(
-            asset_refs(html),
-            ["/style.css", "/favicon.ico", "/main.js"]
-        );
+        assert_eq!(asset_refs(html), ["/style.css", "/favicon.ico", "/main.js"]);
     }
 
     #[test]

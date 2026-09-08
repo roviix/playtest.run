@@ -7,8 +7,8 @@ use std::collections::HashSet;
 use axum::extract::{Path, State};
 use axum::Json;
 use playtest_common::api::{CommitUploadResponse, PrepareUploadRequest, PrepareUploadResponse};
-use playtest_common::manifest::{self, FileEntry, Manifest, ManifestError};
 use playtest_common::limits;
+use playtest_common::manifest::{self, FileEntry, Manifest, ManifestError};
 use playtest_common::store::Current;
 use uuid::Uuid;
 
@@ -232,7 +232,10 @@ fn missing_message(absent: &[&str]) -> String {
             absent.len()
         )
     } else {
-        format!("还有 {} 个文件没传上来：{shown}。重新运行一次上传，没传成功的会补上。", absent.len())
+        format!(
+            "还有 {} 个文件没传上来：{shown}。重新运行一次上传，没传成功的会补上。",
+            absent.len()
+        )
     }
 }
 
@@ -303,7 +306,10 @@ mod tests {
     #[test]
     fn blank_title_counts_as_missing() {
         assert_eq!(clean_title(Some("   ")).unwrap(), None);
-        assert_eq!(clean_title(Some(" 小球 ")).unwrap().as_deref(), Some("小球"));
+        assert_eq!(
+            clean_title(Some(" 小球 ")).unwrap().as_deref(),
+            Some("小球")
+        );
         assert!(clean_title(Some(&"字".repeat(limits::MAX_TITLE_CHARS + 1))).is_err());
     }
 }

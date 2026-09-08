@@ -82,7 +82,8 @@ async fn save(
     let at = clock::format(now);
 
     let mut conn = state.db().lock().await;
-    let version = current_version(&conn, &slug)?.ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?;
+    let version =
+        current_version(&conn, &slug)?.ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?;
 
     let tx = conn.transaction()?;
     let already = count_for_session(&tx, &request.session)?;

@@ -227,7 +227,14 @@ mod tests {
 
     #[test]
     fn anything_else_is_a_directory() {
-        for raw in ["./dist", "dist", "/tmp/build", "5173/", "./5173", "web-export"] {
+        for raw in [
+            "./dist",
+            "dist",
+            "/tmp/build",
+            "5173/",
+            "./5173",
+            "web-export",
+        ] {
             assert_eq!(classify(raw), Target::Dir(PathBuf::from(raw)), "{raw}");
         }
     }

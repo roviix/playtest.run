@@ -128,7 +128,9 @@ impl Mux {
             return Err(MuxError::WrongRole);
         }
         let (tx, rx) = oneshot::channel();
-        self.cmd.send(Command::Open(tx)).map_err(|_| MuxError::Closed)?;
+        self.cmd
+            .send(Command::Open(tx))
+            .map_err(|_| MuxError::Closed)?;
         rx.await.map_err(|_| MuxError::Closed)?.map(MuxStream::new)
     }
 
@@ -312,7 +314,10 @@ mod tests {
 
     async fn mux_pair() -> (Mux, Mux) {
         let (edge, cli) = ws_pair().await;
-        (Mux::spawn(edge, Role::Opener), Mux::spawn(cli, Role::Acceptor))
+        (
+            Mux::spawn(edge, Role::Opener),
+            Mux::spawn(cli, Role::Acceptor),
+        )
     }
 
     #[tokio::test]
@@ -374,7 +379,10 @@ mod tests {
                     }
                     total += n;
                 }
-                stream.write_all(&(total as u64).to_be_bytes()).await.unwrap();
+                stream
+                    .write_all(&(total as u64).to_be_bytes())
+                    .await
+                    .unwrap();
                 stream.shutdown().await.unwrap();
                 acceptor
             });
@@ -416,7 +424,11 @@ mod tests {
 
             let mut back = Vec::new();
             stream.read_to_end(&mut back).await.unwrap();
-            assert_eq!(back, "响应".as_bytes(), "半关闭之后应该还能收到对端写回来的东西");
+            assert_eq!(
+                back,
+                "响应".as_bytes(),
+                "半关闭之后应该还能收到对端写回来的东西"
+            );
 
             let _acceptor = server.await.unwrap();
         })
@@ -434,7 +446,10 @@ mod tests {
             opener.close();
             assert_eq!(opener.closed().await, Ok(()), "主动关闭的一端该干净收场");
 
-            assert!(acceptor.accept().await.is_none(), "对端关了之后不该再有新流进来");
+            assert!(
+                acceptor.accept().await.is_none(),
+                "对端关了之后不该再有新流进来"
+            );
             // 被动感知关闭的一端，收到的是干净的收尾还是半个帧要看时序，这里只要求它一定会结束。
             let _ = peer_closed.await;
 

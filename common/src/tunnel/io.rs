@@ -125,9 +125,16 @@ mod tests {
 
     #[test]
     fn handshake_request_rejects_urls_that_are_not_websockets() {
-        for bad in ["https://x.playtest.run/_playtest/tunnel", "不是地址", "/只有路径"] {
+        for bad in [
+            "https://x.playtest.run/_playtest/tunnel",
+            "不是地址",
+            "/只有路径",
+        ] {
             assert!(
-                matches!(handshake_request(bad, "t", 1), Err(HandshakeError::BadUrl(_))),
+                matches!(
+                    handshake_request(bad, "t", 1),
+                    Err(HandshakeError::BadUrl(_))
+                ),
                 "{bad} 应该被拒"
             );
         }

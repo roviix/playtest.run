@@ -194,7 +194,10 @@ mod tests {
     #[test]
     fn clips_long_fields_on_char_boundary() {
         let long = "中".repeat(MAX_FIELD_CHARS + 10);
-        assert_eq!(clip(&long, MAX_FIELD_CHARS).chars().count(), MAX_FIELD_CHARS);
+        assert_eq!(
+            clip(&long, MAX_FIELD_CHARS).chars().count(),
+            MAX_FIELD_CHARS
+        );
         assert_eq!(clip("短", MAX_FIELD_CHARS), "短");
     }
 
@@ -210,8 +213,15 @@ mod tests {
         };
         log.append(Kind::GateView, "brisk-otter-41", 7, &visitor, None, None)
             .await;
-        log.append(Kind::Report, "brisk-otter-41", 7, &visitor, Some("phishing"), Some("假的"))
-            .await;
+        log.append(
+            Kind::Report,
+            "brisk-otter-41",
+            7,
+            &visitor,
+            Some("phishing"),
+            Some("假的"),
+        )
+        .await;
 
         let body = std::fs::read_to_string(log.path()).unwrap();
         let lines: Vec<_> = body.lines().collect();
@@ -240,8 +250,14 @@ mod tests {
     async fn breaker_trip_records_how_far_over_it_went() {
         let dir = tempfile::tempdir().unwrap();
         let log = EventLog::new(dir.path().join("edge-events.jsonl"));
-        log.breaker_trip("brisk-otter-41", 7, &Visitor::default(), 3_221_225_472, 3_221_225_472)
-            .await;
+        log.breaker_trip(
+            "brisk-otter-41",
+            7,
+            &Visitor::default(),
+            3_221_225_472,
+            3_221_225_472,
+        )
+        .await;
 
         let body = std::fs::read_to_string(log.path()).unwrap();
         let line: serde_json::Value = serde_json::from_str(body.trim()).unwrap();

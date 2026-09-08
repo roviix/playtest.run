@@ -267,7 +267,9 @@ impl Tunnels {
         session.close(close::GOING_AWAY);
 
         let seen = LastSeen {
-            at: OffsetDateTime::now_utc().format(&Rfc3339).unwrap_or_default(),
+            at: OffsetDateTime::now_utc()
+                .format(&Rfc3339)
+                .unwrap_or_default(),
             title: session.claims.title.clone(),
             developer: session.claims.developer.clone(),
             badge: session.claims.badge,
@@ -312,8 +314,12 @@ impl Tunnels {
     }
 
     async fn persist(&self, slug: &str, seen: &LastSeen) {
-        let Some(path) = self.file_of(slug) else { return };
-        let Ok(bytes) = serde_json::to_vec(seen) else { return };
+        let Some(path) = self.file_of(slug) else {
+            return;
+        };
+        let Ok(bytes) = serde_json::to_vec(seen) else {
+            return;
+        };
         let write = async {
             tokio::fs::create_dir_all(&self.dir).await?;
             tokio::fs::write(&path, &bytes).await

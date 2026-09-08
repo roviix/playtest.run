@@ -182,10 +182,9 @@ async fn findings_for(
     let Some(weighing) = weighing else {
         return findings;
     };
-    match tokio::time::timeout(WEIGH_GRACE, weighing).await {
-        Ok(Ok(Some(total))) => findings.extend(probe::heavy_hint(total)),
-        // 没量完、量不准、任务出错：都当作不知道。
-        _ => {}
+    // 没量完、量不准、任务出错：都当作不知道。
+    if let Ok(Ok(Some(total))) = tokio::time::timeout(WEIGH_GRACE, weighing).await {
+        findings.extend(probe::heavy_hint(total));
     }
     findings
 }

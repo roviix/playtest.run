@@ -57,8 +57,7 @@ pub fn app(state: AppState) -> Router {
             paths::BLOB,
             // 上传是流式的，请求体从头到尾不进内存，所以体积上限要在层里挡，
             // 不能靠那些「先收完再解析」的提取器。
-            put(blobs::upload)
-                .layer(RequestBodyLimitLayer::new(limits::MAX_FILE_BYTES as usize)),
+            put(blobs::upload).layer(RequestBodyLimitLayer::new(limits::MAX_FILE_BYTES as usize)),
         )
         .fallback(unknown_route)
         // 写入端点的令牌桶。一个 app() 一份，进程内存里（见 events.rs）。

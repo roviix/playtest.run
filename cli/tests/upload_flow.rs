@@ -354,7 +354,10 @@ fn a_second_run_reuses_the_remembered_site_and_uploads_nothing() {
     // 要验的是「作品沿用记住的那个」和「一个字节都不用传」。
     let second = run_cli(home.path(), &api2, &[dist.to_str().unwrap(), "--no-qr"]);
     assert!(second.status.success(), "{}", stderr_of(&second));
-    assert!(fake2.log.lock().unwrap().blobs.is_empty(), "不该再传任何文件");
+    assert!(
+        fake2.log.lock().unwrap().blobs.is_empty(),
+        "不该再传任何文件"
+    );
     assert!(
         stderr_of(&second).contains("都已经有了"),
         "{}",
@@ -362,7 +365,9 @@ fn a_second_run_reuses_the_remembered_site_and_uploads_nothing() {
     );
     let calls = fake2.calls();
     assert!(
-        calls.iter().any(|c| c == &format!("POST /v1/sites/{NEW_SLUG}/uploads")),
+        calls
+            .iter()
+            .any(|c| c == &format!("POST /v1/sites/{NEW_SLUG}/uploads")),
         "应该沿用记住的作品：{calls:?}"
     );
     assert!(
@@ -461,7 +466,11 @@ fn login_says_it_is_not_built_yet() {
     let home = tempfile::tempdir().unwrap();
     let output = run_cli(home.path(), "http://127.0.0.1:1", &["login"]);
     assert_eq!(output.status.code(), Some(2));
-    assert!(stderr_of(&output).contains("匿名链接"), "{}", stderr_of(&output));
+    assert!(
+        stderr_of(&output).contains("匿名链接"),
+        "{}",
+        stderr_of(&output)
+    );
 }
 
 #[test]
@@ -470,10 +479,18 @@ fn a_missing_directory_and_a_plain_file_each_get_their_own_message() {
     let work = tempfile::tempdir().unwrap();
 
     let missing = work.path().join("nope");
-    let output = run_cli(home.path(), "http://127.0.0.1:1", &[missing.to_str().unwrap()]);
+    let output = run_cli(
+        home.path(),
+        "http://127.0.0.1:1",
+        &[missing.to_str().unwrap()],
+    );
     // 退出码 6：给的东西有问题（见 `playtest --help` 尾部）。
     assert_eq!(output.status.code(), Some(6));
-    assert!(stderr_of(&output).contains("找不到"), "{}", stderr_of(&output));
+    assert!(
+        stderr_of(&output).contains("找不到"),
+        "{}",
+        stderr_of(&output)
+    );
 
     let file = work.path().join("index.html");
     write(&file, b"<html></html>");
@@ -487,9 +504,17 @@ fn a_missing_directory_and_a_plain_file_each_get_their_own_message() {
 
     let empty = work.path().join("empty");
     std::fs::create_dir_all(&empty).unwrap();
-    let output = run_cli(home.path(), "http://127.0.0.1:1", &[empty.to_str().unwrap()]);
+    let output = run_cli(
+        home.path(),
+        "http://127.0.0.1:1",
+        &[empty.to_str().unwrap()],
+    );
     assert_eq!(output.status.code(), Some(6));
-    assert!(stderr_of(&output).contains("是空的"), "{}", stderr_of(&output));
+    assert!(
+        stderr_of(&output).contains("是空的"),
+        "{}",
+        stderr_of(&output)
+    );
 }
 
 #[test]

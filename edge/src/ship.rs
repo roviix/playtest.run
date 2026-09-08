@@ -117,7 +117,9 @@ impl Shipper {
 
     async fn post(&self, events: &[EdgeEvent]) -> anyhow::Result<()> {
         let url: hyper::Uri = format!("{}{}", self.api_base, ingest::routes::EDGE).parse()?;
-        let host = url.host().ok_or_else(|| anyhow::anyhow!("控制面地址没有主机名"))?;
+        let host = url
+            .host()
+            .ok_or_else(|| anyhow::anyhow!("控制面地址没有主机名"))?;
         let port = url.port_u16().unwrap_or(80);
         if url.scheme_str() != Some("http") {
             anyhow::bail!("边缘上报只支持 http://（控制面在同一台机器或内网上）");
@@ -128,7 +130,8 @@ impl Shipper {
         )
         .await
         .map_err(|_| anyhow::anyhow!("连接控制面超时"))??;
-        let (mut sender, conn) = hyper::client::conn::http1::handshake(TokioIo::new(stream)).await?;
+        let (mut sender, conn) =
+            hyper::client::conn::http1::handshake(TokioIo::new(stream)).await?;
         tokio::spawn(async move {
             let _ = conn.await;
         });
@@ -139,7 +142,10 @@ impl Shipper {
         let request = Request::post(url.path())
             .header("host", format!("{host}:{port}"))
             .header("content-type", "application/json")
-            .header("user-agent", concat!("playtest-edge/", env!("CARGO_PKG_VERSION")))
+            .header(
+                "user-agent",
+                concat!("playtest-edge/", env!("CARGO_PKG_VERSION")),
+            )
             .body(Full::new(Bytes::from(body)))?;
         let response = tokio::time::timeout(Duration::from_secs(10), sender.send_request(request))
             .await
@@ -149,7 +155,10 @@ impl Shipper {
             let text = response.into_body().collect().await?.to_bytes();
             anyhow::bail!(
                 "控制面拒收（{status}）：{}",
-                String::from_utf8_lossy(&text).chars().take(200).collect::<String>()
+                String::from_utf8_lossy(&text)
+                    .chars()
+                    .take(200)
+                    .collect::<String>()
             );
         }
         Ok(())
@@ -204,7 +213,11 @@ mod tests {
         let log = dir.path().join("edge-events.jsonl");
         std::fs::write(
             &log,
-            format!("{}\n{}\n", line("gate_view", "a".repeat(32).as_str()), line("start", "a".repeat(32).as_str())),
+            format!(
+                "{}\n{}\n",
+                line("gate_view", "a".repeat(32).as_str()),
+                line("start", "a".repeat(32).as_str())
+            ),
         )
         .unwrap();
         let received = Arc::new(Mutex::new(Vec::new()));
@@ -217,7 +230,12 @@ mod tests {
         // 再追加一行加半行：只有完整的那行被送。
         let mut f = std::fs::OpenOptions::new().append(true).open(&log).unwrap();
         use std::io::Write;
-        write!(f, "{}\n{{\"ts\":\"半", line("html_view", "b".repeat(32).as_str())).unwrap();
+        write!(
+            f,
+            "{}\n{{\"ts\":\"半",
+            line("html_view", "b".repeat(32).as_str())
+        )
+        .unwrap();
         drop(f);
         assert_eq!(shipper.ship_once().await.unwrap(), 1);
 
@@ -240,7 +258,11 @@ mod tests {
     async fn a_dead_api_leaves_the_offset_alone() {
         let dir = tempfile::tempdir().unwrap();
         let log = dir.path().join("edge-events.jsonl");
-        std::fs::write(&log, format!("{}\n", line("gate_view", "c".repeat(32).as_str()))).unwrap();
+        std::fs::write(
+            &log,
+            format!("{}\n", line("gate_view", "c".repeat(32).as_str())),
+        )
+        .unwrap();
         // 一个没人听的端口。
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();

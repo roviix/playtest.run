@@ -24,12 +24,7 @@ struct Inner {
 }
 
 impl AppState {
-    pub fn new(
-        db: Db,
-        store: FsStore,
-        site_url_template: String,
-        tunnel_key: SigningKey,
-    ) -> Self {
+    pub fn new(db: Db, store: FsStore, site_url_template: String, tunnel_key: SigningKey) -> Self {
         Self {
             inner: Arc::new(Inner {
                 db,
@@ -75,9 +70,7 @@ impl AppState {
 
     /// 玩家点开的链接。
     pub fn site_url(&self, slug: &str) -> String {
-        self.inner
-            .site_url_template
-            .replace(SLUG_PLACEHOLDER, slug)
+        self.inner.site_url_template.replace(SLUG_PLACEHOLDER, slug)
     }
 
     /// 提交一个版本要「读当前版本号 → 写清单 → 挪指针 → 回写库」，中间有文件 I/O，

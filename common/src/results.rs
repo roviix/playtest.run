@@ -346,7 +346,10 @@ mod tests {
         assert_eq!("time".parse::<RosterSort>().unwrap(), RosterSort::Time);
         assert!("按停留".parse::<RosterSort>().is_err());
 
-        assert_eq!("done".parse::<FeedbackStatus>().unwrap(), FeedbackStatus::Done);
+        assert_eq!(
+            "done".parse::<FeedbackStatus>().unwrap(),
+            FeedbackStatus::Done
+        );
         assert!("closed".parse::<FeedbackStatus>().is_err());
         assert_eq!(FeedbackStatus::from_db("坏了"), FeedbackStatus::New);
     }

@@ -128,7 +128,9 @@ fn b64(bytes: &[u8]) -> String {
 
 fn unb64(s: &str) -> Option<Vec<u8>> {
     use base64::Engine;
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(s).ok()
+    base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(s)
+        .ok()
 }
 
 impl SigningKey {
@@ -186,7 +188,8 @@ impl VerifyingKey {
         }
         let payload = unb64(payload_b64).ok_or(TokenError::Malformed)?;
         let sig_bytes = unb64(sig_b64).ok_or(TokenError::Malformed)?;
-        let sig = ed25519_dalek::Signature::from_slice(&sig_bytes).map_err(|_| TokenError::Malformed)?;
+        let sig =
+            ed25519_dalek::Signature::from_slice(&sig_bytes).map_err(|_| TokenError::Malformed)?;
         self.0
             .verify(&payload, &sig)
             .map_err(|_| TokenError::BadSignature)?;
@@ -291,7 +294,10 @@ mod tests {
         let now = 1_800_000_000;
         let token = sk.sign(&claims(now));
 
-        assert_eq!(vk.verify(&token, now + TOKEN_TTL_SECS + 61), Err(TokenError::Expired));
+        assert_eq!(
+            vk.verify(&token, now + TOKEN_TTL_SECS + 61),
+            Err(TokenError::Expired)
+        );
         assert_eq!(vk.verify(&token, now - 61), Err(TokenError::NotYetValid));
 
         let other = SigningKey::generate().verifying_key();
@@ -300,9 +306,15 @@ mod tests {
         let mut parts: Vec<&str> = token.split('.').collect();
         let forged = b64(br#"{"v":1,"slug":"admin"}"#);
         parts[1] = &forged;
-        assert_eq!(vk.verify(&parts.join("."), now), Err(TokenError::BadSignature));
+        assert_eq!(
+            vk.verify(&parts.join("."), now),
+            Err(TokenError::BadSignature)
+        );
 
-        assert_eq!(vk.verify("pt0.a.b", now), Err(TokenError::UnknownVersion("pt0".into())));
+        assert_eq!(
+            vk.verify("pt0.a.b", now),
+            Err(TokenError::UnknownVersion("pt0".into()))
+        );
         assert_eq!(vk.verify("garbage", now), Err(TokenError::Malformed));
     }
 }

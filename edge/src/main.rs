@@ -30,7 +30,11 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("绑不上 {listen}，端口可能被占了"))?;
 
     tracing::info!("边缘在 http://{listen} 上（明文，没有 TLS）");
-    tracing::info!("作品从 {} 读，事件写到 {}", store_root.display(), events_path.display());
+    tracing::info!(
+        "作品从 {} 读，事件写到 {}",
+        store_root.display(),
+        events_path.display()
+    );
     tracing::info!("一个作品就是一个 {scheme}://<slug>.{suffix}");
     if !store_root.is_dir() {
         tracing::warn!(
@@ -40,7 +44,10 @@ async fn main() -> anyhow::Result<()> {
     }
     match Config::api_internal_url() {
         Some(api) => {
-            tracing::info!("事件每 {} 秒送一批到 {api}", playtest_edge::ship::INTERVAL.as_secs());
+            tracing::info!(
+                "事件每 {} 秒送一批到 {api}",
+                playtest_edge::ship::INTERVAL.as_secs()
+            );
             tokio::spawn(playtest_edge::ship::Shipper::new(events_path, api).run());
         }
         None => tracing::info!("没设 PLAYTEST_API_INTERNAL_URL，事件只留在本地文件里，不送控制面"),

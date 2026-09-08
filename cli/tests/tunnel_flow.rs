@@ -14,6 +14,9 @@
 //!
 //! 每条测试都带超时，卡住就是失败，不会把 CI 挂在那儿。
 
+// 测试脚手架：为了把一条用例写成一眼能看完的样子，这里放宽 result_large_err。
+#![allow(clippy::result_large_err)]
+
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
@@ -27,7 +30,9 @@ use axum::routing::post;
 use axum::{Json, Router};
 use playtest_common::api::{routes, ErrorBody, ErrorCode};
 use playtest_common::tunnel::io::{Mux, Role, WsByteStream};
-use playtest_common::tunnel::{TunnelGrant, TunnelRequest, HEADER_LOCAL_PORT, WS_PATH, WS_PROTOCOL};
+use playtest_common::tunnel::{
+    TunnelGrant, TunnelRequest, HEADER_LOCAL_PORT, WS_PATH, WS_PROTOCOL,
+};
 use serde_json::{json, Value};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -96,7 +101,11 @@ fn refuse_handshake() -> ErrorResponse {
 }
 
 /// 边缘这一侧的握手：记下 CLI 送来的头，决定接还是拒。
-fn shake(edge: &Arc<Edge>, request: &HandshakeRequest, mut response: HandshakeResponse) -> Result<HandshakeResponse, ErrorResponse> {
+fn shake(
+    edge: &Arc<Edge>,
+    request: &HandshakeRequest,
+    mut response: HandshakeResponse,
+) -> Result<HandshakeResponse, ErrorResponse> {
     let mut seen = HashMap::new();
     seen.insert("path".to_string(), request.uri().path().to_string());
     for (name, value) in request.headers() {
@@ -115,9 +124,10 @@ fn shake(edge: &Arc<Edge>, request: &HandshakeRequest, mut response: HandshakeRe
     }
     // 子协议必须原样回：tungstenite 的客户端要求请求里带了就得回，
     // 不回它会把这次握手判成协议错。
-    response
-        .headers_mut()
-        .insert(SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static(WS_PROTOCOL));
+    response.headers_mut().insert(
+        SEC_WEBSOCKET_PROTOCOL,
+        HeaderValue::from_static(WS_PROTOCOL),
+    );
     Ok(response)
 }
 
@@ -125,7 +135,9 @@ fn shake(edge: &Arc<Edge>, request: &HandshakeRequest, mut response: HandshakeRe
 async fn probe_through(edge: Arc<Edge>, socket: TcpStream) {
     let held = {
         let edge = Arc::clone(&edge);
-        move |request: &HandshakeRequest, response: HandshakeResponse| shake(&edge, request, response)
+        move |request: &HandshakeRequest, response: HandshakeResponse| {
+            shake(&edge, request, response)
+        }
     };
     let Ok(ws) = accept_hdr_async(socket, held).await else {
         // 拒了的那次握手会走到这里，正常。
@@ -214,7 +226,10 @@ async fn answer_one(mut socket: TcpStream) -> io::Result<()> {
                 .to_string(),
         )
     } else {
-        ("text/plain; charset=utf-8", format!("dev server 收到：{request_line}"))
+        (
+            "text/plain; charset=utf-8",
+            format!("dev server 收到：{request_line}"),
+        )
     };
 
     let response = format!(
@@ -387,12 +402,16 @@ fn a_players_request_reaches_the_dev_server_and_a_lost_link_comes_back() {
     assert_eq!(output.status.code(), Some(1), "{}", stderr_of(&output));
 
     let events = events(&output);
-    let online = first_named(&events, "online").unwrap_or_else(|| panic!("没有 online：{events:?}"));
+    let online =
+        first_named(&events, "online").unwrap_or_else(|| panic!("没有 online：{events:?}"));
     assert_eq!(online["url"], PLAYER_URL);
     assert_eq!(online["slug"], SLUG);
     assert_eq!(online["expires_at"], "2026-09-08T03:30:00Z");
     assert_eq!(online["attempt"], 0);
-    assert!(online["elapsed_ms"].is_u64(), "「几秒」要是个数字：{online}");
+    assert!(
+        online["elapsed_ms"].is_u64(),
+        "「几秒」要是个数字：{online}"
+    );
     assert!(
         online["findings"]
             .as_array()
@@ -416,11 +435,14 @@ fn a_players_request_reaches_the_dev_server_and_a_lost_link_comes_back() {
     assert_eq!(counts, [1, 0], "玩家连接数变化该逐次报出来：{events:?}");
 
     // 断了之后自己回来了。
-    let again =
-        first_named(&events, "reconnecting").unwrap_or_else(|| panic!("没有 reconnecting：{events:?}"));
+    let again = first_named(&events, "reconnecting")
+        .unwrap_or_else(|| panic!("没有 reconnecting：{events:?}"));
     assert_eq!(again["attempt"], 1);
     let waited = again["wait_ms"].as_u64().expect("要有等待时长");
-    assert!((500..=1000).contains(&waited), "第一次退避该在 0.5–1 秒：{waited}");
+    assert!(
+        (500..=1000).contains(&waited),
+        "第一次退避该在 0.5–1 秒：{waited}"
+    );
     assert!(
         again["reason"].as_str().unwrap().contains("断开"),
         "{again}"
@@ -493,7 +515,10 @@ fn the_human_output_puts_the_link_on_stdout_and_everything_else_on_stderr() {
         "和服务器断开了",
         "接管",
     ] {
-        assert!(stderr.contains(expected), "stderr 里少了「{expected}」：{stderr}");
+        assert!(
+            stderr.contains(expected),
+            "stderr 里少了「{expected}」：{stderr}"
+        );
     }
 }
 
@@ -526,7 +551,10 @@ fn a_port_with_nothing_on_it_stops_before_asking_for_a_link() {
     let message = only["message"].as_str().unwrap();
     assert!(message.contains("没有东西在监听"), "{message}");
     assert!(message.contains(&free_port.to_string()), "{message}");
-    assert!(control.granted.lock().unwrap().is_empty(), "都没端口可接，别去要链接");
+    assert!(
+        control.granted.lock().unwrap().is_empty(),
+        "都没端口可接，别去要链接"
+    );
 }
 
 /// Ctrl-C：关掉隧道，报一句「已停止」，退出码 0。
@@ -566,7 +594,8 @@ fn ctrl_c_stops_the_tunnel_cleanly() {
     assert_eq!(output.status.code(), Some(0), "{}", stderr_of(&output));
 
     let events = events(&output);
-    let stopped = first_named(&events, "stopped").unwrap_or_else(|| panic!("没有 stopped：{events:?}"));
+    let stopped =
+        first_named(&events, "stopped").unwrap_or_else(|| panic!("没有 stopped：{events:?}"));
     assert_eq!(stopped["connections"], 1, "这次接过一个玩家连接");
     assert!(stopped["bytes"].as_u64().unwrap() > 0, "转发的字节要算进去");
 }

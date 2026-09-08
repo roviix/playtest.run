@@ -31,7 +31,9 @@ impl std::str::FromStr for GateMode {
             "once" => Ok(Self::Once),
             "always" => Ok(Self::Always),
             "never" => Ok(Self::Never),
-            other => Err(format!("门禁页策略只能是 once、always 或 never，不认识「{other}」")),
+            other => Err(format!(
+                "门禁页策略只能是 once、always 或 never，不认识「{other}」"
+            )),
         }
     }
 }
@@ -268,7 +270,12 @@ mod tests {
 
     #[test]
     fn accepts_normal_paths() {
-        for p in ["index.html", "Build/game.wasm.br", "assets/a b.png", "深/中文.txt"] {
+        for p in [
+            "index.html",
+            "Build/game.wasm.br",
+            "assets/a b.png",
+            "深/中文.txt",
+        ] {
             assert_eq!(validate_path(p), Ok(()), "{p}");
         }
     }
@@ -276,18 +283,39 @@ mod tests {
     #[test]
     fn rejects_dangerous_paths() {
         assert_eq!(validate_path(""), Err(PathError::Empty));
-        assert!(matches!(validate_path("/index.html"), Err(PathError::LeadingSlash(_))));
-        assert!(matches!(validate_path("a\\b"), Err(PathError::Backslash(_))));
-        assert!(matches!(validate_path("a//b"), Err(PathError::BadSegment(_))));
-        assert!(matches!(validate_path("../etc/passwd"), Err(PathError::BadSegment(_))));
-        assert!(matches!(validate_path("a/./b"), Err(PathError::BadSegment(_))));
-        assert!(matches!(validate_path("a\nb"), Err(PathError::ControlChar(_))));
+        assert!(matches!(
+            validate_path("/index.html"),
+            Err(PathError::LeadingSlash(_))
+        ));
+        assert!(matches!(
+            validate_path("a\\b"),
+            Err(PathError::Backslash(_))
+        ));
+        assert!(matches!(
+            validate_path("a//b"),
+            Err(PathError::BadSegment(_))
+        ));
+        assert!(matches!(
+            validate_path("../etc/passwd"),
+            Err(PathError::BadSegment(_))
+        ));
+        assert!(matches!(
+            validate_path("a/./b"),
+            Err(PathError::BadSegment(_))
+        ));
+        assert!(matches!(
+            validate_path("a\nb"),
+            Err(PathError::ControlChar(_))
+        ));
     }
 
     #[test]
     fn rejects_duplicates_and_size_overflow() {
         let files = vec![entry("a", 1), entry("a", 1)];
-        assert!(matches!(validate_files(&files, 1000), Err(ManifestError::DuplicatePath(_))));
+        assert!(matches!(
+            validate_files(&files, 1000),
+            Err(ManifestError::DuplicatePath(_))
+        ));
 
         let files = vec![entry("a", 600), entry("b", 600)];
         assert!(matches!(
@@ -341,7 +369,10 @@ mod tests {
 
     #[test]
     fn gate_mode_round_trips_lowercase() {
-        assert_eq!(serde_json::to_string(&GateMode::Always).unwrap(), "\"always\"");
+        assert_eq!(
+            serde_json::to_string(&GateMode::Always).unwrap(),
+            "\"always\""
+        );
         assert_eq!("never".parse::<GateMode>(), Ok(GateMode::Never));
         assert!("Sometimes".parse::<GateMode>().is_err());
     }

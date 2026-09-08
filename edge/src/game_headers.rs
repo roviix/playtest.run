@@ -104,7 +104,11 @@ fn encoding(headers: &mut HeaderMap, path: &str, source: Source, encoding: Optio
     }
     let Some(value) = encoding else { return };
     if !may_set_encoding(path) {
-        tracing::debug!(path, value, "Decompression Fallback 产物不加 Content-Encoding");
+        tracing::debug!(
+            path,
+            value,
+            "Decompression Fallback 产物不加 Content-Encoding"
+        );
         return;
     }
     put(headers, "content-encoding", value);
@@ -150,7 +154,13 @@ mod tests {
     #[test]
     fn wasm_gets_the_streaming_compilation_mime() {
         let mut h = headers();
-        apply(&mut h, "/Build/game.wasm", false, Source::Ours, Opts::default());
+        apply(
+            &mut h,
+            "/Build/game.wasm",
+            false,
+            Source::Ours,
+            Opts::default(),
+        );
         assert_eq!(get(&h, "content-type"), Some("application/wasm"));
         assert_eq!(get(&h, "content-encoding"), None);
         assert_eq!(get(&h, "accept-ranges"), None);
@@ -187,7 +197,10 @@ mod tests {
                 ..Opts::default()
             },
         );
-        assert_eq!(get(&h, "content-type"), Some("text/javascript; charset=utf-8"));
+        assert_eq!(
+            get(&h, "content-type"),
+            Some("text/javascript; charset=utf-8")
+        );
         assert_eq!(get(&h, "content-encoding"), Some("gzip"));
         assert_eq!(get(&h, "vary"), Some("Accept-Encoding"));
     }
@@ -195,7 +208,11 @@ mod tests {
     #[test]
     fn unityweb_never_gets_content_encoding() {
         // Decompression Fallback 的产物。就算调用方递了一个编码进来也要丢掉。
-        for path in ["/Build/x.wasm.unityweb", "/Build/x.data.unityweb", "/a.UNITYWEB"] {
+        for path in [
+            "/Build/x.wasm.unityweb",
+            "/Build/x.data.unityweb",
+            "/a.UNITYWEB",
+        ] {
             let mut h = headers();
             apply(
                 &mut h,
@@ -239,7 +256,10 @@ mod tests {
         let mut h = headers();
         isolation(&mut h, true, false);
         assert_eq!(get(&h, "cross-origin-opener-policy"), Some("same-origin"));
-        assert_eq!(get(&h, "cross-origin-embedder-policy"), Some("require-corp"));
+        assert_eq!(
+            get(&h, "cross-origin-embedder-policy"),
+            Some("require-corp")
+        );
         // 顶层文档不给 CORP。
         assert_eq!(get(&h, "cross-origin-resource-policy"), None);
 
@@ -252,20 +272,44 @@ mod tests {
     fn upstream_responses_are_only_corrected_where_it_breaks_the_game() {
         // 隧道回来的响应：dev server 什么都没说 → 补上。
         let mut h = headers();
-        apply(&mut h, "/game.wasm", true, Source::Upstream, Opts { resource: true, ..Opts::default() });
+        apply(
+            &mut h,
+            "/game.wasm",
+            true,
+            Source::Upstream,
+            Opts {
+                resource: true,
+                ..Opts::default()
+            },
+        );
         assert_eq!(get(&h, "content-type"), Some("application/wasm"));
-        assert_eq!(get(&h, "cross-origin-embedder-policy"), Some("require-corp"));
+        assert_eq!(
+            get(&h, "cross-origin-embedder-policy"),
+            Some("require-corp")
+        );
         assert_eq!(get(&h, "cross-origin-resource-policy"), Some("same-origin"));
 
         // dev server 把 wasm 说成了字节流 → 换掉，否则没有流式编译。
         let mut h = headers();
-        h.insert("content-type", HeaderValue::from_static("application/octet-stream"));
-        apply(&mut h, "/game.wasm", false, Source::Upstream, Opts::default());
+        h.insert(
+            "content-type",
+            HeaderValue::from_static("application/octet-stream"),
+        );
+        apply(
+            &mut h,
+            "/game.wasm",
+            false,
+            Source::Upstream,
+            Opts::default(),
+        );
         assert_eq!(get(&h, "content-type"), Some("application/wasm"));
 
         // 别的类型上游说了算，不替它改。
         let mut h = headers();
-        h.insert("content-type", HeaderValue::from_static("application/javascript"));
+        h.insert(
+            "content-type",
+            HeaderValue::from_static("application/javascript"),
+        );
         apply(&mut h, "/main.js", false, Source::Upstream, Opts::default());
         assert_eq!(get(&h, "content-type"), Some("application/javascript"));
 

@@ -610,8 +610,12 @@ mod tests {
             let mut peer = client;
             let mut ours = WsByteStream::new(server);
 
-            peer.send(Message::Ping(Bytes::from_static(b"pt"))).await.unwrap();
-            peer.send(Message::Binary(Bytes::from_static(b"after-ping"))).await.unwrap();
+            peer.send(Message::Ping(Bytes::from_static(b"pt")))
+                .await
+                .unwrap();
+            peer.send(Message::Binary(Bytes::from_static(b"after-ping")))
+                .await
+                .unwrap();
 
             let mut got = [0u8; 10];
             ours.read_exact(&mut got).await.unwrap();
@@ -642,8 +646,12 @@ mod tests {
             let mut ours = WsByteStream::new(server);
 
             peer.send(Message::text("这条不该进字节流")).await.unwrap();
-            peer.send(Message::Pong(Bytes::from_static(b"unsolicited"))).await.unwrap();
-            peer.send(Message::Binary(Bytes::from_static(b"real"))).await.unwrap();
+            peer.send(Message::Pong(Bytes::from_static(b"unsolicited")))
+                .await
+                .unwrap();
+            peer.send(Message::Binary(Bytes::from_static(b"real")))
+                .await
+                .unwrap();
 
             let mut got = [0u8; 4];
             ours.read_exact(&mut got).await.unwrap();
@@ -743,7 +751,11 @@ mod tests {
             assert_eq!(control.close_code(), Some(tunnel::close::REPLACED));
             assert_eq!(ours.close_code(), Some(tunnel::close::REPLACED));
             let err = ours.write(b"x").await.unwrap_err();
-            assert_eq!(err.kind(), io::ErrorKind::BrokenPipe, "关了之后写侧该是坏管子");
+            assert_eq!(
+                err.kind(),
+                io::ErrorKind::BrokenPipe,
+                "关了之后写侧该是坏管子"
+            );
         })
         .await
         .expect("超时：control().close() 之后两边都该收场");

@@ -15,7 +15,9 @@ pub enum Range {
 }
 
 pub fn parse(header: Option<&str>, len: u64) -> Range {
-    let Some(raw) = header else { return Range::Whole };
+    let Some(raw) = header else {
+        return Range::Whole;
+    };
     let Some(spec) = raw.trim().strip_prefix("bytes=") else {
         return Range::Whole;
     };
@@ -54,7 +56,10 @@ pub fn parse(header: Option<&str>, len: u64) -> Range {
         return Range::Unsatisfiable;
     }
     if last.is_empty() {
-        return Range::Part { start, end: len - 1 };
+        return Range::Part {
+            start,
+            end: len - 1,
+        };
     }
     let Ok(end) = last.parse::<u64>() else {
         return Range::Whole;
@@ -79,13 +84,28 @@ mod tests {
 
     #[test]
     fn closed_open_and_suffix_forms() {
-        assert_eq!(parse(Some("bytes=0-9"), 100), Range::Part { start: 0, end: 9 });
-        assert_eq!(parse(Some("bytes=10-"), 100), Range::Part { start: 10, end: 99 });
-        assert_eq!(parse(Some("bytes=-20"), 100), Range::Part { start: 80, end: 99 });
+        assert_eq!(
+            parse(Some("bytes=0-9"), 100),
+            Range::Part { start: 0, end: 9 }
+        );
+        assert_eq!(
+            parse(Some("bytes=10-"), 100),
+            Range::Part { start: 10, end: 99 }
+        );
+        assert_eq!(
+            parse(Some("bytes=-20"), 100),
+            Range::Part { start: 80, end: 99 }
+        );
         // 末端超出就夹到文件尾，这是 RFC 要求的，不是错误。
-        assert_eq!(parse(Some("bytes=90-999"), 100), Range::Part { start: 90, end: 99 });
+        assert_eq!(
+            parse(Some("bytes=90-999"), 100),
+            Range::Part { start: 90, end: 99 }
+        );
         // 后缀比文件还长就是整个文件。
-        assert_eq!(parse(Some("bytes=-500"), 100), Range::Part { start: 0, end: 99 });
+        assert_eq!(
+            parse(Some("bytes=-500"), 100),
+            Range::Part { start: 0, end: 99 }
+        );
     }
 
     #[test]

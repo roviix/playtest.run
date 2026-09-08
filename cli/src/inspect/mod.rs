@@ -229,7 +229,9 @@ fn index_placement(here: &HashSet<&str>, paths: &[&str]) -> Option<Finding> {
         Finding::blocker(format!(
             "最外层没有 index.html，它在 {nested} 里，玩家点开链接会是 404"
         ))
-        .hint(format!("把 {dir} 这一层直接传上来：playtest <刚才那个目录>/{dir}")),
+        .hint(format!(
+            "把 {dir} 这一层直接传上来：playtest <刚才那个目录>/{dir}"
+        )),
     )
 }
 
@@ -295,7 +297,9 @@ fn missing_engine_parts(paths: &[&str], index: Option<&str>) -> Option<Finding> 
 
 /// 压缩相关的话：预压缩产物照原样给；Unity 的 Decompression Fallback 会拖慢加载。
 fn compression(paths: &[&str], index: Option<&str>, found: Option<Engine>) -> Vec<Finding> {
-    let precompressed = paths.iter().any(|p| p.ends_with(".br") || p.ends_with(".gz"));
+    let precompressed = paths
+        .iter()
+        .any(|p| p.ends_with(".br") || p.ends_with(".gz"));
     let fallback = paths.iter().any(|p| p.ends_with(".unityweb"));
     let mut out = Vec::new();
 
@@ -422,11 +426,7 @@ mod tests {
     }
 
     fn messages(report: &Report) -> Vec<String> {
-        report
-            .findings
-            .iter()
-            .map(|f| f.message.clone())
-            .collect()
+        report.findings.iter().map(|f| f.message.clone()).collect()
     }
 
     /// 找到说了某件事的那一条。
@@ -515,7 +515,10 @@ mod tests {
     fn no_index_anywhere_is_still_worth_saying() {
         let dir = Dir::new(&[("main.js", b"console.log(1)")]);
         let report = dir.inspect();
-        assert_eq!(about(&report, "最外层没有 index.html").level, Level::Blocker);
+        assert_eq!(
+            about(&report, "最外层没有 index.html").level,
+            Level::Blocker
+        );
     }
 
     #[test]
@@ -683,16 +686,24 @@ mod tests {
             max: 5000,
         };
         let paths = vec!["node_modules/x/index.js".to_string()];
-        assert!(explain_limit(&too_many, &paths).unwrap().contains("源码目录"));
+        assert!(explain_limit(&too_many, &paths)
+            .unwrap()
+            .contains("源码目录"));
         assert!(!explain_limit(&too_many, &[]).unwrap().contains("源码目录"));
     }
 
     #[test]
     fn source_trees_are_recognised() {
         let paths = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert!(looks_like_source_tree(&paths(&["package.json", "index.html"])));
+        assert!(looks_like_source_tree(&paths(&[
+            "package.json",
+            "index.html"
+        ])));
         assert!(looks_like_source_tree(&paths(&["src/main.ts"])));
         assert!(looks_like_source_tree(&paths(&["node_modules/x/index.js"])));
-        assert!(!looks_like_source_tree(&paths(&["index.html", "game.wasm"])));
+        assert!(!looks_like_source_tree(&paths(&[
+            "index.html",
+            "game.wasm"
+        ])));
     }
 }

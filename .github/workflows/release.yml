@@ -1,0 +1,89 @@
+# 打一个 v* 标签就把 `playtest` 命令行编成三平台的单文件，挂到 GitHub Release 上。
+# 只发 CLI：边缘与控制面在服务器上用 deploy/ 构建，不发预编译包（DESIGN §7：托管部署形态公开，密钥私有）。
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# 私测阶段仓库是私有的，Release 只有协作者看得到；公开时同一套产物直接可见。
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14,       target: aarch64-apple-darwin,      archive: tar.gz }
+          - { os: macos-14,       target: x86_64-apple-darwin,       archive: tar.gz }
+          - { os: ubuntu-22.04,   target: x86_64-unknown-linux-musl, archive: tar.gz }
+          - { os: ubuntu-22.04,   target: aarch64-unknown-linux-musl, archive: tar.gz }
+          - { os: windows-2022,   target: x86_64-pc-windows-msvc,    archive: zip }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      # musl：静态链接，任何 Linux 发行版直接跑，不依赖 glibc 版本。aarch64 musl 要交叉链接器。
+      - if: contains(matrix.target, 'linux-musl')
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q musl-tools
+          if [[ "${{ matrix.target }}" == aarch64-* ]]; then
+            sudo apt-get install -y -q gcc-aarch64-linux-gnu
+            echo 'CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc' >> "$GITHUB_ENV"
+          fi
+      - run: cargo build -p playtest --release --locked --target ${{ matrix.target }}
+      - name: 打包
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          name="playtest-${version}-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            cp "target/${{ matrix.target }}/release/playtest.exe" "dist/$name/"
+            cp LICENSE README.md "dist/$name/"
+            (cd dist && 7z a -bd "$name.zip" "$name" >/dev/null)
+          else
+            cp "target/${{ matrix.target }}/release/playtest" "dist/$name/"
+            cp LICENSE README.md "dist/$name/"
+            (cd dist && tar -czf "$name.tar.gz" "$name")
+          fi
+          (cd dist && (shasum -a 256 "$name."* 2>/dev/null || sha256sum "$name."*) > "$name.sha256")
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+
+  release:
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: 合并校验文件
+        run: |
+          cd dist && cat *.sha256 > SHA256SUMS && rm -f *.sha256 && ls -la
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            `playtest` 命令行的预编译包。解开后把 `playtest` 放到 PATH 里即可；macOS 第一次运行若被拦，
+            在「系统设置 → 隐私与安全性」里放行一次（私测阶段没有签名与公证）。
+
+            边缘与控制面不发预编译包，部署方式见 `deploy/README.md`。

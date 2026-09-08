@@ -60,8 +60,8 @@ pub async fn scan_dir(root: &Path) -> Result<Vec<ScannedFile>> {
             .context("排队算哈希时出错")?;
         tasks.spawn_blocking(move || {
             let _permit = permit;
-            let (hash, size) = hash_file(&source)
-                .with_context(|| format!("读不了 {}", source.display()))?;
+            let (hash, size) =
+                hash_file(&source).with_context(|| format!("读不了 {}", source.display()))?;
             anyhow::Ok(ScannedFile {
                 entry: FileEntry { path, hash, size },
                 source,
@@ -150,12 +150,18 @@ mod tests {
 
     #[test]
     fn ordinary_paths_become_slash_separated() {
-        assert_eq!(manifest_path(Path::new("index.html")).unwrap(), "index.html");
+        assert_eq!(
+            manifest_path(Path::new("index.html")).unwrap(),
+            "index.html"
+        );
         assert_eq!(
             manifest_path(Path::new("Build/game.wasm.br")).unwrap(),
             "Build/game.wasm.br"
         );
-        assert_eq!(manifest_path(Path::new("深/中文 名.png")).unwrap(), "深/中文 名.png");
+        assert_eq!(
+            manifest_path(Path::new("深/中文 名.png")).unwrap(),
+            "深/中文 名.png"
+        );
     }
 
     #[cfg(unix)]

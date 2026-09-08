@@ -9,6 +9,9 @@
 //! 玩家用 hyper 的 HTTP/1.1 客户端一条连接打一次，Host 写成 `brisk-otter-41.localhost`。
 //! 每条测试都有超时：隧道上任何一处卡住都表现为「挂着不动」，不设超时就是让 CI 挂死。
 
+// 测试脚手架：为了把一条用例写成一眼能看完的样子，这里放宽 type_complexity。
+#![allow(clippy::type_complexity)]
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -39,7 +42,8 @@ const HOST: &str = "brisk-otter-41.localhost";
 /// 而不是「CI 卡了十分钟」。
 const LIMIT: Duration = Duration::from_secs(30);
 
-const UPSTREAM_HTML: &str = "<!doctype html><title>开发者机器上的那一版</title><canvas id=c></canvas>";
+const UPSTREAM_HTML: &str =
+    "<!doctype html><title>开发者机器上的那一版</title><canvas id=c></canvas>";
 const WASM: &[u8] = b"\0asm\x01\0\0\0not-a-real-module";
 /// 2 MiB。远大于 yamux 单流 256 KiB 的初始接收窗口，能把流控真的走一遍。
 const BIG_LEN: usize = 2 * 1024 * 1024;
@@ -63,7 +67,10 @@ impl Edge {
     async fn start() -> Self {
         let dir = tempfile::tempdir().unwrap();
         let signing = SigningKey::generate();
-        let key_path = dir.path().join("store").join(key_files::VERIFYING_KEY_OBJECT);
+        let key_path = dir
+            .path()
+            .join("store")
+            .join(key_files::VERIFYING_KEY_OBJECT);
         std::fs::create_dir_all(key_path.parent().unwrap()).unwrap();
         std::fs::write(&key_path, signing.verifying_key().to_base64()).unwrap();
 
@@ -236,7 +243,10 @@ async fn send(edge: SocketAddr, request: Request<Full<Bytes>>) -> Reply {
     tokio::spawn(async move {
         let _ = conn.await;
     });
-    let response = sender.send_request(request).await.expect("边缘该给一个响应");
+    let response = sender
+        .send_request(request)
+        .await
+        .expect("边缘该给一个响应");
     let status = response.status();
     let headers = response.headers().clone();
     let body = response.into_body().collect().await.unwrap().to_bytes();
@@ -247,7 +257,12 @@ async fn send(edge: SocketAddr, request: Request<Full<Bytes>>) -> Reply {
     }
 }
 
-fn request(method: Method, path: &str, headers: &[(&str, &str)], body: &str) -> Request<Full<Bytes>> {
+fn request(
+    method: Method,
+    path: &str,
+    headers: &[(&str, &str)],
+    body: &str,
+) -> Request<Full<Bytes>> {
     let mut builder = Request::builder()
         .method(method)
         .uri(path)
@@ -343,7 +358,10 @@ async fn a_player_plays_what_is_running_on_the_developers_machine() {
         // 1. 第一眼是门禁页，不是游戏。版本那个位置写「在线」——隧道没有版本。
         let gate = navigate(edge.addr, "/", None).await;
         assert_eq!(gate.status, StatusCode::OK);
-        assert_eq!(gate.header("content-type"), Some("text/html; charset=utf-8"));
+        assert_eq!(
+            gate.header("content-type"),
+            Some("text/html; charset=utf-8")
+        );
         assert!(gate.text().contains("某某 邀请你体验"));
         assert!(gate.text().contains("《小球大冒险》"));
         assert!(gate.text().contains("· 在线"), "版本位置该是「在线」");
@@ -378,7 +396,9 @@ async fn a_player_plays_what_is_running_on_the_developers_machine() {
         assert_eq!(&big.body[..], &big_body()[..]);
 
         // 5. WebSocket 原样过去：101 之后边缘只是两根管子。
-        let mut player = format!("ws://{}/echo", edge.addr).into_client_request().unwrap();
+        let mut player = format!("ws://{}/echo", edge.addr)
+            .into_client_request()
+            .unwrap();
         player
             .headers_mut()
             .insert("host", HeaderValue::from_static(HOST));
@@ -447,10 +467,7 @@ async fn a_second_process_takes_over_and_the_old_token_is_finished() {
             body.message
         );
         // 被拒之后新的那条还好好的。
-        assert_eq!(
-            navigate(edge.addr, "/", None).await.status,
-            StatusCode::OK
-        );
+        assert_eq!(navigate(edge.addr, "/", None).await.status, StatusCode::OK);
 
         second.disconnect();
     })
@@ -490,7 +507,10 @@ async fn the_offline_page_remembers_who_was_here() {
 
         // 落盘了，边缘重启之后还说得出来。
         let saved = std::fs::read_to_string(
-            edge._dir.path().join("tunnels").join(format!("{SLUG}.json")),
+            edge._dir
+                .path()
+                .join("tunnels")
+                .join(format!("{SLUG}.json")),
         )
         .expect("上次在线要落到边缘自己的目录里");
         assert!(saved.contains("小球大冒险"));
@@ -510,7 +530,10 @@ async fn an_isolated_site_keeps_its_cross_origin_headers_through_the_tunnel() {
 
         // dev server 一个隔离头都不发（Vite 就是这样），Godot 4 的线程导出因此白屏。
         let wasm = fetch(edge.addr, "/game.wasm").await;
-        assert_eq!(wasm.header("cross-origin-opener-policy"), Some("same-origin"));
+        assert_eq!(
+            wasm.header("cross-origin-opener-policy"),
+            Some("same-origin")
+        );
         assert_eq!(
             wasm.header("cross-origin-embedder-policy"),
             Some("require-corp")
@@ -523,7 +546,10 @@ async fn an_isolated_site_keeps_its_cross_origin_headers_through_the_tunnel() {
 
         // 顶层文档不给 CORP，门禁页也一样要隔离——点了开始之后才隔离等于没隔离。
         let gate = navigate(edge.addr, "/", None).await;
-        assert_eq!(gate.header("cross-origin-opener-policy"), Some("same-origin"));
+        assert_eq!(
+            gate.header("cross-origin-opener-policy"),
+            Some("same-origin")
+        );
         assert_eq!(gate.header("cross-origin-resource-policy"), None);
 
         cli.disconnect();
@@ -554,7 +580,12 @@ async fn a_dead_dev_server_is_a_rendered_502() {
         // 开不出去的请求也要把名额还回来。
         use std::sync::atomic::Ordering::Relaxed;
         assert_eq!(
-            edge.app.tunnels.get(SLUG).unwrap().open_streams.load(Relaxed),
+            edge.app
+                .tunnels
+                .get(SLUG)
+                .unwrap()
+                .open_streams
+                .load(Relaxed),
             0
         );
 
@@ -576,17 +607,27 @@ async fn the_handshake_says_why_it_said_no() {
         assert_eq!(error_body(&plain).code, ErrorCode::Invalid);
 
         let cases: Vec<(&str, Vec<(String, String)>, StatusCode, ErrorCode)> = vec![
-            ("协议名不对", {
-                let mut h = handshake_headers(&good, 5173);
-                h.retain(|(n, _)| n != "sec-websocket-protocol");
-                h.push(("sec-websocket-protocol".into(), "chat".into()));
-                h
-            }, StatusCode::BAD_REQUEST, ErrorCode::Invalid),
-            ("没带令牌", {
-                let mut h = handshake_headers(&good, 5173);
-                h.retain(|(n, _)| n != "authorization");
-                h
-            }, StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized),
+            (
+                "协议名不对",
+                {
+                    let mut h = handshake_headers(&good, 5173);
+                    h.retain(|(n, _)| n != "sec-websocket-protocol");
+                    h.push(("sec-websocket-protocol".into(), "chat".into()));
+                    h
+                },
+                StatusCode::BAD_REQUEST,
+                ErrorCode::Invalid,
+            ),
+            (
+                "没带令牌",
+                {
+                    let mut h = handshake_headers(&good, 5173);
+                    h.retain(|(n, _)| n != "authorization");
+                    h
+                },
+                StatusCode::UNAUTHORIZED,
+                ErrorCode::Unauthorized,
+            ),
             (
                 "令牌是别人签的",
                 handshake_headers(&SigningKey::generate().sign(&mint(0)), 5173),
@@ -612,17 +653,27 @@ async fn the_handshake_says_why_it_said_no() {
                 StatusCode::UNAUTHORIZED,
                 ErrorCode::Unauthorized,
             ),
-            ("端口不对", {
-                let mut h = handshake_headers(&good, 5173);
-                h.retain(|(n, _)| n != HEADER_LOCAL_PORT);
-                h.push((HEADER_LOCAL_PORT.into(), "0".into()));
-                h
-            }, StatusCode::BAD_REQUEST, ErrorCode::Invalid),
-            ("端口缺了", {
-                let mut h = handshake_headers(&good, 5173);
-                h.retain(|(n, _)| n != HEADER_LOCAL_PORT);
-                h
-            }, StatusCode::BAD_REQUEST, ErrorCode::Invalid),
+            (
+                "端口不对",
+                {
+                    let mut h = handshake_headers(&good, 5173);
+                    h.retain(|(n, _)| n != HEADER_LOCAL_PORT);
+                    h.push((HEADER_LOCAL_PORT.into(), "0".into()));
+                    h
+                },
+                StatusCode::BAD_REQUEST,
+                ErrorCode::Invalid,
+            ),
+            (
+                "端口缺了",
+                {
+                    let mut h = handshake_headers(&good, 5173);
+                    h.retain(|(n, _)| n != HEADER_LOCAL_PORT);
+                    h
+                },
+                StatusCode::BAD_REQUEST,
+                ErrorCode::Invalid,
+            ),
         ];
 
         for (what, headers, status, code) in cases {
@@ -668,12 +719,20 @@ async fn without_a_verifying_key_the_edge_says_so_instead_of_guessing() {
         assert_eq!(body.message, "边缘还没拿到验签公钥");
 
         // api 起来了，把公钥写进去——不用重启边缘，下一次握手就认。
-        let key_path = dir.path().join("store").join(key_files::VERIFYING_KEY_OBJECT);
+        let key_path = dir
+            .path()
+            .join("store")
+            .join(key_files::VERIFYING_KEY_OBJECT);
         std::fs::create_dir_all(key_path.parent().unwrap()).unwrap();
         std::fs::write(&key_path, signing.verifying_key().to_base64()).unwrap();
 
         let dev = upstream().await;
-        let mut request = handshake_request(&format!("ws://{addr}{WS_PATH}"), &signing.sign(&mint(0)), dev.port()).unwrap();
+        let mut request = handshake_request(
+            &format!("ws://{addr}{WS_PATH}"),
+            &signing.sign(&mint(0)),
+            dev.port(),
+        )
+        .unwrap();
         request
             .headers_mut()
             .insert("host", HeaderValue::from_static(HOST));

@@ -176,7 +176,11 @@ impl FsStore {
         self.write_atomic(&key, &path, &data).await
     }
 
-    pub async fn get_manifest(&self, slug: &str, version: u32) -> Result<Option<Manifest>, StoreError> {
+    pub async fn get_manifest(
+        &self,
+        slug: &str,
+        version: u32,
+    ) -> Result<Option<Manifest>, StoreError> {
         Self::check_slug(slug)?;
         self.read_json(&manifest_key(slug, version)).await
     }
@@ -208,14 +212,19 @@ impl FsStore {
         }
     }
 
-    async fn read_json<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<Option<T>, StoreError> {
+    async fn read_json<T: for<'de> Deserialize<'de>>(
+        &self,
+        key: &str,
+    ) -> Result<Option<T>, StoreError> {
         match tokio::fs::read(self.path_of(key)).await {
-            Ok(bytes) => serde_json::from_slice(&bytes)
-                .map(Some)
-                .map_err(|source| StoreError::BadJson {
-                    key: key.to_string(),
-                    source,
-                }),
+            Ok(bytes) => {
+                serde_json::from_slice(&bytes)
+                    .map(Some)
+                    .map_err(|source| StoreError::BadJson {
+                        key: key.to_string(),
+                        source,
+                    })
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(Self::io(key, e)),
         }
@@ -302,8 +311,14 @@ mod tests {
         };
         store.set_current("brisk-otter-41", &cur).await.unwrap();
 
-        assert_eq!(store.get_manifest("brisk-otter-41", 1).await.unwrap(), Some(m));
-        assert_eq!(store.get_current("brisk-otter-41").await.unwrap(), Some(cur));
+        assert_eq!(
+            store.get_manifest("brisk-otter-41", 1).await.unwrap(),
+            Some(m)
+        );
+        assert_eq!(
+            store.get_current("brisk-otter-41").await.unwrap(),
+            Some(cur)
+        );
 
         store.remove_site("brisk-otter-41").await.unwrap();
         assert!(store.get_current("brisk-otter-41").await.unwrap().is_none());
@@ -313,7 +328,13 @@ mod tests {
     async fn rejects_unsafe_keys() {
         let dir = tempfile::tempdir().unwrap();
         let store = FsStore::new(dir.path());
-        assert!(matches!(store.blob_path("../etc"), Err(StoreError::BadHash(_))));
-        assert!(matches!(store.get_current("../x").await, Err(StoreError::BadSlug(_))));
+        assert!(matches!(
+            store.blob_path("../etc"),
+            Err(StoreError::BadHash(_))
+        ));
+        assert!(matches!(
+            store.get_current("../x").await,
+            Err(StoreError::BadSlug(_))
+        ));
     }
 }

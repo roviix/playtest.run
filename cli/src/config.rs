@@ -82,9 +82,8 @@ pub fn default_path() -> Result<PathBuf> {
 /// 读配置。文件不在就当是全新的一台机器。
 pub fn load(path: &Path) -> Result<Config> {
     match std::fs::read(path) {
-        Ok(bytes) => serde_json::from_slice(&bytes).with_context(|| {
-            format!("配置文件读不懂：{}。删掉它再运行一次就好。", path.display())
-        }),
+        Ok(bytes) => serde_json::from_slice(&bytes)
+            .with_context(|| format!("配置文件读不懂：{}。删掉它再运行一次就好。", path.display())),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
         Err(e) => Err(e).with_context(|| format!("读不了配置文件 {}", path.display())),
     }
@@ -95,8 +94,7 @@ pub fn save(path: &Path, config: &Config) -> Result<()> {
     let dir = path
         .parent()
         .with_context(|| format!("配置文件路径不对：{}", path.display()))?;
-    std::fs::create_dir_all(dir)
-        .with_context(|| format!("建不了配置目录 {}", dir.display()))?;
+    std::fs::create_dir_all(dir).with_context(|| format!("建不了配置目录 {}", dir.display()))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -120,8 +118,7 @@ pub fn save(path: &Path, config: &Config) -> Result<()> {
             .and_then(|()| file.write_all(b"\n"))
             .with_context(|| format!("写不了 {}", tmp.display()))?;
     }
-    std::fs::rename(&tmp, path)
-        .with_context(|| format!("保存不了配置文件 {}", path.display()))?;
+    std::fs::rename(&tmp, path).with_context(|| format!("保存不了配置文件 {}", path.display()))?;
     Ok(())
 }
 
@@ -154,7 +151,10 @@ mod tests {
     #[test]
     fn missing_file_reads_as_empty() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(load(&dir.path().join("config.json")).unwrap(), Config::default());
+        assert_eq!(
+            load(&dir.path().join("config.json")).unwrap(),
+            Config::default()
+        );
     }
 
     #[cfg(unix)]
@@ -189,8 +189,14 @@ mod tests {
             token_expires_at: Some("2026-09-08T03:30:00Z".into()),
             sites: BTreeMap::new(),
         };
-        assert_eq!(config.usable_token("http://a", at("2026-09-08T04:00:00Z")), None);
-        assert_eq!(config.usable_token("http://a", at("2026-09-08T03:29:30Z")), None);
+        assert_eq!(
+            config.usable_token("http://a", at("2026-09-08T04:00:00Z")),
+            None
+        );
+        assert_eq!(
+            config.usable_token("http://a", at("2026-09-08T03:29:30Z")),
+            None
+        );
     }
 
     #[test]

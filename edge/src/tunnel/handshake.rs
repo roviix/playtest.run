@@ -33,7 +33,11 @@ use crate::tunnel::keys;
 use crate::tunnel::registry::{Session, Tunnels};
 
 /// `slug` 是 Host 里那一段，令牌必须和它对得上——不然拿着 A 的令牌就能占住 B 的域名。
-pub async fn respond(tunnels: &Arc<Tunnels>, slug: &str, parts: &mut Parts) -> axum::response::Response {
+pub async fn respond(
+    tunnels: &Arc<Tunnels>,
+    slug: &str,
+    parts: &mut Parts,
+) -> axum::response::Response {
     let headers = &parts.headers;
 
     if parts.method != Method::GET
@@ -45,7 +49,11 @@ pub async fn respond(tunnels: &Arc<Tunnels>, slug: &str, parts: &mut Parts) -> a
             "这个地址只接受 WebSocket 握手：GET、Upgrade: websocket、Sec-WebSocket-Version: 13、Sec-WebSocket-Key",
         );
     }
-    if !has_token(headers, header::SEC_WEBSOCKET_PROTOCOL.as_str(), WS_PROTOCOL) {
+    if !has_token(
+        headers,
+        header::SEC_WEBSOCKET_PROTOCOL.as_str(),
+        WS_PROTOCOL,
+    ) {
         return invalid(&format!("握手要带 Sec-WebSocket-Protocol: {WS_PROTOCOL}"));
     }
 
@@ -140,7 +148,8 @@ fn spawn_session(
         };
         // 握手是我们自己做的，所以这里从「已经升级完的裸连接」接手，
         // 角色写死 Server——掩码规则和帧的方向都由它决定。
-        let ws = WebSocketStream::from_raw_socket(TokioIo::new(upgraded), WsRole::Server, None).await;
+        let ws =
+            WebSocketStream::from_raw_socket(TokioIo::new(upgraded), WsRole::Server, None).await;
         let stream = WsByteStream::new(ws);
         // 活动时钟与控制句柄要先复制出来：`stream` 马上就被 yamux 拿走，再也摸不到了。
         let activity = stream.activity();
@@ -219,7 +228,11 @@ mod tests {
             ("sec-websocket-protocol", "superchat"),
         ]);
         assert!(has_token(&h, "sec-websocket-protocol", WS_PROTOCOL));
-        assert!(!has_token(&h, "sec-websocket-protocol", "playtest-tunnel-v2"));
+        assert!(!has_token(
+            &h,
+            "sec-websocket-protocol",
+            "playtest-tunnel-v2"
+        ));
 
         // 子串不算。
         assert!(!has_token(
@@ -249,11 +262,24 @@ mod tests {
 
     #[test]
     fn the_local_port_must_be_a_port() {
-        assert_eq!(local_port(&headers(&[(HEADER_LOCAL_PORT, "5173")])), Some(5173));
-        assert_eq!(local_port(&headers(&[(HEADER_LOCAL_PORT, " 80 ")])), Some(80));
-        assert_eq!(local_port(&headers(&[(HEADER_LOCAL_PORT, "65535")])), Some(65535));
+        assert_eq!(
+            local_port(&headers(&[(HEADER_LOCAL_PORT, "5173")])),
+            Some(5173)
+        );
+        assert_eq!(
+            local_port(&headers(&[(HEADER_LOCAL_PORT, " 80 ")])),
+            Some(80)
+        );
+        assert_eq!(
+            local_port(&headers(&[(HEADER_LOCAL_PORT, "65535")])),
+            Some(65535)
+        );
         for bad in ["0", "65536", "-1", "5173x", "", "八千"] {
-            assert_eq!(local_port(&headers(&[(HEADER_LOCAL_PORT, bad)])), None, "{bad}");
+            assert_eq!(
+                local_port(&headers(&[(HEADER_LOCAL_PORT, bad)])),
+                None,
+                "{bad}"
+            );
         }
         assert_eq!(local_port(&HeaderMap::new()), None);
     }

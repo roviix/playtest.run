@@ -180,7 +180,10 @@ async fn subresources_without_a_cookie_get_the_bytes_or_a_404() {
         )
         .await;
     assert_eq!(js.status, StatusCode::OK);
-    assert_eq!(js.header("content-type"), Some("text/javascript; charset=utf-8"));
+    assert_eq!(
+        js.header("content-type"),
+        Some("text/javascript; charset=utf-8")
+    );
     assert_eq!(js.text(), APP_JS);
     js.assert_not_200_html("带 Sec-Fetch-Dest: script 的 /assets/app.js");
 
@@ -194,8 +197,14 @@ async fn subresources_without_a_cookie_get_the_bytes_or_a_404() {
     wasm.assert_not_200_html("不带任何 Accept 的 /game.wasm");
 
     // 清单里没有的，只能是 404，不能是「200 + 一页 HTML」。
-    for path in ["/assets/missing.js", "/Build/absent.wasm", "/textures/x.png"] {
-        for dest in ["script", "empty", "image", "style", "font", "worker", "audio"] {
+    for path in [
+        "/assets/missing.js",
+        "/Build/absent.wasm",
+        "/textures/x.png",
+    ] {
+        for dest in [
+            "script", "empty", "image", "style", "font", "worker", "audio",
+        ] {
             let reply = site
                 .send(
                     base(path)
@@ -234,13 +243,23 @@ async fn spa_fallback_never_turns_a_missing_asset_into_the_gate_page() {
         // 老客户端的样子：没有 Sec-Fetch-Dest，Accept 里却写着 text/html。
         // 这一条会命中 SPA 回退（拿到 index.html），但**不能拿到门禁页**。
         let reply = site
-            .send(base(path).header("accept", "text/html,*/*").body(Body::empty()).unwrap())
+            .send(
+                base(path)
+                    .header("accept", "text/html,*/*")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await;
-        assert!(!is_gate_page(&reply.text()), "{path}：SPA 回退把门禁页发给了资源路径");
+        assert!(
+            !is_gate_page(&reply.text()),
+            "{path}：SPA 回退把门禁页发给了资源路径"
+        );
     }
 
     // 同一个作品上，真的导航照常出门禁页——上面那道不是把门禁关掉了。
-    let reply = site.send(nav("/level/3").body(Body::empty()).unwrap()).await;
+    let reply = site
+        .send(nav("/level/3").body(Body::empty()).unwrap())
+        .await;
     assert_eq!(reply.status, StatusCode::OK);
     assert!(is_gate_page(&reply.text()));
 }
@@ -274,9 +293,23 @@ async fn accept_html_does_not_override_a_non_document_fetch_dest() {
     // `fetch('/')` 带的就是 `Sec-Fetch-Dest: empty`；有的库还顺手写 Accept: text/html。
     // 两个信号打架时信 Accept，就等于把门禁页发给了一个 XHR。
     for dest in [
-        "empty", "script", "iframe", "frame", "image", "style", "font", "worker",
-        "sharedworker", "serviceworker", "manifest", "object", "embed", "audio", "video",
-        "websocket", "report",
+        "empty",
+        "script",
+        "iframe",
+        "frame",
+        "image",
+        "style",
+        "font",
+        "worker",
+        "sharedworker",
+        "serviceworker",
+        "manifest",
+        "object",
+        "embed",
+        "audio",
+        "video",
+        "websocket",
+        "report",
     ] {
         for path in ["/", "/index.html"] {
             let reply = site
@@ -304,7 +337,12 @@ async fn accept_html_does_not_override_a_non_document_fetch_dest() {
 
     // 不发 Sec-Fetch-Dest 的老客户端仍然靠 Accept 兜住（Safari 16.4 之前）。
     let reply = site
-        .send(base("/").header("accept", "text/html").body(Body::empty()).unwrap())
+        .send(
+            base("/")
+                .header("accept", "text/html")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await;
     assert!(is_gate_page(&reply.text()));
 }
@@ -366,7 +404,12 @@ async fn no_request_header_can_skip_the_gate() {
     // 这条 cookie 没有签名，谁都能自己带一个：门禁页不是访问控制
     // （那是 DESIGN §3.6 的口令与邀请名单，不在 v0.1），它是信任凭证、用户手势和会话起点。
     let passed = site
-        .send(nav("/").header("cookie", "pt_gate=1").body(Body::empty()).unwrap())
+        .send(
+            nav("/")
+                .header("cookie", "pt_gate=1")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await;
     assert_eq!(passed.text(), INDEX_HTML);
 }
@@ -390,6 +433,9 @@ async fn unityweb_never_gets_a_content_encoding() {
         .await;
     assert_eq!(reply.status, StatusCode::OK);
     assert_eq!(reply.header("content-encoding"), None);
-    assert_eq!(reply.header("content-type"), Some("application/octet-stream"));
+    assert_eq!(
+        reply.header("content-type"),
+        Some("application/octet-stream")
+    );
     assert_eq!(reply.body.as_ref(), UNITYWEB);
 }

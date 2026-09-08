@@ -247,7 +247,7 @@ mod tests {
             limit_for(&manifest(Some("2026-09-08T00:00:00Z"))),
             limits::ANON_SLUG_HOURLY_BYTES
         );
-        assert!(limits::ANON_SLUG_HOURLY_BYTES < limits::SLUG_HOURLY_BYTES);
+        const { assert!(limits::ANON_SLUG_HOURLY_BYTES < limits::SLUG_HOURLY_BYTES) };
     }
 
     #[test]
@@ -342,7 +342,10 @@ mod tests {
         b.record_at(SLUG, 100, t0);
         for offset in [0, 1, 60, BUCKET_SECS - 1, BUCKET_SECS, BUCKET_SECS + 7] {
             let v = b.check_at(SLUG, 100, t0 + Duration::from_secs(offset));
-            assert!(v.retry_after >= 1 && v.retry_after <= BUCKET_SECS, "{offset}");
+            assert!(
+                v.retry_after >= 1 && v.retry_after <= BUCKET_SECS,
+                "{offset}"
+            );
         }
     }
 }

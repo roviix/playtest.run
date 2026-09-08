@@ -58,7 +58,12 @@ pub struct Player<'a> {
     pub isolated: bool,
 }
 
-pub async fn forward(session: &Arc<Session>, player: Player<'_>, mut parts: Parts, body: Body) -> Response {
+pub async fn forward(
+    session: &Arc<Session>,
+    player: Player<'_>,
+    mut parts: Parts,
+    body: Body,
+) -> Response {
     let Some(guard) = Guard::acquire(session) else {
         tracing::info!(
             slug = %session.slug(),
@@ -84,7 +89,8 @@ pub async fn forward(session: &Arc<Session>, player: Player<'_>, mut parts: Part
         }
     };
 
-    let (mut sender, conn) = match hyper::client::conn::http1::handshake(TokioIo::new(stream)).await {
+    let (mut sender, conn) = match hyper::client::conn::http1::handshake(TokioIo::new(stream)).await
+    {
         Ok(pair) => pair,
         Err(err) => {
             tracing::warn!(slug = %session.slug(), %err, "隧道流上起不了 HTTP 连接");
@@ -229,7 +235,11 @@ fn build_request(
         // 上游就不会把这当成升级请求——socket.io 和 Vite 的 HMR 都会卡在这里。
         headers.insert(header::CONNECTION, HeaderValue::from_static("upgrade"));
     }
-    put(headers, header::HOST.as_str(), &format!("localhost:{}", session.local_port));
+    put(
+        headers,
+        header::HOST.as_str(),
+        &format!("localhost:{}", session.local_port),
+    );
     put(headers, HEADER_FORWARDED_HOST, player.authority);
     put(headers, "x-forwarded-proto", player.public_scheme);
     // 这里**没有** X-Forwarded-For：玩家 IP 我们不收集，也就没有 IP 可以往开发者那里送。
@@ -241,7 +251,9 @@ fn counted_body(session: &Arc<Session>, body: Body) -> Body {
     let session = session.clone();
     Body::new(body.map_frame(move |frame| {
         if let Some(data) = frame.data_ref() {
-            session.bytes_in.fetch_add(data.len() as u64, Ordering::Relaxed);
+            session
+                .bytes_in
+                .fetch_add(data.len() as u64, Ordering::Relaxed);
         }
         frame
     }))
@@ -270,7 +282,9 @@ impl HttpBody for Streaming {
         let polled = Pin::new(&mut this.inner).poll_frame(cx);
         if let Poll::Ready(Some(Ok(frame))) = &polled {
             if let Some(data) = frame.data_ref() {
-                this.session.bytes_out.fetch_add(data.len() as u64, Ordering::Relaxed);
+                this.session
+                    .bytes_out
+                    .fetch_add(data.len() as u64, Ordering::Relaxed);
             }
         }
         polled
@@ -479,7 +493,10 @@ mod tests {
         assert_eq!(out.headers()["upgrade"], "websocket");
         // 留了 Upgrade 却不说 Connection: upgrade，上游不会当成升级请求。
         assert_eq!(out.headers()["connection"], "upgrade");
-        assert_eq!(out.headers()["sec-websocket-key"], "dGhlIHNhbXBsZSBub25jZQ==");
+        assert_eq!(
+            out.headers()["sec-websocket-key"],
+            "dGhlIHNhbXBsZSBub25jZQ=="
+        );
     }
 
     #[test]
@@ -507,7 +524,10 @@ mod tests {
         headers.insert("upgrade", HeaderValue::from_static("websocket"));
         // 光有 Upgrade 不算，`Connection` 得点名它。
         assert!(!wants_upgrade(&headers));
-        headers.insert("connection", HeaderValue::from_static("keep-alive, Upgrade"));
+        headers.insert(
+            "connection",
+            HeaderValue::from_static("keep-alive, Upgrade"),
+        );
         assert!(wants_upgrade(&headers));
     }
 

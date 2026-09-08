@@ -73,12 +73,11 @@ impl SiteStore {
     }
 
     async fn current_version(&self, slug: &str) -> Option<u32> {
-        if let Some(hit) = self
-            .current
-            .lock()
-            .ok()
-            .and_then(|c| c.get(slug).filter(|e| e.at.elapsed() < self.ttl).map(|e| e.version))
-        {
+        if let Some(hit) = self.current.lock().ok().and_then(|c| {
+            c.get(slug)
+                .filter(|e| e.at.elapsed() < self.ttl)
+                .map(|e| e.version)
+        }) {
             return hit;
         }
         let version = match self.store.get_current(slug).await {
@@ -102,7 +101,12 @@ impl SiteStore {
 
     async fn manifest(&self, slug: &str, version: u32) -> Option<Arc<Manifest>> {
         let key = (slug.to_string(), version);
-        if let Some(hit) = self.manifests.lock().ok().and_then(|m| m.get(&key).cloned()) {
+        if let Some(hit) = self
+            .manifests
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&key).cloned())
+        {
             return Some(hit);
         }
         let manifest = match self.store.get_manifest(slug, version).await {
@@ -167,7 +171,10 @@ mod tests {
         assert!(!is_expired(&manifest(Some("2026-09-08T00:00:00Z")), now));
         assert!(is_expired(&manifest(Some("2026-09-07T11:59:59Z")), now));
         // 带时区偏移的写法也要认。
-        assert!(is_expired(&manifest(Some("2026-09-07T19:00:00+08:00")), now));
+        assert!(is_expired(
+            &manifest(Some("2026-09-07T19:00:00+08:00")),
+            now
+        ));
         // 解析不了就当没过期。
         assert!(!is_expired(&manifest(Some("明天")), now));
     }

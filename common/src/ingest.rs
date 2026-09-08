@@ -318,36 +318,69 @@ mod tests {
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 \
              (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
         );
-        assert_eq!((mac.device, mac.browser, mac.os), ("desktop", "safari", "macos"));
+        assert_eq!(
+            (mac.device, mac.browser, mac.os),
+            ("desktop", "safari", "macos")
+        );
 
         let ipad = classify_ua(
             "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 \
              (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
         );
-        assert_eq!((ipad.device, ipad.browser, ipad.os), ("tablet", "safari", "ios"));
+        assert_eq!(
+            (ipad.device, ipad.browser, ipad.os),
+            ("tablet", "safari", "ios")
+        );
 
         let win = classify_ua(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) \
              Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0",
         );
-        assert_eq!((win.device, win.browser, win.os), ("desktop", "other", "windows"));
+        assert_eq!(
+            (win.device, win.browser, win.os),
+            ("desktop", "other", "windows")
+        );
 
         let nothing = classify_ua("curl/8.7.1");
-        assert_eq!((nothing.device, nothing.browser, nothing.os), ("desktop", "other", "other"));
+        assert_eq!(
+            (nothing.device, nothing.browser, nothing.os),
+            ("desktop", "other", "other")
+        );
     }
 
     #[test]
     fn referrer_is_best_effort() {
         assert_eq!(referrer_kind("", false), "direct");
         assert_eq!(referrer_kind("", true), "wechat");
-        assert_eq!(referrer_kind("https://discord.com/channels/1/2", false), "discord");
-        assert_eq!(referrer_kind("https://mp.weixin.qq.com/s/abc", false), "wechat");
-        assert_eq!(referrer_kind("https://news.ycombinator.com/", false), "other");
+        assert_eq!(
+            referrer_kind("https://discord.com/channels/1/2", false),
+            "discord"
+        );
+        assert_eq!(
+            referrer_kind("https://mp.weixin.qq.com/s/abc", false),
+            "wechat"
+        );
+        assert_eq!(
+            referrer_kind("https://news.ycombinator.com/", false),
+            "other"
+        );
         assert_eq!(referrer_kind("垃圾", false), "direct");
-        assert!(is_self_referral("https://brisk-otter-41.playtest.run/", "brisk-otter-41"));
-        assert!(is_self_referral("http://brisk-otter-41.localhost:8443/game", "brisk-otter-41"));
-        assert!(!is_self_referral("https://discord.com/channels/1/2", "brisk-otter-41"));
-        assert!(!is_self_referral("https://brisk-otter-411.playtest.run/", "brisk-otter-41"));
+        assert!(is_self_referral(
+            "https://brisk-otter-41.playtest.run/",
+            "brisk-otter-41"
+        ));
+        assert!(is_self_referral(
+            "http://brisk-otter-41.localhost:8443/game",
+            "brisk-otter-41"
+        ));
+        assert!(!is_self_referral(
+            "https://discord.com/channels/1/2",
+            "brisk-otter-41"
+        ));
+        assert!(!is_self_referral(
+            "https://brisk-otter-411.playtest.run/",
+            "brisk-otter-41"
+        ));
     }
 
     #[test]

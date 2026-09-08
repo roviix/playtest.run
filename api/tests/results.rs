@@ -6,11 +6,16 @@
 //!
 //! 请求走的是真的 `Router`（`tower::ServiceExt::oneshot`），中间层和鉴权都在。
 
+// 测试脚手架：为了把一条用例写成一眼能看完的样子，这里放宽 too_many_arguments。
+#![allow(clippy::too_many_arguments)]
+
 use axum::body::{Body, Bytes};
 use axum::http::{header, Request, StatusCode};
 use axum::Router;
 use playtest_api::{app, AppState, Config};
-use playtest_common::api::{routes as paths, AnonSessionResponse, CreateSiteRequest, ErrorBody, ErrorCode, Site};
+use playtest_common::api::{
+    routes as paths, AnonSessionResponse, CreateSiteRequest, ErrorBody, ErrorCode, Site,
+};
 use playtest_common::results::{
     routes as result_paths, FeedbackItem, FeedbackList, FeedbackStatus, RosterSort, SiteResults,
     UpdateFeedbackRequest, VersionResults, VersionSessions,
@@ -118,9 +123,16 @@ impl Harness {
         if !matches!(method, "GET" | "DELETE") {
             builder = builder.header(header::CONTENT_TYPE, "application/json");
         }
-        let response = self.router.clone().oneshot(builder.body(body).unwrap()).await.unwrap();
+        let response = self
+            .router
+            .clone()
+            .oneshot(builder.body(body).unwrap())
+            .await
+            .unwrap();
         let status = response.status();
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         Reply { status, body }
     }
 
@@ -142,7 +154,9 @@ impl Harness {
 
     async fn new_site(&self, token: &str) -> Site {
         let body = Body::from(serde_json::to_vec(&CreateSiteRequest::default()).unwrap());
-        self.request("POST", paths::SITES, Some(token), body).await.json()
+        self.request("POST", paths::SITES, Some(token), body)
+            .await
+            .json()
     }
 
     async fn version(&self, slug: &str, version: u32, created_at: &str, note: &str) {
@@ -237,7 +251,8 @@ async fn one_version_adds_up_to_the_paragraph() {
     let token = h.anon_token().await;
     let site = h.new_site(&token).await;
     let slug = &site.slug;
-    h.version(slug, 7, "2026-09-05T14:20:00Z", "改了新手引导").await;
+    h.version(slug, 7, "2026-09-05T14:20:00Z", "改了新手引导")
+        .await;
 
     // 六个人进到了游戏，其中三个玩了 5 分钟以上、两个是回头的。
     let long_ones = [
@@ -263,7 +278,15 @@ async fn one_version_adds_up_to_the_paragraph() {
         ("s5", "2026-09-05T14:02:00Z"),
         ("s6", "2026-09-05T14:00:45Z"),
     ] {
-        h.session(slug, &Sess { id, last, ..Default::default() }).await;
+        h.session(
+            slug,
+            &Sess {
+                id,
+                last,
+                ..Default::default()
+            },
+        )
+        .await;
     }
     // 两个点了开始但没等到首帧——L7 数的就是这两个人。
     h.session(
@@ -310,14 +333,43 @@ async fn one_version_adds_up_to_the_paragraph() {
         )
         .await;
     }
-    h.event(slug, "s6", 7, "2026-09-05T14:00:40Z", "sdk", "error", Some("RangeError @ boot.js:8"), None)
-        .await;
+    h.event(
+        slug,
+        "s6",
+        7,
+        "2026-09-05T14:00:40Z",
+        "sdk",
+        "error",
+        Some("RangeError @ boot.js:8"),
+        None,
+    )
+    .await;
     // 边缘报的加载失败。
-    h.event(slug, "s7", 7, "2026-09-05T14:00:07Z", "edge", "resource_fail", Some("game.wasm"), None)
-        .await;
-    h.feedback(slug, "s2", 7, "2026-09-05T14:03:00Z", "不知道要按哪个键", 47).await;
+    h.event(
+        slug,
+        "s7",
+        7,
+        "2026-09-05T14:00:07Z",
+        "edge",
+        "resource_fail",
+        Some("game.wasm"),
+        None,
+    )
+    .await;
+    h.feedback(
+        slug,
+        "s2",
+        7,
+        "2026-09-05T14:03:00Z",
+        "不知道要按哪个键",
+        47,
+    )
+    .await;
 
-    let results: SiteResults = h.get(&result_paths::site_results(slug), &token).await.json();
+    let results: SiteResults = h
+        .get(&result_paths::site_results(slug), &token)
+        .await
+        .json();
     let v7 = find(&results, 7);
 
     assert_eq!(v7.note.as_deref(), Some("改了新手引导"));
@@ -371,7 +423,10 @@ async fn without_the_sdk_l7_says_it_does_not_know() {
         .await;
     }
 
-    let results: SiteResults = h.get(&result_paths::site_results(slug), &token).await.json();
+    let results: SiteResults = h
+        .get(&result_paths::site_results(slug), &token)
+        .await
+        .json();
     let v7 = find(&results, 7);
     assert_eq!(v7.opened, 3);
     assert_eq!(v7.entered, 3, "点了开始就算进来了");
@@ -379,10 +434,9 @@ async fn without_the_sdk_l7_says_it_does_not_know() {
     assert_eq!(v7.errors.total, 0);
 
     // 序列化出去是 null，控制台照这个判断该不该说那半句话。
-    let raw: serde_json::Value = serde_json::from_slice(
-        &h.get(&result_paths::site_results(slug), &token).await.body,
-    )
-    .unwrap();
+    let raw: serde_json::Value =
+        serde_json::from_slice(&h.get(&result_paths::site_results(slug), &token).await.body)
+            .unwrap();
     assert!(raw["versions"][0]["dropped_before_first_frame"].is_null());
 }
 
@@ -428,9 +482,16 @@ async fn median_holds_at_zero_one_and_even() {
         .await;
     }
 
-    let results: SiteResults = h.get(&result_paths::site_results(slug), &token).await.json();
+    let results: SiteResults = h
+        .get(&result_paths::site_results(slug), &token)
+        .await
+        .json();
     assert_eq!(
-        results.versions.iter().map(|v| v.version).collect::<Vec<_>>(),
+        results
+            .versions
+            .iter()
+            .map(|v| v.version)
+            .collect::<Vec<_>>(),
         vec![3, 2, 1],
         "版本倒序，没人打开的那一版也要在"
     );
@@ -483,10 +544,28 @@ async fn the_roster_puts_the_shortest_stay_first() {
         },
     )
     .await;
-    h.event(slug, "早来玩很久", 7, "2026-09-05T14:05:00Z", "sdk", "event", Some("第一关过了"), None)
-        .await;
-    h.event(slug, "早来玩很久", 7, "2026-09-05T14:12:00Z", "sdk", "event", Some("第二关过了"), None)
-        .await;
+    h.event(
+        slug,
+        "早来玩很久",
+        7,
+        "2026-09-05T14:05:00Z",
+        "sdk",
+        "event",
+        Some("第一关过了"),
+        None,
+    )
+    .await;
+    h.event(
+        slug,
+        "早来玩很久",
+        7,
+        "2026-09-05T14:12:00Z",
+        "sdk",
+        "event",
+        Some("第二关过了"),
+        None,
+    )
+    .await;
     h.event(
         slug,
         "早来玩很久",
@@ -498,7 +577,15 @@ async fn the_roster_puts_the_shortest_stay_first() {
         Some(r#"{"stack":"main.js:412"}"#),
     )
     .await;
-    h.feedback(slug, "早来玩很久", 7, "2026-09-05T14:14:00Z", "不知道要按哪个键", 840).await;
+    h.feedback(
+        slug,
+        "早来玩很久",
+        7,
+        "2026-09-05T14:14:00Z",
+        "不知道要按哪个键",
+        840,
+    )
+    .await;
 
     let roster: VersionSessions = h
         .get(&result_paths::site_version_sessions(slug, 7), &token)
@@ -506,13 +593,20 @@ async fn the_roster_puts_the_shortest_stay_first() {
         .json();
     assert_eq!(roster.sort, RosterSort::Dwell);
     assert_eq!(
-        roster.sessions.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+        roster
+            .sessions
+            .iter()
+            .map(|s| s.id.as_str())
+            .collect::<Vec<_>>(),
         vec!["晚来就走", "早来玩很久"]
     );
 
     let quitter = &roster.sessions[0];
     assert_eq!(quitter.dwell_s, 9);
-    assert!(quitter.started && !quitter.first_frame, "点了开始，没等到首帧");
+    assert!(
+        quitter.started && !quitter.first_frame,
+        "点了开始，没等到首帧"
+    );
     assert!(quitter.wechat);
     assert_eq!(quitter.browser.as_deref(), Some("wechat"));
     assert_eq!(quitter.referrer_kind.as_deref(), Some("wechat"));
@@ -523,7 +617,11 @@ async fn the_roster_puts_the_shortest_stay_first() {
 
     let stayer = &roster.sessions[1];
     assert_eq!(stayer.dwell_s, 20 * 60);
-    assert_eq!(stayer.reached.as_deref(), Some("第二关过了"), "玩到哪 = 最后一个自定义事件");
+    assert_eq!(
+        stayer.reached.as_deref(),
+        Some("第二关过了"),
+        "玩到哪 = 最后一个自定义事件"
+    );
     assert_eq!(stayer.errors, 1);
     assert_eq!(stayer.feedback, 1);
     // 最后一次输入距「进入」多久：14:00:05 点的开始，14:19:00 最后动的。
@@ -532,21 +630,34 @@ async fn the_roster_puts_the_shortest_stay_first() {
     assert_eq!(stayer.events.len(), 3);
     assert_eq!(stayer.events[0].name.as_deref(), Some("第一关过了"));
     assert_eq!(stayer.events[2].kind, "error");
-    assert_eq!(stayer.events[2].data.as_ref().unwrap()["stack"], "main.js:412");
+    assert_eq!(
+        stayer.events[2].data.as_ref().unwrap()["stack"],
+        "main.js:412"
+    );
     assert!(!stayer.more_events);
 
     let by_time: VersionSessions = h
-        .get(&format!("{}?sort=time", result_paths::site_version_sessions(slug, 7)), &token)
+        .get(
+            &format!("{}?sort=time", result_paths::site_version_sessions(slug, 7)),
+            &token,
+        )
         .await
         .json();
     assert_eq!(by_time.sort, RosterSort::Time);
     assert_eq!(by_time.sessions[0].id, "晚来就走", "最近打开的排最前面");
 
     let bad = h
-        .get(&format!("{}?sort=最短", result_paths::site_version_sessions(slug, 7)), &token)
+        .get(
+            &format!("{}?sort=最短", result_paths::site_version_sessions(slug, 7)),
+            &token,
+        )
         .await
         .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
-    assert!(bad.message.contains("dwell"), "报错要说清能填什么：{}", bad.message);
+    assert!(
+        bad.message.contains("dwell"),
+        "报错要说清能填什么：{}",
+        bad.message
+    );
 }
 
 /// 反馈流：按版本和状态筛，标记已看 / 已处理。
@@ -557,13 +668,41 @@ async fn feedback_can_be_filtered_and_marked() {
     let site = h.new_site(&token).await;
     let slug = &site.slug;
 
-    h.session(slug, &Sess { id: "p1", ..Default::default() }).await;
-    h.session(slug, &Sess { id: "p2", version: 6, ..Default::default() }).await;
-    h.feedback(slug, "p1", 7, "2026-09-05T14:03:00Z", "不知道要按哪个键", 47).await;
-    h.feedback(slug, "p1", 7, "2026-09-05T14:09:00Z", "第三关太难了", 380).await;
-    h.feedback(slug, "p2", 6, "2026-09-04T10:00:00Z", "上一版的反馈", 12).await;
+    h.session(
+        slug,
+        &Sess {
+            id: "p1",
+            ..Default::default()
+        },
+    )
+    .await;
+    h.session(
+        slug,
+        &Sess {
+            id: "p2",
+            version: 6,
+            ..Default::default()
+        },
+    )
+    .await;
+    h.feedback(
+        slug,
+        "p1",
+        7,
+        "2026-09-05T14:03:00Z",
+        "不知道要按哪个键",
+        47,
+    )
+    .await;
+    h.feedback(slug, "p1", 7, "2026-09-05T14:09:00Z", "第三关太难了", 380)
+        .await;
+    h.feedback(slug, "p2", 6, "2026-09-04T10:00:00Z", "上一版的反馈", 12)
+        .await;
 
-    let all: FeedbackList = h.get(&result_paths::site_feedback(slug), &token).await.json();
+    let all: FeedbackList = h
+        .get(&result_paths::site_feedback(slug), &token)
+        .await
+        .json();
     assert_eq!(all.items.len(), 3);
     assert_eq!(all.items[0].text, "第三关太难了", "最新的在最前面");
     assert_eq!(all.items[0].seconds_in, Some(380));
@@ -572,7 +711,10 @@ async fn feedback_can_be_filtered_and_marked() {
     assert!(all.items[0].screenshot_hash.is_none(), "截图 v0.2 才做");
 
     let v7: FeedbackList = h
-        .get(&format!("{}?version=7", result_paths::site_feedback(slug)), &token)
+        .get(
+            &format!("{}?version=7", result_paths::site_feedback(slug)),
+            &token,
+        )
         .await
         .json();
     assert_eq!(v7.items.len(), 2);
@@ -591,7 +733,10 @@ async fn feedback_can_be_filtered_and_marked() {
     assert_eq!(updated.status, FeedbackStatus::Done);
 
     let still_new: FeedbackList = h
-        .get(&format!("{}?status=new", result_paths::site_feedback(slug)), &token)
+        .get(
+            &format!("{}?status=new", result_paths::site_feedback(slug)),
+            &token,
+        )
         .await
         .json();
     assert_eq!(still_new.items.len(), 2);
@@ -609,7 +754,10 @@ async fn feedback_can_be_filtered_and_marked() {
     .error(StatusCode::NOT_FOUND, ErrorCode::NotFound);
 
     let bad = h
-        .get(&format!("{}?status=已读", result_paths::site_feedback(slug)), &token)
+        .get(
+            &format!("{}?status=已读", result_paths::site_feedback(slug)),
+            &token,
+        )
         .await
         .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
     assert!(bad.message.contains("done"), "{}", bad.message);
@@ -624,7 +772,8 @@ async fn results_are_only_visible_to_the_owner() {
     let site = h.new_site(&mine).await;
     let slug = &site.slug;
     h.session(slug, &Sess::default()).await;
-    h.feedback(slug, "s0", 7, "2026-09-05T14:03:00Z", "看不到我", 10).await;
+    h.feedback(slug, "s0", 7, "2026-09-05T14:03:00Z", "看不到我", 10)
+        .await;
 
     for path in [
         result_paths::site_results(slug),

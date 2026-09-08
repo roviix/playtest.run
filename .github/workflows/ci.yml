@@ -1,0 +1,46 @@
+# 每次推送与 PR：全 workspace 测试、clippy、格式；控制台与 SDK 的 TypeScript 类型检查。
+# 不做发布、不碰服务器。
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  rust:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --features playtest-common/tunnel-io -- -D warnings
+      - run: cargo test --workspace --locked
+
+  web:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: |
+            console/pnpm-lock.yaml
+            sdk/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile && pnpm build
+        working-directory: console
+      - run: pnpm install --frozen-lockfile && pnpm check && pnpm build
+        working-directory: sdk
+      # SDK 的产物进仓库、边缘编进二进制：构建结果必须和提交的一致，否则线上跑的不是源码里的那份。
+      - run: git diff --exit-code -- sdk/dist

@@ -24,7 +24,11 @@ pub fn respond(method: &Method, request_headers: &HeaderMap) -> Response {
             h.insert(k, value);
         }
     };
-    put(&mut headers, "content-type", "text/javascript; charset=utf-8");
+    put(
+        &mut headers,
+        "content-type",
+        "text/javascript; charset=utf-8",
+    );
     put(&mut headers, "x-content-type-options", "nosniff");
     // 内容按哈希变，可以缓存一天；换版本靠 ETag 不一致触发重取。
     put(&mut headers, "cache-control", "public, max-age=86400");
@@ -72,6 +76,9 @@ mod tests {
         let mut h = HeaderMap::new();
         h.insert("if-none-match", tag);
         assert_eq!(respond(&Method::GET, &h).status(), StatusCode::NOT_MODIFIED);
-        assert_eq!(respond(&Method::POST, &HeaderMap::new()).status(), StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(
+            respond(&Method::POST, &HeaderMap::new()).status(),
+            StatusCode::METHOD_NOT_ALLOWED
+        );
     }
 }

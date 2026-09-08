@@ -13,8 +13,7 @@ pub fn now() -> OffsetDateTime {
 }
 
 pub fn format(t: OffsetDateTime) -> String {
-    t.format(&Rfc3339)
-        .expect("UTC 时间总能格式化成 RFC 3339")
+    t.format(&Rfc3339).expect("UTC 时间总能格式化成 RFC 3339")
 }
 
 pub fn now_string() -> String {

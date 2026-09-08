@@ -156,7 +156,9 @@ fn a_handwritten_client_can_shake_hands_list_tools_and_call_one() {
             tool["name"]
         );
         assert!(
-            description.chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c)),
+            description
+                .chars()
+                .any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c)),
             "{} 的说明该有中文给人读：{description}",
             tool["name"]
         );

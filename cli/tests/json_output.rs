@@ -385,11 +385,7 @@ fn what_is_not_built_yet_says_so_instead_of_pretending() {
 #[test]
 fn removing_without_confirmation_is_refused_not_guessed() {
     let home = tempfile::tempdir().unwrap();
-    let output = run_cli(
-        home.path(),
-        "http://127.0.0.1:1",
-        &["rm", SLUG, "--json"],
-    );
+    let output = run_cli(home.path(), "http://127.0.0.1:1", &["rm", SLUG, "--json"]);
     let value = expect_failure(&output, 2, "usage");
     assert!(value["message"].as_str().unwrap().contains("-y"), "{value}");
 }

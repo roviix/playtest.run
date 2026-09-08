@@ -72,11 +72,55 @@ fn looks_like_a_resource(path: &str) -> bool {
 
 /// 引擎导出物里真实出现过的扩展名。少了谁就补谁，宁可长一点。
 const RESOURCE_EXTENSIONS: &[&str] = &[
-    "js", "mjs", "cjs", "wasm", "css", "json", "map", "txt", "xml", "csv", //
-    "data", "pck", "unityweb", "bin", "mem", "symbols", "framework", "loader", //
-    "png", "jpg", "jpeg", "gif", "webp", "avif", "svg", "ico", "bmp", "ktx2", "basis", //
-    "mp3", "ogg", "wav", "m4a", "flac", "opus", "mp4", "webm", "mov", //
-    "ttf", "otf", "woff", "woff2", "eot", "atlas", "glb", "gltf", "obj", "fbx", "tres",
+    "js",
+    "mjs",
+    "cjs",
+    "wasm",
+    "css",
+    "json",
+    "map",
+    "txt",
+    "xml",
+    "csv", //
+    "data",
+    "pck",
+    "unityweb",
+    "bin",
+    "mem",
+    "symbols",
+    "framework",
+    "loader", //
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "webp",
+    "avif",
+    "svg",
+    "ico",
+    "bmp",
+    "ktx2",
+    "basis", //
+    "mp3",
+    "ogg",
+    "wav",
+    "m4a",
+    "flac",
+    "opus",
+    "mp4",
+    "webm",
+    "mov", //
+    "ttf",
+    "otf",
+    "woff",
+    "woff2",
+    "eot",
+    "atlas",
+    "glb",
+    "gltf",
+    "obj",
+    "fbx",
+    "tres",
 ];
 
 pub struct GatePage<'a> {
@@ -346,7 +390,10 @@ mod tests {
             "/user/v1.2",
         ] {
             assert!(!looks_like_a_resource(path), "{path}");
-            assert!(should_show(GateMode::Once, path, true, true, false), "{path}");
+            assert!(
+                should_show(GateMode::Once, path, true, true, false),
+                "{path}"
+            );
         }
     }
 
@@ -384,7 +431,8 @@ mod tests {
         assert!(html.contains("由 localhost 提供"));
         // 分享出去时靠这几条：Discord / iMessage / Telegram 会抓，微信尽力而为。
         assert!(html.contains("<title>某某 邀请你试玩《小球大冒险》</title>"));
-        assert!(html.contains("<meta name=\"description\" content=\"某某 邀请你试玩《小球大冒险》· v7\">"));
+        assert!(html
+            .contains("<meta name=\"description\" content=\"某某 邀请你试玩《小球大冒险》· v7\">"));
         assert!(html.contains("<meta property=\"og:title\" content=\"《小球大冒险》· v7\">"));
         assert!(html.contains("<meta property=\"og:description\" content=\"某某 邀请你试玩\">"));
         assert!(html.contains("<meta property=\"og:type\" content=\"website\">"));
@@ -535,7 +583,12 @@ mod tests {
         m.expires_at = Some("2026-09-08T04:30:00Z".into());
         m.note = Some("修了跳跃手感".into());
         let html = page(&m, true).render();
-        for forbidden in ["<script src", "<link rel=\"stylesheet", "@import", "//fonts."] {
+        for forbidden in [
+            "<script src",
+            "<link rel=\"stylesheet",
+            "@import",
+            "//fonts.",
+        ] {
             assert!(!html.contains(forbidden), "{forbidden}");
         }
         // 最胖的一页也要小。

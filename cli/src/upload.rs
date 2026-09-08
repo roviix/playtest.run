@@ -133,7 +133,13 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     // 令牌和作品都定下来了，后面只读，装进 Arc 好分给并发的上传任务。
     let client = Arc::new(client);
     let sending = Instant::now();
-    send_missing(Arc::clone(&client), &files, &prepared.missing, entries.len()).await?;
+    send_missing(
+        Arc::clone(&client),
+        &files,
+        &prepared.missing,
+        entries.len(),
+    )
+    .await?;
     timings.upload_ms = output::ms_since(sending);
 
     let committing = Instant::now();
@@ -166,7 +172,9 @@ fn resolve_dir(shown: &str) -> Result<PathBuf> {
         Err(e) => return Err(e).with_context(|| format!("看不了 {shown}")),
     };
     if !meta.is_dir() {
-        bail!("{shown} 是一个文件。请给目录，不是文件——引擎导出的那个文件夹，里面通常有 index.html。");
+        bail!(
+            "{shown} 是一个文件。请给目录，不是文件——引擎导出的那个文件夹，里面通常有 index.html。"
+        );
     }
     std::fs::canonicalize(given).with_context(|| format!("看不了 {shown}"))
 }
@@ -187,10 +195,8 @@ fn check_limits(entries: &[FileEntry], paths: &[String]) -> Result<()> {
 /// 只读每个文件的开头：要看的东西（wasm 的 import 段、脚本里的引擎名字）都在最前面，
 /// 而 Godot、Unity 的 `.wasm` 和 `.data` 动辄几十 MB，为一句提示读完不值得。
 fn inspect_dir(root: &Path, files: &[ScannedFile], entries: &[FileEntry]) -> inspect::Report {
-    let by_path: HashMap<&str, &ScannedFile> = files
-        .iter()
-        .map(|f| (f.entry.path.as_str(), f))
-        .collect();
+    let by_path: HashMap<&str, &ScannedFile> =
+        files.iter().map(|f| (f.entry.path.as_str(), f)).collect();
     let mut read_prefix = |path: &str, max: usize| {
         let file = by_path.get(path)?;
         let opened = std::fs::File::open(&file.source).ok()?;
@@ -232,9 +238,15 @@ fn choose_isolated(checked: &mut inspect::Report, cli_args: &UploadArgs) -> bool
         );
     }
     if cli_args.isolated {
-        return decided(checked, true, Finding::note(format!("{head}，--isolated 已经开着")));
+        return decided(
+            checked,
+            true,
+            Finding::note(format!("{head}，--isolated 已经开着")),
+        );
     }
-    match ask_yes(&format!("{head}，需要 --isolated 才能在浏览器里跑。帮你开吗？[Y/n] ")) {
+    match ask_yes(&format!(
+        "{head}，需要 --isolated 才能在浏览器里跑。帮你开吗？[Y/n] "
+    )) {
         Some(true) => decided(checked, true, Finding::note("这一版开了 --isolated")),
         Some(false) => decided(
             checked,
@@ -458,17 +470,17 @@ fn new_progress(total: u64) -> ProgressBar {
     }
     let bar = ProgressBar::new(total);
     bar.set_style(
-        ProgressStyle::with_template("{bar:28} {bytes}/{total_bytes}  {binary_bytes_per_sec}  剩 {eta}")
-            .unwrap_or_else(|_| ProgressStyle::default_bar()),
+        ProgressStyle::with_template(
+            "{bar:28} {bytes}/{total_bytes}  {binary_bytes_per_sec}  剩 {eta}",
+        )
+        .unwrap_or_else(|_| ProgressStyle::default_bar()),
     );
     bar
 }
 
 /// 边构建边上传时最常见的一种失败：文件在传的过程中被写了。
 fn changed_mid_upload(shown: &str) -> anyhow::Error {
-    output::bad_input(format!(
-        "上传时文件变了（{shown}），请等构建完成再运行。"
-    ))
+    output::bad_input(format!("上传时文件变了（{shown}），请等构建完成再运行。"))
 }
 
 async fn put_with_retry(

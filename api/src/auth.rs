@@ -18,9 +18,11 @@ use crate::state::AppState;
 
 pub const ANON_DISPLAY_NAME: &str = "匿名开发者";
 
-const NO_TOKEN: &str = "这个请求没带令牌。第一次用直接运行 playtest，它会自动申请一个 24 小时的匿名链接。";
+const NO_TOKEN: &str =
+    "这个请求没带令牌。第一次用直接运行 playtest，它会自动申请一个 24 小时的匿名链接。";
 const BAD_TOKEN: &str = "这个令牌我们不认识。重新运行 playtest 会拿到一个新的链接。";
-const EXPIRED: &str = "匿名链接的 24 小时已到，这个令牌和它创建的作品都失效了。重新运行 playtest 会拿到一个新链接。";
+const EXPIRED: &str =
+    "匿名链接的 24 小时已到，这个令牌和它创建的作品都失效了。重新运行 playtest 会拿到一个新链接。";
 
 /// 令牌的字节数。32 字节的随机量，base64url 之后是 43 个字符，能整行复制粘贴。
 const TOKEN_BYTES: usize = 32;
@@ -137,8 +139,14 @@ mod tests {
 
     #[test]
     fn reads_bearer_case_insensitively() {
-        assert_eq!(bearer_token(&parts_with("Bearer abc")).as_deref(), Some("abc"));
-        assert_eq!(bearer_token(&parts_with("bearer abc")).as_deref(), Some("abc"));
+        assert_eq!(
+            bearer_token(&parts_with("Bearer abc")).as_deref(),
+            Some("abc")
+        );
+        assert_eq!(
+            bearer_token(&parts_with("bearer abc")).as_deref(),
+            Some("abc")
+        );
         assert_eq!(bearer_token(&parts_with("Basic abc")), None);
         assert_eq!(bearer_token(&parts_with("Bearer   ")), None);
     }
@@ -148,6 +156,10 @@ mod tests {
         let a = new_token();
         let b = new_token();
         assert_ne!(a, b);
-        assert!(a.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'), "{a}");
+        assert!(
+            a.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
+            "{a}"
+        );
     }
 }

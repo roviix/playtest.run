@@ -189,10 +189,19 @@ struct Ctx {
 }
 
 impl Ctx {
-    fn new(parts: &axum::http::request::Parts, authority: &str, slug: &str, config: &Config) -> Self {
+    fn new(
+        parts: &axum::http::request::Parts,
+        authority: &str,
+        slug: &str,
+        config: &Config,
+    ) -> Self {
         let headers = &parts.headers;
-        let ua = header_str(headers, "user-agent").unwrap_or_default().to_string();
-        let referer = header_str(headers, "referer").unwrap_or_default().to_string();
+        let ua = header_str(headers, "user-agent")
+            .unwrap_or_default()
+            .to_string();
+        let referer = header_str(headers, "referer")
+            .unwrap_or_default()
+            .to_string();
         let sid = cookie_value(headers, SESSION_COOKIE)
             .filter(|s| is_session_id(s))
             .map(str::to_string);
@@ -324,7 +333,14 @@ async fn start(
         ..ctx.visitor.clone()
     };
     app.events
-        .append(Kind::Start, &manifest.slug, manifest.version, &visitor, None, None)
+        .append(
+            Kind::Start,
+            &manifest.slug,
+            manifest.version,
+            &visitor,
+            None,
+            None,
+        )
         .await;
 
     (StatusCode::SEE_OTHER, headers).into_response()
@@ -343,7 +359,9 @@ async fn serve_file(
     }
     // 熔断判定在取文件之前，也在门禁页之前：这一小时的额度用完了就一个字节都不出
     // （DESIGN §4.8）。`/_playtest/report` 走的是另一条路，举报入口任何时候都开着。
-    let verdict = app.breaker.check(&manifest.slug, breaker::limit_for(manifest));
+    let verdict = app
+        .breaker
+        .check(&manifest.slug, breaker::limit_for(manifest));
     if !verdict.allowed {
         return tripped(app, manifest, ctx, verdict).await;
     }
@@ -435,20 +453,32 @@ async fn blob(
 ) -> Response {
     let Ok(path) = app.sites.store().blob_path(&served.entry.hash) else {
         tracing::warn!(hash = %served.entry.hash, "清单里的哈希形态不对");
-        return page(StatusCode::INTERNAL_SERVER_ERROR, pages::broken(), Some((manifest.isolated, false)));
+        return page(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            pages::broken(),
+            Some((manifest.isolated, false)),
+        );
     };
     let mut file = match tokio::fs::File::open(&path).await {
         Ok(f) => f,
         Err(err) => {
             tracing::warn!(path = %path.display(), %err, "清单指向的 blob 打不开");
-            return page(StatusCode::INTERNAL_SERVER_ERROR, pages::broken(), Some((manifest.isolated, false)));
+            return page(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                pages::broken(),
+                Some((manifest.isolated, false)),
+            );
         }
     };
     let total = match file.metadata().await {
         Ok(meta) => meta.len(),
         Err(err) => {
             tracing::warn!(path = %path.display(), %err, "blob 读不到大小");
-            return page(StatusCode::INTERNAL_SERVER_ERROR, pages::broken(), Some((manifest.isolated, false)));
+            return page(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                pages::broken(),
+                Some((manifest.isolated, false)),
+            );
         }
     };
 
@@ -531,7 +561,11 @@ async fn blob(
     if start > 0 {
         if let Err(err) = file.seek(SeekFrom::Start(start)).await {
             tracing::warn!(path = %path.display(), %err, "定位 Range 起点失败");
-            return page(StatusCode::INTERNAL_SERVER_ERROR, pages::broken(), Some((manifest.isolated, false)));
+            return page(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                pages::broken(),
+                Some((manifest.isolated, false)),
+            );
         }
     }
     // 流式回给玩家：一个 80 MB 的 Unity `.data` 不该先进我们的内存。
@@ -567,19 +601,18 @@ async fn tripped(app: &App, manifest: &Manifest, ctx: &Ctx, verdict: breaker::Ve
 
     let mut headers = base_headers();
     put(&mut headers, "cache-control", "no-store");
-    put(&mut headers, "retry-after", &verdict.retry_after.to_string());
+    put(
+        &mut headers,
+        "retry-after",
+        &verdict.retry_after.to_string(),
+    );
     if !ctx.navigation {
         // 子资源：状态码就是全部，一个字节的 HTML 也不给。
         return (StatusCode::TOO_MANY_REQUESTS, headers).into_response();
     }
     put(&mut headers, "content-type", "text/html; charset=utf-8");
     security(&mut headers, manifest.isolated, false);
-    (
-        StatusCode::TOO_MANY_REQUESTS,
-        headers,
-        pages::over_quota(),
-    )
-        .into_response()
+    (StatusCode::TOO_MANY_REQUESTS, headers, pages::over_quota()).into_response()
 }
 
 // ---------------------------------------------------------------- 响应零件
@@ -611,7 +644,12 @@ fn method_not_allowed(allow: &str) -> Response {
     let mut headers = base_headers();
     put(&mut headers, "allow", allow);
     put(&mut headers, "content-type", "text/plain; charset=utf-8");
-    (StatusCode::METHOD_NOT_ALLOWED, headers, "这个地址不接受这种请求\n").into_response()
+    (
+        StatusCode::METHOD_NOT_ALLOWED,
+        headers,
+        "这个地址不接受这种请求\n",
+    )
+        .into_response()
 }
 
 fn put(headers: &mut HeaderMap, name: &'static str, value: &str) {
@@ -772,7 +810,10 @@ mod tests {
     #[test]
     fn cookie_lookup_needs_an_exact_name() {
         let mut headers = HeaderMap::new();
-        headers.insert("cookie", HeaderValue::from_static("a=1; pt_gate=1; pt_sid=abc"));
+        headers.insert(
+            "cookie",
+            HeaderValue::from_static("a=1; pt_gate=1; pt_sid=abc"),
+        );
         assert_eq!(cookie_value(&headers, GATE_COOKIE), Some("1"));
         assert_eq!(cookie_value(&headers, SESSION_COOKIE), Some("abc"));
         assert_eq!(cookie_value(&headers, "pt_g"), None);
@@ -805,20 +846,29 @@ mod tests {
     fn etag_matching_handles_lists_and_weak_forms() {
         let hash = "a".repeat(64);
         let quoted = format!("\"{hash}\"");
-        assert!(matches_etag(Some(&HeaderValue::from_str(&quoted).unwrap()), &hash));
+        assert!(matches_etag(
+            Some(&HeaderValue::from_str(&quoted).unwrap()),
+            &hash
+        ));
         assert!(matches_etag(Some(&HeaderValue::from_static("*")), &hash));
         assert!(matches_etag(
             Some(&HeaderValue::from_str(&format!("\"other\", W/{quoted}")).unwrap()),
             &hash
         ));
-        assert!(!matches_etag(Some(&HeaderValue::from_static("\"other\"")), &hash));
+        assert!(!matches_etag(
+            Some(&HeaderValue::from_static("\"other\"")),
+            &hash
+        ));
         assert!(!matches_etag(None, &hash));
     }
 
     #[test]
     fn form_fields_are_decoded() {
         assert_eq!(field("to=%2Flevel%2F3", "to").as_deref(), Some("/level/3"));
-        assert_eq!(field("reason=other&detail=a+b", "detail").as_deref(), Some("a b"));
+        assert_eq!(
+            field("reason=other&detail=a+b", "detail").as_deref(),
+            Some("a b")
+        );
         assert_eq!(field("reason=other", "detail"), None);
         assert_eq!(field("flag&to=%2F", "to").as_deref(), Some("/"));
     }

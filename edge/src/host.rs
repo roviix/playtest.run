@@ -108,9 +108,15 @@ mod tests {
     #[test]
     fn reserved_and_multi_label_are_unknown() {
         assert_eq!(classify("admin.localhost", "localhost"), HostKind::Unknown);
-        assert_eq!(classify("wechat.playtest.run", "playtest.run"), HostKind::Unknown);
+        assert_eq!(
+            classify("wechat.playtest.run", "playtest.run"),
+            HostKind::Unknown
+        );
         assert_eq!(classify("a.b.localhost", "localhost"), HostKind::Unknown);
-        assert_eq!(classify("under_score.localhost", "localhost"), HostKind::Unknown);
+        assert_eq!(
+            classify("under_score.localhost", "localhost"),
+            HostKind::Unknown
+        );
         assert_eq!(classify("-lead.localhost", "localhost"), HostKind::Unknown);
         assert_eq!(classify("example.com", "localhost"), HostKind::Unknown);
         assert_eq!(classify("127.0.0.1:8443", "localhost"), HostKind::Unknown);

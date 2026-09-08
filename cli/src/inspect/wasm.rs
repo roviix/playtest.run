@@ -212,14 +212,20 @@ mod tests {
     /// Godot 4 线程导出的样子：共享内存，写了上限。
     #[test]
     fn a_shared_memory_import_is_a_threaded_build() {
-        let wasm = module(&[(IMPORT_SECTION, memory_import(0b011, &[0x80, 0x02, 0x80, 0x04]))]);
+        let wasm = module(&[(
+            IMPORT_SECTION,
+            memory_import(0b011, &[0x80, 0x02, 0x80, 0x04]),
+        )]);
         assert_eq!(memory_kind(&wasm), Memory::Shared);
     }
 
     /// 单线程导出：同样导入内存，只是没有共享那一位。
     #[test]
     fn an_ordinary_memory_import_is_not() {
-        let wasm = module(&[(IMPORT_SECTION, memory_import(0b001, &[0x80, 0x02, 0x80, 0x04]))]);
+        let wasm = module(&[(
+            IMPORT_SECTION,
+            memory_import(0b001, &[0x80, 0x02, 0x80, 0x04]),
+        )]);
         assert_eq!(memory_kind(&wasm), Memory::Plain);
         let no_max = module(&[(IMPORT_SECTION, memory_import(0b000, &[0x80, 0x02]))]);
         assert_eq!(memory_kind(&no_max), Memory::Plain);
@@ -265,7 +271,10 @@ mod tests {
         assert_eq!(memory_kind(b"\0asm"), Memory::Unknown);
         assert_eq!(memory_kind(b"<!doctype html>"), Memory::Unknown);
         // brotli 压缩过的 wasm：magic 对不上。
-        assert_eq!(memory_kind(&[0x1b, 0x28, 0x00, 0x00, 0x04]), Memory::Unknown);
+        assert_eq!(
+            memory_kind(&[0x1b, 0x28, 0x00, 0x00, 0x04]),
+            Memory::Unknown
+        );
         // 版本号不是 1。
         assert_eq!(memory_kind(b"\0asm\x02\x00\x00\x00"), Memory::Unknown);
     }

@@ -48,7 +48,9 @@ pub async fn rm(slug: &str, yes: bool, api_flag: Option<&str>) -> Result<()> {
     };
 
     if !yes {
-        match ui::confirm(&format!("要删掉 {slug} 吗？删了它的链接就打不开了。输入 y 确认：")) {
+        match ui::confirm(&format!(
+            "要删掉 {slug} 吗？删了它的链接就打不开了。输入 y 确认："
+        )) {
             Some(true) => {}
             Some(false) => {
                 ui::say("没有删。");

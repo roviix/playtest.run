@@ -60,7 +60,11 @@ pub fn respond(
             return (StatusCode::INTERNAL_SERVER_ERROR, headers).into_response();
         }
     };
-    put(&mut headers, "content-type", "application/json; charset=utf-8");
+    put(
+        &mut headers,
+        "content-type",
+        "application/json; charset=utf-8",
+    );
     (StatusCode::OK, headers, body).into_response()
 }
 
@@ -140,10 +144,23 @@ mod tests {
 
     #[test]
     fn isolated_sites_get_the_resource_policy_header() {
-        let plain = respond(&config(), &manifest(false), Some(&"a1".repeat(16)), &Method::GET);
-        assert!(plain.headers().get("cross-origin-resource-policy").is_none());
+        let plain = respond(
+            &config(),
+            &manifest(false),
+            Some(&"a1".repeat(16)),
+            &Method::GET,
+        );
+        assert!(plain
+            .headers()
+            .get("cross-origin-resource-policy")
+            .is_none());
 
-        let isolated = respond(&config(), &manifest(true), Some(&"a1".repeat(16)), &Method::GET);
+        let isolated = respond(
+            &config(),
+            &manifest(true),
+            Some(&"a1".repeat(16)),
+            &Method::GET,
+        );
         assert_eq!(
             isolated.headers()["cross-origin-resource-policy"],
             "same-origin"

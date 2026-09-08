@@ -90,7 +90,8 @@ async fn sdk_batch(
     let now = clock::now();
     let ua = header_str(headers, header::USER_AGENT.as_str());
     let mut conn = state.db().lock().await;
-    let version = current_version(&conn, &slug)?.ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?;
+    let version =
+        current_version(&conn, &slug)?.ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?;
 
     // 「最后一次见到这个人」按批里最晚的那条事件算，不按请求到达的时刻：退出时补发的那一批
     // 本来就晚于它记录的事情，用到达时刻会把停留时长算长。
@@ -138,7 +139,9 @@ async fn sdk_batch(
             },
         )?;
         match event.kind.as_str() {
-            ingest::kind::LOAD => first_frame(&tx, &batch.session, &ts, load_ms(event.data.as_ref()))?,
+            ingest::kind::LOAD => {
+                first_frame(&tx, &batch.session, &ts, load_ms(event.data.as_ref()))?
+            }
             ingest::kind::INPUT => last_input(&tx, &batch.session, &ts)?,
             _ => {}
         }
@@ -726,7 +729,10 @@ mod tests {
 
     #[test]
     fn load_ms_ignores_nonsense() {
-        assert_eq!(load_ms(Some(&serde_json::json!({"ms": 1234.6}))), Some(1235));
+        assert_eq!(
+            load_ms(Some(&serde_json::json!({"ms": 1234.6}))),
+            Some(1235)
+        );
         assert_eq!(load_ms(Some(&serde_json::json!({"ms": -1}))), None);
         assert_eq!(load_ms(Some(&serde_json::json!({"ms": 1e12}))), None);
         assert_eq!(load_ms(Some(&serde_json::json!({"ms": "快"}))), None);

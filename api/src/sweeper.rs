@@ -18,7 +18,10 @@ pub fn spawn(state: AppState) -> tokio::task::JoinHandle<()> {
         loop {
             ticker.tick().await;
             if let Err(err) = sweep_once(&state).await {
-                tracing::error!(error = format!("{err:#}"), "清理过期匿名作品没做完，下一轮再试");
+                tracing::error!(
+                    error = format!("{err:#}"),
+                    "清理过期匿名作品没做完，下一轮再试"
+                );
             }
         }
     })

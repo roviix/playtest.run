@@ -7,6 +7,7 @@
 use axum::body::{Body, Bytes};
 use axum::http::{header, Request, StatusCode};
 use axum::Router;
+use playtest_api::{app, tunnel_keys, AppState, Config};
 use playtest_common::api::{
     routes as paths, AnonSessionResponse, CreateSiteRequest, ErrorBody, ErrorCode, Site,
 };
@@ -17,7 +18,6 @@ use playtest_common::tunnel::{
     key_files, Claims, SigningKey, TunnelGrant, TunnelRequest, VerifyingKey, TOKEN_TTL_SECS,
     WS_PATH,
 };
-use playtest_api::{app, tunnel_keys, AppState, Config};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use time::format_description::well_known::Rfc3339;
@@ -87,7 +87,10 @@ impl Harness {
 
     /// 边缘手上只有这个：对象存储里的一行公钥。
     fn edge_key(&self) -> VerifyingKey {
-        let path = self.config.store_root().join(key_files::VERIFYING_KEY_OBJECT);
+        let path = self
+            .config
+            .store_root()
+            .join(key_files::VERIFYING_KEY_OBJECT);
         let raw = std::fs::read_to_string(&path)
             .unwrap_or_else(|err| panic!("边缘要从 {} 读公钥，读不到：{err}", path.display()));
         VerifyingKey::from_base64(&raw)
@@ -111,8 +114,12 @@ impl Harness {
         if let Some(token) = token {
             builder = builder.header(header::AUTHORIZATION, format!("Bearer {token}"));
         }
-        self.send(builder.body(Body::from(serde_json::to_vec(value).unwrap())).unwrap())
-            .await
+        self.send(
+            builder
+                .body(Body::from(serde_json::to_vec(value).unwrap()))
+                .unwrap(),
+        )
+        .await
     }
 
     async fn anon_token(&self) -> String {
@@ -212,8 +219,12 @@ async fn anonymous_developer_gets_a_token_the_edge_can_verify() {
     );
     assert!(!claims.jti.is_empty());
 
-    let expires_at = OffsetDateTime::parse(&grant.expires_at, &Rfc3339)
-        .unwrap_or_else(|err| panic!("expires_at 要是 RFC 3339：{err}；原文是 {}", grant.expires_at));
+    let expires_at = OffsetDateTime::parse(&grant.expires_at, &Rfc3339).unwrap_or_else(|err| {
+        panic!(
+            "expires_at 要是 RFC 3339：{err}；原文是 {}",
+            grant.expires_at
+        )
+    });
     assert_eq!(expires_at.unix_timestamp(), claims.exp);
 
     // 令牌是签出来的，不是编出来的：改一个字节就验不过。
@@ -312,9 +323,13 @@ async fn a_token_is_required_and_expiry_says_so() {
     let token = h.anon_token().await;
     let site = h.new_site(&token).await;
 
-    h.post(&paths::site_tunnel(&site.slug), None, &serde_json::json!({}))
-        .await
-        .error(StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized);
+    h.post(
+        &paths::site_tunnel(&site.slug),
+        None,
+        &serde_json::json!({}),
+    )
+    .await
+    .error(StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized);
 
     let stale = h.stale_token().await;
     let expired = h
@@ -363,18 +378,17 @@ async fn restarting_keeps_the_same_key() {
     };
 
     AppState::from_config(&config).await.unwrap();
-    let published = std::fs::read_to_string(
-        config.store_root().join(key_files::VERIFYING_KEY_OBJECT),
-    )
-    .unwrap();
+    let published =
+        std::fs::read_to_string(config.store_root().join(key_files::VERIFYING_KEY_OBJECT)).unwrap();
 
     AppState::from_config(&config).await.unwrap();
-    let after_restart = std::fs::read_to_string(
-        config.store_root().join(key_files::VERIFYING_KEY_OBJECT),
-    )
-    .unwrap();
+    let after_restart =
+        std::fs::read_to_string(config.store_root().join(key_files::VERIFYING_KEY_OBJECT)).unwrap();
     assert_eq!(published, after_restart);
-    assert!(published.ends_with('\n'), "公钥文件要以换行结尾：{published:?}");
+    assert!(
+        published.ends_with('\n'),
+        "公钥文件要以换行结尾：{published:?}"
+    );
 
     let key_path = dir.path().join(key_files::SIGNING_KEY_FILE);
     assert!(key_path.is_file(), "私钥要落在数据目录里");

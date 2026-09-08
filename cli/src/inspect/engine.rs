@@ -136,7 +136,9 @@ pub fn is_unity(paths: &[&str]) -> bool {
 
 /// 有没有 Unity 的某一件产物，压缩与否都算。
 pub fn has_unity_part(paths: &[&str], suffix: &str) -> bool {
-    paths.iter().any(|p| without_compression(p).ends_with(suffix))
+    paths
+        .iter()
+        .any(|p| without_compression(p).ends_with(suffix))
 }
 
 fn is_godot(paths: &[&str], text: &Text) -> bool {
@@ -162,7 +164,9 @@ fn is_vite(paths: &[&str]) -> bool {
 }
 
 fn has_path_part(paths: &[&str], needle: &str) -> bool {
-    paths.iter().any(|p| p.to_ascii_lowercase().contains(needle))
+    paths
+        .iter()
+        .any(|p| p.to_ascii_lowercase().contains(needle))
 }
 
 /// 读到的那几段文本，用来找特征词。
@@ -254,7 +258,11 @@ mod tests {
             Some(Engine::Construct)
         );
         assert_eq!(
-            identify(&["index.html", "code0.js"], None, &[script("code0.js", "gdjs.evtsExt__…")]),
+            identify(
+                &["index.html", "code0.js"],
+                None,
+                &[script("code0.js", "gdjs.evtsExt__…")]
+            ),
             Some(Engine::GDevelop)
         );
         assert_eq!(

@@ -175,7 +175,10 @@ fn asset(path: &str) -> axum::http::request::Builder {
 }
 
 fn passed_gate(builder: axum::http::request::Builder) -> axum::http::request::Builder {
-    builder.header("cookie", "pt_gate=1; pt_sid=0123456789abcdef0123456789abcdef")
+    builder.header(
+        "cookie",
+        "pt_gate=1; pt_sid=0123456789abcdef0123456789abcdef",
+    )
 }
 
 // ------------------------------------------------------------------ 门禁页
@@ -186,7 +189,10 @@ async fn navigation_without_cookie_gets_the_gate_page() {
     let reply = site.get("/").await;
 
     assert_eq!(reply.status, StatusCode::OK);
-    assert_eq!(reply.header("content-type"), Some("text/html; charset=utf-8"));
+    assert_eq!(
+        reply.header("content-type"),
+        Some("text/html; charset=utf-8")
+    );
     assert_eq!(reply.header("cache-control"), Some("no-store"));
     assert_eq!(reply.header("x-content-type-options"), Some("nosniff"));
 
@@ -212,11 +218,16 @@ async fn navigation_without_cookie_gets_the_gate_page() {
 #[tokio::test]
 async fn gate_cookie_lets_the_html_through() {
     let site = Site::plain().await;
-    let reply = site.send(passed_gate(nav("/")).body(Body::empty()).unwrap()).await;
+    let reply = site
+        .send(passed_gate(nav("/")).body(Body::empty()).unwrap())
+        .await;
 
     assert_eq!(reply.status, StatusCode::OK);
     assert_eq!(reply.text(), INDEX_HTML);
-    assert_eq!(reply.header("content-type"), Some("text/html; charset=utf-8"));
+    assert_eq!(
+        reply.header("content-type"),
+        Some("text/html; charset=utf-8")
+    );
     assert_eq!(reply.header("cache-control"), Some("no-cache"));
     assert_eq!(reply.header("accept-ranges"), Some("bytes"));
     assert_eq!(
@@ -234,7 +245,9 @@ async fn gate_cookie_lets_the_html_through() {
 async fn assets_are_never_gated() {
     let site = Site::plain().await;
     // 没有任何 cookie，游戏的 js 照样要能取到——否则加载器会卡在半路。
-    let reply = site.send(asset("/game.js").body(Body::empty()).unwrap()).await;
+    let reply = site
+        .send(asset("/game.js").body(Body::empty()).unwrap())
+        .await;
     assert_eq!(reply.status, StatusCode::OK);
     assert_eq!(reply.text(), GAME_JS);
     assert!(site.events().is_empty());
@@ -274,7 +287,9 @@ async fn wechat_gets_the_open_in_browser_tip() {
 #[tokio::test]
 async fn wasm_gets_the_streaming_compilation_mime() {
     let site = Site::plain().await;
-    let reply = site.send(asset("/game.wasm").body(Body::empty()).unwrap()).await;
+    let reply = site
+        .send(asset("/game.wasm").body(Body::empty()).unwrap())
+        .await;
     assert_eq!(reply.status, StatusCode::OK);
     assert_eq!(reply.header("content-type"), Some("application/wasm"));
     assert_eq!(reply.header("content-encoding"), None);
@@ -291,7 +306,9 @@ async fn wasm_gets_the_streaming_compilation_mime() {
 async fn explicitly_requested_br_keeps_the_inner_type() {
     let site = Site::plain().await;
     // Unity 的加载器就是这样直接请求 Build/x.wasm.br 的。
-    let reply = site.send(asset("/game.wasm.br").body(Body::empty()).unwrap()).await;
+    let reply = site
+        .send(asset("/game.wasm.br").body(Body::empty()).unwrap())
+        .await;
     assert_eq!(reply.status, StatusCode::OK);
     assert_eq!(reply.header("content-encoding"), Some("br"));
     assert_eq!(reply.header("content-type"), Some("application/wasm"));
@@ -301,7 +318,10 @@ async fn explicitly_requested_br_keeps_the_inner_type() {
         .send(asset("/Build/x.data.br").body(Body::empty()).unwrap())
         .await;
     assert_eq!(reply.header("content-encoding"), Some("br"));
-    assert_eq!(reply.header("content-type"), Some("application/octet-stream"));
+    assert_eq!(
+        reply.header("content-type"),
+        Some("application/octet-stream")
+    );
     assert_eq!(reply.body.as_ref(), DATA_BR);
 }
 
@@ -332,7 +352,9 @@ async fn precompressed_is_preferred_when_accepted() {
 async fn isolated_manifest_adds_the_cross_origin_headers() {
     let site = Site::build(|m| m.isolated = true).await;
 
-    let asset_reply = site.send(asset("/game.wasm").body(Body::empty()).unwrap()).await;
+    let asset_reply = site
+        .send(asset("/game.wasm").body(Body::empty()).unwrap())
+        .await;
     assert_eq!(
         asset_reply.header("cross-origin-opener-policy"),
         Some("same-origin")
@@ -359,7 +381,11 @@ async fn isolated_manifest_adds_the_cross_origin_headers() {
 async fn no_csp_header_anywhere() {
     let site = Site::plain().await;
     // CSP 会把别人的游戏弄坏，我们不发。
-    assert!(site.get("/").await.header("content-security-policy").is_none());
+    assert!(site
+        .get("/")
+        .await
+        .header("content-security-policy")
+        .is_none());
     assert!(site
         .send(asset("/game.js").body(Body::empty()).unwrap())
         .await
@@ -373,7 +399,9 @@ async fn no_csp_header_anywhere() {
 async fn whole_file_then_single_range() {
     let site = Site::plain().await;
 
-    let whole = site.send(asset("/game.js").body(Body::empty()).unwrap()).await;
+    let whole = site
+        .send(asset("/game.js").body(Body::empty()).unwrap())
+        .await;
     assert_eq!(whole.status, StatusCode::OK);
     assert_eq!(whole.header("accept-ranges"), Some("bytes"));
     assert_eq!(whole.header("content-range"), None);
@@ -416,7 +444,10 @@ async fn suffix_range_on_a_one_mib_file() {
         Some(format!("bytes {}-{}/{}", BIG_LEN - 16, BIG_LEN - 1, BIG_LEN).as_str())
     );
     assert_eq!(reply.body.len(), 16);
-    assert_eq!(reply.header("content-type"), Some("application/octet-stream"));
+    assert_eq!(
+        reply.header("content-type"),
+        Some("application/octet-stream")
+    );
 }
 
 #[tokio::test]
@@ -508,7 +539,9 @@ async fn directory_without_trailing_slash_redirects() {
     assert_eq!(reply.status, StatusCode::MOVED_PERMANENTLY);
     assert_eq!(reply.header("location"), Some("/sub/"));
 
-    let reply = site.send(passed_gate(nav("/sub/")).body(Body::empty()).unwrap()).await;
+    let reply = site
+        .send(passed_gate(nav("/sub/")).body(Body::empty()).unwrap())
+        .await;
     assert_eq!(reply.status, StatusCode::OK);
     assert_eq!(reply.text(), SUB_HTML);
 }
@@ -531,11 +564,15 @@ async fn traversal_and_missing_files_are_our_own_404_page() {
 #[tokio::test]
 async fn spa_fallback_only_for_navigation() {
     let site = Site::build(|m| m.spa = true).await;
-    let reply = site.send(passed_gate(nav("/level/3")).body(Body::empty()).unwrap()).await;
+    let reply = site
+        .send(passed_gate(nav("/level/3")).body(Body::empty()).unwrap())
+        .await;
     assert_eq!(reply.status, StatusCode::OK);
     assert_eq!(reply.text(), INDEX_HTML);
 
-    let reply = site.send(asset("/level/3.png").body(Body::empty()).unwrap()).await;
+    let reply = site
+        .send(asset("/level/3.png").body(Body::empty()).unwrap())
+        .await;
     assert_eq!(reply.status, StatusCode::NOT_FOUND);
 }
 
@@ -571,23 +608,37 @@ async fn host_routing() {
 
     // 根域：唯一一页可以把开发者引去品牌站的地方。
     for host in ["localhost:8443", "www.localhost"] {
-        let reply = site.send(nav_on(host, "/").body(Body::empty()).unwrap()).await;
+        let reply = site
+            .send(nav_on(host, "/").body(Body::empty()).unwrap())
+            .await;
         assert_eq!(reply.status, StatusCode::OK, "{host}");
         assert!(reply.text().contains("playtest ./dist"), "{host}");
-        assert!(reply.text().contains(playtest_common::DEVELOPER_API_URL), "{host}");
+        assert!(
+            reply.text().contains(playtest_common::DEVELOPER_API_URL),
+            "{host}"
+        );
     }
 
     // 根域下别的路径没有内容。
     let reply = site
-        .send(nav_on("localhost:8443", "/anything").body(Body::empty()).unwrap())
+        .send(
+            nav_on("localhost:8443", "/anything")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await;
     assert_eq!(reply.status, StatusCode::NOT_FOUND);
 
     // 多级、保留名都不是作品。
     for host in ["a.b.localhost", "admin.localhost", "example.com"] {
-        let reply = site.send(nav_on(host, "/").body(Body::empty()).unwrap()).await;
+        let reply = site
+            .send(nav_on(host, "/").body(Body::empty()).unwrap())
+            .await;
         assert_eq!(reply.status, StatusCode::NOT_FOUND, "{host}");
-        assert!(!reply.text().contains(playtest_common::DEVELOPER_HOST), "{host}");
+        assert!(
+            !reply.text().contains(playtest_common::DEVELOPER_HOST),
+            "{host}"
+        );
     }
 }
 
@@ -702,7 +753,11 @@ async fn the_real_referrer_survives_the_gate() {
 #[tokio::test]
 async fn start_refuses_to_redirect_off_site() {
     let site = Site::plain().await;
-    for target in ["to=https%3A%2F%2Fevil.example", "to=%2F%2Fevil.example", "to=%2F%5Cevil"] {
+    for target in [
+        "to=https%3A%2F%2Fevil.example",
+        "to=%2F%2Fevil.example",
+        "to=%2F%5Cevil",
+    ] {
         let reply = site
             .send(
                 Request::builder()
@@ -736,7 +791,10 @@ async fn always_mode_uses_a_session_cookie() {
         .into_iter()
         .find(|c| c.starts_with("pt_gate="))
         .unwrap();
-    assert!(!gate.contains("Max-Age"), "每次都出的作品不该记住一整天：{gate}");
+    assert!(
+        !gate.contains("Max-Age"),
+        "每次都出的作品不该记住一整天：{gate}"
+    );
 }
 
 #[tokio::test]

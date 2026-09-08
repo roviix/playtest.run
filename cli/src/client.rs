@@ -40,7 +40,10 @@ pub enum Error {
     /// 非 2xx，但内容不是我们约定的格式——多半中间挡了一层代理或网关。
     Unexpected { status: u16, text: String },
     /// 本机这边的问题，比如要传的文件读不了。
-    Local { path: PathBuf, source: std::io::Error },
+    Local {
+        path: PathBuf,
+        source: std::io::Error,
+    },
 }
 
 impl std::fmt::Display for Error {
@@ -52,7 +55,10 @@ impl std::fmt::Display for Error {
                 } else {
                     root_cause(source)
                 };
-                write!(f, "连不上服务器（{api}）：{reason}。检查网络，或用 --api 指定地址。")
+                write!(
+                    f,
+                    "连不上服务器（{api}）：{reason}。检查网络，或用 --api 指定地址。"
+                )
             }
             Error::Server { body, .. } => write!(f, "服务器说：{}", body.message),
             Error::Unexpected { status, text } => {
@@ -91,8 +97,7 @@ impl Error {
 
     /// 记住的那个作品已经不认我们了：令牌过期，或者作品本身没了。
     pub fn means_anonymous_link_gone(&self) -> bool {
-        self.means_token_gone()
-            || matches!(self, Error::Server { status, .. } if *status == 404)
+        self.means_token_gone() || matches!(self, Error::Server { status, .. } if *status == 404)
     }
 
     /// 是令牌本身不行了（过期或服务器不认），而不是作品没了。
@@ -207,11 +212,7 @@ impl Client {
         self.read_json(response).await
     }
 
-    pub async fn commit_upload(
-        &self,
-        slug: &str,
-        upload_id: &str,
-    ) -> Result<CommitUploadResponse> {
+    pub async fn commit_upload(&self, slug: &str, upload_id: &str) -> Result<CommitUploadResponse> {
         let response = self
             .request(Method::POST, &routes::site_upload_commit(slug, upload_id))
             .send()
@@ -263,7 +264,10 @@ impl Client {
         }
     }
 
-    async fn read_json<T: serde::de::DeserializeOwned>(&self, response: reqwest::Response) -> Result<T> {
+    async fn read_json<T: serde::de::DeserializeOwned>(
+        &self,
+        response: reqwest::Response,
+    ) -> Result<T> {
         if !response.status().is_success() {
             return Err(self.read_error(response).await);
         }
@@ -307,10 +311,7 @@ fn root_cause(e: &reqwest::Error) -> String {
 fn describe_status(status: StatusCode, bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes).trim().to_string();
     if text.is_empty() {
-        status
-            .canonical_reason()
-            .unwrap_or("没有内容")
-            .to_string()
+        status.canonical_reason().unwrap_or("没有内容").to_string()
     } else {
         text
     }

@@ -70,10 +70,11 @@ impl Keys {
         }
 
         let stamp = self.stamp().await;
-        let cached = self.cached.lock().ok().and_then(|c| {
-            c.as_ref()
-                .map(|c| (c.key.clone(), Some(c.stamp) == stamp))
-        });
+        let cached = self
+            .cached
+            .lock()
+            .ok()
+            .and_then(|c| c.as_ref().map(|c| (c.key.clone(), Some(c.stamp) == stamp)));
         match cached {
             Some((key, true)) => return Some(key),
             // 文件这一刻读不到（被换名字、磁盘抖了一下），但我们手上有一把读到过的。

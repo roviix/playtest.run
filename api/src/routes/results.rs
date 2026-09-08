@@ -102,7 +102,7 @@ pub async fn timeline(
             )
         })
         .collect();
-    versions.sort_by(|a, b| b.version.cmp(&a.version));
+    versions.sort_by_key(|v| std::cmp::Reverse(v.version));
 
     Ok(Json(SiteResults {
         slug: site.slug,
@@ -201,12 +201,13 @@ pub async fn feedback(
     Path(slug): Path<String>,
     Query(query): Query<FeedbackQuery>,
 ) -> ApiResult<Json<FeedbackList>> {
-    let version = match query.version.as_deref() {
-        None | Some("") => None,
-        Some(value) => Some(value.parse::<u32>().map_err(|_| {
-            ApiError::invalid(format!("版本号只能是数字，不认识「{value}」。"))
-        })?),
-    };
+    let version =
+        match query.version.as_deref() {
+            None | Some("") => None,
+            Some(value) => Some(value.parse::<u32>().map_err(|_| {
+                ApiError::invalid(format!("版本号只能是数字，不认识「{value}」。"))
+            })?),
+        };
     let status = match query.status.as_deref() {
         None | Some("") => None,
         Some(value) => Some(value.parse::<FeedbackStatus>().map_err(ApiError::invalid)?),
@@ -267,7 +268,8 @@ pub async fn update_feedback(
 
 /// 我的、没删的作品。别人的和不存在的说同一句话，不告诉外面这个 slug 存不存在。
 fn owned_site(conn: &Connection, slug: &str, caller: &Caller) -> ApiResult<SiteRow> {
-    db::find_live_site(conn, slug, &caller.user_id)?.ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))
+    db::find_live_site(conn, slug, &caller.user_id)?
+        .ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))
 }
 
 /// 一个会话里聚合要用到的几列。整行读出来在 Rust 里分组，比每版一条 SQL 好读。
@@ -333,10 +335,10 @@ fn sessions_with_sdk_load(conn: &Connection, slug: &str) -> rusqlite::Result<Has
     rows.collect()
 }
 
-fn version_notes(
-    conn: &Connection,
-    slug: &str,
-) -> rusqlite::Result<BTreeMap<u32, (Option<String>, Option<String>)>> {
+/// 版本号 → （这版改了什么，创建时间）。
+type VersionNotes = BTreeMap<u32, (Option<String>, Option<String>)>;
+
+fn version_notes(conn: &Connection, slug: &str) -> rusqlite::Result<VersionNotes> {
     let mut stmt =
         conn.prepare("SELECT version, created_at, note FROM versions WHERE slug = ?1")?;
     let rows = stmt.query_map(params![slug], |row| {
@@ -354,7 +356,9 @@ fn counts_by_version(
     args: impl rusqlite::Params,
 ) -> rusqlite::Result<HashMap<u32, u32>> {
     let mut stmt = conn.prepare(sql)?;
-    let rows = stmt.query_map(args, |row| Ok((row.get::<_, u32>(0)?, row.get::<_, u32>(1)?)))?;
+    let rows = stmt.query_map(args, |row| {
+        Ok((row.get::<_, u32>(0)?, row.get::<_, u32>(1)?))
+    })?;
     rows.collect()
 }
 

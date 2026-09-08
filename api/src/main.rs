@@ -18,10 +18,7 @@ async fn main() -> anyhow::Result<()> {
             )
         })?;
 
-    tracing::info!(
-        "playtest 控制面已启动：http://{}",
-        listener.local_addr()?
-    );
+    tracing::info!("playtest 控制面已启动：http://{}", listener.local_addr()?);
     tracing::info!("数据目录：{}", config.data_dir.display());
     tracing::info!("玩家链接：{}", config.site_url_template);
 
@@ -34,8 +31,9 @@ async fn main() -> anyhow::Result<()> {
 
 fn init_logging() {
     // tower-http 的每请求日志在 debug 级，本机开发默认打开——看不见请求就没法查问题。
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("playtest_api=info,tower_http=debug"));
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        tracing_subscriber::EnvFilter::new("playtest_api=info,tower_http=debug")
+    });
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(false)

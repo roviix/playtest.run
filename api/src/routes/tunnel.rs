@@ -78,7 +78,10 @@ pub async fn grant(
 
 /// 令牌活不过作品：匿名作品还剩十分钟时签出的令牌也只剩十分钟，否则边缘会在作品到期后
 /// 继续认它一小时（边缘只验签不回源，DESIGN §4.5）。`site_expires_at` 解析不了就当没有到期。
-fn token_expiry(issued_at: time::OffsetDateTime, site_expires_at: Option<&str>) -> time::OffsetDateTime {
+fn token_expiry(
+    issued_at: time::OffsetDateTime,
+    site_expires_at: Option<&str>,
+) -> time::OffsetDateTime {
     let token_exp = issued_at + Duration::seconds(TOKEN_TTL_SECS);
     match site_expires_at.and_then(clock::parse) {
         Some(site_exp) if site_exp < token_exp => site_exp,

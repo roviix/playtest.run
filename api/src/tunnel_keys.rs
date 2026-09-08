@@ -95,8 +95,9 @@ fn write_new_key(path: &Path) -> anyhow::Result<Option<SigningKey>> {
             Ok(Some(key))
         }
         Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(None),
-        Err(err) => Err(anyhow::Error::new(err)
-            .context(format!("建不了隧道签名密钥 {}", path.display()))),
+        Err(err) => {
+            Err(anyhow::Error::new(err).context(format!("建不了隧道签名密钥 {}", path.display())))
+        }
     }
 }
 

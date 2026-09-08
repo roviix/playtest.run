@@ -7,6 +7,7 @@
 use axum::body::{Body, Bytes};
 use axum::http::{header, Request, StatusCode};
 use axum::Router;
+use playtest_api::{app, AppState, Config};
 use playtest_common::api::{
     routes as paths, AnonSessionResponse, CommitUploadResponse, CreateSiteRequest, ErrorBody,
     ErrorCode, PrepareUploadRequest, PrepareUploadResponse, Site,
@@ -14,7 +15,6 @@ use playtest_common::api::{
 use playtest_common::hash;
 use playtest_common::manifest::{FileEntry, GateMode};
 use playtest_common::store::FsStore;
-use playtest_api::{app, AppState, Config};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tower::ServiceExt;
@@ -42,9 +42,8 @@ impl Reply {
             self.status,
             self.text()
         );
-        serde_json::from_slice(&self.body).unwrap_or_else(|err| {
-            panic!("响应不是预期的 JSON：{err}；原文是 {}", self.text())
-        })
+        serde_json::from_slice(&self.body)
+            .unwrap_or_else(|err| panic!("响应不是预期的 JSON：{err}；原文是 {}", self.text()))
     }
 
     /// 断言这是一次失败，并把错误体拿出来。
@@ -216,9 +215,14 @@ async fn anonymous_upload_reaches_v2() {
     // 形容词-动物-两位数
     let parts: Vec<&str> = site.slug.split('-').collect();
     assert_eq!(parts.len(), 3, "随机名字长得不对：{}", site.slug);
-    assert!(parts[2].parse::<u32>().is_ok_and(|n| (10..=99).contains(&n)));
+    assert!(parts[2]
+        .parse::<u32>()
+        .is_ok_and(|n| (10..=99).contains(&n)));
 
-    let files = vec![entry("index.html", INDEX_HTML), entry("art/ball.png", SPRITE_PNG)];
+    let files = vec![
+        entry("index.html", INDEX_HTML),
+        entry("art/ball.png", SPRITE_PNG),
+    ];
     let prepared: PrepareUploadResponse = h
         .post(
             &paths::site_uploads(&site.slug),
@@ -268,7 +272,11 @@ async fn anonymous_upload_reaches_v2() {
     assert!(!manifest.spa);
     assert_eq!(manifest.expires_at, site.expires_at);
     assert_eq!(
-        manifest.files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(),
+        manifest
+            .files
+            .iter()
+            .map(|f| f.path.as_str())
+            .collect::<Vec<_>>(),
         ["art/ball.png", "index.html"],
         "清单要按路径排序"
     );
@@ -298,7 +306,15 @@ async fn anonymous_upload_reaches_v2() {
         .await
         .json();
     assert_eq!(v2.version, 2);
-    assert_eq!(h.store.get_current(&site.slug).await.unwrap().unwrap().version, 2);
+    assert_eq!(
+        h.store
+            .get_current(&site.slug)
+            .await
+            .unwrap()
+            .unwrap()
+            .version,
+        2
+    );
     // 旧版本不可变，回滚要靠它。
     assert!(h.store.get_manifest(&site.slug, 1).await.unwrap().is_some());
 
@@ -327,7 +343,8 @@ async fn deleting_a_site_takes_the_link_down() {
         )
         .await
         .json();
-    h.put_bytes(&paths::blob(&file.hash), &token, INDEX_HTML).await;
+    h.put_bytes(&paths::blob(&file.hash), &token, INDEX_HTML)
+        .await;
     h.post(
         &paths::site_upload_commit(&site.slug, &prepared.upload_id),
         Some(&token),
@@ -351,7 +368,11 @@ async fn deleting_a_site_takes_the_link_down() {
     h.get(&paths::site(&site.slug), &token)
         .await
         .error(StatusCode::NOT_FOUND, ErrorCode::NotFound);
-    assert!(h.get(paths::SITES, &token).await.json::<Vec<Site>>().is_empty());
+    assert!(h
+        .get(paths::SITES, &token)
+        .await
+        .json::<Vec<Site>>()
+        .is_empty());
 
     // blob 是跨作品去重的，删作品不删内容。
     assert!(h.store.has_blob(&file.hash).await.unwrap());
@@ -363,11 +384,20 @@ async fn wrong_bytes_are_rejected_and_nothing_is_kept() {
     let token = h.anon_token().await;
     let claimed = hash::hash_bytes(INDEX_HTML);
 
-    let reply = h.put_bytes(&paths::blob(&claimed), &token, SPRITE_PNG).await;
+    let reply = h
+        .put_bytes(&paths::blob(&claimed), &token, SPRITE_PNG)
+        .await;
     let body = reply.error(StatusCode::BAD_REQUEST, ErrorCode::HashMismatch);
-    assert!(body.message.contains(&claimed), "要说清是哪个哈希对不上：{}", body.message);
+    assert!(
+        body.message.contains(&claimed),
+        "要说清是哪个哈希对不上：{}",
+        body.message
+    );
 
-    assert!(!h.store.has_blob(&claimed).await.unwrap(), "对不上的内容不能落地");
+    assert!(
+        !h.store.has_blob(&claimed).await.unwrap(),
+        "对不上的内容不能落地"
+    );
     h.assert_no_leftovers();
 }
 
@@ -387,7 +417,10 @@ async fn commit_without_the_files_says_which_ones() {
     let token = h.anon_token().await;
     let site = h.new_site(&token).await;
 
-    let files = vec![entry("index.html", INDEX_HTML), entry("art/ball.png", SPRITE_PNG)];
+    let files = vec![
+        entry("index.html", INDEX_HTML),
+        entry("art/ball.png", SPRITE_PNG),
+    ];
     let prepared: PrepareUploadResponse = h
         .post(
             &paths::site_uploads(&site.slug),
@@ -408,7 +441,11 @@ async fn commit_without_the_files_says_which_ones() {
         )
         .await;
     let body = reply.error(StatusCode::CONFLICT, ErrorCode::BlobsMissing);
-    assert!(body.message.contains("art/ball.png"), "要点名缺哪个：{}", body.message);
+    assert!(
+        body.message.contains("art/ball.png"),
+        "要点名缺哪个：{}",
+        body.message
+    );
 
     // 没提交成，指针不能动。
     assert!(h.store.get_current(&site.slug).await.unwrap().is_none());
@@ -429,7 +466,8 @@ async fn committing_twice_is_refused() {
         )
         .await
         .json();
-    h.put_bytes(&paths::blob(&file.hash), &token, INDEX_HTML).await;
+    h.put_bytes(&paths::blob(&file.hash), &token, INDEX_HTML)
+        .await;
 
     let commit_path = paths::site_upload_commit(&site.slug, &prepared.upload_id);
     h.post(&commit_path, Some(&token), &serde_json::json!({}))
@@ -439,7 +477,15 @@ async fn committing_twice_is_refused() {
         .await
         .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
 
-    assert_eq!(h.store.get_current(&site.slug).await.unwrap().unwrap().version, 1);
+    assert_eq!(
+        h.store
+            .get_current(&site.slug)
+            .await
+            .unwrap()
+            .unwrap()
+            .version,
+        1
+    );
 }
 
 #[tokio::test]
@@ -450,10 +496,18 @@ async fn no_token_and_stale_token_say_different_things() {
         .post(paths::SITES, None, &CreateSiteRequest::default())
         .await
         .error(StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized);
-    assert!(anonymous.message.contains("playtest"), "{}", anonymous.message);
+    assert!(
+        anonymous.message.contains("playtest"),
+        "{}",
+        anonymous.message
+    );
 
     let unknown = h
-        .post(paths::SITES, Some("nobody-issued-this"), &CreateSiteRequest::default())
+        .post(
+            paths::SITES,
+            Some("nobody-issued-this"),
+            &CreateSiteRequest::default(),
+        )
         .await
         .error(StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized);
     assert!(!unknown.message.is_empty());
@@ -490,8 +544,14 @@ async fn anonymous_users_stop_at_three_sites() {
     assert!(body.message.contains('3'), "{}", body.message);
 
     // 删掉一个就能再建一个。
-    h.request("DELETE", &paths::site(&slugs[0]), Some(&token), Body::empty(), false)
-        .await;
+    h.request(
+        "DELETE",
+        &paths::site(&slugs[0]),
+        Some(&token),
+        Body::empty(),
+        false,
+    )
+    .await;
     h.new_site(&token).await;
 }
 
@@ -510,7 +570,11 @@ async fn dangerous_paths_never_reach_the_manifest() {
             )
             .await;
         let body = reply.error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
-        assert!(body.message.contains(bad), "报错要指出是哪条路径：{}", body.message);
+        assert!(
+            body.message.contains(bad),
+            "报错要指出是哪条路径：{}",
+            body.message
+        );
     }
 }
 
@@ -595,7 +659,8 @@ async fn expired_anonymous_sites_are_swept() {
         )
         .await
         .json();
-    h.put_bytes(&paths::blob(&file.hash), &token, INDEX_HTML).await;
+    h.put_bytes(&paths::blob(&file.hash), &token, INDEX_HTML)
+        .await;
     h.post(
         &paths::site_upload_commit(&site.slug, &prepared.upload_id),
         Some(&token),
@@ -605,7 +670,10 @@ async fn expired_anonymous_sites_are_swept() {
     .json::<CommitUploadResponse>();
 
     // 还没到期，扫一遍什么都不该动。
-    assert_eq!(playtest_api::sweeper::sweep_once(&h.state).await.unwrap(), 0);
+    assert_eq!(
+        playtest_api::sweeper::sweep_once(&h.state).await.unwrap(),
+        0
+    );
     assert!(h.store.get_current(&site.slug).await.unwrap().is_some());
 
     // 把这个人的到期时间拨到过去，再扫。
@@ -614,7 +682,10 @@ async fn expired_anonymous_sites_are_swept() {
         conn.execute("UPDATE users SET expires_at = '2020-01-01T00:00:00Z'", [])
             .unwrap();
     }
-    assert_eq!(playtest_api::sweeper::sweep_once(&h.state).await.unwrap(), 1);
+    assert_eq!(
+        playtest_api::sweeper::sweep_once(&h.state).await.unwrap(),
+        1
+    );
     assert!(
         h.store.get_current(&site.slug).await.unwrap().is_none(),
         "到期之后链接就该打不开了"

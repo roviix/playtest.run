@@ -51,7 +51,13 @@ pub const ONLINE_LABEL: &str = "在线";
 /// 就算走到了，[`gate::should_show`] 里那条资源路径白名单还挡着；判据仍然只有请求语义和
 /// 门禁自己种的 cookie，没有任何请求头能绕过它。POST 之类不出门禁页——那是游戏自己的
 /// 请求，拦下来等于把玩家的表单体吞掉。
-pub fn wants_gate(manifest: &Manifest, method: &Method, path: &str, navigation: bool, has_cookie: bool) -> bool {
+pub fn wants_gate(
+    manifest: &Manifest,
+    method: &Method,
+    path: &str,
+    navigation: bool,
+    has_cookie: bool,
+) -> bool {
     (method == Method::GET || method == Method::HEAD)
         && gate::should_show(manifest.gate, path, navigation, navigation, has_cookie)
 }
@@ -79,7 +85,10 @@ pub fn error(status: StatusCode, code: ErrorCode, message: &str) -> Response {
 /// 否则点了开始之后才隔离等于没隔离。
 pub fn page(status: StatusCode, html: String, isolated: bool) -> Response {
     let mut headers = HeaderMap::new();
-    headers.insert("x-content-type-options", HeaderValue::from_static("nosniff"));
+    headers.insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
     headers.insert(
         "content-type",
         HeaderValue::from_static("text/html; charset=utf-8"),
@@ -120,7 +129,10 @@ mod tests {
 
     #[test]
     fn the_handshake_path_is_the_one_common_declares() {
-        assert_eq!(WS_PATH.strip_prefix(RESERVED_PATH_PREFIX), Some(HANDSHAKE_TAIL));
+        assert_eq!(
+            WS_PATH.strip_prefix(RESERVED_PATH_PREFIX),
+            Some(HANDSHAKE_TAIL)
+        );
     }
 
     #[test]
@@ -135,11 +147,23 @@ mod tests {
         assert!(!wants_gate(&m, &Method::GET, "/main.js", false, false));
         assert!(!wants_gate(&m, &Method::GET, "/socket.io/", false, false));
         // 就算客户端把自己说成导航，长得像资源的路径也不出门禁页。
-        assert!(!wants_gate(&m, &Method::GET, "/assets/app-4f2c.js", true, false));
+        assert!(!wants_gate(
+            &m,
+            &Method::GET,
+            "/assets/app-4f2c.js",
+            true,
+            false
+        ));
         // 游戏自己发的 POST 不能被拦，否则请求体就丢了。
         assert!(!wants_gate(&m, &Method::POST, "/api/score", true, false));
         // 开发者选了不出就不出。
-        assert!(!wants_gate(&manifest(GateMode::Never), &Method::GET, "/", true, false));
+        assert!(!wants_gate(
+            &manifest(GateMode::Never),
+            &Method::GET,
+            "/",
+            true,
+            false
+        ));
     }
 
     #[test]

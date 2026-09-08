@@ -25,9 +25,9 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let listen_raw = env_or("PLAYTEST_EDGE_LISTEN", DEFAULT_LISTEN);
-        let listen = listen_raw
-            .parse::<SocketAddr>()
-            .with_context(|| format!("PLAYTEST_EDGE_LISTEN 不是「地址:端口」的形式：{listen_raw}"))?;
+        let listen = listen_raw.parse::<SocketAddr>().with_context(|| {
+            format!("PLAYTEST_EDGE_LISTEN 不是「地址:端口」的形式：{listen_raw}")
+        })?;
         let host_suffix = env_or("PLAYTEST_HOST_SUFFIX", DEFAULT_HOST_SUFFIX).to_ascii_lowercase();
         let public_scheme = std::env::var("PLAYTEST_PUBLIC_SCHEME")
             .ok()

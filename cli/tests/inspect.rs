@@ -140,7 +140,10 @@ impl Looked {
             .iter()
             .find(|f| f["message"].as_str().is_some_and(|m| m.contains(needle)))
             .unwrap_or_else(|| {
-                panic!("--json 的 findings 里没有「{needle}」：{:#?}", self.findings)
+                panic!(
+                    "--json 的 findings 里没有「{needle}」：{:#?}",
+                    self.findings
+                )
             })
     }
 
@@ -176,7 +179,11 @@ fn look_at(dir: &Path, extra: &[&str]) -> Looked {
     let mut args: Vec<&str> = vec![path, "--no-qr"];
     args.extend_from_slice(extra);
     let human = run_cli(human_home.path(), &api, &args);
-    assert!(human.status.success(), "人类模式挂了：{}", stderr_of(&human));
+    assert!(
+        human.status.success(),
+        "人类模式挂了：{}",
+        stderr_of(&human)
+    );
 
     let machine_home = tempfile::tempdir().unwrap();
     let mut args: Vec<&str> = vec!["--json", path, "--no-qr"];
@@ -283,7 +290,10 @@ fn unity_unityweb(root: &Path) -> PathBuf {
     );
     write(&dir.join("Build/webgl.loader.js"), b"// unity loader\n");
     write(&dir.join("Build/webgl.data.unityweb"), b"packed data\n");
-    write(&dir.join("Build/webgl.framework.js.unityweb"), b"packed js\n");
+    write(
+        &dir.join("Build/webgl.framework.js.unityweb"),
+        b"packed js\n",
+    );
     write(&dir.join("Build/webgl.wasm.unityweb"), b"packed wasm\n");
     dir
 }
@@ -306,7 +316,10 @@ fn unity_brotli(root: &Path) -> PathBuf {
     );
     write(&dir.join("Build/webgl.loader.js"), b"// unity loader\n");
     write(&dir.join("Build/webgl.data.br"), b"\x1b\x28\x00data\n");
-    write(&dir.join("Build/webgl.framework.js.br"), b"\x1b\x28\x00js\n");
+    write(
+        &dir.join("Build/webgl.framework.js.br"),
+        b"\x1b\x28\x00js\n",
+    );
     write(&dir.join("Build/webgl.wasm.br"), b"\x1b\x28\x00wasm\n");
     dir
 }
@@ -384,9 +397,7 @@ fn saying_no_to_isolation_is_obeyed_and_the_consequence_is_spelled_out() {
     let refused = looked.about("--no-isolated");
     assert_eq!(refused["level"], "warn", "{refused}");
     assert!(
-        refused["hint"]
-            .as_str()
-            .is_some_and(|h| h.contains("报错")),
+        refused["hint"].as_str().is_some_and(|h| h.contains("报错")),
         "得说清楚不开的后果：{refused}"
     );
     assert_eq!(looked.request["isolated"], false, "{}", looked.request);
@@ -454,10 +465,19 @@ fn an_index_html_one_level_down_is_a_blocker_that_names_the_right_directory() {
     assert_eq!(value["ok"], false);
     assert_eq!(value["code"], "bad_input");
     let message = value["message"].as_str().unwrap();
-    assert!(message.contains("最外层没有 index.html") && message.contains("web/index.html"), "{value}");
+    assert!(
+        message.contains("最外层没有 index.html") && message.contains("web/index.html"),
+        "{value}"
+    );
     let hint = value["hint"].as_str().unwrap();
-    assert!(hint.contains("/web") && hint.contains("--force"), "得告诉人家该传哪一层、怎么放行：{value}");
-    assert!(fake.prepared.lock().unwrap().is_empty(), "拦下就不该向控制面提交清单");
+    assert!(
+        hint.contains("/web") && hint.contains("--force"),
+        "得告诉人家该传哪一层、怎么放行：{value}"
+    );
+    assert!(
+        fake.prepared.lock().unwrap().is_empty(),
+        "拦下就不该向控制面提交清单"
+    );
 
     // --force 照传，且那条发现仍然在 findings 里让人看见。
     let looked = look_at(&dir, &["--force"]);
@@ -526,7 +546,10 @@ fn a_whole_project_directory_is_called_out() {
     let dir = work.path().join("whole-repo");
     write(&dir.join("index.html"), b"<html><body>hi</body></html>");
     write(&dir.join("package.json"), b"{\"name\":\"x\"}\n");
-    write(&dir.join("node_modules/left-pad/index.js"), b"module.exports=1\n");
+    write(
+        &dir.join("node_modules/left-pad/index.js"),
+        b"module.exports=1\n",
+    );
     write(&dir.join(".git/HEAD"), b"ref: refs/heads/main\n");
 
     let looked = look_at(&dir, &[]);

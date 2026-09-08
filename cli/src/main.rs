@@ -3,8 +3,8 @@
 //! 退出码分层，见 [`output::Code`]；`--json` 的输出形状也在那个模块的开头。
 
 mod args;
-mod clock;
 mod client;
+mod clock;
 mod config;
 mod inspect;
 mod mcp;
@@ -44,9 +44,11 @@ fn main() -> ExitCode {
 
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
-        Err(e) => return output::report_failure(&output::classify(&anyhow::anyhow!(
-            "起不来后台任务：{e}"
-        ))),
+        Err(e) => {
+            return output::report_failure(&output::classify(&anyhow::anyhow!(
+                "起不来后台任务：{e}"
+            )))
+        }
     };
 
     match runtime.block_on(dispatch(cli)) {
@@ -111,7 +113,9 @@ async fn dispatch(cli: Cli) -> Result<()> {
             output::rm(&slug, yes, api.as_deref()).await
         }
         Some(Command::Rm { slug, yes, api }) => sites::rm(&slug, yes, api.as_deref()).await,
-        Some(Command::Open { target, api }) if machine => output::open(&target, api.as_deref()).await,
+        Some(Command::Open { target, api }) if machine => {
+            output::open(&target, api.as_deref()).await
+        }
         Some(Command::Open { target, api }) => sites::open(&target, api.as_deref()).await,
         Some(Command::Mcp { setup, api }) => mcp::run(setup, api).await,
         None => run_default(cli).await,

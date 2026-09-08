@@ -13,7 +13,9 @@ use playtest_common::tunnel::{close, TunnelGrant, KEEPALIVE_INTERVAL_SECS};
 use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::http::Response;
 use tokio_tungstenite::tungstenite::Error as WsError;
-use tokio_tungstenite::{connect_async_tls_with_config, Connector, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{
+    connect_async_tls_with_config, Connector, MaybeTlsStream, WebSocketStream,
+};
 
 use crate::output;
 use crate::tunnel::Stop;
@@ -128,9 +130,9 @@ fn handshake_next(status: u16, body: Option<&ErrorBody>) -> Next {
         401 => Next::NewGrant("令牌到期了".to_string()),
         // 同一个作品来了新的隧道，我们是被挤掉的那个。再连也只会一直得到 409（驱逐名单按
         // 令牌记），所以退出，两个进程才不会互相挤来挤去（DESIGN §4.3）。
-        409 if code == Some(ErrorCode::TunnelReplaced) => Next::Stop(
-            "另一个 playtest 进程接管了这个作品，这里退出。".to_string(),
-        ),
+        409 if code == Some(ErrorCode::TunnelReplaced) => {
+            Next::Stop("另一个 playtest 进程接管了这个作品，这里退出。".to_string())
+        }
         // 别的 4xx 都是「这次请求本身不对」：作品没了、令牌不是给这个 slug 的、被封了。
         400..=499 => Next::Stop(stop_reason(status, said)),
         _ => Next::Retry(retry_reason(status, said)),
@@ -259,7 +261,9 @@ mod tests {
         let replaced = body(ErrorCode::TunnelReplaced, "这个作品已经有别的隧道了");
         let next = handshake_next(409, Some(&replaced));
         assert!(matches!(next, Next::Stop(_)), "{next:?}");
-        let Next::Stop(said) = next else { unreachable!() };
+        let Next::Stop(said) = next else {
+            unreachable!()
+        };
         assert!(said.contains("接管"), "{said}");
 
         assert_eq!(
@@ -296,7 +300,10 @@ mod tests {
             Next::Retry("和服务器断开了".into()),
             "对端没给状态码就直接断了，最常见的一种"
         );
-        assert_eq!(close_next(Some(close::GOING_AWAY)), Next::Retry("和服务器断开了".into()));
+        assert_eq!(
+            close_next(Some(close::GOING_AWAY)),
+            Next::Retry("和服务器断开了".into())
+        );
         assert_eq!(close_next(Some(1006)), Next::Retry("和服务器断开了".into()));
     }
 
@@ -329,10 +336,7 @@ mod tests {
     #[test]
     fn the_http_error_body_is_read_off_the_wire() {
         let payload = serde_json::to_vec(&body(ErrorCode::TunnelReplaced, "被挤掉了")).unwrap();
-        let response = Response::builder()
-            .status(409)
-            .body(Some(payload))
-            .unwrap();
+        let response = Response::builder().status(409).body(Some(payload)).unwrap();
         assert!(matches!(http_next(&response), Next::Stop(_)));
 
         // 中间挡了一层网关、回的不是我们的格式时，按状态码办，不能崩。

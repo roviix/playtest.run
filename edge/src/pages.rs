@@ -129,7 +129,10 @@ mod tests {
             over_quota(),
             not_implemented(),
         ] {
-            assert!(!page.contains(playtest_common::DEVELOPER_HOST), "玩家页面上不能出现开发者域名");
+            assert!(
+                !page.contains(playtest_common::DEVELOPER_HOST),
+                "玩家页面上不能出现开发者域名"
+            );
         }
     }
 

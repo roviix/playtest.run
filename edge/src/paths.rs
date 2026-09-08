@@ -210,7 +210,10 @@ pub fn content_type_for(path: &str) -> String {
         "pck" | "data" | "unityweb" | "bin" => "application/octet-stream".to_string(),
         "json" => "application/json".to_string(),
         _ => match mime_guess::from_path(file).first() {
-            Some(mime) if mime.type_() == mime_guess::mime::TEXT && mime.get_param("charset").is_none() => {
+            Some(mime)
+                if mime.type_() == mime_guess::mime::TEXT
+                    && mime.get_param("charset").is_none() =>
+            {
                 format!("{mime}; charset=utf-8")
             }
             Some(mime) => mime.to_string(),
@@ -278,7 +281,10 @@ mod tests {
         assert!(normalize("/a%00b").is_none());
         assert!(normalize("/a%5Cb").is_none());
         // 文件名里连着两个点不是穿越，别误伤。
-        assert_eq!(normalize("/game..min.js").unwrap().candidate, "game..min.js");
+        assert_eq!(
+            normalize("/game..min.js").unwrap().candidate,
+            "game..min.js"
+        );
     }
 
     #[test]
@@ -286,17 +292,29 @@ mod tests {
         assert_eq!(parse_accept_encoding(None), AcceptEncoding::default());
         assert_eq!(
             parse_accept_encoding(Some("gzip, deflate, br, zstd")),
-            AcceptEncoding { br: true, gzip: true }
+            AcceptEncoding {
+                br: true,
+                gzip: true
+            }
         );
         assert_eq!(
             parse_accept_encoding(Some("gzip;q=1.0, br;q=0")),
-            AcceptEncoding { br: false, gzip: true }
+            AcceptEncoding {
+                br: false,
+                gzip: true
+            }
         );
         assert_eq!(
             parse_accept_encoding(Some("*")),
-            AcceptEncoding { br: true, gzip: true }
+            AcceptEncoding {
+                br: true,
+                gzip: true
+            }
         );
-        assert_eq!(parse_accept_encoding(Some("identity")), AcceptEncoding::default());
+        assert_eq!(
+            parse_accept_encoding(Some("identity")),
+            AcceptEncoding::default()
+        );
     }
 
     #[test]
@@ -322,8 +340,18 @@ mod tests {
         let m = manifest(&["game.wasm", "game.wasm.br"]);
         let n = normalize("/game.wasm").unwrap();
 
-        let accepted = resolve(&m, &n, AcceptEncoding { br: true, gzip: true }, false);
-        let Resolved::File(s) = accepted else { panic!("应当命中文件") };
+        let accepted = resolve(
+            &m,
+            &n,
+            AcceptEncoding {
+                br: true,
+                gzip: true,
+            },
+            false,
+        );
+        let Resolved::File(s) = accepted else {
+            panic!("应当命中文件")
+        };
         assert_eq!(s.entry.path, "game.wasm.br");
         assert_eq!(s.encoding, Some("br"));
         assert_eq!(s.content_type, "application/wasm");
@@ -331,7 +359,9 @@ mod tests {
 
         // 不接受压缩时退回未压缩那份，但仍然要 Vary。
         let plain = resolve(&m, &n, AcceptEncoding::default(), false);
-        let Resolved::File(s) = plain else { panic!("应当命中文件") };
+        let Resolved::File(s) = plain else {
+            panic!("应当命中文件")
+        };
         assert_eq!(s.entry.path, "game.wasm");
         assert_eq!(s.encoding, None);
         assert!(s.vary_encoding);
@@ -341,7 +371,15 @@ mod tests {
     fn gzip_only_client_gets_gzip() {
         let m = manifest(&["app.js.br", "app.js.gz"]);
         let n = normalize("/app.js").unwrap();
-        let Resolved::File(s) = resolve(&m, &n, AcceptEncoding { br: false, gzip: true }, false) else {
+        let Resolved::File(s) = resolve(
+            &m,
+            &n,
+            AcceptEncoding {
+                br: false,
+                gzip: true,
+            },
+            false,
+        ) else {
             panic!("应当命中文件");
         };
         assert_eq!(s.entry.path, "app.js.gz");
@@ -353,7 +391,10 @@ mod tests {
     fn only_compressed_and_client_refuses_is_not_found() {
         let m = manifest(&["game.wasm.br"]);
         let n = normalize("/game.wasm").unwrap();
-        assert_eq!(resolve(&m, &n, AcceptEncoding::default(), false), Resolved::NotFound);
+        assert_eq!(
+            resolve(&m, &n, AcceptEncoding::default(), false),
+            Resolved::NotFound
+        );
     }
 
     #[test]
@@ -382,7 +423,10 @@ mod tests {
             panic!("导航请求应当回退到 index.html");
         };
         assert_eq!(s.entry.path, "index.html");
-        assert_eq!(resolve(&m, &n, AcceptEncoding::default(), false), Resolved::NotFound);
+        assert_eq!(
+            resolve(&m, &n, AcceptEncoding::default(), false),
+            Resolved::NotFound
+        );
     }
 
     #[test]

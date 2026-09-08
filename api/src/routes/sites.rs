@@ -78,10 +78,7 @@ pub async fn create(
     Ok(Json(to_site(&state, row)))
 }
 
-pub async fn list(
-    State(state): State<AppState>,
-    caller: Caller,
-) -> ApiResult<Json<Vec<Site>>> {
+pub async fn list(State(state): State<AppState>, caller: Caller) -> ApiResult<Json<Vec<Site>>> {
     let rows = {
         let conn = state.db().lock().await;
         db::list_live_sites(&conn, &caller.user_id)?

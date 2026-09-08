@@ -120,7 +120,10 @@ pub struct TokenOwner {
     pub user_expires_at: Option<String>,
 }
 
-pub fn find_token_owner(conn: &Connection, token_hash: &str) -> rusqlite::Result<Option<TokenOwner>> {
+pub fn find_token_owner(
+    conn: &Connection,
+    token_hash: &str,
+) -> rusqlite::Result<Option<TokenOwner>> {
     conn.query_row(
         "SELECT u.id, u.kind, u.display_name, t.expires_at, u.expires_at
            FROM tokens t JOIN users u ON u.id = t.user_id
@@ -164,11 +167,9 @@ fn site_from_row(row: &Row<'_>) -> rusqlite::Result<SiteRow> {
 
 /// 这个 slug 有没有被占。删掉的也算占着：清单和对象已经没了，再发给别人会拿到一个空作品。
 pub fn slug_taken(conn: &Connection, slug: &str) -> rusqlite::Result<bool> {
-    conn.query_row(
-        "SELECT 1 FROM sites WHERE slug = ?1",
-        params![slug],
-        |_| Ok(()),
-    )
+    conn.query_row("SELECT 1 FROM sites WHERE slug = ?1", params![slug], |_| {
+        Ok(())
+    })
     .optional()
     .map(|found| found.is_some())
 }
@@ -224,7 +225,11 @@ pub fn find_live_site(
 }
 
 /// 返回是不是真的删掉了一行（本来就删过的返回 false）。
-pub fn mark_site_deleted(conn: &Connection, slug: &str, deleted_at: &str) -> rusqlite::Result<bool> {
+pub fn mark_site_deleted(
+    conn: &Connection,
+    slug: &str,
+    deleted_at: &str,
+) -> rusqlite::Result<bool> {
     let changed = conn.execute(
         "UPDATE sites SET deleted_at = ?2 WHERE slug = ?1 AND deleted_at IS NULL",
         params![slug, deleted_at],
@@ -309,7 +314,12 @@ pub fn known_blob_hashes(
 }
 
 /// 同一个哈希可能被并发上传两次，内容一样，后到的覆盖前面那行即可。
-pub fn record_blob(conn: &Connection, hash: &str, size: u64, created_at: &str) -> rusqlite::Result<()> {
+pub fn record_blob(
+    conn: &Connection,
+    hash: &str,
+    size: u64,
+    created_at: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO blobs (hash, size, created_at) VALUES (?1, ?2, ?3)
          ON CONFLICT(hash) DO UPDATE SET size = excluded.size",
@@ -318,6 +328,8 @@ pub fn record_blob(conn: &Connection, hash: &str, size: u64, created_at: &str) -
     Ok(())
 }
 
+// 参数多是因为提交一个版本要写三张表；拆成结构体只是把同样九个字段换个地方写。
+#[allow(clippy::too_many_arguments)]
 /// 提交一个版本：库这一侧的三处改动一起生效，中途失败就都不生效。
 pub fn commit_version(
     conn: &mut Connection,
@@ -334,7 +346,14 @@ pub fn commit_version(
     tx.execute(
         "INSERT INTO versions (slug, version, created_at, note, file_count, total_bytes)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![slug, version, created_at, note, file_count as i64, total_bytes as i64],
+        params![
+            slug,
+            version,
+            created_at,
+            note,
+            file_count as i64,
+            total_bytes as i64
+        ],
     )?;
     tx.execute(
         "UPDATE sites SET current_version = ?2, title = ?3 WHERE slug = ?1",
@@ -375,7 +394,15 @@ mod tests {
             },
         )
         .unwrap();
-        insert_site(&conn, "brisk-otter-41", "u1", "小游戏", "2026-09-07T00:00:00Z", None).unwrap();
+        insert_site(
+            &conn,
+            "brisk-otter-41",
+            "u1",
+            "小游戏",
+            "2026-09-07T00:00:00Z",
+            None,
+        )
+        .unwrap();
         assert_eq!(count_live_sites(&conn, "u1").unwrap(), 1);
 
         assert!(mark_site_deleted(&conn, "brisk-otter-41", "2026-09-07T01:00:00Z").unwrap());
