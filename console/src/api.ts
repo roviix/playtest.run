@@ -194,6 +194,12 @@ export const api = {
       body: JSON.stringify(request),
     }),
   results: (slug: string) => call<SiteResults>(`/v1/sites/${encodeURIComponent(slug)}/results`),
+  // 回滚：把「当前版本」指回某一版。清单都在，边缘 1 秒内看到新指针（DESIGN §3.5）。
+  activateVersion: (slug: string, version: number) =>
+    call<Site>(`/v1/sites/${encodeURIComponent(slug)}/versions/${version}/activate`, {
+      method: "POST",
+      body: "{}",
+    }),
   sessions: (slug: string, version: number, sort: RosterSort) =>
     call<VersionSessions>(
       `/v1/sites/${encodeURIComponent(slug)}/versions/${version}/sessions?sort=${sort}`,
