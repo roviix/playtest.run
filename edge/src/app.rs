@@ -27,6 +27,7 @@ use crate::game_headers::{self, Source};
 use crate::gate::{self, GatePage};
 use crate::host::{self, HostKind};
 use crate::paths::{self, AcceptEncoding, Resolved, Served};
+use crate::plaza::{self, PlazaCache};
 use crate::range::{self, Range};
 use crate::tunnel::{self, Tunnels};
 use crate::{breaker, pages, sites::SiteState, sites::SiteStore};
@@ -37,6 +38,9 @@ const GATE_MAX_AGE: u64 = 24 * 60 * 60;
 const SESSION_MAX_AGE: u64 = 90 * 24 * 60 * 60;
 /// 表单体上限。这两个表单只有一个下拉和一个文本框。
 const MAX_FORM_BYTES: usize = 16 * 1024;
+/// 封面在浏览器里缓存多久。地址带着内容哈希的前几位（控制面拼的 `?v=`），换了封面地址就变，
+/// 所以可以放心缓存一天；直接打 `/_playtest/cover` 不带 `?v=` 的也只是最多旧一天。
+const COVER_MAX_AGE: u64 = 24 * 60 * 60;
 
 pub struct App {
     pub config: Config,
@@ -45,11 +49,15 @@ pub struct App {
     pub breaker: Breaker,
     /// 现在连着的隧道（DESIGN §4.3）。和 `sites` 互不知情，谁说了算在 [`site`] 里定。
     pub tunnels: Arc<Tunnels>,
+    /// 广场那一份 `plaza.json`（DESIGN §3.8），同样只读对象存储。
+    pub plaza: PlazaCache,
 }
 
 impl App {
     pub fn new(config: Config) -> Self {
-        let sites = SiteStore::new(FsStore::new(config.store_root()));
+        let store = FsStore::new(config.store_root());
+        let sites = SiteStore::new(store.clone());
+        let plaza = PlazaCache::new(store);
         let events = EventLog::new(config.events_path());
         let tunnels = Tunnels::new(&config);
         Self {
@@ -58,6 +66,7 @@ impl App {
             events,
             breaker: Breaker::new(),
             tunnels,
+            plaza,
         }
     }
 }
@@ -85,20 +94,61 @@ async fn handle(State(app): State<Arc<App>>, req: Request) -> Response {
 
     let authority = authority_of(&parts);
     match host::classify(&authority, &app.config.host_suffix) {
-        HostKind::Root => root(&app, &parts.method, parts.uri.path()),
+        HostKind::Root => root(&app, &parts.method, parts.uri.path(), &authority).await,
         HostKind::Unknown => page(StatusCode::NOT_FOUND, pages::not_found(), None),
         HostKind::Site(slug) => site(&app, &slug, &authority, parts, body).await,
     }
 }
 
-fn root(app: &App, method: &Method, path: &str) -> Response {
+/// 根域就是广场（DESIGN §3.8）。
+async fn root(app: &App, method: &Method, path: &str, authority: &str) -> Response {
     if method != Method::GET && method != Method::HEAD {
         return method_not_allowed("GET, HEAD");
     }
     if path != "/" {
         return page(StatusCode::NOT_FOUND, pages::not_found(), None);
     }
-    page(StatusCode::OK, pages::root(&app.config.host_suffix), None)
+    let plaza = app.plaza.get().await;
+    let nonce = new_nonce();
+    let html = plaza::render(&plaza::View {
+        plaza: &plaza,
+        host_suffix: &app.config.host_suffix,
+        nonce: &nonce,
+        now: time::OffsetDateTime::now_utc(),
+    });
+
+    let mut headers = base_headers();
+    put(&mut headers, "content-type", "text/html; charset=utf-8");
+    // 这一页可以短暂公共缓存：内容 30 秒才变一次，前面的 Caddy 或浏览器多拿一次是白拿。
+    put(&mut headers, "cache-control", "public, max-age=30");
+    // 我们自己的页面，没有用户脚本，所以能锁死：脚本只放行带这个 nonce 的那段，
+    // 图只从各作品自己的子域来，别的一律不许（DESIGN §3.8「长相」）。
+    let port = host::port_of(authority)
+        .map(|p| format!(":{p}"))
+        .unwrap_or_default();
+    let img_src = format!(
+        "{}://*.{}{port}",
+        app.config.public_scheme, app.config.host_suffix
+    );
+    put(
+        &mut headers,
+        "content-security-policy",
+        &format!(
+            "default-src 'none'; img-src {img_src}; style-src 'unsafe-inline'; \
+script-src 'nonce-{nonce}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        ),
+    );
+    put(
+        &mut headers,
+        "referrer-policy",
+        "strict-origin-when-cross-origin",
+    );
+    (StatusCode::OK, headers, html).into_response()
+}
+
+/// CSP 的 nonce：16 字节随机数的十六进制，每个响应一个。
+fn new_nonce() -> String {
+    new_session_id()
 }
 
 async fn site(
@@ -180,6 +230,8 @@ struct Ctx {
     root_url: String,
     /// 这一页自己的地址，给 og:url。
     page_url: String,
+    /// 这个作品的源 `scheme://<slug>.<后缀>[:端口]`，封面的绝对地址接在后面。
+    origin: String,
     visitor: Visitor,
     /// 已有的会话 cookie，形态合法才认。
     sid: Option<String>,
@@ -212,6 +264,7 @@ impl Ctx {
         Self {
             root_url: format!("{scheme}://{suffix}{port_part}/"),
             page_url: format!("{scheme}://{slug}.{suffix}{port_part}{}", parts.uri.path()),
+            origin: format!("{scheme}://{slug}.{suffix}{port_part}"),
             visitor: Visitor {
                 wechat: is_wechat(&ua),
                 sid: sid.clone().unwrap_or_default(),
@@ -273,8 +326,72 @@ async fn reserved(
         "report" => method_not_allowed("GET, POST"),
         "me" => crate::me::respond(&app.config, manifest, ctx.sid.as_deref(), &parts.method),
         "sdk.js" => crate::sdk::respond(&parts.method, &parts.headers),
+        "cover" if parts.method == Method::GET || parts.method == Method::HEAD => {
+            cover(app, manifest, &parts).await
+        }
+        "cover" => method_not_allowed("GET, HEAD"),
         _ => page(StatusCode::NOT_FOUND, pages::file_not_found(), isolated),
     }
+}
+
+/// 封面（DESIGN §3.3）：清单里单独的那条引用，从 blob 出，按清单里记的类型给。
+///
+/// 它是一张图，永远不会拿到 HTML：没有封面就是一个裸 404——广场卡片和分享抓取器
+/// 只认状态码，一页「找不到」的 HTML 对它们是噪音。同样走这个 slug 的每小时熔断。
+async fn cover(app: &App, manifest: &Manifest, parts: &axum::http::request::Parts) -> Response {
+    let Some(cover) = &manifest.cover else {
+        return (StatusCode::NOT_FOUND, base_headers()).into_response();
+    };
+    let verdict = app
+        .breaker
+        .check(&manifest.slug, breaker::limit_for(manifest));
+    if !verdict.allowed {
+        let mut headers = base_headers();
+        put(
+            &mut headers,
+            "retry-after",
+            &verdict.retry_after.to_string(),
+        );
+        return (StatusCode::TOO_MANY_REQUESTS, headers).into_response();
+    }
+    let Ok(path) = app.sites.store().blob_path(&cover.hash) else {
+        return (StatusCode::NOT_FOUND, base_headers()).into_response();
+    };
+    let file = match tokio::fs::File::open(&path).await {
+        Ok(f) => f,
+        Err(err) => {
+            tracing::warn!(slug = %manifest.slug, %err, "封面的 blob 打不开");
+            return (StatusCode::NOT_FOUND, base_headers()).into_response();
+        }
+    };
+    let total = file.metadata().await.map(|m| m.len()).unwrap_or(0);
+
+    let mut headers = base_headers();
+    put(&mut headers, "content-type", &cover.mime);
+    put(&mut headers, "content-length", &total.to_string());
+    put(&mut headers, "etag", &format!("\"{}\"", cover.hash));
+    put(
+        &mut headers,
+        "cache-control",
+        &format!("public, max-age={COVER_MAX_AGE}"),
+    );
+    // 广场在根域上，封面在作品的子域上：跨源的 <img> 不需要 CORS，但抓分享卡片的机器人
+    // 有时候会带 Origin 来要，给它就是。
+    put(&mut headers, "access-control-allow-origin", "*");
+    security(&mut headers, manifest.isolated, true);
+    if matches_etag(parts.headers.get("if-none-match"), &cover.hash) {
+        return (StatusCode::NOT_MODIFIED, headers).into_response();
+    }
+    if parts.method == Method::HEAD {
+        return (StatusCode::OK, headers).into_response();
+    }
+    app.breaker.record(&manifest.slug, total);
+    (
+        StatusCode::OK,
+        headers,
+        Body::from_stream(ReaderStream::new(file)),
+    )
+        .into_response()
 }
 
 /// 「开始」这一下：种门禁 cookie 与会话 cookie，记一条 `start`，回到玩家原来要去的地方。
@@ -423,6 +540,7 @@ async fn gate_page(
         host_suffix: &app.config.host_suffix,
         root_url: &ctx.root_url,
         page_url: &ctx.page_url,
+        origin: &ctx.origin,
         wechat: ctx.visitor.wechat,
         version_label,
         referer: &ctx.visitor.referer,

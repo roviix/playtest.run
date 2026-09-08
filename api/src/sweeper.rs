@@ -48,12 +48,18 @@ pub fn spawn_blob_gc(state: AppState) -> tokio::task::JoinHandle<()> {
                     tracing::info!(removed, bytes, "回收了没有清单引用的 blob")
                 }
                 Ok(_) => {}
-                Err(err) => tracing::error!(error = format!("{err:#}"), "blob 回收没做完，明天再试"),
+                Err(err) => {
+                    tracing::error!(error = format!("{err:#}"), "blob 回收没做完，明天再试")
+                }
             }
             match expire_sessions(&state).await {
-                Ok(n) if n > 0 => tracing::info!(sessions = n, "删掉了超过 {RETENTION_DAYS} 天的会话数据"),
+                Ok(n) if n > 0 => {
+                    tracing::info!(sessions = n, "删掉了超过 {RETENTION_DAYS} 天的会话数据")
+                }
                 Ok(_) => {}
-                Err(err) => tracing::error!(error = format!("{err:#}"), "会话数据清理没做完，明天再试"),
+                Err(err) => {
+                    tracing::error!(error = format!("{err:#}"), "会话数据清理没做完，明天再试")
+                }
             }
         }
     })
@@ -114,6 +120,10 @@ pub async fn sweep_once(state: &AppState) -> anyhow::Result<usize> {
 
     if !slugs.is_empty() || tokens > 0 {
         tracing::info!(sites = slugs.len(), tokens, "清掉了过期的匿名作品和令牌");
+    }
+    if !slugs.is_empty() {
+        // 到期的作品不能还挂在广场上（DESIGN §3.8「到期自动下来」）。
+        crate::plaza::publish(state).await;
     }
     Ok(slugs.len())
 }

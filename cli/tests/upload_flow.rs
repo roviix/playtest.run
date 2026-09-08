@@ -92,6 +92,7 @@ async fn create_site(
         current_version: None,
         created_at: "2026-09-07T00:00:00Z".into(),
         expires_at: Some("2026-09-08T03:30:00Z".into()),
+        listing: Default::default(),
     })
 }
 

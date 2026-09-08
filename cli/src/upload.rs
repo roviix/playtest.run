@@ -9,16 +9,16 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
-use playtest_common::api::{CreateSiteRequest, ErrorCode, PrepareUploadRequest};
+use playtest_common::api::{CreateSiteRequest, ErrorCode, PrepareUploadRequest, UpdateSiteRequest};
 use playtest_common::limits::{self, ANON_MAX_VERSION_BYTES};
-use playtest_common::manifest::{validate_files, FileEntry};
+use playtest_common::manifest::{self, validate_files, Cover, FileEntry};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
 use crate::args::{self, UploadArgs};
 use crate::client::{Client, OnBytes};
 use crate::config::{self, Config};
-use crate::output::{self, Finding, Timings, UploadReport};
+use crate::output::{self, Finding, PlazaOut, Timings, UploadReport};
 use crate::scan::{self, ScannedFile};
 use crate::{clock, inspect, ui};
 
@@ -85,6 +85,11 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     let title =
         title_for(cli_args, &root, checked.page_title.as_deref()).map_err(output::as_bad_input)?;
     check_note(cli_args).map_err(output::as_bad_input)?;
+    check_plaza_texts(cli_args).map_err(output::as_bad_input)?;
+    let cover = match &cli_args.cover {
+        Some(path) => Some(read_cover(path).map_err(output::as_bad_input)?),
+        None => None,
+    };
 
     let api = args::api_base(cli_args.api.as_deref());
     let config_path = config::default_path()?;
@@ -108,6 +113,8 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         files: entries.clone(),
         title: Some(title.clone()),
         note: cli_args.note.clone(),
+        summary: cli_args.summary.clone(),
+        cover: cover.as_ref().map(|c| c.cover.clone()),
         gate: cli_args.gate,
         isolated,
         spa: cli_args.spa,
@@ -134,11 +141,16 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     // 令牌和作品都定下来了，后面只读，装进 Arc 好分给并发的上传任务。
     let client = Arc::new(client);
     let sending = Instant::now();
+    // 封面和目录里的文件走同一条上传路（DESIGN §3.3），进度和「N 个文件」把它一起数。
+    let mut to_upload: Vec<ScannedFile> = files.clone();
+    if let Some(cover) = &cover {
+        to_upload.push(cover.as_scanned());
+    }
     send_missing(
         Arc::clone(&client),
-        &files,
+        &to_upload,
         &prepared.missing,
-        entries.len(),
+        to_upload.len(),
     )
     .await?;
     timings.upload_ms = output::ms_since(sending);
@@ -147,20 +159,137 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     let committed = client.commit_upload(&slug, &prepared.upload_id).await?;
     timings.commit_ms = output::ms_since(committing);
 
+    // 广场（DESIGN §3.8）：版本发出去之后再改状态，广场上出现的一定是能玩的东西。
+    let plaza = if cli_args.public || cli_args.seek.is_some() {
+        let site = client
+            .update_site(
+                &slug,
+                &UpdateSiteRequest {
+                    public: Some(true),
+                    seeking: Some(cli_args.seek.is_some()),
+                    seek_note: cli_args.seek.clone(),
+                },
+            )
+            .await?;
+        Some(PlazaOut {
+            url: plaza_url(&committed.url),
+            public: site.listing.public,
+            seeking: site.listing.seeking,
+            seek_note: site.listing.seek_note,
+        })
+    } else {
+        None
+    };
+
     let qr_text = if cli_args.no_qr {
         None
     } else {
         ui::qr_text(&committed.url)
     };
-    Ok(UploadReport::new(
+    let mut report = UploadReport::new(
         committed.slug,
         committed.url,
+        title,
         committed.version,
         timings,
         committed.expires_at,
         qr_text,
         checked.findings,
-    ))
+    );
+    report.plaza = plaza;
+    Ok(report)
+}
+
+/// 广场的地址就是玩家链接去掉 slug 那一级：`https://brisk-otter-41.playtest.run` → `https://playtest.run/`。
+pub(crate) fn plaza_url(site_url: &str) -> String {
+    let Some((scheme, rest)) = site_url.split_once("://") else {
+        return site_url.to_string();
+    };
+    let host_and_path = rest.trim_end_matches('/');
+    let root = match host_and_path.split_once('.') {
+        Some((_slug, root)) => root,
+        None => host_and_path,
+    };
+    format!("{scheme}://{root}/")
+}
+
+/// 读进来的封面：清单里那条引用，加上上传时按哪个路径读。
+pub(crate) struct CoverFile {
+    pub cover: Cover,
+    pub source: PathBuf,
+}
+
+impl CoverFile {
+    fn as_scanned(&self) -> ScannedFile {
+        ScannedFile {
+            entry: FileEntry {
+                path: "（封面）".to_string(),
+                hash: self.cover.hash.clone(),
+                size: self.cover.size,
+            },
+            source: self.source.clone(),
+        }
+    }
+}
+
+/// `--cover` 指的那个文件：看开头几个字节认类型（扩展名会骗人），算哈希，检查大小。
+pub(crate) fn read_cover(path: &Path) -> Result<CoverFile> {
+    let shown = path.display();
+    let meta = match std::fs::metadata(path) {
+        Ok(meta) => meta,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            bail!("找不到封面 {shown}。检查一下路径。")
+        }
+        Err(e) => return Err(e).with_context(|| format!("看不了封面 {shown}")),
+    };
+    if !meta.is_file() {
+        bail!("封面 {shown} 不是一个文件。要一张 PNG、JPEG 或 WebP 图片。");
+    }
+    if meta.len() > limits::MAX_COVER_BYTES {
+        bail!(
+            "封面 {shown} 有 {}，最多 {} MB。缩一下再来——广场上一屏十几张封面，大了每个翻广场的人都在替它付流量。",
+            ui::bytes(meta.len()),
+            limits::MAX_COVER_BYTES / limits::MIB
+        );
+    }
+    let bytes = std::fs::read(path).with_context(|| format!("读不了封面 {shown}"))?;
+    let Some(mime) = manifest::sniff_image_mime(&bytes) else {
+        bail!("封面 {shown} 不是 PNG、JPEG 或 WebP（看的是文件内容，不是扩展名）。SVG 和 GIF 都不收。");
+    };
+    let cover = Cover {
+        hash: playtest_common::hash::hash_bytes(&bytes),
+        size: bytes.len() as u64,
+        mime: mime.to_string(),
+    };
+    manifest::validate_cover(&cover).map_err(|e| anyhow::anyhow!("{e}"))?;
+    Ok(CoverFile {
+        cover,
+        source: std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()),
+    })
+}
+
+/// `--summary` 与 `--seek` 的长度，本地先拦一道。
+fn check_plaza_texts(cli_args: &UploadArgs) -> Result<()> {
+    if let Some(summary) = &cli_args.summary {
+        if summary.chars().count() > limits::MAX_SUMMARY_CHARS {
+            bail!(
+                "「一句话介绍」太长了，最多 {} 个字——广场卡片上只放得下两行。",
+                limits::MAX_SUMMARY_CHARS
+            );
+        }
+    }
+    if let Some(seek) = &cli_args.seek {
+        if seek.trim().is_empty() {
+            bail!("--seek 后面要跟一句话，告诉来的人你想让他们重点看什么。");
+        }
+        if seek.chars().count() > limits::MAX_SEEK_NOTE_CHARS {
+            bail!(
+                "「想让你看什么」太长了，最多 {} 个字。",
+                limits::MAX_SEEK_NOTE_CHARS
+            );
+        }
+    }
+    Ok(())
 }
 
 fn resolve_dir(shown: &str) -> Result<PathBuf> {
@@ -300,22 +429,7 @@ pub(crate) fn title_for(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .filter(|n| !n.is_empty() && n != ".");
-    let generic_dir = dir_name.as_deref().is_none_or(|n| {
-        matches!(
-            n.to_ascii_lowercase().as_str(),
-            "dist"
-                | "export"
-                | "build"
-                | "www"
-                | "public"
-                | "out"
-                | "html"
-                | "web"
-                | "webgl"
-                | "release"
-                | "output"
-        )
-    });
+    let generic_dir = dir_name.as_deref().is_none_or(is_generic_dir_name);
     let title = match (&cli_args.name, page_title) {
         (Some(name), _) => name.trim().to_string(),
         (None, Some(page)) if generic_dir => page.to_string(),
@@ -328,6 +442,51 @@ pub(crate) fn title_for(
         bail!("作品名太长了，最多 {} 个字。", limits::MAX_TITLE_CHARS);
     }
     Ok(title)
+}
+
+/// 目录名不像作品名的那几类：构建产物的惯用名、版本号（`v2`、`2.0`、`v0.1.0`）、单个字母或数字。
+/// 拿自己的作品试的时候撞到的：目录叫 `v2`，门禁页就写「邀请你体验《v2》」。
+fn is_generic_dir_name(name: &str) -> bool {
+    let n = name.trim().to_ascii_lowercase();
+    if matches!(
+        n.as_str(),
+        "dist"
+            | "export"
+            | "exports"
+            | "build"
+            | "builds"
+            | "www"
+            | "public"
+            | "out"
+            | "html"
+            | "web"
+            | "webgl"
+            | "release"
+            | "output"
+            | "site"
+            | "static"
+            | "game"
+            | "app"
+            | "src"
+            | "prod"
+            | "production"
+            | "latest"
+            | "final"
+            | "new"
+            | "old"
+            | "tmp"
+            | "temp"
+            | "test"
+    ) {
+        return true;
+    }
+    // v2 / v0.1.0 / 2.0 / 20260908 这类：去掉前导 v，剩下全是数字和点。
+    let rest = n.strip_prefix('v').unwrap_or(&n);
+    !rest.is_empty()
+        && rest
+            .chars()
+            .all(|c| c.is_ascii_digit() || c == '.' || c == '_' || c == '-')
+        || n.chars().count() <= 1
 }
 
 fn check_note(cli_args: &UploadArgs) -> Result<()> {

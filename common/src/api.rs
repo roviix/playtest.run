@@ -12,7 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::manifest::{FileEntry, GateMode};
+use crate::manifest::{Cover, FileEntry, GateMode};
 
 pub mod routes {
     pub const HEALTH: &str = "/healthz";
@@ -20,7 +20,7 @@ pub mod routes {
     pub const ANON_SESSIONS: &str = "/v1/anon/sessions";
     /// `GET` 列出我的作品 → `Vec<`[`super::Site`]`>`；`POST` 新建 → 200 [`super::Site`]
     pub const SITES: &str = "/v1/sites";
-    /// `GET` → [`super::Site`]；`DELETE` → 204
+    /// `GET` → [`super::Site`]；`PATCH` [`super::UpdateSiteRequest`] → 200 [`super::Site`]；`DELETE` → 204
     pub const SITE: &str = "/v1/sites/{slug}";
     /// `POST` → [`super::PrepareUploadResponse`]
     pub const SITE_UPLOADS: &str = "/v1/sites/{slug}/uploads";
@@ -30,9 +30,23 @@ pub mod routes {
     pub const BLOB: &str = "/v1/blobs/{hash}";
     /// `POST` [`crate::tunnel::TunnelRequest`] → 200 [`crate::tunnel::TunnelGrant`]：签一个隧道令牌
     pub const SITE_TUNNEL: &str = "/v1/sites/{slug}/tunnel";
+    /// `GET` → 200 [`super::VersionList`]：这个作品发过的每一版，新的在前
+    pub const SITE_VERSIONS: &str = "/v1/sites/{slug}/versions";
+    /// `POST` → 200 [`super::Site`]：把「当前版本」指针指回某一版（回滚，DESIGN §3.5）。清单不可变，指针一动玩家立刻看到
+    pub const SITE_VERSION_ACTIVATE: &str = "/v1/sites/{slug}/versions/{version}/activate";
 
     pub fn site_tunnel(slug: &str) -> String {
         SITE_TUNNEL.replace("{slug}", slug)
+    }
+
+    pub fn site_versions(slug: &str) -> String {
+        SITE_VERSIONS.replace("{slug}", slug)
+    }
+
+    pub fn site_version_activate(slug: &str, version: u32) -> String {
+        SITE_VERSION_ACTIVATE
+            .replace("{slug}", slug)
+            .replace("{version}", &version.to_string())
     }
 
     pub fn site(slug: &str) -> String {
@@ -113,6 +127,65 @@ pub struct Site {
     /// 匿名作品的到期时间。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<String>,
+    /// 广场上的状态（DESIGN §3.8）。旧控制面不返回这一段，按「不公开」解析。
+    #[serde(default)]
+    pub listing: Listing,
+}
+
+/// 一个作品在广场（DESIGN §3.8）上的状态。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Listing {
+    /// 开发者勾了「放到广场上」。默认不公开。
+    #[serde(default)]
+    pub public: bool,
+    /// 「正在找人测」。只在 `public` 时有意义。
+    #[serde(default)]
+    pub seeking: bool,
+    /// 想让来的人重点看什么，最多 [`crate::limits::MAX_SEEK_NOTE_CHARS`] 字。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seek_note: Option<String>,
+    /// 一句话介绍，最多 [`crate::limits::MAX_SUMMARY_CHARS`] 字。随最新版本的清单走。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// 被举报到阈值、或我们手工撤下了：`public` 仍是开发者的意愿，但广场上不出现。
+    /// 控制台要把这件事告诉开发者，不能让他以为自己在广场上。
+    #[serde(default)]
+    pub hidden: bool,
+    /// 最新版本有没有封面。
+    #[serde(default)]
+    pub has_cover: bool,
+}
+
+/// `PATCH /v1/sites/{slug}`：只改带了的字段。`seek_note` 传空字符串表示清掉。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateSiteRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seeking: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seek_note: Option<String>,
+}
+
+/// 一个已发布的版本。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VersionInfo {
+    pub version: u32,
+    pub created_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    pub file_count: u32,
+    pub total_bytes: u64,
+    /// 玩家现在看到的就是这一版。
+    pub current: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VersionList {
+    pub slug: String,
+    pub current_version: Option<u32>,
+    /// 新的在前。
+    pub versions: Vec<VersionInfo>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,6 +195,13 @@ pub struct PrepareUploadRequest {
     pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// 一句话介绍（DESIGN §3.8）。没给就沿用这个作品上一版的。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// 封面。CLI 先把它当普通 blob 传上来（`PUT /v1/blobs/{hash}`），提交时服务端检查它在不在。
+    /// 没给就沿用上一版的封面。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover: Option<Cover>,
     #[serde(default)]
     pub gate: GateMode,
     #[serde(default)]

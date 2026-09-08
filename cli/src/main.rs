@@ -99,7 +99,7 @@ async fn dispatch(cli: Cli) -> Result<()> {
     let machine = output::is_json();
     if cli.command.is_some() && cli.upload.any_set() {
         return Err(output::usage(
-            "子命令（ls / rm / open / mcp）不和要发出去的目录一起用。要发目录就只写 playtest ./dist；\
+            "子命令（ls / rm / open / unlist / mcp）不和要发出去的目录一起用。要发目录就只写 playtest ./dist；\
              要用子命令就把目录和 --name 这类参数去掉。",
         ));
     }
@@ -117,6 +117,8 @@ async fn dispatch(cli: Cli) -> Result<()> {
             output::open(&target, api.as_deref()).await
         }
         Some(Command::Open { target, api }) => sites::open(&target, api.as_deref()).await,
+        // 机器模式下也走同一条：它只打一行话，`--json` 的调用方看退出码就够了。
+        Some(Command::Unlist { slug, api }) => sites::unlist(&slug, api.as_deref()).await,
         Some(Command::Mcp { setup, api }) => mcp::run(setup, api).await,
         None => run_default(cli).await,
     }

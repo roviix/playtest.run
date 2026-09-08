@@ -40,6 +40,10 @@ pub async fn prepare(
 
     clean_title(request.title.as_deref())?;
     clean_note(request.note.as_deref())?;
+    clean_summary(request.summary.as_deref())?;
+    if let Some(cover) = &request.cover {
+        manifest::validate_cover(cover).map_err(|e| ApiError::invalid(e.to_string()))?;
+    }
 
     let max_total = if caller.kind.is_anon() {
         limits::ANON_MAX_VERSION_BYTES
@@ -48,7 +52,13 @@ pub async fn prepare(
     };
     manifest::validate_files(&request.files, max_total).map_err(as_api_error)?;
 
-    let wanted = dedup_by_hash(&request.files);
+    // 封面和目录里的文件走同一条上传路：也是一个 blob，缺了就在 `missing` 里。
+    let mut wanted = dedup_by_hash(&request.files);
+    if let Some(cover) = &request.cover {
+        if !wanted.iter().any(|f| f.hash == cover.hash) {
+            wanted.push(cover_entry(cover));
+        }
+    }
     let present = present_hashes(&state, &wanted).await?;
 
     let mut missing = Vec::new();
@@ -114,9 +124,12 @@ pub async fn commit(
     }
 
     let request: PrepareUploadRequest = serde_json::from_str(&upload.request_json)?;
-    let present = present_hashes(&state, &dedup_by_hash(&request.files)).await?;
-    let absent: Vec<&str> = request
-        .files
+    let mut wanted = dedup_by_hash(&request.files);
+    if let Some(cover) = &request.cover {
+        wanted.push(cover_entry(cover));
+    }
+    let present = present_hashes(&state, &wanted).await?;
+    let absent: Vec<&str> = wanted
         .iter()
         .filter(|file| !present.contains(&file.hash))
         .map(|file| file.path.as_str())
@@ -126,9 +139,30 @@ pub async fn commit(
     }
 
     let created_at = clock::now_string();
-    let version = site.current_version.unwrap_or(0) + 1;
+    let version = {
+        let conn = state.db().lock().await;
+        db::next_version(&conn, &site.slug)?
+    };
     let title = clean_title(request.title.as_deref())?.unwrap_or_else(|| site.title.clone());
     let note = clean_note(request.note.as_deref())?;
+    // 一句话介绍和封面是作品级的东西：这一版没给就沿用上一版的，别让人每次都重打一遍。
+    let summary =
+        clean_summary(request.summary.as_deref())?.or_else(|| site.listing.summary.clone());
+    let cover = match request.cover {
+        Some(cover) => Some(cover),
+        None => match (&site.listing.cover_hash, &site.listing.cover_mime) {
+            (Some(hash), Some(mime)) => {
+                let conn = state.db().lock().await;
+                // 上一版的封面 blob 可能已经被回收（比如作品很久没动）；那就当没有封面，不写一条指向空处的引用。
+                db::blob_size(&conn, hash)?.map(|size| manifest::Cover {
+                    hash: hash.clone(),
+                    size,
+                    mime: mime.clone(),
+                })
+            }
+            _ => None,
+        },
+    };
 
     let mut files = request.files;
     files.sort_by(|a, b| a.path.cmp(&b.path));
@@ -139,6 +173,8 @@ pub async fn commit(
         title: title.clone(),
         developer: caller.display_name.clone(),
         note: note.clone(),
+        summary,
+        cover,
         created_at: created_at.clone(),
         expires_at: site.expires_at.clone(),
         // v0.1 只有匿名和免费档，两档都带角标（DESIGN §3.3）。
@@ -179,6 +215,22 @@ pub async fn commit(
             file_count,
             total_bytes,
         )?;
+        // 广场卡片要用的几样抄到 sites 上（DESIGN §3.8）。
+        db::record_version_meta(
+            &conn,
+            &site.slug,
+            manifest.summary.as_deref(),
+            manifest
+                .cover
+                .as_ref()
+                .map(|c| (c.hash.as_str(), c.mime.as_str())),
+            manifest.engine.as_deref(),
+            &created_at,
+        )?;
+    }
+    // 公开着的作品，新版本要立刻出现在广场上；没公开的这一步只是重写一份一样的文件。
+    if site.listing.public {
+        crate::plaza::publish(&state).await;
     }
 
     tracing::info!(slug = %site.slug, version, file_count, total_bytes, "提交了一个版本");
@@ -188,6 +240,15 @@ pub async fn commit(
         version,
         expires_at: site.expires_at,
     }))
+}
+
+/// 封面在「缺哪些 blob」这一步里的样子：它不在目录里，给它一个只在报错信息里出现的名字。
+fn cover_entry(cover: &manifest::Cover) -> FileEntry {
+    FileEntry {
+        path: "（封面）".to_string(),
+        hash: cover.hash.clone(),
+        size: cover.size,
+    }
 }
 
 /// 按清单顺序去重：同一份内容在目录里出现两次，只要传一次。
@@ -259,7 +320,11 @@ pub fn clean_note(note: Option<&str>) -> ApiResult<Option<String>> {
     clean_text(note, limits::MAX_NOTE_CHARS, "这版改了什么")
 }
 
-fn clean_text(value: Option<&str>, max_chars: usize, what: &str) -> ApiResult<Option<String>> {
+pub fn clean_summary(summary: Option<&str>) -> ApiResult<Option<String>> {
+    clean_text(summary, limits::MAX_SUMMARY_CHARS, "一句话介绍")
+}
+
+pub fn clean_text(value: Option<&str>, max_chars: usize, what: &str) -> ApiResult<Option<String>> {
     let Some(text) = value.map(str::trim).filter(|t| !t.is_empty()) else {
         return Ok(None);
     };

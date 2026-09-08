@@ -11,7 +11,10 @@ use playtest_common::RESERVED_PATH_PREFIX;
 use time::format_description::well_known::Rfc3339;
 use time::{OffsetDateTime, UtcOffset};
 
-use crate::html::{esc, shell};
+use crate::html::{esc, shell_hero};
+
+/// 封面在作品自己的域上的路径（DESIGN §3.3）。
+pub const COVER_PATH: &str = "/_playtest/cover";
 
 /// 没有 JS 时到期时间按这个时区显示。边缘在香港、玩家多数也在这个时区；
 /// 括号里把时区写出来，读的人不用猜。有 JS 的话下面那段会换成浏览器本地时间。
@@ -133,6 +136,8 @@ pub struct GatePage<'a> {
     pub root_url: &'a str,
     /// 这一页自己的地址，给 og:url。
     pub page_url: &'a str,
+    /// 这个作品的源（`scheme://slug.suffix[:port]`），封面的绝对地址接在它后面给 og:image。
+    pub origin: &'a str,
     pub wechat: bool,
     /// 版本那个位置显示什么。上传路径是 `None`，显示 `v7`；隧道路径传「在线」——
     /// 隧道没有版本这个概念（DESIGN §3.5），显示合成清单里那个 `v0` 会让玩家
@@ -153,19 +158,48 @@ impl GatePage<'_> {
             None => format!("v{}", m.version),
         };
         let invite = invite_verb(m);
+        let summary = m
+            .summary
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(esc);
 
         // 服务端直出分享元数据（DESIGN §3.3）：Discord、iMessage、Telegram 会来抓。
         // 微信对未备案域名的抓取没有任何承诺，这里是尽力而为，不是「支持微信卡片」（§5）。
-        // 没有 `og:image`：现在没有封面，编一张假图比没有图糟——玩家看到的第一眼
-        // 应该是这个作品，不是我们的占位符。有封面之后再加。
-        let head = format!(
-            "<meta name=\"description\" content=\"{developer} {invite}《{title}》· {version}\">\n\
+        // `og:image` 只在开发者给了封面时才有：编一张假图比没有图糟——玩家看到的第一眼
+        // 应该是这个作品，不是我们的占位符。
+        let description = match &summary {
+            Some(summary) => format!("{summary} · {developer} {invite}"),
+            None => format!("{developer} {invite}《{title}》· {version}"),
+        };
+        let mut head = format!(
+            "<meta name=\"description\" content=\"{description}\">\n\
 <meta property=\"og:title\" content=\"《{title}》· {version}\">\n\
-<meta property=\"og:description\" content=\"{developer} {invite}\">\n\
+<meta property=\"og:description\" content=\"{og_description}\">\n\
 <meta property=\"og:type\" content=\"website\">\n\
 <meta property=\"og:url\" content=\"{url}\">\n",
+            og_description = summary
+                .clone()
+                .unwrap_or_else(|| format!("{developer} {invite}")),
             url = esc(self.page_url),
         );
+        let hero = if let Some(cover) = &m.cover {
+            head.push_str(&format!(
+                "<meta property=\"og:image\" content=\"{origin}{COVER_PATH}\">\n\
+<meta property=\"og:image:type\" content=\"{mime}\">\n\
+<meta name=\"twitter:card\" content=\"summary_large_image\">\n",
+                origin = esc(self.origin),
+                mime = esc(&cover.mime),
+            ));
+            format!("<img class=\"hero\" src=\"{COVER_PATH}\" alt=\"\">\n")
+        } else {
+            String::new()
+        };
+        let summary_html = match &summary {
+            Some(summary) => format!("<p class=\"summary\">{summary}</p>\n"),
+            None => String::new(),
+        };
 
         let note = match m.note.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
             Some(note) => format!(
@@ -208,7 +242,7 @@ impl GatePage<'_> {
 
         let body = format!(
             "<h1><span class=\"invite\">{developer} {invite}</span>《{title}》<span class=\"ver\">· {version}</span></h1>\n\
-{note}{tips}\
+{summary_html}{note}{tips}\
 <form method=\"post\" action=\"{prefix}start\">\n\
 <input type=\"hidden\" name=\"to\" value=\"{to}\">\n\
 <input type=\"hidden\" name=\"from\" value=\"{from}\">\n\
@@ -222,9 +256,10 @@ impl GatePage<'_> {
             capability = self.capability_note(),
         );
 
-        shell(
+        shell_hero(
             &format!("{} {invite}《{}》", m.developer, m.title),
             &head,
+            &hero,
             &body,
         )
     }
@@ -318,6 +353,8 @@ mod tests {
             title: "小球大冒险".into(),
             developer: "某某".into(),
             note: None,
+            summary: None,
+            cover: None,
             created_at: "2026-09-07T00:00:00Z".into(),
             expires_at: None,
             badge: true,
@@ -336,10 +373,37 @@ mod tests {
             host_suffix: "localhost",
             root_url: "http://localhost:8443/",
             page_url: "http://brisk-otter-41.localhost:8443/",
+            origin: "http://brisk-otter-41.localhost:8443",
             wechat,
             version_label: None,
             referer: "",
         }
+    }
+
+    #[test]
+    fn a_cover_becomes_the_hero_and_the_share_image() {
+        let mut m = manifest();
+        m.cover = Some(playtest_common::manifest::Cover {
+            hash: "a".repeat(64),
+            size: 1000,
+            mime: "image/png".into(),
+        });
+        m.summary = Some("一个关于小球的冒险，三关，五分钟。".into());
+        let html = page(&m, false).render();
+        // 封面顶在卡片最上面，从作品自己的域上取（DESIGN §3.3）。
+        assert!(html.contains("<img class=\"hero\" src=\"/_playtest/cover\""));
+        assert!(html.find("class=\"hero\"") < html.find("<h1>"));
+        // 分享卡片拿到绝对地址的图。
+        assert!(html.contains(
+            "<meta property=\"og:image\" content=\"http://brisk-otter-41.localhost:8443/_playtest/cover\">"
+        ));
+        assert!(html.contains("<meta property=\"og:image:type\" content=\"image/png\">"));
+        // 一句话介绍进正文，也顶替掉分享描述里那句「某某 邀请你试玩」。
+        assert!(html.contains("<p class=\"summary\">一个关于小球的冒险，三关，五分钟。</p>"));
+        assert!(html.contains(
+            "<meta property=\"og:description\" content=\"一个关于小球的冒险，三关，五分钟。\">"
+        ));
+        assert!(html.len() < 8 * 1024, "门禁页 {} 字节", html.len());
     }
 
     #[test]

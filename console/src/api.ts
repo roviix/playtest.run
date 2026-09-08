@@ -7,6 +7,17 @@ const API_BASE = import.meta.env.VITE_PLAYTEST_API ?? "";
 
 const TOKEN_KEY = "playtest.token";
 
+/** 广场上的状态（DESIGN §3.8）。旧控制面不返回这一段，按「不公开」处理。 */
+export type Listing = {
+  public: boolean;
+  seeking: boolean;
+  seek_note?: string;
+  summary?: string;
+  /** 被举报到阈值或我们手工撤下：开发者勾着公开，但广场上没有它。必须告诉他。 */
+  hidden: boolean;
+  has_cover: boolean;
+};
+
 export type Site = {
   slug: string;
   url: string;
@@ -14,6 +25,14 @@ export type Site = {
   current_version?: number;
   created_at: string;
   expires_at?: string;
+  listing?: Listing;
+};
+
+export type UpdateSiteRequest = {
+  public?: boolean;
+  seeking?: boolean;
+  /** 空字符串表示清掉。 */
+  seek_note?: string;
 };
 
 export type ErrorTally = { fingerprint: string; count: number };
@@ -169,6 +188,11 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   sites: () => call<Site[]>("/v1/sites"),
+  updateSite: (slug: string, request: UpdateSiteRequest) =>
+    call<Site>(`/v1/sites/${encodeURIComponent(slug)}`, {
+      method: "PATCH",
+      body: JSON.stringify(request),
+    }),
   results: (slug: string) => call<SiteResults>(`/v1/sites/${encodeURIComponent(slug)}/results`),
   sessions: (slug: string, version: number, sort: RosterSort) =>
     call<VersionSessions>(

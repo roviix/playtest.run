@@ -25,6 +25,16 @@ pub const MAX_NOTE_CHARS: usize = 280;
 /// 作品名长度上限。
 pub const MAX_TITLE_CHARS: usize = 80;
 
+/// 一句话介绍的长度上限（DESIGN §3.8）。广场卡片上只放得下两行，140 个字已经是上限。
+pub const MAX_SUMMARY_CHARS: usize = 140;
+
+/// 「想让你看什么」的长度上限（DESIGN §3.8）。
+pub const MAX_SEEK_NOTE_CHARS: usize = 140;
+
+/// 封面图的字节上限（DESIGN §3.3）。2 MB 够一张 1200×630 的 PNG；封面会被贴在根域那一页上，
+/// 一屏十几张，再大就是让每个翻广场的人替一张图付流量。
+pub const MAX_COVER_BYTES: u64 = 2 * MIB;
+
 // ------------------------------------------------------------------ 带宽配额
 //
 // 两个时间尺度，缺一不可（DESIGN §4.8「额度是双重上限」）：月配额挡长期滥用，

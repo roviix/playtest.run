@@ -10,6 +10,8 @@
 //! 作品也可以不上传，而是从开发者自己的电脑上直接放出来：[`tunnel`] 那一头
 //! 接住 CLI 开过来的 WebSocket，按 Host 找到会话，把玩家的请求送进去（DESIGN §4.3）。
 //!
+//! 根域是广场（DESIGN §3.8）：[`plaza`] 读控制面写进对象存储的 `plaza.json`，渲染成一页卡片。
+//!
 //! 这个进程不执行任何用户代码（DESIGN §3.7），也不记玩家 IP（§3.4）。
 
 pub mod app;
@@ -23,6 +25,7 @@ pub mod html;
 pub mod me;
 pub mod pages;
 pub mod paths;
+pub mod plaza;
 pub mod range;
 pub mod sdk;
 pub mod ship;

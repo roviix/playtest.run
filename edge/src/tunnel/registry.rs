@@ -140,6 +140,8 @@ pub fn synthetic_manifest(claims: &Claims, connected_at: OffsetDateTime) -> Mani
         title: claims.title.clone(),
         developer: claims.developer.clone(),
         note: None,
+        summary: None,
+        cover: None,
         created_at: connected_at.format(&Rfc3339).unwrap_or_default(),
         expires_at: None,
         badge: claims.badge,

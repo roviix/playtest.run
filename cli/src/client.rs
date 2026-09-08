@@ -7,7 +7,7 @@ use std::time::Duration;
 use futures_util::TryStreamExt;
 use playtest_common::api::{
     routes, AnonSessionResponse, CommitUploadResponse, CreateSiteRequest, ErrorBody, ErrorCode,
-    PrepareUploadRequest, PrepareUploadResponse, Site,
+    PrepareUploadRequest, PrepareUploadResponse, Site, UpdateSiteRequest,
 };
 use playtest_common::tunnel::{TunnelGrant, TunnelRequest};
 use reqwest::header::AUTHORIZATION;
@@ -196,6 +196,17 @@ impl Client {
             return Ok(());
         }
         Err(self.read_error(response).await)
+    }
+
+    /// 改广场上的状态（DESIGN §3.8）：公开、求测、想让人看什么。
+    pub async fn update_site(&self, slug: &str, request: &UpdateSiteRequest) -> Result<Site> {
+        let response = self
+            .request(Method::PATCH, &routes::site(slug))
+            .json(request)
+            .send()
+            .await
+            .map_err(|e| self.transport(e))?;
+        self.read_json(response).await
     }
 
     pub async fn prepare_upload(

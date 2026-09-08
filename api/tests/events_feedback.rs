@@ -174,6 +174,8 @@ impl Harness {
                     files: vec![file.clone()],
                     title: Some("小球".to_string()),
                     note: None,
+                    summary: None,
+                    cover: None,
                     gate: GateMode::Once,
                     isolated: false,
                     spa: false,
@@ -828,7 +830,9 @@ async fn sessions_older_than_ninety_days_are_forgotten() {
         detail: None,
     };
     let accepted: Accepted = h
-        .from_edge(&EdgeBatch { events: vec![start(&fresh), start(&stale)] })
+        .from_edge(&EdgeBatch {
+            events: vec![start(&fresh), start(&stale)],
+        })
         .await
         .json();
     assert_eq!(accepted.accepted, 2);
@@ -850,16 +854,28 @@ async fn sessions_older_than_ninety_days_are_forgotten() {
     }
 
     assert_eq!(h.count("SELECT COUNT(*) FROM sessions").await, 2);
-    let removed = playtest_api::sweeper::expire_sessions(&h.state).await.unwrap();
+    let removed = playtest_api::sweeper::expire_sessions(&h.state)
+        .await
+        .unwrap();
     assert_eq!(removed, 1);
     assert_eq!(h.count("SELECT COUNT(*) FROM sessions").await, 1);
-    assert_eq!(h.count("SELECT COUNT(*) FROM feedback").await, 0, "反馈跟着会话走");
     assert_eq!(
-        h.count(&format!("SELECT COUNT(*) FROM session_events WHERE session_id = '{stale}'")).await,
+        h.count("SELECT COUNT(*) FROM feedback").await,
+        0,
+        "反馈跟着会话走"
+    );
+    assert_eq!(
+        h.count(&format!(
+            "SELECT COUNT(*) FROM session_events WHERE session_id = '{stale}'"
+        ))
+        .await,
         0
     );
     assert_eq!(
-        h.count(&format!("SELECT COUNT(*) FROM session_events WHERE session_id = '{fresh}'")).await,
+        h.count(&format!(
+            "SELECT COUNT(*) FROM session_events WHERE session_id = '{fresh}'"
+        ))
+        .await,
         1,
         "活跃会话的事件一条不少"
     );

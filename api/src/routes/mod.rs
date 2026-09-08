@@ -8,6 +8,7 @@ pub mod sessions;
 pub mod sites;
 pub mod tunnel;
 pub mod uploads;
+pub mod versions;
 
 use axum::extract::{FromRequest, Request};
 use axum::http::{header, StatusCode};
@@ -29,10 +30,15 @@ pub fn app(state: AppState) -> Router {
         .route(paths::HEALTH, get(health))
         .route(paths::ANON_SESSIONS, post(sessions::create))
         .route(paths::SITES, get(sites::list).post(sites::create))
-        .route(paths::SITE, get(sites::show).delete(sites::remove))
+        .route(
+            paths::SITE,
+            get(sites::show).patch(sites::update).delete(sites::remove),
+        )
         .route(paths::SITE_UPLOADS, post(uploads::prepare))
         .route(paths::SITE_UPLOAD_COMMIT, post(uploads::commit))
         .route(paths::SITE_TUNNEL, post(tunnel::grant))
+        .route(paths::SITE_VERSIONS, get(versions::list))
+        .route(paths::SITE_VERSION_ACTIVATE, post(versions::activate))
         .route(result_paths::SITE_RESULTS, get(results::timeline))
         .route(result_paths::SITE_VERSION_SESSIONS, get(results::sessions))
         .route(result_paths::SITE_FEEDBACK, get(results::feedback))

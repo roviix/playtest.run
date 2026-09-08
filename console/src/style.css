@@ -1,31 +1,41 @@
 /* 手机优先：所有尺寸先按 375 宽写，宽屏只放宽容器和把点名册的一行摊平。
-   没有图表，所以也没有画布、没有颜色刻度——这里的颜色只用来区分「该看的」和「其它」。 */
+   没有图表，所以也没有画布、没有颜色刻度——这里的颜色只用来区分「该看的」和「其它」。
+   一套记号和玩家那一侧（边缘的 html.rs）同源：同样的圆角、同样的琥珀色强调，
+   开发者从广场点回控制台不觉得换了产品。 */
 
 :root {
-  --bg: #fbfaf8;
+  --bg: #f6f5f2;
   --panel: #ffffff;
+  --panel-2: #f1efea;
   --ink: #17181a;
   --muted: #6b7076;
   --line: #e3e1dc;
-  --warn: #a8400f;
+  --warn: #9a3d0c;
   --warn-bg: #fdf1e8;
   --good: #1c6b4a;
   --good-bg: #e9f5ee;
+  --accent: #b5731a;
+  --accent-bg: #fff3dc;
   --link: #1b52b8;
+  --shadow: 0 1px 2px rgba(20, 20, 30, 0.04), 0 8px 24px -18px rgba(20, 20, 30, 0.25);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #131416;
-    --panel: #1b1d20;
-    --ink: #ecebe8;
-    --muted: #9aa0a6;
-    --line: #2e3237;
+    --bg: #0e0f13;
+    --panel: #16181d;
+    --panel-2: #1d2027;
+    --ink: #eef0f4;
+    --muted: #9aa2b1;
+    --line: #272b34;
     --warn: #f0a071;
     --warn-bg: #33231a;
     --good: #7fd0a6;
     --good-bg: #16291f;
+    --accent: #ffb224;
+    --accent-bg: #2b2210;
     --link: #8fb4ff;
+    --shadow: 0 24px 60px -36px rgba(0, 0, 0, 0.9);
   }
 }
 
@@ -44,6 +54,7 @@ body {
   font: 16px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
@@ -62,7 +73,7 @@ code,
 }
 
 .shell {
-  max-width: 44rem;
+  max-width: 46rem;
   margin: 0 auto;
   padding: 0 1rem env(safe-area-inset-bottom);
 }
@@ -72,7 +83,7 @@ code,
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.9rem 0;
+  padding: 1rem 0 0.9rem;
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
@@ -80,18 +91,30 @@ code,
   z-index: 1;
 }
 
+.top a:not(.brand) {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
 .brand {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: -0.01em;
   color: var(--ink);
-  letter-spacing: 0.02em;
+}
+
+.brand::after {
+  content: ".run";
+  color: var(--accent);
 }
 
 main {
-  padding: 1rem 0 3rem;
+  padding: 1.25rem 0 3rem;
 }
 
 h1 {
-  font-size: 1.35rem;
+  font-size: 1.45rem;
+  letter-spacing: -0.01em;
   margin: 0.2rem 0 0.3rem;
 }
 
@@ -105,7 +128,7 @@ p {
 }
 
 .page-head {
-  margin-bottom: 1rem;
+  margin-bottom: 1.1rem;
 }
 
 .cards,
@@ -115,20 +138,22 @@ p {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.85rem;
 }
 
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 0.7rem;
-  padding: 0.9rem 1rem;
+  border-radius: 0.9rem;
+  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow);
 }
 
 .card-title {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1.12rem;
+  font-weight: 650;
   color: var(--ink);
+  letter-spacing: -0.005em;
 }
 
 .card-head {
@@ -164,9 +189,23 @@ p {
   color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  padding: 0.45rem 0.8rem;
+  border-radius: 0.55rem;
+  padding: 0.45rem 0.85rem;
   cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.08s;
+}
+
+.button:hover {
+  border-color: var(--muted);
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .button.primary {
@@ -175,11 +214,33 @@ p {
   border-color: var(--ink);
 }
 
+.button.quiet {
+  border-color: transparent;
+  color: var(--muted);
+  background: transparent;
+}
+
+.button.quiet:hover {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.linkish {
+  font: inherit;
+  font-size: 0.85rem;
+  margin-left: 0.5rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  cursor: pointer;
+}
+
 .notice,
 .empty {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 0.7rem;
+  border-radius: 0.9rem;
   padding: 0.9rem 1rem;
   margin: 0.75rem 0;
 }
@@ -188,6 +249,7 @@ p {
   border-color: var(--warn);
   background: var(--warn-bg);
   color: var(--warn);
+  font-size: 0.92rem;
 }
 
 .switch {
@@ -202,7 +264,7 @@ p {
   flex: 1;
   padding: 0.5rem;
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
+  border-radius: 0.55rem;
   background: var(--panel);
   color: var(--muted);
   cursor: pointer;
@@ -214,12 +276,64 @@ p {
   font-weight: 600;
 }
 
+/* 作品卡 */
+
+.site-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.site-title-block {
+  min-width: 0;
+}
+
+.site-summary {
+  margin: 0.5rem 0 0;
+  color: var(--ink);
+  opacity: 0.85;
+}
+
+.plaza {
+  margin-top: 0.8rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.7rem;
+  background: var(--panel-2);
+}
+
+.plaza .muted {
+  margin: 0;
+}
+
+.plaza .row-actions {
+  margin-top: 0.6rem;
+}
+
+.plaza .notice {
+  margin: 0;
+}
+
+.seek-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.92rem;
+}
+
+.seek-note b {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.seek-form {
+  margin-top: 0.6rem;
+}
+
 /* 点名册 */
 
 .session {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 0.7rem;
+  border-radius: 0.8rem;
   padding: 0.6rem 0.8rem 0.7rem;
 }
 
@@ -265,10 +379,10 @@ p {
 }
 
 .tag {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   line-height: 1.5;
-  padding: 0.05rem 0.45rem;
-  border-radius: 0.4rem;
+  padding: 0.08rem 0.5rem;
+  border-radius: 999px;
   border: 1px solid var(--line);
   color: var(--muted);
   white-space: nowrap;
@@ -284,6 +398,13 @@ p {
   color: var(--good);
   background: var(--good-bg);
   border-color: transparent;
+}
+
+.tag.accent {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-color: transparent;
+  font-weight: 600;
 }
 
 .events {
@@ -332,13 +453,24 @@ p {
   gap: 0.35rem;
 }
 
+.field span {
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
 .field input {
   font: inherit;
-  padding: 0.6rem;
+  padding: 0.6rem 0.7rem;
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
+  border-radius: 0.55rem;
   background: var(--bg);
   color: var(--ink);
+}
+
+.field input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: transparent;
 }
 
 @media (min-width: 40rem) {

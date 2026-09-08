@@ -42,6 +42,21 @@ pub struct UploadParams {
     /// Serve cross-origin isolated; Godot 4 threaded exports need it. Godot 4 的线程导出需要这个。
     #[serde(default)]
     pub isolated: Option<bool>,
+    /// One line describing what the work is; shown on the gate page, share card and plaza card (≤140 chars).
+    /// 一句话介绍这个作品是什么，门禁页、分享卡片、广场卡片上都用（最多 140 字）。
+    #[serde(default)]
+    pub summary: Option<String>,
+    /// Path to a cover image (PNG/JPEG/WebP, ≤2 MB). 封面图的路径（PNG / JPEG / WebP，2 MB 以内）。
+    #[serde(default)]
+    pub cover: Option<String>,
+    /// Also list the work on the public plaza (playtest.run home) so passers-by can play it. Default false.
+    /// 上传后放到广场（playtest.run 首页）上，路过的人点开就能玩。默认不放。
+    #[serde(default)]
+    pub public: Option<bool>,
+    /// Mark it "looking for testers" on the plaza and tell them what to look at (≤140 chars); implies public.
+    /// 在广场上标「正在找人测」并告诉来的人重点看什么（最多 140 字）；蕴含 public。
+    #[serde(default)]
+    pub seek: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -76,6 +91,10 @@ impl Playtest {
             target: Some(params.dir),
             name: params.name,
             note: params.note,
+            summary: params.summary,
+            cover: params.cover.map(std::path::PathBuf::from),
+            public: params.public.unwrap_or(false),
+            seek: params.seek,
             isolated: params.isolated.unwrap_or(false),
             api: self.api.clone(),
             ..UploadArgs::default()

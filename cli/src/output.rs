@@ -394,6 +394,8 @@ pub struct UploadReport {
     action: &'static str,
     pub slug: String,
     pub url: String,
+    /// 玩家在门禁页上看到的作品名。发完就打出来，别让人到玩家那边才发现叫《v2》。
+    pub title: String,
     pub version: u32,
     /// 从进程启动到这一刻。MCP 里没有「进程启动」这回事，由调用方改写成这次工具调用的耗时。
     pub elapsed_ms: u64,
@@ -403,12 +405,28 @@ pub struct UploadReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub qr_text: Option<String>,
     pub findings: Vec<Finding>,
+    /// 这次上传之后作品在广场上的状态（DESIGN §3.8）。没动过广场就没有这一段。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plaza: Option<PlazaOut>,
+}
+
+/// 广场状态在输出里的样子。
+#[derive(Debug, Clone, Serialize)]
+pub struct PlazaOut {
+    /// 广场的地址（根域）。
+    pub url: String,
+    pub public: bool,
+    pub seeking: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seek_note: Option<String>,
 }
 
 impl UploadReport {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         slug: String,
         url: String,
+        title: String,
         version: u32,
         timings: Timings,
         expires_at: Option<String>,
@@ -420,12 +438,14 @@ impl UploadReport {
             action: "upload",
             slug,
             url,
+            title,
             version,
             elapsed_ms: elapsed_ms(),
             timings,
             expires_at,
             qr_text,
             findings,
+            plaza: None,
         }
     }
 }
@@ -436,7 +456,7 @@ pub fn report_upload(report: &UploadReport) {
         emit(report);
         return;
     }
-    ui::say(&format!("已发布 v{}", report.version));
+    ui::say(&format!("已发布《{}》v{}", report.title, report.version));
     ui::blank();
     ui::link(&report.url);
     ui::blank();
@@ -446,13 +466,32 @@ pub fn report_upload(report: &UploadReport) {
             ui::say("手机扫码就能玩。");
         }
     }
+    if let Some(plaza) = &report.plaza {
+        ui::say(&plaza_line(plaza));
+    }
     if let Some(expires_at) = &report.expires_at {
         ui::say(&format!(
-            "这是匿名链接，{} 后失效。保留、改名、查看结果需要登录（登录还没做好）。",
+            "这是匿名链接，{} 后失效。保留、改名需要登录（登录还没做好）。",
             clock::human(expires_at)
         ));
     }
+    ui::say(&format!(
+        "谁打开了、玩到哪、报了什么错：{}/console/（令牌在 playtest 的配置文件里）",
+        playtest_common::DEVELOPER_API_URL
+    ));
     ui::say(&timing_line(report.elapsed_ms, report.timings));
+}
+
+/// 「已放到广场上：https://playtest.run/ ，并标了「正在找人测」。」
+pub fn plaza_line(plaza: &PlazaOut) -> String {
+    match (plaza.public, plaza.seeking) {
+        (true, true) => format!(
+            "已放到广场上并标了「正在找人测」：{} 。来的人玩成什么样，控制台里看得见。",
+            plaza.url
+        ),
+        (true, false) => format!("已放到广场上：{} 。路过的人点开就能玩。", plaza.url),
+        (false, _) => "已从广场上拿下来了，链接照常能开。".to_string(),
+    }
 }
 
 /// 「本次 4.2 秒（哈希 0.3 · 上传 3.1 · 提交 0.8）」。
@@ -940,6 +979,7 @@ mod tests {
         let report = UploadReport::new(
             "brisk-otter-41".into(),
             "https://brisk-otter-41.playtest.run".into(),
+            "小球大冒险".into(),
             7,
             Timings {
                 hash_ms: 300,

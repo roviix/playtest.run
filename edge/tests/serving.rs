@@ -23,6 +23,16 @@ const WASM: &[u8] = b"\0asm\x01\0\0\0not-a-real-module";
 const WASM_BR: &[u8] = b"<pretend brotli stream for game.wasm>";
 const DATA_BR: &[u8] = b"<pretend brotli stream for Unity .data>";
 const SUB_HTML: &str = "<!doctype html><title>子目录</title>";
+// 只有 PNG 的魔数，边缘不解码图片，够用了。
+const COVER_PNG: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR pretend cover";
+
+fn with_cover(m: &mut Manifest) {
+    m.cover = Some(playtest_common::manifest::Cover {
+        hash: hash_bytes(COVER_PNG),
+        size: COVER_PNG.len() as u64,
+        mime: "image/png".into(),
+    });
+}
 
 struct Site {
     _dir: tempfile::TempDir,
@@ -54,6 +64,11 @@ impl Site {
                 size: bytes.len() as u64,
             });
         }
+        // 封面的 blob 也放进去，但不在 files 里——它是清单单独的一条引用（DESIGN §3.3）。
+        store
+            .put_blob(&hash_bytes(COVER_PNG), COVER_PNG)
+            .await
+            .unwrap();
 
         let mut manifest = Manifest {
             schema: SCHEMA,
@@ -62,6 +77,8 @@ impl Site {
             title: "小球大冒险".into(),
             developer: "某某".into(),
             note: None,
+            summary: None,
+            cover: None,
             created_at: "2026-09-07T00:00:00Z".into(),
             expires_at: None,
             badge: true,
@@ -594,6 +611,38 @@ async fn unknown_slug_is_a_rendered_404() {
 }
 
 #[tokio::test]
+async fn the_cover_is_served_from_the_reserved_path() {
+    // 有封面：从 /_playtest/cover 出，按清单里记的类型给，不经过门禁，可以缓存。
+    let site = Site::build(with_cover).await;
+    let reply = site.get("/_playtest/cover").await;
+    assert_eq!(reply.status, StatusCode::OK);
+    assert_eq!(reply.header("content-type"), Some("image/png"));
+    assert_eq!(reply.body.as_ref(), COVER_PNG);
+    assert!(reply
+        .header("cache-control")
+        .is_some_and(|c| c.starts_with("public, max-age=")));
+    assert_eq!(
+        reply.header("etag"),
+        Some(format!("\"{}\"", hash_bytes(COVER_PNG)).as_str())
+    );
+    // 门禁页拿它当第一眼，也拿它当分享卡片的图。
+    let gate = site.get("/").await;
+    assert!(gate
+        .text()
+        .contains("<img class=\"hero\" src=\"/_playtest/cover\""));
+    assert!(gate.text().contains(
+        "<meta property=\"og:image\" content=\"http://brisk-otter-41.localhost:8443/_playtest/cover\">"
+    ));
+
+    // 没有封面：裸 404，一个字节的 HTML 都没有——抓卡片的机器人和 <img> 只认状态码。
+    let plain = Site::plain().await;
+    let reply = plain.get("/_playtest/cover").await;
+    assert_eq!(reply.status, StatusCode::NOT_FOUND);
+    assert!(reply.body.is_empty());
+    assert!(!plain.get("/").await.text().contains("og:image"));
+}
+
+#[tokio::test]
 async fn expired_anonymous_link_is_410() {
     let site = Site::build(|m| m.expires_at = Some("2026-09-06T00:00:00Z".into())).await;
     let reply = site.get("/").await;
@@ -606,17 +655,23 @@ async fn expired_anonymous_link_is_410() {
 async fn host_routing() {
     let site = Site::plain().await;
 
-    // 根域：唯一一页可以把开发者引去品牌站的地方。
+    // 根域是广场（DESIGN §3.8）：唯一一页可以把开发者引去品牌站的地方。
+    // 这个测试的对象存储里没有 plaza.json，所以是空广场，但页面照常出、说明照常在。
     for host in ["localhost:8443", "www.localhost"] {
         let reply = site
             .send(nav_on(host, "/").body(Body::empty()).unwrap())
             .await;
         assert_eq!(reply.status, StatusCode::OK, "{host}");
-        assert!(reply.text().contains("playtest ./dist"), "{host}");
-        assert!(
-            reply.text().contains(playtest_common::DEVELOPER_API_URL),
-            "{host}"
-        );
+        let text = reply.text();
+        assert!(text.contains("现在广场上还没有作品"), "{host}");
+        assert!(text.contains("--public"), "{host}");
+        assert!(text.contains(playtest_common::DEVELOPER_API_URL), "{host}");
+        // 这一页是我们自己的，能锁死；脚本只放行带 nonce 的那段，图只从作品子域来。
+        // 作品页面上则一个 CSP 都不能有（见 no_csp_header_anywhere）。
+        let csp = reply.header("content-security-policy").unwrap_or_default();
+        assert!(csp.starts_with("default-src 'none'"), "{host}: {csp}");
+        assert!(csp.contains("img-src http://*.localhost"), "{host}: {csp}");
+        assert!(csp.contains("script-src 'nonce-"), "{host}: {csp}");
     }
 
     // 根域下别的路径没有内容。

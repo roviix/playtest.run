@@ -115,6 +115,7 @@ async fn sdk_batch(
             // SDK 的请求头里那个 Referer 是作品自己的地址，不是玩家从哪来的，
             // 拿它填 referrer_kind 只会填出一个假答案。这一列留给边缘。
             referer: None,
+            plaza_host: "",
             return_before: &clock::format(at - Duration::minutes(RETURN_AFTER_MINUTES)),
         },
     )?;
@@ -166,14 +167,20 @@ pub async fn from_edge(
         other => other.allowed(),
     };
     let done = edge_batch(&state, &limiter, &body).await;
+    // 这一批里有举报：立刻重算一次广场，够数的当场撤下（DESIGN §3.8），不等 5 分钟那一轮。
+    if matches!(&done, Ok((_, true))) {
+        crate::plaza::publish(&state).await;
+    }
+    let done = done.map(|(accepted, _)| accepted);
     with_cors(done.into_response(), origin.as_deref())
 }
 
+/// 返回收下了几条，以及这批里有没有举报。
 async fn edge_batch(
     state: &AppState,
     limiter: &Limiter,
     body: &Bytes,
-) -> ApiResult<Json<Accepted>> {
+) -> ApiResult<(Json<Accepted>, bool)> {
     let batch: EdgeBatch = parse(body)?;
     if batch.events.len() > ingest::MAX_EVENTS_PER_BATCH {
         return Err(ApiError::invalid(format!(
@@ -184,10 +191,12 @@ async fn edge_batch(
     }
 
     let now = clock::now();
+    let plaza_host = content_host_suffix(state);
     let mut conn = state.db().lock().await;
     let tx = conn.transaction()?;
 
     let mut accepted = 0usize;
+    let mut had_report = false;
     let mut versions: HashMap<String, u32> = HashMap::new();
     for line in &batch.events {
         if !ingest::edge_kind::known(&line.kind) || !ingest::is_session_id(&line.sid) {
@@ -199,6 +208,7 @@ async fn edge_batch(
         if !limiter.take_slug(&slug) {
             continue;
         }
+        had_report |= line.kind == ingest::edge_kind::REPORT;
         let current = match versions.get(&slug) {
             Some(version) => *version,
             None => {
@@ -228,6 +238,7 @@ async fn edge_batch(
                 at: &ts,
                 ua: Some(line.ua.as_str()).filter(|ua| !ua.is_empty()),
                 referer: Some(line.referer.as_str()),
+                plaza_host: &plaza_host,
                 return_before: &clock::format(at - Duration::minutes(RETURN_AFTER_MINUTES)),
             },
         )?;
@@ -253,7 +264,7 @@ async fn edge_batch(
     }
     tx.commit()?;
 
-    Ok(Json(Accepted { accepted }))
+    Ok((Json(Accepted { accepted }), had_report))
 }
 
 /// 预检。SDK 发的是 `text/plain` 的体，正常路径上不会走到这里；
@@ -307,8 +318,8 @@ pub fn check_origin(state: &AppState, headers: &HeaderMap) -> Origin {
     }
 }
 
-/// 链接模板里放一个假 slug，剩下的就是内容域后缀。
-fn content_host_suffix(state: &AppState) -> String {
+/// 链接模板里放一个假 slug，剩下的就是内容域后缀——也就是广场所在的根域。
+pub fn content_host_suffix(state: &AppState) -> String {
     const PROBE: &str = "sluglugslug";
     let url = state.site_url(PROBE);
     let host = ingest::host_of(&url);
@@ -486,6 +497,8 @@ pub struct Seen<'a> {
     pub ua: Option<&'a str>,
     /// `None` 是「不知道从哪来」，和「直接打开」不是一回事。
     pub referer: Option<&'a str>,
+    /// 广场所在的根域（[`content_host_suffix`]）；从那里来的记成 `plaza`。空字符串就不认。
+    pub plaza_host: &'a str,
     /// 上一次活动早于这个时间就算回头客。
     pub return_before: &'a str,
 }
@@ -512,7 +525,7 @@ pub fn touch_session(conn: &Connection, seen: &Seen<'_>) -> rusqlite::Result<()>
     } else {
         seen.referer
             .filter(|r| !ingest::is_self_referral(r, seen.slug))
-            .map(|r| ingest::referrer_kind(r, false))
+            .map(|r| ingest::referrer_kind(r, false, seen.plaza_host))
     };
 
     let Some((last_seen_at, known_ua)) = existing else {

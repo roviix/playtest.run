@@ -1,9 +1,10 @@
-//! `playtest ls / rm / open`：看和管这台机器上发过的作品。
+//! `playtest ls / rm / open / unlist`：看和管这台机器上发过的作品。
 
 use std::path::Path;
 use std::process::{Command, Stdio};
 
 use anyhow::{bail, Result};
+use playtest_common::api::UpdateSiteRequest;
 
 use crate::args;
 use crate::client::Client;
@@ -34,8 +35,47 @@ pub async fn ls(api_flag: Option<&str>) -> Result<()> {
         if let Some(expires_at) = &site.expires_at {
             ui::out(&format!("  {} 后失效", clock::human(expires_at)));
         }
+        if let Some(line) = listing_line(&site.listing) {
+            ui::out(&format!("  {line}"));
+        }
         ui::out("");
     }
+    Ok(())
+}
+
+/// 广场上的状态，一行说完；不在广场上就不占一行。
+fn listing_line(listing: &playtest_common::api::Listing) -> Option<String> {
+    if !listing.public {
+        return None;
+    }
+    if listing.hidden {
+        return Some("在广场上被撤下了（被多人举报，等人复核）；链接照常能开".to_string());
+    }
+    Some(match (&listing.seeking, &listing.seek_note) {
+        (true, Some(note)) => format!("在广场上 · 正在找人测：{note}"),
+        (true, None) => "在广场上 · 正在找人测".to_string(),
+        (false, _) => "在广场上".to_string(),
+    })
+}
+
+/// `playtest unlist <slug>`：从广场上拿下来，链接照常能开（DESIGN §3.8）。
+pub async fn unlist(slug: &str, api_flag: Option<&str>) -> Result<()> {
+    let api = args::api_base(api_flag);
+    let config = config::load(&config::default_path()?)?;
+    let Some(client) = client_with_saved_token(&api, &config)? else {
+        bail!("这台机器上还没发过东西，没有 {slug} 可以从广场上拿下来。");
+    };
+    client
+        .update_site(
+            slug,
+            &UpdateSiteRequest {
+                public: Some(false),
+                seeking: Some(false),
+                seek_note: None,
+            },
+        )
+        .await?;
+    ui::say(&format!("已把 {slug} 从广场上拿下来了，链接照常能开。"));
     Ok(())
 }
 

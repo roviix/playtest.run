@@ -63,6 +63,22 @@ pub struct UploadArgs {
     #[arg(short = 'm', long = "note", value_name = "一句话")]
     pub note: Option<String>,
 
+    /// 一句话介绍这个作品是什么；门禁页、分享卡片、广场卡片上都用（最多 140 字）
+    #[arg(long, value_name = "一句话")]
+    pub summary: Option<String>,
+
+    /// 封面图（PNG / JPEG / WebP，2 MB 以内）；门禁页的第一眼，分享出去时的卡片图
+    #[arg(long, value_name = "图片文件")]
+    pub cover: Option<PathBuf>,
+
+    /// 上传后放到广场（playtest.run 首页）上，路过的人点开就能玩；默认不放
+    #[arg(long)]
+    pub public: bool,
+
+    /// 在广场上标「正在找人测」，并告诉来的人你想让他们重点看什么（最多 140 字）；蕴含 --public
+    #[arg(long, value_name = "想让人看什么")]
+    pub seek: Option<String>,
+
     /// 让页面跑在隔离环境里；Godot 4 的线程导出需要这个才能运行
     #[arg(long)]
     pub isolated: bool,
@@ -106,6 +122,10 @@ impl UploadArgs {
         self.target.is_some()
             || self.name.is_some()
             || self.note.is_some()
+            || self.summary.is_some()
+            || self.cover.is_some()
+            || self.public
+            || self.seek.is_some()
             || self.isolated
             || self.no_isolated
             || self.spa
@@ -146,6 +166,15 @@ pub enum Command {
     Open {
         #[arg(value_name = "slug 或目录")]
         target: String,
+
+        #[arg(long, value_name = "网址")]
+        api: Option<String>,
+    },
+
+    /// 把一个作品从广场上拿下来；它的链接照常能开
+    Unlist {
+        #[arg(value_name = "slug")]
+        slug: String,
 
         #[arg(long, value_name = "网址")]
         api: Option<String>,
@@ -259,6 +288,32 @@ mod tests {
             }
             other => panic!("解析成了 {other:?}"),
         }
+    }
+
+    #[test]
+    fn plaza_flags_parse() {
+        let cli = Cli::try_parse_from([
+            "playtest",
+            "./dist",
+            "--public",
+            "--seek",
+            "新手引导看得懂吗",
+            "--summary",
+            "三关五分钟",
+            "--cover",
+            "cover.png",
+        ])
+        .unwrap();
+        assert!(cli.upload.public);
+        assert_eq!(cli.upload.seek.as_deref(), Some("新手引导看得懂吗"));
+        assert_eq!(cli.upload.summary.as_deref(), Some("三关五分钟"));
+        assert_eq!(cli.upload.cover, Some(PathBuf::from("cover.png")));
+        assert!(cli.upload.any_set());
+
+        let cli = Cli::try_parse_from(["playtest", "unlist", "brisk-otter-41"]).unwrap();
+        assert!(
+            matches!(cli.command, Some(Command::Unlist { slug, .. }) if slug == "brisk-otter-41")
+        );
     }
 
     #[test]

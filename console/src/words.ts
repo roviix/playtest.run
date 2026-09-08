@@ -131,6 +131,7 @@ const NAMES: Record<string, string> = {
   macos: "macOS",
   linux: "Linux",
   discord: "Discord",
+  plaza: "广场",
   direct: "直接打开",
   other: "其它",
 };

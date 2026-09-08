@@ -7,6 +7,7 @@
 //! - [`api`]：CLI 与控制面之间的请求 / 响应体。
 //! - [`ingest`]：玩家浏览器写进来的东西——SDK 的事件与反馈、边缘补送的第一层事件。
 //! - [`results`]：控制台读出来的东西——作品时间线、会话点名册、反馈流。
+//! - [`plaza`]：广场那一份 `plaza.json` 的形状——控制面写、边缘渲染（DESIGN §3.8）。
 //! - [`hash`]：内容哈希（SHA-256 小写十六进制）。
 //! - [`slug`]：slug 的校验与保留名单。
 //! - [`limits`]：匿名与免费档的配额常量，CLI 报错和 api 校验用同一份数字。
@@ -19,6 +20,7 @@ pub mod hash;
 pub mod ingest;
 pub mod limits;
 pub mod manifest;
+pub mod plaza;
 pub mod results;
 pub mod slug;
 pub mod store;

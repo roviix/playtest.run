@@ -49,6 +49,64 @@ pub struct FileEntry {
     pub size: u64,
 }
 
+/// 封面（DESIGN §3.3）。**不在 `files` 里**：它不是开发者目录的一部分，是清单单独的一条引用，
+/// 边缘在 `/_playtest/cover` 提供。这样开发者目录的字节一个不多一个不少（§3.7 最后一条）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Cover {
+    pub hash: String,
+    pub size: u64,
+    /// `image/png`、`image/jpeg` 或 `image/webp`，见 [`COVER_MIMES`]。
+    pub mime: String,
+}
+
+/// 封面认这三种。SVG 不收：它能带脚本，而封面会被贴到根域那一页上。
+pub const COVER_MIMES: &[&str] = &["image/png", "image/jpeg", "image/webp"];
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum CoverError {
+    #[error("封面的哈希格式不对")]
+    BadHash,
+    #[error("封面只能是 PNG、JPEG 或 WebP，这个是「{0}」")]
+    BadMime(String),
+    #[error("封面最多 {max} MB，这张有 {size} 字节")]
+    TooLarge { size: u64, max: u64 },
+    #[error("封面是空的")]
+    Empty,
+}
+
+/// 校验一条封面引用的形态。CLI 选文件时调用，api 收到清单时再调用一次。
+pub fn validate_cover(cover: &Cover) -> Result<(), CoverError> {
+    if !crate::hash::is_valid_hex(&cover.hash) {
+        return Err(CoverError::BadHash);
+    }
+    if !COVER_MIMES.contains(&cover.mime.as_str()) {
+        return Err(CoverError::BadMime(cover.mime.clone()));
+    }
+    if cover.size == 0 {
+        return Err(CoverError::Empty);
+    }
+    if cover.size > limits::MAX_COVER_BYTES {
+        return Err(CoverError::TooLarge {
+            size: cover.size,
+            max: limits::MAX_COVER_BYTES / limits::MIB,
+        });
+    }
+    Ok(())
+}
+
+/// 从文件开头几个字节认出图片类型。扩展名会骗人，魔数不会。
+pub fn sniff_image_mime(head: &[u8]) -> Option<&'static str> {
+    if head.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else if head.starts_with(b"\xff\xd8\xff") {
+        Some("image/jpeg")
+    } else if head.len() >= 12 && &head[0..4] == b"RIFF" && &head[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else {
+        None
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Manifest {
     pub schema: u32,
@@ -62,6 +120,12 @@ pub struct Manifest {
     /// 这版改了什么，可选，门禁页显示。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// 一句话介绍这个作品是什么（DESIGN §3.8），门禁页、分享卡片、广场卡片都用。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// 封面，见 [`Cover`]。没有就没有 `og:image`（DESIGN §3.3）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover: Option<Cover>,
     /// RFC 3339。
     pub created_at: String,
     /// 匿名链接到期时间，RFC 3339；登录用户的作品没有。
@@ -333,6 +397,8 @@ mod tests {
             title: "测试".into(),
             developer: "某某".into(),
             note: None,
+            summary: None,
+            cover: None,
             created_at: "2026-09-07T00:00:00Z".into(),
             expires_at: None,
             badge: true,
@@ -363,8 +429,81 @@ mod tests {
         let m: Manifest = serde_json::from_str(raw).unwrap();
         assert_eq!(m.engine, None);
         assert!(!m.is_game());
+        assert_eq!(m.summary, None);
+        assert_eq!(m.cover, None);
         // 没有引擎就不写这个字段，旧边缘读新清单也不会多出东西。
-        assert!(!serde_json::to_string(&m).unwrap().contains("engine"));
+        let json = serde_json::to_string(&m).unwrap();
+        assert!(!json.contains("engine"));
+        assert!(!json.contains("cover"));
+        assert!(!json.contains("summary"));
+    }
+
+    #[test]
+    fn cover_must_be_a_small_raster_image() {
+        let ok = Cover {
+            hash: "a".repeat(64),
+            size: 120_000,
+            mime: "image/png".into(),
+        };
+        assert_eq!(validate_cover(&ok), Ok(()));
+        for mime in ["image/jpeg", "image/webp"] {
+            assert_eq!(
+                validate_cover(&Cover {
+                    mime: mime.into(),
+                    ..ok.clone()
+                }),
+                Ok(()),
+                "{mime}"
+            );
+        }
+        // SVG 能带脚本，而封面会贴到根域那一页上。
+        assert!(matches!(
+            validate_cover(&Cover {
+                mime: "image/svg+xml".into(),
+                ..ok.clone()
+            }),
+            Err(CoverError::BadMime(_))
+        ));
+        assert!(matches!(
+            validate_cover(&Cover {
+                size: limits::MAX_COVER_BYTES + 1,
+                ..ok.clone()
+            }),
+            Err(CoverError::TooLarge { .. })
+        ));
+        assert_eq!(
+            validate_cover(&Cover {
+                size: 0,
+                ..ok.clone()
+            }),
+            Err(CoverError::Empty)
+        );
+        assert_eq!(
+            validate_cover(&Cover {
+                hash: "zz".into(),
+                ..ok
+            }),
+            Err(CoverError::BadHash)
+        );
+    }
+
+    #[test]
+    fn image_type_comes_from_the_bytes_not_the_name() {
+        assert_eq!(
+            sniff_image_mime(b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR"),
+            Some("image/png")
+        );
+        assert_eq!(
+            sniff_image_mime(b"\xff\xd8\xff\xe0\0\x10JFIF"),
+            Some("image/jpeg")
+        );
+        assert_eq!(
+            sniff_image_mime(b"RIFF\x24\x00\x00\x00WEBPVP8 "),
+            Some("image/webp")
+        );
+        assert_eq!(sniff_image_mime(b"<svg xmlns"), None);
+        assert_eq!(sniff_image_mime(b"GIF89a"), None);
+        assert_eq!(sniff_image_mime(b""), None);
     }
 
     #[test]

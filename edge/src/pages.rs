@@ -1,28 +1,13 @@
-//! 门禁页以外的几页：根域介绍、找不到、已过期、举报。
+//! 门禁页以外的几页：找不到、已过期、举报、流量用完。根域那一页在 `plaza.rs`。
 //!
 //! 都是我们自己渲染的完整 HTML，不是裸状态码——玩家拿到的是一条别人发给他的链接，
 //! 浏览器默认的错误页只会让他以为是自己的网络坏了。
 //!
-//! 除根域介绍页外，任何一页都不出现开发者域名（AGENTS 第 7 条）。
+//! 除根域（广场）外，任何一页都不出现开发者域名（AGENTS 第 7 条）。
 
-use playtest_common::{DEVELOPER_API_URL, RESERVED_PATH_PREFIX};
+use playtest_common::RESERVED_PATH_PREFIX;
 
 use crate::html::{esc, shell};
-
-/// 根域：一页极简介绍。这里是唯一允许把开发者引去品牌站的地方。
-pub fn root(host_suffix: &str) -> String {
-    let body = format!(
-        "<h1>playtest</h1>\n\
-<p class=\"lead\">把你手上这个能玩的版本，用一条命令放到别人面前，然后知道他们玩成了什么样。</p>\n\
-<pre><code>playtest ./dist</code></pre>\n\
-<p class=\"lead\">几秒钟拿到一个链接和一张二维码。拿到链接的人点开就能玩——不注册、不装东西、手机上也一样。\
-每个作品一个 <code>xxx.{suffix}</code>。</p>\n\
-<footer><a href=\"{dev}\">开发者从这里开始</a></footer>\n",
-        suffix = esc(host_suffix),
-        dev = DEVELOPER_API_URL,
-    );
-    shell("playtest · 一条命令，把这个版本放到别人面前", "", &body)
-}
 
 /// slug 不存在、被删了、或者压根不是一个合法的名字。
 /// 不区分「没有」和「已删除」：区分了就等于给人一个扫描哪些名字被占的接口。
@@ -117,8 +102,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_the_root_page_may_mention_the_brand_site() {
-        assert!(root("playtest.run").contains(DEVELOPER_API_URL));
+    fn no_page_here_may_mention_the_brand_site() {
+        // 玩家路径上唯一允许出现开发者域名的是根域的广场（`plaza.rs`），不在这里。
         for page in [
             not_found(),
             file_not_found(),
@@ -144,12 +129,6 @@ mod tests {
         for word in ["熔断", "配额", "风控", "封禁", "DDoS"] {
             assert!(!html.contains(word), "「{word}」不是给玩家看的词");
         }
-    }
-
-    #[test]
-    fn root_page_shows_the_real_suffix() {
-        assert!(root("localhost").contains("xxx.localhost"));
-        assert!(root("playtest.run").contains("xxx.playtest.run"));
     }
 
     #[test]

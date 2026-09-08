@@ -1,5 +1,5 @@
 use anyhow::Context;
-use playtest_api::{app, sweeper, AppState, Config};
+use playtest_api::{app, plaza, sweeper, AppState, Config};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -9,6 +9,9 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState::from_config(&config).await?;
     sweeper::spawn(state.clone());
     sweeper::spawn_blob_gc(state.clone());
+    // 起来先写一次广场：边缘读的是对象存储里的文件，控制面重启前的那份可能已经旧了。
+    plaza::publish(&state).await;
+    plaza::spawn_refresh(state.clone());
 
     let listener = tokio::net::TcpListener::bind(config.listen)
         .await

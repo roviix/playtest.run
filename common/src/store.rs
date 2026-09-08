@@ -201,6 +201,21 @@ impl FsStore {
         self.read_json(&current_key(slug)).await
     }
 
+    /// 广场那一份（DESIGN §3.8、§4.5）。控制面写、边缘读，和清单同一条路。
+    pub async fn put_plaza(&self, plaza: &crate::plaza::Plaza) -> Result<(), StoreError> {
+        let key = crate::plaza::KEY;
+        let data = serde_json::to_vec(plaza).map_err(|source| StoreError::BadJson {
+            key: key.to_string(),
+            source,
+        })?;
+        let path = self.path_of(key);
+        self.write_atomic(key, &path, &data).await
+    }
+
+    pub async fn get_plaza(&self) -> Result<Option<crate::plaza::Plaza>, StoreError> {
+        self.read_json(crate::plaza::KEY).await
+    }
+
     /// 删除一个作品的所有清单与指针。blob 是跨作品去重的，不在这里删（见 [`Self::referenced_hashes`] 与垃圾回收）。
     pub async fn remove_site(&self, slug: &str) -> Result<(), StoreError> {
         Self::check_slug(slug)?;
@@ -222,20 +237,35 @@ impl FsStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(out),
             Err(e) => return Err(Self::io("sites", e)),
         };
-        while let Some(site) = site_dirs.next_entry().await.map_err(|e| Self::io("sites", e))? {
+        while let Some(site) = site_dirs
+            .next_entry()
+            .await
+            .map_err(|e| Self::io("sites", e))?
+        {
             let manifests = site.path().join("manifests");
             let mut files = match tokio::fs::read_dir(&manifests).await {
                 Ok(d) => d,
                 Err(_) => continue,
             };
-            while let Some(f) = files.next_entry().await.map_err(|e| Self::io("manifests", e))? {
-                let Ok(bytes) = tokio::fs::read(f.path()).await else { continue };
+            while let Some(f) = files
+                .next_entry()
+                .await
+                .map_err(|e| Self::io("manifests", e))?
+            {
+                let Ok(bytes) = tokio::fs::read(f.path()).await else {
+                    continue;
+                };
                 // 解析不了的清单当作「引用了所有东西」不现实；跳过它，但绝不因此删 blob——
                 // 调用方在有解析失败时应放弃这一轮回收（见返回的 error）。
-                let m: Manifest = serde_json::from_slice(&bytes).map_err(|source| StoreError::BadJson {
-                    key: f.path().display().to_string(),
-                    source,
-                })?;
+                let m: Manifest =
+                    serde_json::from_slice(&bytes).map_err(|source| StoreError::BadJson {
+                        key: f.path().display().to_string(),
+                        source,
+                    })?;
+                // 封面不在 `files` 里，但同样是一个 blob（DESIGN §3.3）：漏了它，回收会把封面删掉。
+                if let Some(cover) = m.cover {
+                    out.insert(cover.hash);
+                }
                 out.extend(m.files.into_iter().map(|e| e.hash));
             }
         }
@@ -251,7 +281,11 @@ impl FsStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(out),
             Err(e) => return Err(Self::io("blobs", e)),
         };
-        while let Some(shard) = shards.next_entry().await.map_err(|e| Self::io("blobs", e))? {
+        while let Some(shard) = shards
+            .next_entry()
+            .await
+            .map_err(|e| Self::io("blobs", e))?
+        {
             let mut files = match tokio::fs::read_dir(shard.path()).await {
                 Ok(d) => d,
                 Err(_) => continue,
@@ -335,6 +369,8 @@ mod tests {
             title: "测试作品".into(),
             developer: "匿名开发者".into(),
             note: None,
+            summary: None,
+            cover: None,
             created_at: "2026-09-07T00:00:00Z".into(),
             expires_at: None,
             badge: true,
@@ -348,6 +384,38 @@ mod tests {
                 size: 11,
             }],
         }
+    }
+
+    #[tokio::test]
+    async fn cover_counts_as_referenced() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FsStore::new(dir.path());
+        let mut m = sample_manifest("brisk-otter-41", 1);
+        let cover_hash = hash_bytes(b"\x89PNG fake");
+        m.cover = Some(crate::manifest::Cover {
+            hash: cover_hash.clone(),
+            size: 9,
+            mime: "image/png".into(),
+        });
+        store.put_manifest(&m).await.unwrap();
+        let referenced = store.referenced_hashes().await.unwrap();
+        assert!(referenced.contains(&cover_hash), "封面的 blob 不能被回收");
+        assert!(referenced.contains(&m.files[0].hash));
+    }
+
+    #[tokio::test]
+    async fn plaza_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FsStore::new(dir.path());
+        assert!(store.get_plaza().await.unwrap().is_none());
+        let plaza = crate::plaza::Plaza {
+            schema: crate::plaza::SCHEMA,
+            generated_at: "2026-09-08T00:00:00Z".into(),
+            items: vec![],
+        };
+        store.put_plaza(&plaza).await.unwrap();
+        assert_eq!(store.get_plaza().await.unwrap(), Some(plaza));
+        assert!(dir.path().join("plaza.json").is_file());
     }
 
     #[tokio::test]

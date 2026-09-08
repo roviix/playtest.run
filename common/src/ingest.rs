@@ -247,13 +247,18 @@ fn browser_of(ua: &str) -> &'static str {
 }
 
 /// 来自哪里。尽力而为：referrer 本身脏，微信常常一个字都不发，所以 UA 里认出微信就以它为准。
-pub fn referrer_kind(referer: &str, wechat: bool) -> &'static str {
+///
+/// `plaza_host` 是广场所在的根域（如 `playtest.run`，本机是 `localhost`），从那里点进来的
+/// 记成 `plaza`——开发者据此知道广场有没有真的给他带来人（DESIGN §3.8、§8 T9）。
+pub fn referrer_kind(referer: &str, wechat: bool, plaza_host: &str) -> &'static str {
     if wechat {
         return "wechat";
     }
     let host = host_of(referer);
     if host.is_empty() {
         "direct"
+    } else if !plaza_host.is_empty() && host.eq_ignore_ascii_case(plaza_host) {
+        "plaza"
     } else if host.contains("discord") {
         "discord"
     } else if host.contains("weixin") || host.contains("wechat") || host.ends_with("qq.com") {
@@ -350,21 +355,37 @@ mod tests {
 
     #[test]
     fn referrer_is_best_effort() {
-        assert_eq!(referrer_kind("", false), "direct");
-        assert_eq!(referrer_kind("", true), "wechat");
+        const ROOT: &str = "playtest.run";
+        assert_eq!(referrer_kind("", false, ROOT), "direct");
+        assert_eq!(referrer_kind("", true, ROOT), "wechat");
         assert_eq!(
-            referrer_kind("https://discord.com/channels/1/2", false),
+            referrer_kind("https://discord.com/channels/1/2", false, ROOT),
             "discord"
         );
         assert_eq!(
-            referrer_kind("https://mp.weixin.qq.com/s/abc", false),
+            referrer_kind("https://mp.weixin.qq.com/s/abc", false, ROOT),
             "wechat"
         );
         assert_eq!(
-            referrer_kind("https://news.ycombinator.com/", false),
+            referrer_kind("https://news.ycombinator.com/", false, ROOT),
             "other"
         );
-        assert_eq!(referrer_kind("垃圾", false), "direct");
+        assert_eq!(referrer_kind("垃圾", false, ROOT), "direct");
+        // 从广场点进来的（DESIGN §3.8）：Referer 是根域本身。子域不算——那是作品自己。
+        assert_eq!(referrer_kind("https://playtest.run/", false, ROOT), "plaza");
+        assert_eq!(
+            referrer_kind("https://PLAYTEST.run/?f=seeking", false, ROOT),
+            "plaza"
+        );
+        assert_eq!(
+            referrer_kind("http://localhost:8443/", false, "localhost"),
+            "plaza"
+        );
+        assert_eq!(
+            referrer_kind("https://other.playtest.run/", false, ROOT),
+            "other"
+        );
+        assert_eq!(referrer_kind("https://playtest.run/", false, ""), "other");
         assert!(is_self_referral(
             "https://brisk-otter-41.playtest.run/",
             "brisk-otter-41"

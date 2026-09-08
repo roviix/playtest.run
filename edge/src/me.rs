@@ -115,6 +115,8 @@ mod tests {
             title: "小球".into(),
             developer: "匿名开发者".into(),
             note: None,
+            summary: None,
+            cover: None,
             created_at: "2026-09-07T04:00:00Z".into(),
             expires_at: None,
             badge: true,

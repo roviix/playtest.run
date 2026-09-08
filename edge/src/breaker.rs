@@ -229,6 +229,8 @@ mod tests {
             title: "测试".into(),
             developer: "某某".into(),
             note: None,
+            summary: None,
+            cover: None,
             created_at: "2026-09-07T00:00:00Z".into(),
             expires_at: expires_at.map(str::to_string),
             badge: true,

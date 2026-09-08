@@ -14,6 +14,7 @@ use tokio::sync::{Mutex, MutexGuard};
 const MIGRATIONS: &[&str] = &[
     include_str!("migrations/001_init.sql"),
     include_str!("migrations/002_sessions_events_feedback.sql"),
+    include_str!("migrations/003_plaza.sql"),
 ];
 
 pub struct Db {
@@ -151,9 +152,56 @@ pub struct SiteRow {
     pub created_at: String,
     pub expires_at: Option<String>,
     pub current_version: Option<u32>,
+    pub listing: ListingRow,
 }
 
-const SITE_COLUMNS: &str = "slug, title, created_at, expires_at, current_version";
+/// 广场相关的那几列（DESIGN §3.8、迁移 003）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ListingRow {
+    pub public: bool,
+    pub seeking: bool,
+    pub seek_note: Option<String>,
+    pub summary: Option<String>,
+    pub cover_hash: Option<String>,
+    pub cover_mime: Option<String>,
+    pub engine: Option<String>,
+    pub updated_at: Option<String>,
+    pub hidden_at: Option<String>,
+    pub hidden_reason: Option<String>,
+    /// 人工复核恢复的时间；自动撤下只数它之后的举报。
+    pub reviewed_at: Option<String>,
+}
+
+const SITE_COLUMN_NAMES: &[&str] = &[
+    "slug",
+    "title",
+    "created_at",
+    "expires_at",
+    "current_version",
+    "public",
+    "seeking",
+    "seek_note",
+    "summary",
+    "cover_hash",
+    "cover_mime",
+    "engine",
+    "updated_at",
+    "hidden_at",
+    "hidden_reason",
+    "reviewed_at",
+];
+
+const SITE_COLUMNS: &str = "slug, title, created_at, expires_at, current_version, \
+    public, seeking, seek_note, summary, cover_hash, cover_mime, engine, updated_at, hidden_at, hidden_reason, reviewed_at";
+
+/// 同一组列，带表别名——和别的表 JOIN 时 `created_at` / `expires_at` 会重名。
+fn site_columns(prefix: &str) -> String {
+    SITE_COLUMN_NAMES
+        .iter()
+        .map(|c| format!("{prefix}{c}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
 fn site_from_row(row: &Row<'_>) -> rusqlite::Result<SiteRow> {
     Ok(SiteRow {
@@ -162,6 +210,19 @@ fn site_from_row(row: &Row<'_>) -> rusqlite::Result<SiteRow> {
         created_at: row.get(2)?,
         expires_at: row.get(3)?,
         current_version: row.get(4)?,
+        listing: ListingRow {
+            public: row.get::<_, i64>(5)? != 0,
+            seeking: row.get::<_, i64>(6)? != 0,
+            seek_note: row.get(7)?,
+            summary: row.get(8)?,
+            cover_hash: row.get(9)?,
+            cover_mime: row.get(10)?,
+            engine: row.get(11)?,
+            updated_at: row.get(12)?,
+            hidden_at: row.get(13)?,
+            hidden_reason: row.get(14)?,
+            reviewed_at: row.get(15)?,
+        },
     })
 }
 
@@ -328,6 +389,17 @@ pub fn record_blob(
     Ok(())
 }
 
+/// 索引里记着的大小；不在索引里就是 `None`。
+pub fn blob_size(conn: &Connection, hash: &str) -> rusqlite::Result<Option<u64>> {
+    conn.query_row(
+        "SELECT size FROM blobs WHERE hash = ?1",
+        params![hash],
+        |row| row.get::<_, i64>(0),
+    )
+    .optional()
+    .map(|size| size.map(|s| s as u64))
+}
+
 /// blob 被回收之后把记录也删掉，下次同样的文件再来时 `missing` 里要有它。
 pub fn delete_blob(conn: &Connection, hash: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM blobs WHERE hash = ?1", params![hash])?;
@@ -346,7 +418,10 @@ pub fn delete_sessions_before(conn: &mut Connection, before: &str) -> rusqlite::
         "DELETE FROM feedback WHERE session_id IN (SELECT id FROM sessions WHERE last_seen_at < ?1)",
         params![before],
     )?;
-    let sessions = tx.execute("DELETE FROM sessions WHERE last_seen_at < ?1", params![before])?;
+    let sessions = tx.execute(
+        "DELETE FROM sessions WHERE last_seen_at < ?1",
+        params![before],
+    )?;
     tx.commit()?;
     Ok(sessions)
 }
@@ -387,6 +462,195 @@ pub fn commit_version(
         params![upload_id],
     )?;
     tx.commit()
+}
+
+/// 一个作品发过的每一版，新的在前。
+pub fn list_versions(conn: &Connection, slug: &str) -> rusqlite::Result<Vec<VersionRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT version, created_at, note, file_count, total_bytes
+           FROM versions WHERE slug = ?1 ORDER BY version DESC",
+    )?;
+    let rows = stmt.query_map(params![slug], |row| {
+        Ok(VersionRow {
+            version: row.get::<_, i64>(0)? as u32,
+            created_at: row.get(1)?,
+            note: row.get(2)?,
+            file_count: row.get::<_, i64>(3)? as u32,
+            total_bytes: row.get::<_, i64>(4)? as u64,
+        })
+    })?;
+    rows.collect()
+}
+
+pub struct VersionRow {
+    pub version: u32,
+    pub created_at: String,
+    pub note: Option<String>,
+    pub file_count: u32,
+    pub total_bytes: u64,
+}
+
+/// 下一版是几：按发过的最大版本号加一，不看「当前版本」——回滚会把指针指回去，版本号不能跟着倒退。
+pub fn next_version(conn: &Connection, slug: &str) -> rusqlite::Result<u32> {
+    let max: Option<i64> = conn.query_row(
+        "SELECT MAX(version) FROM versions WHERE slug = ?1",
+        params![slug],
+        |row| row.get(0),
+    )?;
+    Ok(max.unwrap_or(0) as u32 + 1)
+}
+
+pub fn version_exists(conn: &Connection, slug: &str, version: u32) -> rusqlite::Result<bool> {
+    conn.query_row(
+        "SELECT 1 FROM versions WHERE slug = ?1 AND version = ?2",
+        params![slug, version],
+        |_| Ok(()),
+    )
+    .optional()
+    .map(|found| found.is_some())
+}
+
+/// 回滚只动指针这一列；版本行不动，所以「下一版是第几版」仍按最大版本号加一，不会撞。
+pub fn set_current_version(conn: &Connection, slug: &str, version: u32) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE sites SET current_version = ?2 WHERE slug = ?1",
+        params![slug, version],
+    )?;
+    Ok(())
+}
+
+// ---- 广场（DESIGN §3.8） ----
+
+/// 提交一个版本时，把清单里广场要用的几样抄到 sites 上：一句话介绍、封面、引擎、更新时间。
+/// `summary` / `cover` 传 `None` 表示这一版没给，沿用上一版的（COALESCE）。
+pub fn record_version_meta(
+    conn: &Connection,
+    slug: &str,
+    summary: Option<&str>,
+    cover: Option<(&str, &str)>,
+    engine: Option<&str>,
+    updated_at: &str,
+) -> rusqlite::Result<()> {
+    let (cover_hash, cover_mime) = match cover {
+        Some((hash, mime)) => (Some(hash), Some(mime)),
+        None => (None, None),
+    };
+    conn.execute(
+        "UPDATE sites SET
+             summary    = COALESCE(?2, summary),
+             cover_hash = COALESCE(?3, cover_hash),
+             cover_mime = COALESCE(?4, cover_mime),
+             engine     = ?5,
+             updated_at = ?6
+         WHERE slug = ?1",
+        params![slug, summary, cover_hash, cover_mime, engine, updated_at],
+    )?;
+    Ok(())
+}
+
+/// 开发者改广场状态：只改传了的。`seek_note` 是 `Some(None)` 时清掉。
+pub fn update_listing(
+    conn: &Connection,
+    slug: &str,
+    public: Option<bool>,
+    seeking: Option<bool>,
+    seek_note: Option<Option<&str>>,
+) -> rusqlite::Result<()> {
+    if let Some(public) = public {
+        conn.execute(
+            "UPDATE sites SET public = ?2 WHERE slug = ?1",
+            params![slug, public as i64],
+        )?;
+    }
+    if let Some(seeking) = seeking {
+        conn.execute(
+            "UPDATE sites SET seeking = ?2 WHERE slug = ?1",
+            params![slug, seeking as i64],
+        )?;
+    }
+    if let Some(note) = seek_note {
+        conn.execute(
+            "UPDATE sites SET seek_note = ?2 WHERE slug = ?1",
+            params![slug, note],
+        )?;
+    }
+    Ok(())
+}
+
+/// 从广场上撤下（举报到阈值或我们手工）。作品链接不受影响。已经撤下的不改时间。
+pub fn hide_from_plaza(
+    conn: &Connection,
+    slug: &str,
+    at: &str,
+    reason: &str,
+) -> rusqlite::Result<bool> {
+    let changed = conn.execute(
+        "UPDATE sites SET hidden_at = ?2, hidden_reason = ?3 WHERE slug = ?1 AND hidden_at IS NULL",
+        params![slug, at, reason],
+    )?;
+    Ok(changed > 0)
+}
+
+/// 人工复核后恢复。记下复核时间：之前的举报不再算数，否则同一批举报会把它立刻再撤一次。
+pub fn unhide_from_plaza(conn: &Connection, slug: &str, reviewed_at: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE sites SET hidden_at = NULL, hidden_reason = NULL, reviewed_at = ?2 WHERE slug = ?1",
+        params![slug, reviewed_at],
+    )?;
+    Ok(())
+}
+
+/// 广场上该出现的作品：开发者公开了、没被撤下、没删、有版本、主人没到期。
+/// 带上开发者的显示名；排序交给调用方（它还要合上人数）。
+pub struct PlazaCandidate {
+    pub site: SiteRow,
+    pub developer: String,
+}
+
+pub fn plaza_candidates(conn: &Connection, now: &str) -> rusqlite::Result<Vec<PlazaCandidate>> {
+    let sql = format!(
+        "SELECT {}, u.display_name
+           FROM sites s JOIN users u ON u.id = s.user_id
+          WHERE s.public = 1 AND s.hidden_at IS NULL AND s.deleted_at IS NULL
+            AND s.current_version IS NOT NULL
+            AND (u.expires_at IS NULL OR u.expires_at > ?1)",
+        site_columns("s.")
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![now], |row| {
+        Ok(PlazaCandidate {
+            site: site_from_row(row)?,
+            // 开发者名字跟在作品的那组列后面。
+            developer: row.get(SITE_COLUMN_NAMES.len())?,
+        })
+    })?;
+    rows.collect()
+}
+
+/// 每个作品在 `since` 之后点了「开始」的去重人数（DESIGN §3.8「N 人玩过」）。
+pub fn players_since(
+    conn: &Connection,
+    since: &str,
+) -> rusqlite::Result<std::collections::HashMap<String, u32>> {
+    let mut stmt = conn.prepare(
+        "SELECT slug, COUNT(DISTINCT id) FROM sessions
+          WHERE start_at IS NOT NULL AND start_at >= ?1 GROUP BY slug",
+    )?;
+    let rows = stmt.query_map(params![since], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as u32))
+    })?;
+    rows.collect()
+}
+
+/// 一个作品在 `since` 之后被几个不同会话举报过（自动撤下的依据，DESIGN §3.8）。
+pub fn report_count(conn: &Connection, slug: &str, since: &str) -> rusqlite::Result<u32> {
+    conn.query_row(
+        "SELECT COUNT(DISTINCT session_id) FROM session_events
+          WHERE slug = ?1 AND source = 'edge' AND kind = 'report' AND ts >= ?2",
+        params![slug, since],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|n| n as u32)
 }
 
 #[cfg(test)]

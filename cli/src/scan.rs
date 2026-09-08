@@ -17,6 +17,7 @@ const CHUNK_BYTES: usize = 64 * 1024;
 /// 同时算几个文件的哈希。多数导出物是几十上百个小文件，并行主要省的是系统调用的往返。
 const HASH_CONCURRENCY: usize = 8;
 
+#[derive(Debug, Clone)]
 pub struct ScannedFile {
     pub entry: FileEntry,
     /// 本机上的绝对路径，上传的时候按它读。

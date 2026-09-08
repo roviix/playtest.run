@@ -10,7 +10,7 @@ use axum::Router;
 use playtest_api::{app, AppState, Config};
 use playtest_common::api::{
     routes as paths, AnonSessionResponse, CommitUploadResponse, CreateSiteRequest, ErrorBody,
-    ErrorCode, PrepareUploadRequest, PrepareUploadResponse, Site,
+    ErrorCode, PrepareUploadRequest, PrepareUploadResponse, Site, VersionList,
 };
 use playtest_common::hash;
 use playtest_common::manifest::{FileEntry, GateMode};
@@ -185,6 +185,8 @@ fn prepare_request(files: Vec<FileEntry>) -> PrepareUploadRequest {
         files,
         title: Some("小球".to_string()),
         note: Some("第一版：能动了".to_string()),
+        summary: None,
+        cover: None,
         gate: GateMode::Once,
         isolated: true,
         spa: false,
@@ -324,6 +326,82 @@ async fn anonymous_upload_reaches_v2() {
     let mine: Vec<Site> = h.get(paths::SITES, &token).await.json();
     assert_eq!(mine.len(), 1);
     assert_eq!(mine[0].slug, site.slug);
+
+    // 版本列表：新的在前，标出当前。
+    let list: VersionList = h
+        .get(&paths::site_versions(&site.slug), &token)
+        .await
+        .json();
+    assert_eq!(list.current_version, Some(2));
+    assert_eq!(
+        list.versions.iter().map(|v| v.version).collect::<Vec<_>>(),
+        [2, 1]
+    );
+    assert!(list.versions[0].current && !list.versions[1].current);
+    assert_eq!(list.versions[1].note.as_deref(), Some("第一版：能动了"));
+
+    // 回滚到 v1：指针动了，清单没动，玩家立刻看到 v1。
+    let rolled: Site = h
+        .post(
+            &paths::site_version_activate(&site.slug, 1),
+            Some(&token),
+            &serde_json::json!({}),
+        )
+        .await
+        .json();
+    assert_eq!(rolled.current_version, Some(1));
+    assert_eq!(
+        h.store
+            .get_current(&site.slug)
+            .await
+            .unwrap()
+            .unwrap()
+            .version,
+        1
+    );
+    assert!(
+        h.store.get_manifest(&site.slug, 2).await.unwrap().is_some(),
+        "回滚不删任何版本"
+    );
+
+    // 回滚到不存在的版本：说清楚。
+    let nope = h
+        .post(
+            &paths::site_version_activate(&site.slug, 9),
+            Some(&token),
+            &serde_json::json!({}),
+        )
+        .await;
+    let body = nope.error(StatusCode::NOT_FOUND, ErrorCode::NotFound);
+    assert!(body.message.contains("v9"), "{}", body.message);
+
+    // 回滚之后再发一版：是 v3，不是 v2——版本号只增不减，否则会话与反馈按版本归档就乱了。
+    let third: PrepareUploadResponse = h
+        .post(
+            &paths::site_uploads(&site.slug),
+            Some(&token),
+            &prepare_request(files.clone()),
+        )
+        .await
+        .json();
+    let v3: CommitUploadResponse = h
+        .post(
+            &paths::site_upload_commit(&site.slug, &third.upload_id),
+            Some(&token),
+            &serde_json::json!({}),
+        )
+        .await
+        .json();
+    assert_eq!(v3.version, 3);
+    assert_eq!(
+        h.store
+            .get_current(&site.slug)
+            .await
+            .unwrap()
+            .unwrap()
+            .version,
+        3
+    );
 
     h.assert_no_leftovers();
 }
@@ -706,14 +784,25 @@ async fn orphaned_blobs_are_collected_but_never_live_ones() {
     let only_b = entry("game.js", b"console.log('b')");
     let a = h.new_site(&token).await;
     let b = h.new_site(&token).await;
-    for (site, files) in [(&a, vec![shared.clone()]), (&b, vec![shared.clone(), only_b.clone()])] {
+    for (site, files) in [
+        (&a, vec![shared.clone()]),
+        (&b, vec![shared.clone(), only_b.clone()]),
+    ] {
         let prepared: PrepareUploadResponse = h
-            .post(&paths::site_uploads(&site.slug), Some(&token), &prepare_request(files.clone()))
+            .post(
+                &paths::site_uploads(&site.slug),
+                Some(&token),
+                &prepare_request(files.clone()),
+            )
             .await
             .json();
         for f in &files {
             if prepared.missing.contains(&f.hash) {
-                let bytes: &[u8] = if f.path == "index.html" { INDEX_HTML } else { b"console.log('b')" };
+                let bytes: &[u8] = if f.path == "index.html" {
+                    INDEX_HTML
+                } else {
+                    b"console.log('b')"
+                };
                 h.put_bytes(&paths::blob(&f.hash), &token, bytes).await;
             }
         }
@@ -727,7 +816,8 @@ async fn orphaned_blobs_are_collected_but_never_live_ones() {
     }
     // 还有一个谁都没提交过的 blob（上传了一半的人）。
     let dangling = entry("stray.bin", b"nobody committed me");
-    h.put_bytes(&paths::blob(&dangling.hash), &token, b"nobody committed me").await;
+    h.put_bytes(&paths::blob(&dangling.hash), &token, b"nobody committed me")
+        .await;
 
     // 把三个 blob 的修改时间都拨到两天前，否则「落盘不到一天」的保护会让什么都不删。
     let two_days_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 86400);
@@ -738,23 +828,37 @@ async fn orphaned_blobs_are_collected_but_never_live_ones() {
     }
 
     // 两个作品都活着：只有那个没人提交的 blob 该被回收。
-    let (removed, _) = playtest_api::sweeper::collect_blobs(&h.state).await.unwrap();
+    let (removed, _) = playtest_api::sweeper::collect_blobs(&h.state)
+        .await
+        .unwrap();
     assert_eq!(removed, 1);
     assert!(!h.store.has_blob(&dangling.hash).await.unwrap());
     assert!(h.store.has_blob(&shared.hash).await.unwrap());
     assert!(h.store.has_blob(&only_b.hash).await.unwrap());
 
     // 删掉作品 B：它独有的 game.js 变成孤儿，index.html 仍被 A 引用。
-    h.request("DELETE", &paths::site(&b.slug), Some(&token), Body::empty(), false)
-        .await;
-    let (removed, _) = playtest_api::sweeper::collect_blobs(&h.state).await.unwrap();
+    h.request(
+        "DELETE",
+        &paths::site(&b.slug),
+        Some(&token),
+        Body::empty(),
+        false,
+    )
+    .await;
+    let (removed, _) = playtest_api::sweeper::collect_blobs(&h.state)
+        .await
+        .unwrap();
     assert_eq!(removed, 1);
     assert!(!h.store.has_blob(&only_b.hash).await.unwrap());
     assert!(h.store.has_blob(&shared.hash).await.unwrap(), "A 还在用它");
 
     // 回收过的 blob 再上传时，控制面要重新说「缺」——库里的记录也删了。
     let prepared: PrepareUploadResponse = h
-        .post(&paths::site_uploads(&a.slug), Some(&token), &prepare_request(vec![shared.clone(), only_b.clone()]))
+        .post(
+            &paths::site_uploads(&a.slug),
+            Some(&token),
+            &prepare_request(vec![shared.clone(), only_b.clone()]),
+        )
         .await
         .json();
     assert_eq!(prepared.missing, vec![only_b.hash.clone()]);
