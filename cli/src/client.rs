@@ -7,7 +7,7 @@ use std::time::Duration;
 use futures_util::TryStreamExt;
 use playtest_common::api::{
     routes, AnonSessionResponse, CommitUploadResponse, CreateSiteRequest, ErrorBody, ErrorCode,
-    PrepareUploadRequest, PrepareUploadResponse, Site, UpdateSiteRequest,
+    PrepareUploadRequest, PrepareUploadResponse, Site, UpdateSiteRequest, VersionList,
 };
 use playtest_common::tunnel::{TunnelGrant, TunnelRequest};
 use reqwest::header::AUTHORIZATION;
@@ -203,6 +203,27 @@ impl Client {
         let response = self
             .request(Method::PATCH, &routes::site(slug))
             .json(request)
+            .send()
+            .await
+            .map_err(|e| self.transport(e))?;
+        self.read_json(response).await
+    }
+
+    /// 发过的每一版，新的在前。
+    pub async fn list_versions(&self, slug: &str) -> Result<VersionList> {
+        let response = self
+            .request(Method::GET, &routes::site_versions(slug))
+            .send()
+            .await
+            .map_err(|e| self.transport(e))?;
+        self.read_json(response).await
+    }
+
+    /// 让玩家看到的换回某一版（DESIGN §3.5）。
+    pub async fn activate_version(&self, slug: &str, version: u32) -> Result<Site> {
+        let response = self
+            .request(Method::POST, &routes::site_version_activate(slug, version))
+            .json(&serde_json::json!({}))
             .send()
             .await
             .map_err(|e| self.transport(e))?;

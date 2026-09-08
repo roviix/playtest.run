@@ -85,7 +85,8 @@ pub struct View<'a> {
 
 pub fn render(view: &View<'_>) -> String {
     let suffix = esc(view.host_suffix);
-    let head = "<meta name=\"description\" content=\"正在找人试玩的作品。点开就能玩，不用注册、不用安装。\">\n\
+    let head =
+        "<meta name=\"description\" content=\"正在找人试玩的作品。点开就能玩，不用注册。\">\n\
 <meta property=\"og:title\" content=\"playtest · 正在找人试玩的作品\">\n\
 <meta property=\"og:description\" content=\"开发者把手上能玩的版本放到这里，路过的人点开就玩。\">\n\
 <meta property=\"og:type\" content=\"website\">\n";
@@ -95,26 +96,19 @@ pub fn render(view: &View<'_>) -> String {
         tiles.push_str(&tile(item, view.now));
     }
     let grid = if view.plaza.items.is_empty() {
-        "<section class=\"empty-plaza\"><p>现在广场上还没有作品。</p>\
-<p class=\"lead\">开发者在自己的作品上加一句 <code>--public</code>，它就会出现在这里。</p></section>\n"
+        "<section class=\"empty-plaza\"><p>广场上还没有作品。</p>\
+<p class=\"lead\"><code>playtest ./dist --public</code> 会把作品放到这里。</p></section>\n"
             .to_string()
     } else {
         format!("<main class=\"grid\" id=\"pt-grid\">\n{tiles}</main>\n")
     };
 
-    let generated = match OffsetDateTime::parse(&view.plaza.generated_at, &Rfc3339) {
-        Ok(at) => format!(
-            "人数更新于 <time datetime=\"{}\">{}</time> · ",
-            esc(&view.plaza.generated_at),
-            esc(&relative(at, view.now))
-        ),
-        Err(_) => String::new(),
-    };
-
+    // 页脚一行说完，但该如实说的都在（DESIGN §3.8）：只放主动公开的、不排名次、
+    // 「想玩」只在本机、登录未上线所以只有 24 小时作品。多余的解释一个字不留。
     let body = format!(
         "<header class=\"top\">\n\
 <a class=\"brand\" href=\"/\">playtest<span>.run</span></a>\n\
-<p class=\"tagline\">正在找人试玩的作品。点开就能玩——不注册、不安装，手机上也一样。</p>\n\
+<p class=\"tagline\">正在找人试玩的作品，点开就玩。</p>\n\
 </header>\n\
 <nav class=\"bar\" id=\"pt-bar\" hidden>\n\
 <div class=\"filters\" role=\"group\" aria-label=\"筛选\">\
@@ -122,20 +116,17 @@ pub fn render(view: &View<'_>) -> String {
 <button type=\"button\" class=\"chip\" data-f=\"seeking\">正在找人测</button>\
 <button type=\"button\" class=\"chip\" data-f=\"game\">游戏</button>\
 <button type=\"button\" class=\"chip\" data-f=\"other\">体验</button>\
-<button type=\"button\" class=\"chip\" data-f=\"want\">我想玩的</button></div>\n\
+<button type=\"button\" class=\"chip\" data-f=\"want\">想玩的</button></div>\n\
 <div class=\"sorts\" role=\"group\" aria-label=\"排序\">\
 <button type=\"button\" class=\"chip on\" data-s=\"updated\">最近更新</button>\
 <button type=\"button\" class=\"chip\" data-s=\"players\">最多人玩</button></div>\n\
 </nav>\n\
 {grid}\
 <footer class=\"page-foot\">\n\
-<p>这里只有开发者自己放上来的作品，按时间排，不排名次。「N 人玩过」是最近 {days} 天里真的点了「开始」的人数。\
-「想玩」只记在这台设备上，换一台就没有。</p>\n\
-<p>登录还没做好，所以现在广场上只有 24 小时内的作品——到期自动下来。</p>\n\
-<p>{generated}每个作品一个 <code>xxx.{suffix}</code> · <a href=\"{dev}\">开发者从这里开始</a></p>\n\
+<p>只放开发者主动公开的作品，按时间排 · 「想玩」只记在这台设备 · 登录未上线，作品最多停留 24 小时</p>\n\
+<p><code>xxx.{suffix}</code> · <a href=\"{dev}\">开发者从这里开始</a></p>\n\
 </footer>\n\
 <script nonce=\"{nonce}\">{SCRIPT}</script>\n",
-        days = PLAYERS_WINDOW_DAYS,
         dev = DEVELOPER_API_URL,
         nonce = esc(view.nonce),
     );
@@ -152,7 +143,6 @@ fn tile(item: &PlazaItem, now: OffsetDateTime) -> String {
     };
     let title = esc(&item.title);
     let developer = esc(&item.developer);
-    let kind = if item.is_game { "游戏" } else { "体验" };
 
     let cover = match &item.cover_url {
         Some(cover) => format!(
@@ -165,8 +155,10 @@ fn tile(item: &PlazaItem, now: OffsetDateTime) -> String {
             hue(&item.slug)
         ),
     };
+    // 卡片上只有「正在找人测」一个标——它是行动的邀请。「游戏 / 体验」只做筛选的依据
+    // （data-game），不占卡面：邀请函上不写品类。
     let seek_chip = if item.seeking {
-        "<span class=\"chip seek\">正在找人测</span>"
+        "<span class=\"badge\">正在找人测</span>"
     } else {
         ""
     };
@@ -185,12 +177,15 @@ fn tile(item: &PlazaItem, now: OffsetDateTime) -> String {
         .map(str::trim)
         .filter(|s| item.seeking && !s.is_empty())
     {
-        Some(s) => format!("<p class=\"seek-note\"><b>想让你看：</b>{}</p>\n", esc(s)),
+        Some(s) => format!("<p class=\"seek-note\">{}</p>\n", esc(s)),
         None => String::new(),
     };
+    // 0 就不说：「还没人玩过」是一句替作品道歉的话（DESIGN §3.4 的规矩在这里同样成立）。
     let players = match item.players {
-        0 => "还没人玩过".to_string(),
-        n => format!("{n} 人玩过"),
+        0 => String::new(),
+        n => format!(
+            "<span title=\"最近 {PLAYERS_WINDOW_DAYS} 天里点了「开始」的人数\">{n} 人玩过</span>"
+        ),
     };
     let expires = item
         .expires_at
@@ -202,11 +197,11 @@ fn tile(item: &PlazaItem, now: OffsetDateTime) -> String {
     format!(
         "<article class=\"tile\" data-slug=\"{slug}\" data-seeking=\"{seeking}\" data-game=\"{game}\" \
 data-players=\"{players_n}\" data-updated=\"{updated}\">\n\
-<a class=\"cover-link\" href=\"{url}\">{cover}<span class=\"chips\">{seek_chip}<span class=\"chip\">{kind}</span></span></a>\n\
+<a class=\"cover-link\" href=\"{url}\">{cover}{seek_chip}</a>\n\
 <div class=\"tile-body\">\n\
-<h2><a href=\"{url}\">{title}</a></h2>\n\
+<h2><a href=\"{url}\">{title}</a><span class=\"v\">v{version}</span></h2>\n\
 {summary}{seek_note}\
-<p class=\"meta\"><span>{developer}</span><span>v{version}</span><span>{players}</span>{expires}</p>\n\
+<p class=\"meta\"><span>{developer}</span>{players}{expires}</p>\n\
 <div class=\"actions\"><button type=\"button\" class=\"want\" data-slug=\"{slug}\" aria-pressed=\"false\">想玩</button>\
 <a class=\"report\" href=\"{url}{prefix}report\">举报</a></div>\n\
 </div>\n</article>\n",
@@ -243,68 +238,66 @@ fn remaining(expires: OffsetDateTime, now: OffsetDateTime) -> String {
     }
 }
 
-/// 「3 分钟前」。
-fn relative(at: OffsetDateTime, now: OffsetDateTime) -> String {
-    let ago = now - at;
-    let minutes = ago.whole_minutes();
-    if minutes < 1 {
-        "刚刚".to_string()
-    } else if minutes < 60 {
-        format!("{minutes} 分钟前")
-    } else if ago.whole_hours() < 24 {
-        format!("{} 小时前", ago.whole_hours())
-    } else {
-        format!("{} 天前", ago.whole_days())
-    }
-}
-
 /// 广场自己的那段样式，接在共用样式后面。手机一列、平板两列、桌面三到四列。
+///
+/// 形态是「邀请墙」不是商店（DESIGN §3.8）：卡片几乎没有框，封面出血到边，
+/// 元数据用等宽小字排出工具感，唯一的颜色留给「正在找人测」。质感来自排版层次、
+/// 极淡的点阵底纹和 hover 时封面的呼吸，不来自更多的框和更多的字。
 const PLAZA_CSS: &str = "\
-body.page{display:block;padding:0 0 40px}\
-.top{max-width:76rem;margin:0 auto;padding:34px 20px 8px}\
-.brand{display:inline-block;font-size:1.35rem;font-weight:700;letter-spacing:-.02em;color:var(--fg);text-decoration:none}\
+body.page{display:block;padding:0 0 48px;\
+background:radial-gradient(60% 32% at 50% 0%,#141824 0%,rgba(20,24,36,0) 100%),\
+radial-gradient(rgba(255,255,255,.028) 1px,transparent 1.5px) 0 0/26px 26px,var(--bg)}\
+.top{max-width:78rem;margin:0 auto;padding:44px 24px 0}\
+.brand{display:inline-block;font-size:1.3rem;font-weight:750;letter-spacing:-.03em;color:var(--fg);text-decoration:none}\
 .brand span{color:var(--accent)}\
-.tagline{margin:6px 0 0;color:var(--dim);font-size:1rem}\
-.bar{max-width:76rem;margin:14px auto 0;padding:0 20px;display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:space-between}\
-.filters,.sorts{display:flex;flex-wrap:wrap;gap:6px}\
-.chip{display:inline-block;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(20,22,27,.85);\
-color:var(--dim);font:inherit;font-size:.78rem;line-height:1.5;letter-spacing:.02em;width:auto;margin:0;cursor:pointer;white-space:nowrap}\
-.bar .chip:hover{color:var(--fg);border-color:#3a404d}\
-.bar .chip.on{color:var(--accent-ink);background:var(--accent);border-color:var(--accent);font-weight:600}\
-.chip.seek{color:var(--accent);border-color:rgba(255,178,36,.45);background:rgba(255,178,36,.12)}\
-.grid{max-width:76rem;margin:18px auto 0;padding:0 20px;display:grid;gap:18px;grid-template-columns:1fr}\
+.tagline{margin:2px 0 0;color:var(--dim);font-size:.95rem;letter-spacing:.01em}\
+.bar{max-width:78rem;margin:22px auto 0;padding:10px 24px;display:flex;flex-wrap:wrap;gap:6px 20px;justify-content:space-between;\
+border-top:1px solid var(--line);border-bottom:1px solid var(--line)}\
+.filters,.sorts{display:flex;flex-wrap:wrap;gap:2px}\
+.chip{display:inline-block;padding:3px 10px;border-radius:999px;border:1px solid transparent;background:none;\
+color:var(--dim);font:inherit;font-size:.8rem;line-height:1.6;letter-spacing:.02em;width:auto;margin:0;cursor:pointer;white-space:nowrap}\
+.bar .chip:hover{color:var(--fg);filter:none}\
+.bar .chip.on{color:var(--fg);border-color:var(--line);background:var(--card);font-weight:600}\
+.grid{max-width:78rem;margin:26px auto 0;padding:0 24px;display:grid;gap:26px 22px;grid-template-columns:1fr}\
 @media(min-width:40rem){.grid{grid-template-columns:repeat(2,1fr)}}\
 @media(min-width:64rem){.grid{grid-template-columns:repeat(3,1fr)}}\
 @media(min-width:88rem){.grid{grid-template-columns:repeat(4,1fr)}}\
-.tile{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;\
-transition:transform .15s,border-color .15s}\
-.tile:hover{transform:translateY(-2px);border-color:#343947}\
-.cover-link{position:relative;display:block;color:inherit;text-decoration:none}\
-.cover{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;background:#0e1014}\
+.tile{display:flex;flex-direction:column}\
+.cover-link{position:relative;display:block;border-radius:14px;overflow:hidden;border:1px solid var(--line);\
+background:#0e1014;transition:border-color .2s,transform .2s;transform:translateZ(0)}\
+.tile:hover .cover-link{border-color:#39404e;transform:translateY(-2px)}\
+.cover{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;transition:transform .35s ease}\
+.tile:hover img.cover{transform:scale(1.025)}\
 .cover.word{display:flex;align-items:flex-end;padding:18px;\
-background:linear-gradient(135deg,hsl(var(--h) 45% 22%),hsl(calc(var(--h) + 40) 55% 12%) 70%,#0b0c10)}\
-.cover.word span{font-size:1.5rem;font-weight:700;letter-spacing:-.01em;line-height:1.25;color:rgba(255,255,255,.9);\
-text-shadow:0 2px 12px rgba(0,0,0,.5);overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}\
-.chips{position:absolute;top:10px;left:10px;display:flex;gap:6px}\
-.chips .chip{backdrop-filter:blur(6px);cursor:default}\
-.tile-body{display:flex;flex-direction:column;flex:1;padding:14px 16px 12px}\
-.tile h2{margin:0;font-size:1.08rem;line-height:1.4;font-weight:650;letter-spacing:-.005em;overflow-wrap:anywhere}\
+background:radial-gradient(120% 90% at 12% 0%,hsl(var(--h) 42% 26%),transparent 60%),\
+linear-gradient(150deg,hsl(var(--h) 38% 17%),#0b0c10 82%)}\
+.cover.word span{font-size:1.45rem;font-weight:700;letter-spacing:-.01em;line-height:1.3;color:rgba(255,255,255,.92);\
+overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}\
+.badge{position:absolute;top:10px;left:10px;padding:3px 9px;border-radius:999px;font-size:.75rem;font-weight:600;\
+letter-spacing:.03em;color:var(--accent-ink);background:var(--accent)}\
+.tile-body{display:flex;flex-direction:column;flex:1;padding:11px 2px 0}\
+.tile h2{margin:0;display:flex;align-items:baseline;gap:8px;font-size:1.02rem;line-height:1.45;font-weight:650;\
+letter-spacing:-.005em;overflow-wrap:anywhere}\
 .tile h2 a{color:var(--fg);text-decoration:none}\
 .tile h2 a:hover{color:var(--accent)}\
-.tile .summary{margin:6px 0 0;font-size:.9rem;color:#b7bec9;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}\
-.seek-note{margin:8px 0 0;padding:8px 10px;border-radius:10px;background:rgba(255,178,36,.08);font-size:.85rem;color:#e7d3a3}\
-.seek-note b{font-weight:600;color:var(--accent)}\
-.tile .meta{margin:10px 0 0;display:flex;flex-wrap:wrap;gap:4px 12px;text-align:left;font-size:.8rem;color:var(--dim);\
-font-variant-numeric:tabular-nums}\
-.actions{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:auto;padding-top:12px}\
-.want{width:auto;margin:0;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;\
-color:var(--dim);font-size:.82rem;font-weight:600;letter-spacing:0}\
-.want:hover{color:var(--fg);border-color:#3a404d;filter:none}\
-.want.on{color:var(--accent);border-color:rgba(255,178,36,.5);background:rgba(255,178,36,.1)}\
-.report{font-size:.78rem}\
-.empty-plaza{max-width:30rem;margin:48px auto 0;padding:0 20px;text-align:center}\
-.page-foot{max-width:76rem;margin:36px auto 0;padding:18px 20px 0;display:block;font-size:.8rem;line-height:1.7;color:var(--dim)}\
-.page-foot p{margin:0 0 6px}";
+.tile .v{flex:0 0 auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;color:var(--dim)}\
+.tile .summary{margin:3px 0 0;font-size:.88rem;line-height:1.6;color:#aab2bf;\
+display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}\
+.seek-note{margin:7px 0 0;padding:0 0 0 10px;border-left:2px solid var(--accent);font-size:.85rem;line-height:1.6;color:#d8c9a0}\
+.tile .meta{margin:8px 0 0;display:flex;flex-wrap:wrap;gap:2px 14px;text-align:left;\
+font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;color:var(--dim);font-variant-numeric:tabular-nums}\
+.actions{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:auto;padding-top:8px}\
+.want{width:auto;margin:0;padding:2px 0;border:0;border-radius:0;background:none;\
+color:var(--dim);font-size:.8rem;font-weight:600;letter-spacing:.02em;cursor:pointer}\
+.want:hover{color:var(--fg);filter:none;transform:none}\
+.want.on{color:var(--accent)}\
+.report{font-size:.72rem;color:#5b6270}\
+.report:hover{color:var(--dim)}\
+.empty-plaza{max-width:30rem;margin:64px auto 0;padding:0 24px;text-align:center}\
+.page-foot{max-width:78rem;margin:44px auto 0;padding:14px 24px 0;display:block;border-top:1px solid var(--line);\
+font-size:.76rem;line-height:1.8;color:#6b7280}\
+.page-foot p{margin:0}\
+.page-foot code{font-size:.9em}";
 
 /// 三件事：记「想玩」、筛选、排序。写成 ES5，没有 JS 的时候整页照常能看、能点。
 const SCRIPT: &str = "(function(){\
@@ -376,22 +369,24 @@ mod tests {
         assert!(html.contains("<article class=\"tile\" data-slug=\"brisk-otter-41\" data-seeking=\"1\" data-game=\"1\""));
         assert!(html.contains("href=\"http://brisk-otter-41.localhost:8443\""));
         assert!(html.contains("小球大冒险"));
+        assert!(html.contains("<span class=\"v\">v7</span>"));
         assert!(html.contains("三关，五分钟，手机上也能玩。"));
-        assert!(html.contains("<b>想让你看：</b>新手引导看得懂吗"));
-        assert!(html.contains(
-            "<span>某某</span><span>v7</span><span>12 人玩过</span><span>还剩 16 小时</span>"
-        ));
-        assert!(html.contains("正在找人测"));
-        assert!(html.contains("<span class=\"chip\">游戏</span>"));
+        // 求测的那句话直接说，不带「想让你看：」的标签腔。
+        assert!(html.contains("<p class=\"seek-note\">新手引导看得懂吗</p>"));
+        assert!(html.contains("<span>某某</span>"));
+        assert!(html.contains(">12 人玩过</span><span>还剩 16 小时</span>"));
+        assert!(html.contains("class=\"badge\">正在找人测"));
+        // 卡片上不写品类：「游戏 / 体验」只是筛选的依据（data-game），邀请函上不标货架分类。
+        assert!(!html.contains(">游戏</span>"));
         // 没封面：字卡，不是假截图。
         assert!(html.contains("class=\"cover word\""));
         assert!(!html.contains("<img class=\"cover\""));
         // 举报入口复用作品自己的。
         assert!(html.contains("href=\"http://brisk-otter-41.localhost:8443/_playtest/report\""));
-        // 人数更新时间与两句如实的说明。
-        assert!(html.contains("人数更新于 <time datetime=\"2026-09-08T03:57:00Z\">3 分钟前</time>"));
-        assert!(html.contains("现在广场上只有 24 小时内的作品"));
-        assert!(html.contains("换一台就没有"));
+        // 该如实说的仍在页脚，一行说完。
+        assert!(html.contains("登录未上线，作品最多停留 24 小时"));
+        assert!(html.contains("「想玩」只记在这台设备"));
+        assert!(html.contains("只放开发者主动公开的作品"));
         // 脚本带 nonce，CSP 才放行。
         assert!(html.contains("<script nonce=\"n0nce\">"));
         // 这是玩家路径上唯一允许出现开发者域名的一页。
@@ -415,14 +410,14 @@ mod tests {
         assert!(html.contains(
             "<img class=\"cover\" src=\"http://wise-mink-28.localhost:8443/_playtest/cover?v=abcd1234\""
         ));
-        assert!(html.contains("<span class=\"chip\">体验</span>"));
+        assert!(html.contains("data-game=\"0\""));
         // 卡片上没有「正在找人测」的标（筛选栏里那个按钮不算）。
-        assert!(!html.contains("class=\"chip seek\""));
-        // 没求测就不显示「想让你看」，哪怕字段里有。
-        assert!(!html.contains("想让你看"));
-        assert!(html.contains("还没人玩过"));
+        assert!(!html.contains("class=\"badge\""));
+        // 没求测就不显示那句话，哪怕字段里有。
+        assert!(!html.contains("class=\"seek-note\""));
+        // 0 个人玩过就一个字不说，不替作品道歉。
+        assert!(!html.contains("人玩过"));
         assert!(!html.contains("还剩"));
-        assert!(!html.contains("人数更新于"));
     }
 
     #[test]
@@ -451,7 +446,7 @@ mod tests {
     fn empty_plaza_says_so() {
         let plaza = empty();
         let html = render(&view(&plaza));
-        assert!(html.contains("现在广场上还没有作品"));
+        assert!(html.contains("广场上还没有作品"));
         assert!(!html.contains("id=\"pt-grid\""));
         assert!(html.contains("--public"));
     }
@@ -464,7 +459,7 @@ mod tests {
     }
 
     #[test]
-    fn remaining_and_relative_read_like_a_person() {
+    fn remaining_reads_like_a_person() {
         let now = datetime!(2026-09-08 04:00:00 UTC);
         assert_eq!(
             remaining(datetime!(2026-09-08 04:30:00 UTC), now),
@@ -478,12 +473,6 @@ mod tests {
             remaining(datetime!(2026-09-08 03:00:00 UTC), now),
             "即将下线"
         );
-        assert_eq!(relative(datetime!(2026-09-08 03:59:40 UTC), now), "刚刚");
-        assert_eq!(
-            relative(datetime!(2026-09-08 03:00:00 UTC), now),
-            "1 小时前"
-        );
-        assert_eq!(relative(datetime!(2026-09-05 03:00:00 UTC), now), "3 天前");
     }
 
     #[tokio::test]

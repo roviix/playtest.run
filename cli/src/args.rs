@@ -171,6 +171,28 @@ pub enum Command {
         api: Option<String>,
     },
 
+    /// 列出一个作品发过的每一版，标出玩家现在看到的是哪一版
+    Versions {
+        #[arg(value_name = "slug 或目录")]
+        target: String,
+
+        #[arg(long, value_name = "网址")]
+        api: Option<String>,
+    },
+
+    /// 让玩家看到的换回某一版；清单都在，一个字节不用重传
+    Rollback {
+        #[arg(value_name = "slug 或目录")]
+        target: String,
+
+        /// 例如 3 或 v3
+        #[arg(value_name = "版本")]
+        version: String,
+
+        #[arg(long, value_name = "网址")]
+        api: Option<String>,
+    },
+
     /// 把一个作品从广场上拿下来；它的链接照常能开
     Unlist {
         #[arg(value_name = "slug")]

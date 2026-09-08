@@ -31,7 +31,6 @@ export function SitesPage() {
     <>
       <header class="page-head">
         <h1>作品</h1>
-        <p class="muted">每个作品一条链接，永远指向它最新的版本。</p>
       </header>
       <ul class="cards">
         {data.map((site) => (
@@ -103,9 +102,7 @@ function SiteCard({ site: initial }: { site: Site }) {
       />
 
       {problem ? <p class="notice">{problem}</p> : null}
-      {site.expires_at ? (
-        <p class="muted">这个链接 {moment(site.expires_at)} 到期，到期自动从广场上下来。</p>
-      ) : null}
+      {site.expires_at ? <p class="muted">链接 {moment(site.expires_at)} 到期。</p> : null}
     </li>
   );
 }
@@ -134,16 +131,12 @@ function PlazaControls({
   const [editing, setEditing] = useState(false);
 
   if (!canPublish) {
-    return <p class="muted">先发一版，才能放到广场上。</p>;
+    return null;
   }
 
   if (!listing.public) {
     return (
       <div class="plaza">
-        <p class="muted">
-          放到 <a href={plazaUrl} target="_blank" rel="noreferrer">广场</a> 上，路过的人点开就能玩；
-          来的人玩成什么样，点名册里看得见。默认不放。
-        </p>
         <p class="row-actions">
           <button class="button" type="button" disabled={busy} onClick={() => onChange({ public: true })}>
             放到广场上
@@ -157,8 +150,11 @@ function PlazaControls({
               void onChange({ seeking: true });
             }}
           >
-            放上去并标「正在找人测」
+            放上去，找人测
           </button>
+          <a class="muted" href={plazaUrl} target="_blank" rel="noreferrer">
+            广场是什么
+          </a>
         </p>
       </div>
     );
@@ -167,14 +163,12 @@ function PlazaControls({
   return (
     <div class="plaza">
       {listing.hidden ? (
-        <p class="notice">
-          这个作品 24 小时内被多人举报，已经从广场上撤下，等我们复核。它的链接照常能开，你发出去的人不受影响。
-        </p>
+        <p class="notice">被多人举报，已从广场撤下等复核。链接照常能开。</p>
       ) : (
         <p class="muted">
           在 <a href={plazaUrl} target="_blank" rel="noreferrer">广场</a> 上
-          {listing.seeking ? "，标着「正在找人测」" : ""}。
-          {listing.has_cover ? "" : " 还没有封面——上传时加 --cover 一张图，卡片会好看得多。"}
+          {listing.seeking ? "，正在找人测" : ""}。
+          {listing.has_cover ? "" : "加 --cover 可以配一张封面。"}
         </p>
       )}
 

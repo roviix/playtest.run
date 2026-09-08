@@ -482,15 +482,11 @@ pub fn report_upload(report: &UploadReport) {
     ui::say(&timing_line(report.elapsed_ms, report.timings));
 }
 
-/// 「已放到广场上：https://playtest.run/ ，并标了「正在找人测」。」
 pub fn plaza_line(plaza: &PlazaOut) -> String {
     match (plaza.public, plaza.seeking) {
-        (true, true) => format!(
-            "已放到广场上并标了「正在找人测」：{} 。来的人玩成什么样，控制台里看得见。",
-            plaza.url
-        ),
-        (true, false) => format!("已放到广场上：{} 。路过的人点开就能玩。", plaza.url),
-        (false, _) => "已从广场上拿下来了，链接照常能开。".to_string(),
+        (true, true) => format!("已放到广场上，标了「正在找人测」：{}", plaza.url),
+        (true, false) => format!("已放到广场上：{}", plaza.url),
+        (false, _) => "已从广场上拿下来，链接照常能开。".to_string(),
     }
 }
 

@@ -1,4 +1,4 @@
-//! `playtest ls / rm / open / unlist`：看和管这台机器上发过的作品。
+//! `playtest ls / rm / open / unlist / versions / rollback`：看和管这台机器上发过的作品。
 
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -59,6 +59,55 @@ fn listing_line(listing: &playtest_common::api::Listing) -> Option<String> {
 }
 
 /// `playtest unlist <slug>`：从广场上拿下来，链接照常能开（DESIGN §3.8）。
+/// 发过的每一版，新的在前，标出玩家现在看到的那一版。
+pub async fn versions(target: &str, api_flag: Option<&str>) -> Result<()> {
+    let api = args::api_base(api_flag);
+    let config = config::load(&config::default_path()?)?;
+    let slug = resolve_slug(target, &config)?;
+    let Some(client) = client_with_saved_token(&api, &config)? else {
+        bail!("这台机器上还没发过东西，没有 {slug} 的版本可看。");
+    };
+    let list = client.list_versions(&slug).await?;
+    if list.versions.is_empty() {
+        ui::say(&format!("{slug} 还没发过任何版本。"));
+        return Ok(());
+    }
+    for v in &list.versions {
+        let mark = if v.current { "← 玩家现在看到的" } else { "" };
+        let note = v.note.as_deref().map(|n| format!("  「{n}」")).unwrap_or_default();
+        ui::say(&format!(
+            "v{:<3} {}  {} 个文件 {}{}  {}",
+            v.version,
+            clock::human(&v.created_at),
+            v.file_count,
+            ui::bytes(v.total_bytes),
+            note,
+            mark
+        ));
+    }
+    ui::say(&format!("换回某一版：playtest rollback {slug} <版本号>"));
+    Ok(())
+}
+
+/// 让玩家看到的换回某一版。清单都在，一个字节不用重传，边缘 1 秒内看到新指针。
+pub async fn rollback(target: &str, version: &str, api_flag: Option<&str>) -> Result<()> {
+    let api = args::api_base(api_flag);
+    let config = config::load(&config::default_path()?)?;
+    let slug = resolve_slug(target, &config)?;
+    let Some(client) = client_with_saved_token(&api, &config)? else {
+        bail!("这台机器上还没发过东西，没有 {slug} 可以回滚。");
+    };
+    let number: u32 = version
+        .trim()
+        .trim_start_matches(['v', 'V'])
+        .parse()
+        .map_err(|_| anyhow::anyhow!("版本要写成 3 或 v3，不认识「{version}」。"))?;
+    let site = client.activate_version(&slug, number).await?;
+    ui::say(&format!("玩家现在看到的是《{}》v{}。", site.title, number));
+    ui::link(&site.url);
+    Ok(())
+}
+
 pub async fn unlist(slug: &str, api_flag: Option<&str>) -> Result<()> {
     let api = args::api_base(api_flag);
     let config = config::load(&config::default_path()?)?;

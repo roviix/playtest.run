@@ -663,7 +663,7 @@ async fn host_routing() {
             .await;
         assert_eq!(reply.status, StatusCode::OK, "{host}");
         let text = reply.text();
-        assert!(text.contains("现在广场上还没有作品"), "{host}");
+        assert!(text.contains("广场上还没有作品"), "{host}");
         assert!(text.contains("--public"), "{host}");
         assert!(text.contains(playtest_common::DEVELOPER_API_URL), "{host}");
         // 这一页是我们自己的，能锁死；脚本只放行带 nonce 的那段，图只从作品子域来。

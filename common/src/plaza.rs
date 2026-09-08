@@ -22,7 +22,7 @@ pub const KEY: &str = "plaza.json";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Plaza {
     pub schema: u32,
-    /// RFC 3339，这份是什么时候整理的。边缘页脚写出来，人数旧了看得见。
+    /// RFC 3339，这份是什么时候整理的。排查用，页面上不显示。
     pub generated_at: String,
     /// 已经按广场的默认顺序排好：正在找人测的在前，其余按最近更新。边缘不再排。
     pub items: Vec<PlazaItem>,

@@ -119,6 +119,12 @@ async fn dispatch(cli: Cli) -> Result<()> {
         Some(Command::Open { target, api }) => sites::open(&target, api.as_deref()).await,
         // 机器模式下也走同一条：它只打一行话，`--json` 的调用方看退出码就够了。
         Some(Command::Unlist { slug, api }) => sites::unlist(&slug, api.as_deref()).await,
+        Some(Command::Versions { target, api }) => sites::versions(&target, api.as_deref()).await,
+        Some(Command::Rollback {
+            target,
+            version,
+            api,
+        }) => sites::rollback(&target, &version, api.as_deref()).await,
         Some(Command::Mcp { setup, api }) => mcp::run(setup, api).await,
         None => run_default(cli).await,
     }
