@@ -1,7 +1,7 @@
 // 控制面的响应体。字段和 common/src/results.rs、common/src/api.rs 一一对应，
 // 那边改了这里跟着改——两个进程不会同时升级，所以新字段一律当作可能不存在。
 
-// 构建出来的静态站默认打同源的 /v1（控制台和 api 都在 playtest.sh 下）。
+// 构建出来的静态站默认打同源的 /v1（控制台和 api 都在 playtest.roviix.com 下）。
 // 开发时 Vite 把 /v1 代理到本机的控制面，见 vite.config.ts。
 const API_BASE = import.meta.env.VITE_PLAYTEST_API ?? "";
 

@@ -348,7 +348,7 @@ async fn a_player_plays_what_is_running_on_the_developers_machine() {
         assert!(gate.text().contains("《小球大冒险》"));
         assert!(gate.text().contains("· 在线"), "版本位置该是「在线」");
         assert!(!gate.text().contains("v0"), "玩家不该看到合成清单里那个 v0");
-        assert!(!gate.text().contains("playtest.sh"));
+        assert!(!gate.text().contains(playtest_common::DEVELOPER_HOST));
         // 门禁页是我们渲染的，开发者的 HTML 一个字节都还没出去。
         assert!(!gate.text().contains("开发者机器上的那一版"));
 
@@ -486,7 +486,7 @@ async fn the_offline_page_remembers_who_was_here() {
         assert!(html.contains("《小球大冒险》"));
         assert!(html.contains("上次在线"));
         assert!(html.contains("<time datetime=\""));
-        assert!(!html.contains("playtest.sh"));
+        assert!(!html.contains(playtest_common::DEVELOPER_HOST));
 
         // 落盘了，边缘重启之后还说得出来。
         let saved = std::fs::read_to_string(
@@ -549,7 +549,7 @@ async fn a_dead_dev_server_is_a_rendered_502() {
         assert!(reply.text().contains("开发者那边没有响应"));
         // 完整的一页，不是裸状态码。
         assert!(reply.text().starts_with("<!doctype html>"));
-        assert!(!reply.text().contains("playtest.sh"));
+        assert!(!reply.text().contains(playtest_common::DEVELOPER_HOST));
 
         // 开不出去的请求也要把名额还回来。
         use std::sync::atomic::Ordering::Relaxed;

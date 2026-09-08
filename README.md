@@ -3,7 +3,7 @@
 > 一条命令，把你手上这个能玩的版本放到别人面前，然后知道他们玩成了什么样。
 > One command to put the build you have right now in front of real people — and see what happened.
 
-**状态：v0.1 私测前——两条路都在香港边缘上线了，还没有登录和公网控制面。** `playtest <目录>` 与 `playtest <端口>` 都能拿到一个真的 `https://<slug>.playtest.run` 链接：上传的导出物和穿隧道的 socket.io 联机房间都在真实 Chrome 里验过；门禁页、第一层数据、SDK、结果端点与控制台在本机接成了一条线。还没做的：GitHub 登录（现在全是 24 小时匿名链接）、`playtest.sh` 域名（控制面只能经 ssh 隧道访问，控制台因此还没上线）、令牌撤销、用量配额。做不到的地方命令会明说。真机记录在 [`docs/spikes/`](docs/spikes/)。产品定义在 [`docs/DESIGN.md`](docs/DESIGN.md)，每个结论都带推导过程；方向变了直接改它。施工顺序在 [`docs/KICKOFF.md`](docs/KICKOFF.md)。
+**状态：v0.1 私测前——上传、隧道、结果三条线都在线上。** `playtest <目录>` 与 `playtest <端口>` 都能拿到一个真的 `https://<slug>.playtest.run` 链接，控制面与控制台在 `https://playtest.roviix.com`：上传的导出物和穿隧道的 socket.io 联机房间都在真实 Chrome 里验过；门禁页、第一层数据、SDK、结果端点与控制台接成了一条线。还没做的：GitHub 登录（现在全是 24 小时匿名链接）、令牌撤销、用量配额。做不到的地方命令会明说。真机记录在 [`docs/spikes/`](docs/spikes/)。产品定义在 [`docs/DESIGN.md`](docs/DESIGN.md)，每个结论都带推导过程；方向变了直接改它。施工顺序在 [`docs/KICKOFF.md`](docs/KICKOFF.md)。
 
 ## 它会是什么
 
@@ -15,7 +15,7 @@
 ## 域名
 
 - `*.playtest.run` 只放玩家看的东西（作品、门禁页、隧道转发），没有登录。
-- `playtest.sh` 品牌站、开发者控制台、API、文档。
+- `playtest.roviix.com` 开发者控制台、API、文档。
 
 ## 仓库布局
 
@@ -28,7 +28,7 @@ Rust 一个 Cargo workspace（`cargo test --workspace`），控制台与 SDK 是
 | `edge/` | 边缘：泛域名入口、门禁页、按清单分发、隧道接入、熔断、第一层事件与上报、同源 SDK | AGPL-3.0 | 可用；TLS 由前置 Caddy 做 |
 | `api/` | 控制面：匿名令牌、slug、版本、隧道令牌、事件与反馈写入、结果读取 | AGPL-3.0 | 可用；登录、撤销、配额未做 |
 | `sdk/` | `playtest.js`：JS 错误、加载用时、自定义事件、反馈按钮；由边缘在 `/_playtest/sdk.js` 提供 | Apache-2.0 | 可用；上传时自动注入未做 |
-| `console/` | 控制台（Preact）：作品列表、时间线、点名册、反馈流，手机可看 | AGPL-3.0 | 本机可用；上线等 `playtest.sh` |
+| `console/` | 控制台（Preact）：作品列表、时间线、点名册、反馈流，手机可看 | AGPL-3.0 | 在线：`playtest.roviix.com/console/` |
 | `deploy/` | 一台机器跑通：compose、Caddy（DNS-01 泛域名证书）、服务器上构建与发布脚本 | — | 香港在用 |
 | `fixtures/` | 测试用的真实导出物（Vite、Phaser、响应头自检页、socket.io 联机房间、门禁页音频测试台） | — | 缺 Godot、Unity |
 | `scripts/` | 开发用脚本（无头 Chrome 走一遍玩家路径） | — | — |

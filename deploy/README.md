@@ -39,5 +39,5 @@ Caddy 会加载 `sites/content.caddy` 并向 Let's Encrypt 签 `playtest.run` + 
 
 ## 还没有的
 
-- `api.playtest.sh`：域名没买。买到后 Cloudflare 加 A 记录指向同一个 IP，`.env` 填 `API_HOST=api.playtest.sh`，`TARGET=none deploy/push.sh`。
+- 登录：还没做，控制台现在用 CLI 配置文件里的匿名令牌进入。
 - 多台边缘、S3 对象存储、令牌撤销推送、用量上报：都在 DESIGN 第三四周。

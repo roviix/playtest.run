@@ -186,7 +186,7 @@ async fn a_navigation_gets_a_page_a_subresource_gets_nothing() {
     assert_eq!(page.header("cache-control"), Some("no-store"));
     assert!(page.header("retry-after").is_some());
     assert!(page.text().contains("这一小时的流量用完了"));
-    assert!(!page.text().contains("playtest.sh"));
+    assert!(!page.text().contains(playtest_common::DEVELOPER_HOST));
 
     // 子资源：状态码就是全部。**一个字节的 HTML 都不给**——和门禁页同一条硬线，
     // 加载器拿到 HTML 会崩在一个和真实原因无关的地方。

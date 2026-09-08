@@ -3,7 +3,7 @@
 //! 都是完整 HTML，和 `pages.rs` 同一套外壳与样式——玩家拿到的是别人发给他的一条链接，
 //! 一个裸状态码只会让他以为是自己的网络坏了。
 //!
-//! 这几页上都不出现 `playtest.sh`（AGENTS 第 7 条），也不说「隧道」「yamux」「上游」
+//! 这几页上都不出现开发者域名（AGENTS 第 7 条），也不说「隧道」「yamux」「上游」
 //! 这些玩家插不上手的词：他能做的只有等一会儿，或者去问发链接给他的人。
 
 use time::format_description::well_known::Rfc3339;
@@ -107,7 +107,7 @@ mod tests {
         assert!(html.contains("9月7日 12:40（UTC+8）"));
         assert!(html.contains("<title>某某 的电脑暂时不在线</title>"));
         // 玩家页面上不出现品牌域名，也不出现我们内部的说法。
-        assert!(!html.contains("playtest.sh"));
+        assert!(!html.contains(playtest_common::DEVELOPER_HOST));
         for word in ["隧道", "yamux", "上游", "WebSocket"] {
             assert!(!html.contains(word), "「{word}」不是给玩家看的词");
         }
@@ -137,7 +137,7 @@ mod tests {
         for html in [busy(), unreachable(), timed_out()] {
             assert!(html.starts_with("<!doctype html>\n<html lang=\"zh-CN\">"));
             assert!(html.contains("<h1>"));
-            assert!(!html.contains("playtest.sh"));
+            assert!(!html.contains(playtest_common::DEVELOPER_HOST));
         }
         assert!(busy().contains("现在人太多了"));
         assert!(unreachable().contains("开发者那边没有响应"));

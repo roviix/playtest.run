@@ -200,7 +200,7 @@ async fn navigation_without_cookie_gets_the_gate_page() {
     // 门禁页出的不是作品的 index.html。
     assert!(!html.contains("<canvas"));
     // 玩家页面上不出现品牌域名。
-    assert!(!html.contains("playtest.sh"));
+    assert!(!html.contains(playtest_common::DEVELOPER_HOST));
 
     let events = site.events();
     assert_eq!(events.len(), 1);
@@ -574,7 +574,7 @@ async fn host_routing() {
         let reply = site.send(nav_on(host, "/").body(Body::empty()).unwrap()).await;
         assert_eq!(reply.status, StatusCode::OK, "{host}");
         assert!(reply.text().contains("playtest ./dist"), "{host}");
-        assert!(reply.text().contains("https://playtest.sh"), "{host}");
+        assert!(reply.text().contains(playtest_common::DEVELOPER_API_URL), "{host}");
     }
 
     // 根域下别的路径没有内容。
@@ -587,7 +587,7 @@ async fn host_routing() {
     for host in ["a.b.localhost", "admin.localhost", "example.com"] {
         let reply = site.send(nav_on(host, "/").body(Body::empty()).unwrap()).await;
         assert_eq!(reply.status, StatusCode::NOT_FOUND, "{host}");
-        assert!(!reply.text().contains("playtest.sh"), "{host}");
+        assert!(!reply.text().contains(playtest_common::DEVELOPER_HOST), "{host}");
     }
 }
 
@@ -639,6 +639,64 @@ async fn start_sets_cookies_and_redirects_back() {
     let events = site.events();
     assert_eq!(events[0]["type"], "start");
     assert_eq!(events[0]["sid"].as_str().unwrap().len(), 32);
+}
+
+/// 「来自哪里」要能穿过门禁页：玩家从 Discord 点进来，门禁页收到的 Referer 是 discord.com，
+/// 点「开始」那一下 POST 的 Referer 却是门禁页自己。真正的来源由门禁页放进表单带过去，
+/// `start` 事件记的必须是 discord.com，而不是作品自己。
+#[tokio::test]
+async fn the_real_referrer_survives_the_gate() {
+    let site = Site::plain().await;
+    let gate = site
+        .send(
+            nav("/")
+                .header("referer", "https://discord.com/channels/1/2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(gate.status, StatusCode::OK);
+    let html = gate.text();
+    assert!(
+        html.contains("name=\"from\" value=\"https://discord.com/channels/1/2\""),
+        "门禁页要把来源放进表单：{html}"
+    );
+
+    let reply = site
+        .send(
+            Request::builder()
+                .method("POST")
+                .uri("/_playtest/start")
+                .header("host", HOST)
+                .header("referer", format!("http://{HOST}/"))
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(
+                    "to=%2F&from=https%3A%2F%2Fdiscord.com%2Fchannels%2F1%2F2",
+                ))
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(reply.status, StatusCode::SEE_OTHER);
+
+    let events = site.events();
+    let start = events.iter().find(|e| e["type"] == "start").unwrap();
+    assert_eq!(start["referer"], "https://discord.com/channels/1/2");
+
+    // 表单里塞一个不是 URL 的东西，当没有，不照抄。
+    let reply = site
+        .send(
+            Request::builder()
+                .method("POST")
+                .uri("/_playtest/start")
+                .header("host", HOST)
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from("to=%2F&from=javascript%3Aalert(1)"))
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(reply.status, StatusCode::SEE_OTHER);
+    let events = site.events();
+    assert_eq!(events.last().unwrap()["referer"], "");
 }
 
 #[tokio::test]

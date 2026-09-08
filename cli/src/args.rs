@@ -9,7 +9,7 @@ use clap::{Args, Parser, Subcommand};
 use playtest_common::manifest::GateMode;
 
 /// 没有 `--api` 也没有环境变量 `PLAYTEST_API` 时用它。
-pub const DEFAULT_API: &str = "https://api.playtest.sh";
+pub const DEFAULT_API: &str = playtest_common::DEVELOPER_API_URL;
 
 /// 帮助的头两行。第一次用的人只看这两行就够开始了。
 const EXAMPLES: &str = "playtest ./dist            把这个目录发出去，拿到链接和二维码

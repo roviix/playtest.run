@@ -92,7 +92,7 @@ pub struct Me {
     pub version: u32,
     /// 作品开了跨源隔离。SDK 知道之后不去碰会被 COEP 挡下的东西。
     pub isolated: bool,
-    /// 事件往哪发，例如 `https://api.playtest.sh`。
+    /// 事件往哪发，例如 [`crate::DEVELOPER_API_URL`]。
     pub api: String,
 }
 
@@ -263,6 +263,13 @@ pub fn referrer_kind(referer: &str, wechat: bool) -> &'static str {
     }
 }
 
+/// Referer 是作品自己的某一页（门禁页 → 303 → 作品，或作品内部跳转）。
+/// 这种「来源」不含玩家从哪来的信息，调用方应当当作不知道，而不是记成「其它」。
+pub fn is_self_referral(referer: &str, slug: &str) -> bool {
+    let host = host_of(referer).to_ascii_lowercase();
+    host.starts_with(&format!("{slug}.")) || host == slug
+}
+
 /// `https://host:443/path` → `host`。解析不出来就当没有。
 pub fn host_of(url: &str) -> &str {
     let rest = url
@@ -337,6 +344,10 @@ mod tests {
         assert_eq!(referrer_kind("https://mp.weixin.qq.com/s/abc", false), "wechat");
         assert_eq!(referrer_kind("https://news.ycombinator.com/", false), "other");
         assert_eq!(referrer_kind("垃圾", false), "direct");
+        assert!(is_self_referral("https://brisk-otter-41.playtest.run/", "brisk-otter-41"));
+        assert!(is_self_referral("http://brisk-otter-41.localhost:8443/game", "brisk-otter-41"));
+        assert!(!is_self_referral("https://discord.com/channels/1/2", "brisk-otter-41"));
+        assert!(!is_self_referral("https://brisk-otter-411.playtest.run/", "brisk-otter-41"));
     }
 
     #[test]

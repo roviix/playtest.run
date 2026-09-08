@@ -502,10 +502,14 @@ pub fn touch_session(conn: &Connection, seen: &Seen<'_>) -> rusqlite::Result<()>
 
     let wechat = seen.ua.is_some_and(playtest_common::ingest::is_wechat_ua);
     let client = seen.ua.map(ingest::classify_ua);
+    // 第一个带会话 id 的事件是「点了开始」，它的 Referer 是作品自己的门禁页，不是玩家从哪来的。
+    // 把自己当来源会让所有人都变成「其它」；自己引用自己按「不知道」处理，留给真的外部来源。
     let referrer_kind = if wechat {
         Some("wechat")
     } else {
-        seen.referer.map(|r| ingest::referrer_kind(r, false))
+        seen.referer
+            .filter(|r| !ingest::is_self_referral(r, seen.slug))
+            .map(|r| ingest::referrer_kind(r, false))
     };
 
     let Some((last_seen_at, known_ua)) = existing else {

@@ -24,6 +24,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
       - console_dist:/srv/console:ro
+      - ./site:/srv/site:ro
     depends_on:
       - edge
       - api
@@ -57,7 +58,7 @@ services:
       PLAYTEST_SITE_URL_TEMPLATE: ${PLAYTEST_SITE_URL_TEMPLATE}
       RUST_LOG: ${RUST_LOG:-info}
     ports:
-      # 只绑主机回环：API_HOST 没配时 CLI 走 ssh -L 隧道用；api.playtest.sh 上线后可删。
+      # 只绑主机回环：API_HOST 没配时 CLI 走 ssh -L 隧道用；有了公网入口后仍留着给运维。
       - "127.0.0.1:8787:8787"
     volumes:
       - ${PLAYTEST_DATA_HOST_DIR:-/home/ubuntu/playtest-data}:/data

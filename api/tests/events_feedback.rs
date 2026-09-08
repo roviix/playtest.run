@@ -224,13 +224,25 @@ impl Harness {
     }
 }
 
+/// 服务端只采信最近 24 小时内的客户端时间戳（`stamp`），所以测试里的时间要锚在「现在」附近，
+/// 不能写死某一天——写死的那一天过了 24 小时整个测试就会静悄悄地失效。
+fn at(offset_secs: i64) -> String {
+    let base = time::OffsetDateTime::now_utc()
+        .replace_nanosecond(0)
+        .unwrap()
+        - time::Duration::minutes(10);
+    (base + time::Duration::seconds(offset_secs))
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap()
+}
+
 fn session_id(seed: char) -> String {
     seed.to_string().repeat(32)
 }
 
 fn event(kind: &str) -> Event {
     Event {
-        ts: "2026-09-07T04:00:00Z".to_string(),
+        ts: at(0),
         kind: kind.to_string(),
         name: None,
         data: None,
@@ -247,7 +259,7 @@ async fn a_session_gets_stitched_together_from_both_sides() {
     let edge = EdgeBatch {
         events: vec![
             EdgeEvent {
-                ts: "2026-09-07T04:00:00Z".into(),
+                ts: at(0),
                 kind: "gate_view".into(),
                 slug: slug.clone(),
                 version: 1,
@@ -259,7 +271,7 @@ async fn a_session_gets_stitched_together_from_both_sides() {
                 detail: None,
             },
             EdgeEvent {
-                ts: "2026-09-07T04:00:09Z".into(),
+                ts: at(9),
                 kind: "start".into(),
                 slug: slug.clone(),
                 version: 1,
@@ -281,25 +293,25 @@ async fn a_session_gets_stitched_together_from_both_sides() {
         slug: slug.clone(),
         events: vec![
             Event {
-                ts: "2026-09-07T04:00:12Z".into(),
+                ts: at(12),
                 kind: "load".into(),
                 name: None,
                 data: Some(serde_json::json!({ "ms": 2480, "ttfb": 120 })),
             },
             Event {
-                ts: "2026-09-07T04:00:40Z".into(),
+                ts: at(40),
                 kind: "event".into(),
                 name: Some("level_done".into()),
                 data: Some(serde_json::json!({ "level": 3 })),
             },
             Event {
-                ts: "2026-09-07T04:01:00Z".into(),
+                ts: at(60),
                 kind: "error".into(),
                 name: Some("TypeError: Cannot read 'x' of undefined @ main.js:412".into()),
                 data: Some(serde_json::json!({ "stack": "at update (main.js:412:9)" })),
             },
             Event {
-                ts: "2026-09-07T04:02:30Z".into(),
+                ts: at(150),
                 kind: "input".into(),
                 name: None,
                 data: None,
@@ -351,11 +363,11 @@ async fn a_session_gets_stitched_together_from_both_sides() {
     assert_eq!((device.as_str(), browser.as_str(), os.as_str()), ("phone", "wechat", "ios"));
     assert_eq!(referrer, "wechat");
     assert_eq!(wechat, 1);
-    assert_eq!(gate, "2026-09-07T04:00:00Z");
-    assert_eq!(start, "2026-09-07T04:00:09Z");
-    assert_eq!(frame, "2026-09-07T04:00:12Z", "首帧来自 SDK 的 load");
+    assert_eq!(gate, at(0));
+    assert_eq!(start, at(9));
+    assert_eq!(frame, at(12), "首帧来自 SDK 的 load");
     assert_eq!(load_ms, 2480);
-    assert_eq!(last_input, "2026-09-07T04:02:30Z");
+    assert_eq!(last_input, at(150));
     assert_eq!(is_return, 0);
 
     assert_eq!(h.count("SELECT COUNT(*) FROM session_events").await, 6);
@@ -420,7 +432,7 @@ async fn the_version_comes_from_the_server_not_the_client() {
     for (sid, claimed) in [(&older, 1u32), (&faked, 999)] {
         h.from_edge(&EdgeBatch {
             events: vec![EdgeEvent {
-                ts: "2026-09-07T04:00:00Z".into(),
+                ts: at(0),
                 kind: "gate_view".into(),
                 slug: site.slug.clone(),
                 version: claimed,

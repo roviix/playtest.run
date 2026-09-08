@@ -9,7 +9,7 @@
 - **第一周目标在本机成立**：`playtest <目录>` → 控制面 → 边缘 → 真实 Chrome 点开门禁页进游戏，见 `docs/spikes/2026-09-07-e2e-upload-localhost.md`。四个引擎导出物只有 Phaser 与 Vite，缺 Godot、Unity（本机没引擎）。
 - **第二周主干同日完成**：`playtest <端口>` 隧道在本机与香港边缘都通，socket.io 联机穿过去了，见 `docs/spikes/2026-09-07-tunnel-e2e.md`。差两台手机对局、开发者侧断网恢复、真 Vite。
 - **第三周「结果」那一半提前完成**（2026-09-08）：门禁页硬线与熔断、上传前检查、`--json` 与 MCP、SDK 与写入端点、结果端点与控制台，以及边缘事件每 60 秒上报——在本机接成一条线（`docs/spikes/2026-09-08-sdk-ingest-results.md`），并已部署到香港。`cargo test --workspace` 387 条全绿。**第一次 git 提交在此之后。**
-- 域名 `playtest.run`（内容）**已购买、解析已在 Cloudflare（DNS-only）指向香港机器**；`playtest.sh`（品牌 / 控制台 / API）**尚未购买**，第三周做登录前必须有——现在控制面没有公网入口，CLI 走 ssh 隧道。
+- 域名 `playtest.run`（内容）**已购买、解析已在 Cloudflare（DNS-only）指向香港机器**；开发者侧用 `playtest.roviix.com`（2026-09-08 定，不买 `playtest.sh`），已解析到同一台机器，控制面与控制台有了公网入口。
 - **香港边缘已上线**：Caddy + api + edge 跑在 `playtest-hk` 上，`*.playtest.run` 泛域名证书已签，三个真链接在线（`docs/spikes/2026-09-07-hk-online-first-links.md`，部署方式见 `deploy/README.md`）。没有 OAuth 应用；对象存储是机器磁盘。
 - 竞品图见 DESIGN §2，2026-09-07 的快照；调研原文在 `docs/research/`（13 条线，综合在 `docs/research/README.md`）。**DESIGN 已于同日下午按调研修订**：微信可玩降为待验证、香港不作卖点、上传与隧道一等公民、`--json` 与 `playtest mcp` 进 v0.1、免费档 10 GB + 匿名 1 GB/24h + 每 slug 每小时熔断、结果层改点名册句式、时刻表加 M2b「让对方敢点开」、留门与指标更新（DESIGN §9 有清单）。
 
@@ -18,7 +18,7 @@
 | # | 事 | 影响 |
 |---|---|---|
 | 1 | ~~**语言**：Go 还是 Rust（DESIGN §4.7）~~ **已定 Rust**（2026-09-07），一个 Cargo workspace：`cli/`、`edge/`、`api/`、`common/` | 骨架已按此起 |
-| 2 | ~~**两个域名买下**，DNS 放在有 API 的服务商（泛域名证书要 DNS-01）~~ `playtest.run` **已买、DNS 已迁 Cloudflare、证书已签**；`playtest.sh` **还没买** | 控制面没有公网入口，CLI 只能走 ssh 隧道，直到 `playtest.sh` 到手 |
+| 2 | ~~**两个域名买下**，DNS 放在有 API 的服务商（泛域名证书要 DNS-01）~~ `playtest.run` **已买、DNS 已迁 Cloudflare、证书已签**；开发者侧 **`playtest.roviix.com`**（不买 `playtest.sh`） | 都已上线 |
 | 2b | **GitHub 归属**：放 `roviix` 组织，仓库名 `playtest.run`（`github.com/playtest` 是 2015 年起的闲置个人号，拿不到）。这意味着 roviix 是「制作者」品牌、daemon 是旗舰产品——同名公司 + 多个产品是常见结构（`astral-sh` 的 ruff 与 uv，`denoland` 的 deno 与 fresh）。配套三件事：两个仓库都公开后组织 profile 写明「roviix 做两件东西」；本仓库自带 TRADEMARK / SECURITY / 举报邮箱，托管内容的举报与安全报告不流向 daemon；选了 Rust，代码里没有模块路径写归属的问题。备选：先放个人账号，公开前再转（GitHub 保留跳转）。顺手占 npm 包名 `playtest.run`、crates.io `playtest`（2026-09-07 查过均未被占） | 不再阻塞代码；公开前落实 |
 | 3 | **GitHub OAuth App**（设备授权流用） | 没有就先做匿名 24 小时链接那条路 |
 | 4 | ~~**香港云账号**一台机器~~ **已开**：AWS `ap-east-1` 的 `t4g.small`，弹性 IP `18.163.174.245`（`docs/spikes/2026-09-07-aws-hk-instance.md`）。哪家云做正式边缘仍按 DESIGN §4.4 晚高峰压测后定。对象存储私测阶段用这台机器的磁盘，S3 等第二个边缘 | **已部署**（`deploy/`：Docker、Caddy 自动签证书、服务器上构建、每小时备份），三个真链接在线 |
@@ -37,12 +37,12 @@
 做完 = 一个 socket.io 或 Colyseus 的联机小游戏**两台手机能对局**（链接是真的了，`https://<slug>.playtest.run`，还没人用两台手机试）；拔网线 30 秒内自动恢复（只验了边缘侧重启，开发者侧断网没验）；Vite 开发服务器不 403（`Host` 改写已做，没接过真 Vite）；Godot 线程导出物经隧道也能开（缺 Godot 导出物）。
 
 **第三周 · 身份、版本、结果** —— 2026-09-07/08 结果这一半先做完了
-GitHub 设备授权、~~匿名 24 小时链接~~、slug 改名与黑名单（黑名单已在 `common::slug`，改名要登录）、版本列表与回滚、~~短期签名令牌~~（隧道令牌已做）与撤销、~~用量按 60 秒上报~~（边缘事件每 60 秒批量送控制面，`edge/src/ship.rs`；带宽用量还没算）；~~结果第一层（打开、进到游戏、设备、来源、停留、资源失败）~~；~~错误上报与反馈按钮（只收文字）~~（`sdk/`，边缘在 `/_playtest/sdk.js` 同源提供）；~~控制台（作品时间线 · 每版一段话、会话点名册、反馈流），手机可看~~（`console/`，本机验过，上线等 `playtest.sh`）；~~`--json` 与 `playtest mcp`~~；~~上传时的导出物检查与人话报错~~（`cli/src/inspect/`，「一定打不开」的会拦下，`--force` 放行）；~~每 slug 每小时熔断~~。
+GitHub 设备授权、~~匿名 24 小时链接~~、slug 改名与黑名单（黑名单已在 `common::slug`，改名要登录）、版本列表与回滚、~~短期签名令牌~~（隧道令牌已做）与撤销、~~用量按 60 秒上报~~（边缘事件每 60 秒批量送控制面，`edge/src/ship.rs`；带宽用量还没算）；~~结果第一层（打开、进到游戏、设备、来源、停留、资源失败）~~；~~错误上报与反馈按钮（只收文字）~~（`sdk/`，边缘在 `/_playtest/sdk.js` 同源提供）；~~控制台（作品时间线 · 每版一段话、会话点名册、反馈流），手机可看~~（`console/`，`playtest.roviix.com/console/`）；~~`--json` 与 `playtest mcp`~~；~~上传时的导出物检查与人话报错~~（`cli/src/inspect/`，「一定打不开」的会拦下，`--force` 放行）；~~每 slug 每小时熔断~~。
 spike：`2026-09-07-gate-hardlines-breaker`、`2026-09-07-cli-json-mcp`、`2026-09-07-console-results`、`2026-09-07-gate-user-activation`、`2026-09-08-sdk-ingest-results`、`2026-09-08-cli-inspect`。
-还差：GitHub 登录（需要 OAuth App 与 `playtest.sh`）、版本回滚接口、令牌撤销推给边缘、带宽配额计量、上传时自动注入 SDK。
+还差：GitHub 登录（需要 OAuth App）、版本回滚接口、令牌撤销推给边缘、带宽配额计量、上传时自动注入 SDK。
 
 **第四周 · 上线与真机** —— 2026-09-07 提前做了前两项
-~~香港边缘部署~~（AWS 香港这一台已上线，`deploy/`；云在三网晚高峰压测一周后定）、~~泛域名证书~~（Caddy + Cloudflare DNS-01 已签）、对象存储接上（私测用机器磁盘）、`playtest.sh` 控制台上线；**手机流量扫码点开一次**（链接已是真的，`docs/spikes/2026-09-07-hk-online-first-links.md`，还没有人用手机试过）；**发布阻断**：微信真机（Android ≥ 6 台、iOS ≥ 4 个系统版本，私聊 / 群聊 / 朋友圈）+ 腾讯对外链规范 §2.5 的书面口径、香港压测记录；写完所有 spike；招 20 个私测开发者（DESIGN §8 八个指标与一个访谈问题从这里开始计；渠道是 Discord、itch 社区、引擎论坛、国内 Jam 社群、AI 编程社群，不是 Show HN）。
+~~香港边缘部署~~（AWS 香港这一台已上线，`deploy/`；云在三网晚高峰压测一周后定）、~~泛域名证书~~（Caddy + Cloudflare DNS-01 已签）、对象存储接上（私测用机器磁盘）、~~控制台上线~~（`playtest.roviix.com/console/`）；**手机流量扫码点开一次**（链接已是真的，`docs/spikes/2026-09-07-hk-online-first-links.md`，还没有人用手机试过）；**发布阻断**：微信真机（Android ≥ 6 台、iOS ≥ 4 个系统版本，私聊 / 群聊 / 朋友圈）+ 腾讯对外链规范 §2.5 的书面口径、香港压测记录；写完所有 spike；招 20 个私测开发者（DESIGN §8 八个指标与一个访谈问题从这里开始计；渠道是 Discord、itch 社区、引擎论坛、国内 Jam 社群、AI 编程社群，不是 Show HN）。
 
 ### 2b. 并行分工（2026-09-07 下午起）
 
@@ -78,9 +78,9 @@ spike：`2026-09-07-gate-hardlines-breaker`、`2026-09-07-cli-json-mcp`、`2026-
 
 - DESIGN 里对应的那句「完成」能指到一条 spike。
 - CLI 输出里没有内部比喻，第一次用的人看得懂。
-- 玩家路径上没有出现 `playtest.sh`；登录路径上没有出现 `*.playtest.run`。
+- 玩家路径上没有出现 `playtest.roviix.com`（根域介绍页那一个链接除外）；登录路径上没有出现 `*.playtest.run`。
 - 没有密钥进仓库。
 
 ## 5. 给新会话的第一句话（建议）
 
-> 读 `AGENTS.md`、`docs/DESIGN.md`，再按日期读 `docs/spikes/` 看做到哪（上传、隧道、结果三条线都已在香港边缘上线，`deploy/README.md`）。语言是 Rust，契约在 `common/`。接下来是第三周剩下的「身份」那一半：买 `playtest.sh` 让控制面与控制台有公网入口；GitHub 设备授权（要 OAuth App）；版本回滚接口；令牌撤销推给边缘；带宽配额计量。再往后是第四周的真机：手机扫码、微信、Godot / Unity 导出物、晚高峰回程压测。每做完一步在 `docs/spikes/` 里记一条。
+> 读 `AGENTS.md`、`docs/DESIGN.md`，再按日期读 `docs/spikes/` 看做到哪（上传、隧道、结果三条线都已在香港边缘上线，`deploy/README.md`）。语言是 Rust，契约在 `common/`。接下来是第三周剩下的「身份」那一半：GitHub 设备授权（要 OAuth App，回调地址在 `playtest.roviix.com`）；版本回滚接口；令牌撤销推给边缘；带宽配额计量。再往后是第四周的真机：手机扫码、微信、Godot / Unity 导出物、晚高峰回程压测。每做完一步在 `docs/spikes/` 里记一条。

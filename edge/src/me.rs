@@ -72,7 +72,7 @@ fn api_url(config: &Config) -> String {
     }
 }
 
-/// 没配的时候的落点。本机对着 KICKOFF §3 的约定；上线时不猜——`api.playtest.sh` 还没有的时候
+/// 没配的时候的落点。本机对着 KICKOFF §3 的约定；上线时不猜——开发者域名还没指过来的时候
 /// 猜出来只会让玩家浏览器对一个不存在的域名报错。上线必须显式设 `PLAYTEST_API_PUBLIC_URL`。
 fn default_api_url(host_suffix: &str) -> &'static str {
     if host_suffix == "localhost" || host_suffix.ends_with(".localhost") {

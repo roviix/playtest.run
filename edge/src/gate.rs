@@ -4,7 +4,7 @@
 //! （之后游戏的音频才能播）、是会话的起点、是版本的告示牌、是举报入口。
 //! 所以它必须一秒内出现——整页内联，不引任何外部脚本或字体。
 //!
-//! 这一页上不出现 `playtest.sh`：玩家路径与开发者路径是两个域名（AGENTS 第 7 条）。
+//! 这一页上不出现开发者域名：玩家路径与开发者路径是两个域名（AGENTS 第 7 条）。
 
 use playtest_common::manifest::{GateMode, Manifest};
 use playtest_common::RESERVED_PATH_PREFIX;
@@ -94,6 +94,9 @@ pub struct GatePage<'a> {
     /// 隧道没有版本这个概念（DESIGN §3.5），显示合成清单里那个 `v0` 会让玩家
     /// 以为自己拿到了一个坏链接。
     pub version_label: Option<&'a str>,
+    /// 玩家是从哪个页面点到这条链接的（门禁页请求的 Referer）。会话从「开始」那一下才算起，
+    /// 而那一下的 Referer 是门禁页自己，所以真正的来源要在表单里带过去（DESIGN §3.4「来自哪里」）。
+    pub referer: &'a str,
 }
 
 impl GatePage<'_> {
@@ -164,12 +167,14 @@ impl GatePage<'_> {
 {note}{tips}\
 <form method=\"post\" action=\"{prefix}start\">\n\
 <input type=\"hidden\" name=\"to\" value=\"{to}\">\n\
+<input type=\"hidden\" name=\"from\" value=\"{from}\">\n\
 <button type=\"submit\">开始</button>\n\
 </form>\n\
 {capability}{expires}\
 <footer><a href=\"{prefix}report\">有问题？举报</a>{badge}</footer>\n",
             prefix = RESERVED_PATH_PREFIX,
             to = esc(self.to),
+            from = esc(self.referer),
             capability = self.capability_note(),
         );
 
@@ -289,6 +294,7 @@ mod tests {
             page_url: "http://brisk-otter-41.localhost:8443/",
             wechat,
             version_label: None,
+            referer: "",
         }
     }
 
@@ -386,7 +392,7 @@ mod tests {
         // 没有封面就不给 og:image，不编一张假图。
         assert!(!html.contains("og:image"));
         // 玩家页面上不出现品牌域名。
-        assert!(!html.contains("playtest.sh"));
+        assert!(!html.contains(playtest_common::DEVELOPER_HOST));
         // 整页要小（DESIGN §3.3：不超过几 KB，像作品封面不像安全告警）。
         assert!(html.len() < 6 * 1024, "门禁页 {} 字节", html.len());
     }

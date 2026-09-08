@@ -1,4 +1,4 @@
-//! CLI 与控制面（`api.playtest.sh`）之间的请求与响应体。
+//! CLI 与控制面（[`crate::DEVELOPER_API_URL`]）之间的请求与响应体。
 //!
 //! 路径常量与类型放一起，CLI 和 api 各自引用，改一处两边同时变。
 //! 鉴权：`Authorization: Bearer <token>`；匿名令牌由 [`routes::ANON_SESSIONS`] 签发。

@@ -281,6 +281,11 @@ async fn start(
         .or_else(|| parts.uri.query().and_then(|q| field(q, "to")))
         .unwrap_or_default();
     let location = same_origin_target(&target);
+    // 玩家真正从哪来：门禁页把自己收到的 Referer 放在表单里带过来。这一下 POST 的 Referer
+    // 永远是门禁页自己，没有信息量。只留一个 URL 形态的值，别的当没有。
+    let came_from = field(&form, "from")
+        .filter(|f| f.starts_with("http://") || f.starts_with("https://"))
+        .unwrap_or_default();
 
     let secure = app.config.public_scheme == "https";
     let mut headers = base_headers();
@@ -315,6 +320,7 @@ async fn start(
 
     let visitor = Visitor {
         sid,
+        referer: came_from,
         ..ctx.visitor.clone()
     };
     app.events
@@ -401,6 +407,7 @@ async fn gate_page(
         page_url: &ctx.page_url,
         wechat: ctx.visitor.wechat,
         version_label,
+        referer: &ctx.visitor.referer,
     }
     .render();
 

@@ -3,9 +3,9 @@
 //! 都是我们自己渲染的完整 HTML，不是裸状态码——玩家拿到的是一条别人发给他的链接，
 //! 浏览器默认的错误页只会让他以为是自己的网络坏了。
 //!
-//! 除根域介绍页外，任何一页都不出现 `playtest.sh`（AGENTS 第 7 条）。
+//! 除根域介绍页外，任何一页都不出现开发者域名（AGENTS 第 7 条）。
 
-use playtest_common::RESERVED_PATH_PREFIX;
+use playtest_common::{DEVELOPER_API_URL, RESERVED_PATH_PREFIX};
 
 use crate::html::{esc, shell};
 
@@ -17,8 +17,9 @@ pub fn root(host_suffix: &str) -> String {
 <pre><code>playtest ./dist</code></pre>\n\
 <p class=\"lead\">几秒钟拿到一个链接和一张二维码。拿到链接的人点开就能玩——不注册、不装东西、手机上也一样。\
 每个作品一个 <code>xxx.{suffix}</code>。</p>\n\
-<footer><a href=\"https://playtest.sh\">开发者从这里开始</a></footer>\n",
+<footer><a href=\"{dev}\">开发者从这里开始</a></footer>\n",
         suffix = esc(host_suffix),
+        dev = DEVELOPER_API_URL,
     );
     shell("playtest · 一条命令，把这个版本放到别人面前", "", &body)
 }
@@ -117,7 +118,7 @@ mod tests {
 
     #[test]
     fn only_the_root_page_may_mention_the_brand_site() {
-        assert!(root("playtest.run").contains("https://playtest.sh"));
+        assert!(root("playtest.run").contains(DEVELOPER_API_URL));
         for page in [
             not_found(),
             file_not_found(),
@@ -128,7 +129,7 @@ mod tests {
             over_quota(),
             not_implemented(),
         ] {
-            assert!(!page.contains("playtest.sh"), "玩家页面上不能出现品牌域名");
+            assert!(!page.contains(playtest_common::DEVELOPER_HOST), "玩家页面上不能出现开发者域名");
         }
     }
 

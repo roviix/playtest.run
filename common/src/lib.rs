@@ -24,6 +24,15 @@ pub mod slug;
 pub mod store;
 pub mod tunnel;
 
+/// 开发者这一侧的域名：控制面、控制台、登录、文档都在这里（DESIGN §4.1，AGENTS 第 7 条）。
+/// 玩家路径上唯一允许出现它的地方是根域介绍页的「开发者从这里开始」。
+/// 为什么是 roviix 的子域而不是独立域：隔离 cookie 与「品牌不陪葬」只要求「另一个可注册域」，
+/// `roviix.com` 已满足；roviix 是制作者，playtest 是它的产品（KICKOFF §1 2b）。
+pub const DEVELOPER_HOST: &str = "playtest.roviix.com";
+
+/// 控制面 API 的公网地址。控制台挂在同一主机的 `/console/` 下。
+pub const DEVELOPER_API_URL: &str = "https://playtest.roviix.com";
+
 /// 边缘保留给自己的路径前缀。门禁页的「开始」、举报、事件上报都在这下面，
 /// 作品目录里如果有同名路径会被遮住——文档里写明。
 pub const RESERVED_PATH_PREFIX: &str = "/_playtest/";
