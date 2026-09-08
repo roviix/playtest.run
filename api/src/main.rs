@@ -8,6 +8,7 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env()?;
     let state = AppState::from_config(&config).await?;
     sweeper::spawn(state.clone());
+    sweeper::spawn_blob_gc(state.clone());
 
     let listener = tokio::net::TcpListener::bind(config.listen)
         .await

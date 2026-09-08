@@ -3,7 +3,7 @@
 > 一条命令，把你手上这个能玩的版本放到别人面前，然后知道他们玩成了什么样。
 > One command to put the build you have right now in front of real people — and see what happened.
 
-**状态：v0.1 私测前——上传、隧道、结果三条线都在线上。** `playtest <目录>` 与 `playtest <端口>` 都能拿到一个真的 `https://<slug>.playtest.run` 链接，控制面与控制台在 `https://playtest.roviix.com`：上传的导出物和穿隧道的 socket.io 联机房间都在真实 Chrome 里验过；门禁页、第一层数据、SDK、结果端点与控制台接成了一条线。还没做的：GitHub 登录（现在全是 24 小时匿名链接）、令牌撤销、用量配额。做不到的地方命令会明说。真机记录在 [`docs/spikes/`](docs/spikes/)。产品定义在 [`docs/DESIGN.md`](docs/DESIGN.md)，每个结论都带推导过程；方向变了直接改它。施工顺序在 [`docs/KICKOFF.md`](docs/KICKOFF.md)。
+**状态：v0.1 私测前——上传、隧道、结果三条线都在线上。** `playtest <目录>` 与 `playtest <端口>` 都能拿到一个真的 `https://<slug>.playtest.run` 链接，控制面与控制台在 `https://playtest.roviix.com`：上传的导出物和穿隧道的 socket.io 联机房间都在真实 Chrome 里验过；门禁页、第一层数据、SDK、结果端点与控制台接成了一条线。还没做的：GitHub 登录（现在全是 24 小时匿名链接）、令牌撤销、用量配额。做不到的地方命令会明说。真机记录在 [`docs/spikes/`](docs/spikes/)。产品定义在 [`docs/DESIGN.md`](docs/DESIGN.md)，每个结论都带推导过程；方向变了直接改它。施工顺序在 [`docs/KICKOFF.md`](docs/KICKOFF.md)；一张图看架构在 [`docs/architecture.html`](docs/architecture.html)（浏览器直接打开）。
 
 ## 它会是什么
 

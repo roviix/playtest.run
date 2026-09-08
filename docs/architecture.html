@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>playtest · 架构白板</title>
 <style>
-  :root { --paper:#f4f1ea; --ink:#2b2a24; --muted:#8f887a; --red:#c8522f; --green:#3d6b50; --navy:#2e4d72; --amber:#8a6a1f; --violet:#6a4b83; }
+  :root { --paper:#f4f1ea; --ink:#2b2a24; --muted:#8f887a; --red:#c8522f; --green:#3d6b50; --navy:#2e4d72; --amber:#c9973b; --violet:#6a4b83; }
   * { box-sizing:border-box; }
   html,body { margin:0; }
   body {
@@ -20,7 +20,7 @@
     color:var(--muted);
   }
   #crumb a { color:var(--muted); text-decoration:none; border-bottom:1px dashed #b9b2a0; }
-  #board { width:2400px; transform-origin:top left; }
+  #board { width:2960px; transform-origin:top left; }
   svg text {
     font-family:"Segoe Print","Bradley Hand","Chalkboard SE","Kaiti SC","KaiTi",cursive;
     fill:var(--ink);
@@ -47,12 +47,6 @@
   .navy { fill:var(--navy); }
   .violet { fill:var(--violet); }
   .amberink { fill:#8a6a1f; }
-  .wire { fill:none; stroke:var(--ink); stroke-width:2.6; stroke-linecap:round; stroke-linejoin:round; }
-  .wire-thick { stroke-width:5; }
-  .wire-dash { stroke-dasharray:10 9; }
-  .wire-navy { stroke:var(--navy); }
-  .wire-amber { stroke:#8a6a1f; }
-  .wire-green { stroke:var(--green); }
   #zoomer {
     position:fixed; right:18px; bottom:18px; z-index:3;
     display:flex; flex-direction:column; gap:8px;
@@ -68,12 +62,15 @@
 </style>
 </head>
 <body>
-<div id="crumb">playtest · 架构白板 &nbsp;·&nbsp; 细节在 <a href="DESIGN.md">docs/DESIGN.md</a>，方向变了先改它再改这张图 &nbsp;·&nbsp; 2026-09-08</div>
+<div id="crumb">playtest · 架构白板 &nbsp;·&nbsp; 细节在 <a href="DESIGN.md">DESIGN.md</a>，方向变了先改它再改这里 &nbsp;·&nbsp; 2026-09-08</div>
 <div id="board">
-<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="2560" viewBox="0 0 2400 2560" role="img" aria-label="playtest 架构白板">
+<svg xmlns="http://www.w3.org/2000/svg" width="2960" height="5560" viewBox="0 0 2960 5560" role="img" aria-label="playtest 架构白板">
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
       <path d="M0,0 L9,5 L0,10" fill="none" stroke="#2b2a24" stroke-width="1.8"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L9,5 L0,10" fill="none" stroke="#3d6b50" stroke-width="1.8"/>
     </marker>
     <marker id="arrow-navy" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
       <path d="M0,0 L9,5 L0,10" fill="none" stroke="#2e4d72" stroke-width="1.8"/>
@@ -81,206 +78,347 @@
     <marker id="arrow-amber" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
       <path d="M0,0 L9,5 L0,10" fill="none" stroke="#8a6a1f" stroke-width="1.8"/>
     </marker>
-    <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
-      <path d="M0,0 L9,5 L0,10" fill="none" stroke="#3d6b50" stroke-width="1.8"/>
+    <marker id="arrow-red" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L9,5 L0,10" fill="none" stroke="#c8522f" stroke-width="1.8"/>
     </marker>
   </defs>
 
   <!-- ===== 标题 ===== -->
-  <text x="120" y="190" class="title">playtest</text>
-  <path d="M122 226 C300 216 420 236 560 224" class="rough" stroke="#6a4b83" stroke-width="8"/>
-  <text x="120" y="300" font-size="38" fill="#55524a">一条命令，把这个能玩的版本放到别人面前，然后知道他们玩成了什么样</text>
-  <text x="120" y="356" class="body muted">三个人 · 两个域名 · 四个进程。每个框对应 DESIGN 的一节；这里只画抽象与关系</text>
+  <text x="140" y="220" class="title">playtest</text>
+  <path d="M142 258 C300 246 420 269 560 254" class="rough" stroke="#6a4b83" stroke-width="8"/>
+  <text x="140" y="340" font-size="38" fill="#55524a">一条命令，把你手上这个能玩的版本放到别人面前，然后知道他们玩成了什么样</text>
+  <text x="140" y="402" class="body muted">三个人 · 两个域名 · 四个进程 · 一台机器。每个框现在都是真的在跑的东西，不是规划</text>
 
-  <g transform="rotate(-1.4 1980 250)">
-    <rect x="1640" y="140" width="680" height="226" rx="5" fill="#f7e8a8"/>
-    <text x="1980" y="204" text-anchor="middle" class="h">一句话先记住</text>
-    <path d="M1730 220 C1880 204 2080 240 2230 220" class="rough" stroke="#c0331f" stroke-width="5"/>
-    <text x="1980" y="276" text-anchor="middle" font-size="26" font-weight="700" class="amberink">玩家的东西全在 *.playtest.run，没有登录</text>
-    <text x="1980" y="324" text-anchor="middle" font-size="26" font-weight="700" class="navy">开发者的一切在 playtest.roviix.com</text>
+  <g transform="rotate(-1 2340 262)">
+    <rect x="2010" y="146" width="770" height="230" rx="5" fill="#f7e8a8"/>
+    <text x="2395" y="212" text-anchor="middle" class="h">一句话先记住</text>
+    <path d="M2110 228 C2300 210 2510 250 2680 228" class="rough" stroke="#c0331f" stroke-width="5"/>
+    <text x="2395" y="284" text-anchor="middle" font-size="26" font-weight="700" class="violet">送过去只是手段（上传 或 隧道）</text>
+    <text x="2395" y="332" text-anchor="middle" font-size="26" font-weight="700" class="green">知道结果才是产品（点名册）</text>
   </g>
 
-  <!-- ===== 1 · 三个人 ===== -->
-  <rect x="80" y="440" width="2240" height="1080" rx="8" class="panel"/>
-  <circle cx="126" cy="492" r="26" class="rough" stroke="#6a4b83" stroke-width="3"/>
-  <text x="126" y="503" text-anchor="middle" font-size="29" font-weight="700" class="violet">1</text>
-  <text x="176" y="506" class="panel-title">谁在哪、连着谁</text>
-  <text x="560" y="503" class="body muted">左边开发者，中间香港一台机器，右边玩家；粗线是玩家会走的路</text>
+  <!-- ===== 1 全景 ===== -->
+  <rect x="80" y="500" width="2800" height="1300" rx="8" class="panel"/>
+  <circle cx="126" cy="552" r="26" class="rough" stroke="#6a4b83" stroke-width="3"/>
+  <text x="126" y="563" text-anchor="middle" font-size="29" font-weight="700" class="violet">1</text>
+  <text x="176" y="566" class="panel-title">全景：谁在哪、说什么话</text>
+  <text x="760" y="563" class="body muted">蓝 = 开发者的东西（playtest.roviix.com）　黄 = 玩家看到的东西（*.playtest.run）　它们从不共享一个 cookie</text>
 
   <!-- 开发者的电脑 -->
-  <text x="150" y="590" class="h navy">开发者的电脑</text>
-  <rect x="140" y="620" width="520" height="150" rx="6" class="box"/>
-  <text x="400" y="680" text-anchor="middle" class="h">导出目录 ./dist</text>
-  <text x="400" y="722" text-anchor="middle" class="small">Godot · Unity · Phaser · Vite 导出的那一坨，里面有 index.html</text>
+  <rect x="160" y="640" width="640" height="1080" rx="6" class="box" stroke-dasharray="10 9" stroke="#8f887a"/>
+  <text x="480" y="700" text-anchor="middle" class="h">开发者的电脑</text>
 
-  <rect x="140" y="880" width="520" height="220" rx="6" class="box soft-navy"/>
-  <text x="400" y="940" text-anchor="middle" class="h navy">playtest 命令行</text>
-  <text x="400" y="984" text-anchor="middle" class="body">单文件 · 五平台 · Apache-2.0</text>
-  <text x="400" y="1024" text-anchor="middle" class="small">上传 · 隧道 · ls / rm / open · --json · mcp</text>
-  <text x="400" y="1060" text-anchor="middle" class="small">上传前先检查导出物，「一定打不开」的拦下</text>
+  <rect x="220" y="760" width="520" height="150" rx="6" class="box"/>
+  <text x="480" y="820" text-anchor="middle" class="h">导出目录 ./dist</text>
+  <text x="480" y="866" text-anchor="middle" class="small">Godot / Unity / Phaser / Vite 导出的那个，里面有 index.html</text>
 
-  <rect x="140" y="1210" width="520" height="150" rx="6" class="box"/>
-  <text x="400" y="1270" text-anchor="middle" class="h">本地开发服务器 :5173</text>
-  <text x="400" y="1312" text-anchor="middle" class="small">或者一个联机后端（socket.io / Colyseus）</text>
+  <rect x="220" y="1420" width="520" height="150" rx="6" class="box"/>
+  <text x="480" y="1480" text-anchor="middle" class="h">本地开发服务器 :5173</text>
+  <text x="480" y="1526" text-anchor="middle" class="small">或者一个联机后端（socket.io / Colyseus）</text>
 
-  <!-- 内部箭头 -->
-  <path d="M400 770 C404 810 396 840 400 880" class="wire wire-dash" marker-end="url(#arrow)"/>
-  <text x="420" y="832" class="small">算哈希，只传服务器没有的</text>
-  <path d="M400 1210 C404 1170 396 1140 400 1100" class="wire wire-dash" marker-end="url(#arrow)"/>
-  <text x="420" y="1160" class="small">一条出站连接，多路复用</text>
+  <rect x="220" y="1040" width="520" height="290" rx="6" class="box soft-navy"/>
+  <text x="480" y="1100" text-anchor="middle" class="h navy">playtest 命令行</text>
+  <text x="265" y="1152" class="body">· 单文件，五平台，Apache-2.0</text>
+  <text x="265" y="1196" class="body">· 上传：哈希 → 只传缺的 → 提交清单</text>
+  <text x="265" y="1240" class="body">· 隧道：一条出站 WSS，多路复用</text>
+  <text x="265" y="1284" class="body">· --json / mcp：给脚本和 agent 用</text>
+
+  <path d="M480 910 C476 960 484 1000 480 1040" class="rough" stroke="#2b2a24" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="500" y="985" class="small">读文件、算哈希</text>
+  <path d="M480 1420 C484 1390 476 1360 480 1330" class="rough" stroke="#2b2a24" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="500" y="1385" class="small">每个玩家一条流，连到它</text>
 
   <!-- 香港一台机器 -->
-  <text x="900" y="590" class="h">香港一台机器</text>
-  <text x="1140" y="590" class="small">deploy/compose.yaml · 自托管也是同一份</text>
-  <rect x="880" y="610" width="920" height="880" rx="8" fill="none" stroke="#2b2a24" stroke-width="2" stroke-dasharray="14 10"/>
+  <rect x="960" y="640" width="1180" height="1080" rx="6" class="box" stroke-dasharray="10 9" stroke="#8f887a"/>
+  <text x="1550" y="700" text-anchor="middle" class="h">香港一台机器 · deploy/compose.yaml</text>
 
-  <rect x="920" y="650" width="300" height="130" rx="6" class="box"/>
-  <text x="1070" y="704" text-anchor="middle" class="h">Caddy</text>
-  <text x="1070" y="746" text-anchor="middle" class="small">TLS · 泛域名证书（DNS-01）</text>
+  <rect x="1020" y="760" width="1060" height="110" rx="6" class="box"/>
+  <text x="1550" y="806" text-anchor="middle" class="h">Caddy</text>
+  <text x="1550" y="846" text-anchor="middle" class="small">TLS 终止 · *.playtest.run 泛域名证书（Cloudflare DNS-01）· playtest.roviix.com</text>
 
-  <rect x="1300" y="650" width="460" height="230" rx="6" class="box soft-amber"/>
-  <text x="1530" y="704" text-anchor="middle" class="h amberink">edge · 边缘</text>
-  <text x="1330" y="750" class="body">门禁页 · 按清单分发 · 隧道接入</text>
-  <text x="1330" y="790" class="body">游戏响应头：wasm · .br · COOP/COEP · Range</text>
-  <text x="1330" y="830" class="body">每 slug 每小时熔断 · 第一层事件</text>
-  <text x="1330" y="864" class="small">从不运行用户代码，只分发文件、转发连接</text>
+  <rect x="1020" y="940" width="500" height="330" rx="6" class="box soft-amber"/>
+  <text x="1270" y="1000" text-anchor="middle" class="h amberink">edge · 边缘</text>
+  <text x="1060" y="1052" class="body">· 门禁页（开始 = 用户手势）</text>
+  <text x="1060" y="1096" class="body">· 按清单分发，流式，Range</text>
+  <text x="1060" y="1140" class="body">· 游戏响应头：wasm · br · COOP/COEP</text>
+  <text x="1060" y="1184" class="body">· 隧道接入：验公钥 → yamux 流</text>
+  <text x="1060" y="1228" class="body">· 熔断 · 第一层事件 · 同源 SDK</text>
 
-  <rect x="1300" y="1010" width="460" height="210" rx="6" class="box soft-navy"/>
-  <text x="1530" y="1064" text-anchor="middle" class="h navy">api · 控制面</text>
-  <text x="1330" y="1110" class="body">匿名令牌 · slug · 版本 · 隧道令牌（Ed25519）</text>
-  <text x="1330" y="1150" class="body">事件与反馈写入 · 结果读取</text>
-  <text x="1330" y="1190" class="small">令牌活不过作品；边缘只验公钥，不回源</text>
+  <rect x="1580" y="940" width="500" height="330" rx="6" class="box soft-navy"/>
+  <text x="1830" y="1000" text-anchor="middle" class="h navy">api · 控制面</text>
+  <text x="1620" y="1052" class="body">· 匿名令牌（24 小时）</text>
+  <text x="1620" y="1096" class="body">· slug · 版本 · 清单 → 对象存储</text>
+  <text x="1620" y="1140" class="body">· 隧道令牌：私钥签，一小时</text>
+  <text x="1620" y="1184" class="body">· 事件与反馈写入（无令牌，按形状拦）</text>
+  <text x="1620" y="1228" class="body">· 结果读取 → 控制台</text>
 
-  <rect x="920" y="1010" width="300" height="160" rx="6" class="box soft-navy"/>
-  <text x="1070" y="1064" text-anchor="middle" class="h navy">控制台</text>
-  <text x="1070" y="1106" text-anchor="middle" class="small">/console/ · 静态 · 手机可看</text>
-  <text x="1070" y="1144" text-anchor="middle" class="small">不是仪表盘，是点名册</text>
+  <path d="M1520 1105 C1540 1105 1560 1105 1580 1105" class="rough" stroke="#8a6a1f" stroke-width="3" stroke-dasharray="8 8" marker-end="url(#arrow-amber)"/>
+  <text x="1550" y="1090" text-anchor="middle" class="small amberink">事件</text>
+  <text x="1550" y="1140" text-anchor="middle" class="small amberink">每 60 秒</text>
+
+  <rect x="1020" y="1360" width="500" height="120" rx="6" class="box soft-navy"/>
+  <text x="1270" y="1410" text-anchor="middle" class="h navy">控制台 /console/</text>
+  <text x="1270" y="1452" text-anchor="middle" class="small">静态 Preact · 点名册，不是仪表盘 · 手机可看</text>
 
   <!-- 两个存储（圆柱） -->
   <g>
-    <rect x="920" y="1310" width="300" height="140" class="box" rx="0"/>
-    <ellipse cx="1070" cy="1310" rx="150" ry="18" class="box"/>
-    <text x="1070" y="1370" text-anchor="middle" class="h">SQLite</text>
-    <text x="1070" y="1404" text-anchor="middle" class="small">用户 · 作品 · 版本</text>
-    <text x="1070" y="1430" text-anchor="middle" class="small">会话 · 事件 · 反馈</text>
+    <path d="M1030 1590 C1030 1566 1141 1550 1270 1550 C1399 1550 1510 1566 1510 1590 L1510 1680 C1510 1704 1399 1720 1270 1720 C1141 1720 1030 1704 1030 1680 Z" class="box"/>
+    <path d="M1030 1590 C1030 1614 1141 1630 1270 1630 C1399 1630 1510 1614 1510 1590" class="rough" stroke="#2b2a24" stroke-width="3"/>
+    <text x="1270" y="1672" text-anchor="middle" class="h">对象存储</text>
+    <text x="1270" y="1706" text-anchor="middle" class="mono-s">blobs/&lt;hash&gt; · manifests/vN · current.json · keys/tunnel.pub</text>
   </g>
   <g>
-    <rect x="1300" y="1310" width="460" height="140" class="box" rx="0"/>
-    <ellipse cx="1530" cy="1310" rx="230" ry="18" class="box"/>
-    <text x="1530" y="1370" text-anchor="middle" class="h">对象存储（现在是磁盘上的目录）</text>
-    <text x="1530" y="1404" text-anchor="middle" class="mono-s">blobs/&lt;hash&gt; · sites/&lt;slug&gt;/manifests/vN</text>
-    <text x="1530" y="1430" text-anchor="middle" class="mono-s">current.json · keys/tunnel.pub</text>
+    <path d="M1590 1590 C1590 1566 1701 1550 1830 1550 C1959 1550 2070 1566 2070 1590 L2070 1680 C2070 1704 1959 1720 1830 1720 C1701 1720 1590 1704 1590 1680 Z" class="box"/>
+    <path d="M1590 1590 C1590 1614 1701 1630 1830 1630 C1959 1630 2070 1614 2070 1590" class="rough" stroke="#2b2a24" stroke-width="3"/>
+    <text x="1830" y="1672" text-anchor="middle" class="h">SQLite</text>
+    <text x="1830" y="1706" text-anchor="middle" class="mono-s">用户 · 作品 · 版本 · 会话 · 事件 · 反馈</text>
   </g>
 
-  <!-- 机器内部连线 -->
-  <path d="M1220 700 C1250 700 1270 700 1300 700" class="wire" marker-end="url(#arrow)"/>
-  <text x="1226" y="690" class="small">*.playtest.run</text>
-  <path d="M1220 760 C1260 860 1270 960 1300 1060" class="wire wire-navy" marker-end="url(#arrow-navy)"/>
-  <text x="1090" y="1000" class="small navy">playtest.roviix.com → 控制台 / api</text>
-  <path d="M1070 780 C1066 860 1074 940 1070 1010" class="wire wire-navy" marker-end="url(#arrow-navy)"/>
-    <path d="M1530 880 C1526 920 1534 970 1530 1010" class="wire wire-dash" marker-end="url(#arrow)"/>
-  <text x="1548" y="950" class="small">事件，每 60 秒一批</text>
-  <path d="M1220 1090 C1250 1090 1270 1090 1300 1090" class="wire wire-dash wire-navy" marker-end="url(#arrow-navy)"/>
-  <path d="M1530 1220 C1526 1250 1534 1270 1530 1292" class="wire" marker-end="url(#arrow)"/>
-  <text x="1548" y="1262" class="small">写清单、指针、blob</text>
-  <path d="M1360 1010 C1200 1070 1120 1180 1080 1292" class="wire" marker-end="url(#arrow)"/>
-  <path d="M1740 880 C1810 1000 1830 1150 1750 1292" class="wire wire-dash wire-amber" marker-end="url(#arrow-amber)"/>
-  <text x="1800" y="1470" class="small amberink">↑ 边缘只读对象存储：控制面挂了，链接照常开</text>
+  <path d="M1830 1270 C1832 1360 1828 1470 1830 1550" class="rough" stroke="#2e4d72" stroke-width="3" marker-end="url(#arrow-navy)"/>
+  <text x="1850" y="1420" class="small navy">读写</text>
+  <path d="M1640 1270 C1600 1400 1540 1500 1460 1555" class="rough" stroke="#2e4d72" stroke-width="3" marker-end="url(#arrow-navy)"/>
+  <text x="1580" y="1470" class="small navy">写清单与 blob</text>
+  <path d="M1470 1270 C1500 1330 1500 1440 1460 1555" class="rough" stroke="#8a6a1f" stroke-width="3" stroke-dasharray="8 8" marker-end="url(#arrow-amber)"/>
+  <text x="1505" y="1420" class="small amberink">只读清单与 blob</text>
+  <path d="M1520 1400 C1560 1380 1600 1330 1620 1275" class="rough" stroke="#2e4d72" stroke-width="2.5" stroke-dasharray="7 8" marker-end="url(#arrow-navy)"/>
+  <text x="1440" y="1345" class="small navy">令牌读结果</text>
+
+  <!-- Caddy 到三处 -->
+  <path d="M1270 870 C1268 895 1272 915 1270 940" class="rough" stroke="#2b2a24" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M1830 870 C1832 895 1828 915 1830 940" class="rough" stroke="#2b2a24" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M1030 870 C990 950 985 1250 1030 1360" class="rough" stroke="#2e4d72" stroke-width="2.5" marker-end="url(#arrow-navy)"/>
 
   <!-- 玩家 -->
-  <text x="1900" y="590" class="h amberink">玩家的手机</text>
-  <rect x="1880" y="620" width="400" height="230" rx="6" class="box soft-amber"/>
-  <text x="2080" y="676" text-anchor="middle" class="h amberink">门禁页</text>
-  <text x="2080" y="720" text-anchor="middle" class="body">「某某 邀请你试玩</text>
-  <text x="2080" y="756" text-anchor="middle" class="body">《作品》· v7」→ 开始</text>
-  <text x="2080" y="800" text-anchor="middle" class="small">这一下点击解锁音频，会话从这里算</text>
-  <text x="2080" y="830" text-anchor="middle" class="small">微信里提示「用浏览器打开」</text>
+  <rect x="2300" y="640" width="500" height="1080" rx="6" class="box" stroke-dasharray="10 9" stroke="#8f887a"/>
+  <text x="2550" y="700" text-anchor="middle" class="h">玩家的手机 / 浏览器</text>
 
-  <rect x="1880" y="1010" width="400" height="230" rx="6" class="box soft-amber"/>
-  <text x="2080" y="1066" text-anchor="middle" class="h amberink">作品本体</text>
-  <text x="2080" y="1110" text-anchor="middle" class="body">上传的文件，或隧道那头的进程</text>
-  <text x="2080" y="1150" text-anchor="middle" class="small">+ 可选一行 &lt;script src="/_playtest/sdk.js"&gt;</text>
-  <text x="2080" y="1184" text-anchor="middle" class="small">错误 · 加载用时 · 自定义事件 · 反馈按钮</text>
-  <text x="2080" y="1218" text-anchor="middle" class="small">不登录、不装东西、不记 IP</text>
+  <rect x="2350" y="780" width="400" height="300" rx="6" class="box soft-amber"/>
+  <text x="2550" y="840" text-anchor="middle" class="h amberink">门禁页</text>
+  <text x="2550" y="892" text-anchor="middle" class="body">「某某 邀请你试玩</text>
+  <text x="2550" y="932" text-anchor="middle" class="body">《作品名》· v7」</text>
+  <rect x="2450" y="960" width="200" height="60" rx="4" fill="#3d6b50"/>
+  <text x="2550" y="1000" text-anchor="middle" font-size="24" font-weight="700" fill="#fff">开始</text>
+  <text x="2550" y="1058" text-anchor="middle" class="small">这一下点击 = 音频解锁 + 会话起点</text>
 
-  <path d="M2080 850 C2084 900 2076 960 2080 1010" class="wire wire-thick wire-amber" marker-end="url(#arrow-amber)"/>
-  <text x="2100" y="936" class="small amberink">点「开始」</text>
+  <path d="M2550 1080 C2546 1140 2554 1200 2550 1260" class="rough" stroke="#2b2a24" stroke-width="3" marker-end="url(#arrow)"/>
 
-  <!-- 跨区连线 -->
-  <!-- CLI → Caddy（控制面） -->
-  <path d="M660 930 C760 900 820 760 920 715" class="wire wire-navy" marker-end="url(#arrow-navy)"/>
-  <text x="690" y="850" class="mono-s">https://playtest.roviix.com</text>
-  <text x="690" y="878" class="small">令牌 · 建作品 · 传 blob · 提交清单 · 要隧道令牌</text>
-  <!-- CLI ⇉ edge（隧道，粗线，绕开 Caddy 走下方） -->
-  <path d="M660 1000 C740 1000 800 1000 840 990 C880 980 900 940 900 900 C900 860 940 850 1000 850 C1100 850 1200 890 1300 860" class="wire wire-thick wire-amber" marker-end="url(#arrow-amber)"/>
-  <text x="140" y="1410" class="mono-s">↑ 隧道：wss://&lt;slug&gt;.playtest.run/_playtest/tunnel，经 Caddy 到 edge</text>
-  <!-- Caddy ⇉ 门禁页 -->
-  <path d="M1760 700 C1800 690 1840 690 1880 700" class="wire wire-thick wire-amber" marker-end="url(#arrow-amber)"/>
-  <text x="1660" y="630" class="mono-s">https://&lt;slug&gt;.playtest.run</text>
-  <!-- SDK → api（跨域） -->
-  <path d="M1880 1200 C1840 1230 1800 1180 1760 1150" class="wire wire-dash wire-navy" marker-end="url(#arrow-navy)"/>
-  <text x="2080" y="1272" text-anchor="middle" class="small navy">playtest.js 的事件发到 playtest.roviix.com</text>
-  <!-- 开发者 → 控制台 -->
-  <path d="M660 1290 C760 1300 840 1260 900 1220 C940 1200 970 1190 1000 1172" class="wire wire-dash wire-navy" marker-end="url(#arrow-navy)"/>
-  <text x="140" y="1450" class="small navy">↑ 开发者用令牌打开控制台看结果（虚线）</text>
+  <rect x="2350" y="1260" width="400" height="300" rx="6" class="box soft-amber"/>
+  <text x="2550" y="1320" text-anchor="middle" class="h amberink">作品本体</text>
+  <text x="2550" y="1372" text-anchor="middle" class="body">上传的文件 或 隧道那头</text>
+  <text x="2550" y="1416" text-anchor="middle" class="body">+ 可选一行 playtest.js</text>
+  <text x="2550" y="1466" text-anchor="middle" class="small">JS 错误 · 加载用时 · 自定义事件</text>
+  <text x="2550" y="1500" text-anchor="middle" class="small">右下角一个反馈按钮，写一句话</text>
+  <text x="2550" y="1540" text-anchor="middle" class="small red">不注册 · 不装东西 · 微信里也点得开（待验）</text>
 
-  <!-- ===== 2 · 两条路，一种链接 ===== -->
-  <rect x="80" y="1580" width="2240" height="900" rx="8" class="panel"/>
-  <circle cx="126" cy="1632" r="26" class="rough" stroke="#6a4b83" stroke-width="3"/>
-  <text x="126" y="1643" text-anchor="middle" font-size="29" font-weight="700" class="violet">2</text>
-  <text x="176" y="1646" class="panel-title">两条路，一种链接</text>
-  <text x="640" y="1643" class="body muted">同一个 &lt;slug&gt;.playtest.run，既能上传也能隧道；一个作品两条路都走过时，隧道离线就退回上传的版本</text>
+  <rect x="2350" y="1600" width="400" height="90" rx="6" class="box soft-red"/>
+  <text x="2550" y="1636" text-anchor="middle" class="body red" font-weight="700">不收集的</text>
+  <text x="2550" y="1672" text-anchor="middle" class="small">身份 · IP · 位置 · 跨站追踪</text>
 
-  <!-- 上传 -->
-  <rect x="140" y="1700" width="1020" height="700" rx="6" class="box soft-navy"/>
-  <text x="650" y="1756" text-anchor="middle" class="h navy">上传 · playtest ./dist</text>
-  <path d="M400 1772 C560 1762 760 1780 900 1770" class="rough" stroke="#2e4d72" stroke-width="3"/>
-  <text x="180" y="1822" class="body">多数场景（M2 发给朋友 · M3 找一批人测）：引擎导出物是静态目录</text>
-  <text x="180" y="1878" class="body">1. 遍历 · SHA-256 · 检查导出物（要不要 --isolated、index.html 在不在最外层）</text>
-  <text x="180" y="1926" class="body">2. 问控制面「这些哈希缺哪些」→ 只传缺的（改一行代码只传一个文件）</text>
-  <text x="180" y="1974" class="body">3. 提交清单 → v7，不可变；&lt;slug&gt; 永远指最新，回滚就是改指针</text>
-  <text x="180" y="2022" class="body">4. 边缘按清单服务：路径 → 哈希 → blob，流式回给玩家</text>
-  <text x="180" y="2090" class="body green">✓ 玩家从边缘直接拿，笔记本合盖也在</text>
-  <text x="180" y="2134" class="body green">✓ 大文件不经家宽上行</text>
-  <text x="180" y="2190" class="body red">✗ 只有一个区域，海外玩家绕到香港</text>
-  <text x="180" y="2234" class="body red">✗ 对象存储是单机磁盘，S3 等第二个边缘</text>
-  <text x="180" y="2300" class="small">上限：匿名 200 MB / 版本 · 3 个作品 · 24 小时；免费档 500 MB · 每 slug 每小时熔断</text>
-  <text x="180" y="2346" class="mono-s">fixtures：Vite · Phaser · 响应头自检页 已过 · Godot / Unity 待真导出物</text>
+  <!-- 跨区大箭头 -->
+  <path d="M740 1070 C820 1000 860 830 1020 815" class="rough" stroke="#2e4d72" stroke-width="4" marker-end="url(#arrow-navy)"/>
+  <text x="880" y="860" text-anchor="middle" class="small navy">https://playtest.roviix.com</text>
+  <text x="880" y="890" text-anchor="middle" class="small navy">令牌 · blob · 清单 · 隧道令牌</text>
 
-  <!-- 隧道 -->
-  <rect x="1240" y="1700" width="1040" height="700" rx="6" class="box soft-amber"/>
-  <text x="1760" y="1756" text-anchor="middle" class="h amberink">隧道 · playtest 5173</text>
-  <path d="M1500 1772 C1660 1762 1880 1780 2020 1770" class="rough" stroke="#8a6a1f" stroke-width="3"/>
-  <text x="1280" y="1822" class="body">带后端、联机、或不想构建（M1 手机上试一下 · M5 联机版本给人试）</text>
-  <text x="1280" y="1878" class="body">1. 向控制面要一个隧道令牌（一小时，活不过作品）</text>
-  <text x="1280" y="1926" class="body">2. 出站 WSS 连 &lt;slug&gt;.playtest.run/_playtest/tunnel，边缘验公钥、登记会话</text>
-  <text x="1280" y="1974" class="body">3. 玩家请求 → 边缘开一条 yamux 流 → Host 改成 localhost:5173 → 写 HTTP/1.1</text>
-  <text x="1280" y="2022" class="body">4. 101 之后双向拷贝字节，WebSocket 天然透传；响应头补齐，体一个字节不动</text>
-  <text x="1280" y="2090" class="body green">✓ 不用构建，改代码即刻生效；socket.io 联机穿过去了</text>
-  <text x="1280" y="2134" class="body green">✓ 同 slug 来了新进程就接管旧的；边缘重启 1 秒重连</text>
-  <text x="1280" y="2190" class="body red">✗ 大文件走家宽上行：30 MB 一个玩家等几十秒</text>
-  <text x="1280" y="2234" class="body red">✗ 电脑合盖即离线（玩家看到「上次在线 12:40」）</text>
-  <text x="1280" y="2300" class="small">v0.1 WSS + yamux（单 TCP 有队头阻塞，可接受）；v0.2 QUIC，保留 WSS 回退</text>
-  <text x="1280" y="2346" class="mono-s">CLI 看到纯静态目录在走隧道时会说：这个目录可以直接上传</text>
+  <path d="M740 1230 C820 1228 940 1222 1020 1220" class="rough" stroke="#8a6a1f" stroke-width="6" marker-end="url(#arrow-amber)"/>
+  <text x="880" y="1180" text-anchor="middle" class="small amberink">wss://&lt;slug&gt;.playtest.run</text>
+  <text x="880" y="1275" text-anchor="middle" class="small amberink">一条出站连接</text>
 
-  <!-- 便签：不做 -->
-  <g transform="rotate(1.6 1180 2500)">
-    <rect x="740" y="2468" width="880" height="64" rx="4" fill="#f7e8a8"/>
-    <text x="1180" y="2510" text-anchor="middle" class="body">不做：榜单 · 热门 · 评论区 · 地图 · 录像 · 运行用户代码 · 大陆境内服务器</text>
-  </g>
+  <path d="M2080 815 C2160 810 2240 820 2350 860" class="rough" stroke="#8a6a1f" stroke-width="6" marker-end="url(#arrow-amber)"/>
+  <text x="2100" y="790" class="small amberink">https://&lt;slug&gt;.playtest.run</text>
+
+  <path d="M2350 1440 C2260 1440 2200 1300 2080 1200" class="rough" stroke="#2e4d72" stroke-width="2.5" stroke-dasharray="7 8" marker-end="url(#arrow-navy)"/>
+  <text x="2160" y="1400" class="small navy">playtest.js → 跨域到控制面</text>
+
+  <path d="M700 1330 C760 1380 860 1420 1020 1420" class="rough" stroke="#2e4d72" stroke-width="2.5" stroke-dasharray="7 8" marker-end="url(#arrow-navy)"/>
+  <text x="880" y="1460" text-anchor="middle" class="small navy">开发者拿令牌看结果</text>
+
+  <!-- ===== 2 两条路 ===== -->
+  <rect x="80" y="1880" width="2800" height="1000" rx="8" class="panel"/>
+  <circle cx="126" cy="1932" r="26" class="rough" stroke="#2e4d72" stroke-width="3"/>
+  <text x="126" y="1943" text-anchor="middle" font-size="29" font-weight="700" class="navy">2</text>
+  <text x="176" y="1946" class="panel-title">两条路，一种链接</text>
+  <text x="620" y="1943" class="body muted">同一个 &lt;slug&gt;.playtest.run，上传或隧道对玩家透明；一个作品两条都走过时，隧道离线就退回上传的版本</text>
+
+  <rect x="180" y="2010" width="1300" height="520" rx="6" class="box soft-navy"/>
+  <text x="830" y="2072" text-anchor="middle" class="h navy">上传 · playtest ./dist</text>
+  <text x="830" y="2110" text-anchor="middle" class="small">M2 发给朋友 · M3 找一批人测 —— 多数场景，引擎导出物就是一个静态目录</text>
+  <text x="225" y="2172" class="body">① 遍历目录，每个文件算 SHA-256，顺手检查导出物（index.html 在不在最外层、要不要 --isolated）</text>
+  <text x="225" y="2220" class="body">② 问控制面：这些哈希缺哪些？　→　只传缺的（并行、可重试、服务端复核哈希）</text>
+  <text x="225" y="2268" class="body">③ 提交清单 → 得到 v7；「当前版本」指针指向它，回滚就是把指针指回去</text>
+  <path d="M225 2300 C600 2290 1100 2310 1440 2298" class="rough" stroke="#2e4d72" stroke-width="3"/>
+  <text x="225" y="2356" class="body" font-weight="700">边缘按清单服务：路径 → 哈希 → blob</text>
+  <text x="225" y="2400" class="body">.wasm → application/wasm　·　.br / .gz 直接给并加 Content-Encoding　·　--isolated → COOP/COEP　·　Range 206</text>
+  <text x="225" y="2448" class="body">对象不可变、按内容去重；改一行代码只传一个文件，几秒完成</text>
+  <text x="830" y="2504" text-anchor="middle" class="small">实测：7 个文件 45 KB 冷上传 1.0 秒；服务器已有全部文件时 24 ms</text>
+
+  <rect x="1580" y="2010" width="1200" height="520" rx="6" class="box soft-amber"/>
+  <text x="2180" y="2072" text-anchor="middle" class="h amberink">隧道 · playtest 5173</text>
+  <text x="2180" y="2110" text-anchor="middle" class="small">M1 手机上试一下 · M5 带后端或联机 —— 正在跑的进程，只能这样</text>
+  <text x="1625" y="2172" class="body">① 向控制面要一个隧道令牌（Ed25519，一小时，活不过作品）</text>
+  <text x="1625" y="2220" class="body">② 开一条出站 WSS 到 &lt;slug&gt;.playtest.run，边缘只验公钥、不回源</text>
+  <text x="1625" y="2268" class="body">③ 边缘为每个玩家开一条 yamux 流，CLI 连 127.0.0.1:5173 双向拷贝</text>
+  <path d="M1625 2300 C1900 2290 2500 2310 2740 2298" class="rough" stroke="#8a6a1f" stroke-width="3"/>
+  <text x="1625" y="2356" class="body" font-weight="700">Host 改成 localhost:5173（Vite 6 只放行它），原值放 X-Forwarded-Host</text>
+  <text x="1625" y="2400" class="body">响应头同样补齐，响应体一个字节不动　·　101 之后就是字节对拷，WebSocket 天然透传</text>
+  <text x="1625" y="2448" class="body">断了 1→30 秒退避重连，链接不变　·　新进程挤掉旧的（4001）　·　离线 → 「上次在线 12:40」</text>
+  <text x="2180" y="2504" text-anchor="middle" class="small">实测：socket.io 联机房间 14 条自检穿香港隧道全过；边缘重启后 1 秒重连</text>
+
+  <rect x="180" y="2590" width="2600" height="230" rx="6" class="box soft-green"/>
+  <text x="1480" y="2650" text-anchor="middle" class="h green">为什么大文件走上传、小请求走隧道</text>
+  <text x="1480" y="2706" text-anchor="middle" class="body">隧道走开发者的家宽上行（普遍 30–50 Mbps）：一个 32 MB 的 Unity 包一个玩家等 9 秒，十个人同时进来更久</text>
+  <text x="1480" y="2752" text-anchor="middle" class="body">上传一次，玩家从边缘直接拿；隧道上剩下的多数是小请求和 WebSocket —— 单条 TCP 的队头阻塞就不那么疼</text>
+  <text x="1480" y="2796" text-anchor="middle" class="small">CLI 看到目录体积会把这个数字算出来说给你听，而不是让你自己猜</text>
+
+  <!-- ===== 3 结果 ===== -->
+  <rect x="80" y="2960" width="2800" height="900" rx="8" class="panel"/>
+  <circle cx="126" cy="3012" r="26" class="rough" stroke="#3d6b50" stroke-width="3"/>
+  <text x="126" y="3023" text-anchor="middle" font-size="29" font-weight="700" class="green">3</text>
+  <text x="176" y="3026" class="panel-title">知道结果：两层数据，一张点名册</text>
+  <text x="900" y="3023" class="body muted">不做分析平台；围绕「这一版有人玩了之后我想知道什么」列最小集</text>
+
+  <rect x="180" y="3090" width="820" height="440" rx="6" class="box soft-amber"/>
+  <text x="590" y="3152" text-anchor="middle" class="h amberink">第一层：不改游戏一行代码</text>
+  <text x="590" y="3190" text-anchor="middle" class="small">来自门禁页与边缘</text>
+  <text x="225" y="3250" class="body">· 几个人打开，几个人点了「开始」</text>
+  <text x="225" y="3296" class="body">· 几个人真的进到游戏（首帧）</text>
+  <text x="225" y="3342" class="body">· 设备 · 浏览器 · 是不是微信</text>
+  <text x="225" y="3388" class="body">· 停留多久（中位数 + 逐条）</text>
+  <text x="225" y="3434" class="body">· 来自哪里：微信 / Discord / 直接打开</text>
+  <text x="590" y="3494" text-anchor="middle" class="small">边缘先落本地 JSONL，每 60 秒一批送控制面，断了不丢</text>
+
+  <rect x="1070" y="3090" width="820" height="440" rx="6" class="box soft-navy"/>
+  <text x="1480" y="3152" text-anchor="middle" class="h navy">第二层：加一行脚本</text>
+  <text x="1480" y="3190" text-anchor="middle" class="mono-s">&lt;script src="/_playtest/sdk.js"&gt;&lt;/script&gt;</text>
+  <text x="1115" y="3250" class="body">· JS 错误与堆栈（去重、限量）</text>
+  <text x="1115" y="3296" class="body">· 加载完成用时</text>
+  <text x="1115" y="3342" class="body">· playtest.event("level_done", {level: 3})</text>
+  <text x="1115" y="3388" class="body">· 右下角反馈按钮：写一句话</text>
+  <text x="1115" y="3434" class="body">· 会话 id 来自同源 /_playtest/me</text>
+  <text x="1480" y="3494" text-anchor="middle" class="small">5 KB，无依赖，由边缘同源提供；出任何问题都闭嘴，不能变成游戏的 bug</text>
+
+  <rect x="1960" y="3090" width="820" height="440" rx="6" class="box soft-green"/>
+  <text x="2370" y="3152" text-anchor="middle" class="h green">控制台看到的</text>
+  <text x="2370" y="3190" text-anchor="middle" class="small">playtest.roviix.com/console/ · 手机也能看</text>
+  <text x="2005" y="3250" class="body">每版一段话：</text>
+  <text x="2005" y="3296" class="body green" font-weight="700">「8 个人打开，6 个人进到游戏</text>
+  <text x="2005" y="3340" class="body green" font-weight="700">（2 个在加载时走了）。」</text>
+  <text x="2005" y="3396" class="body">点进去是点名册：每个人一行</text>
+  <text x="2005" y="3442" class="body">停留最短在前 · 玩到哪 · 报了什么错</text>
+  <text x="2370" y="3494" text-anchor="middle" class="small">句子在前端拼，控制面只给数——同一组数在 --json 和 MCP 里要说成别的话</text>
+
+  <rect x="180" y="3590" width="2600" height="230" rx="6" class="box soft-red"/>
+  <text x="1480" y="3650" text-anchor="middle" class="h red">明确不做（DESIGN §3.7）</text>
+  <text x="1480" y="3706" text-anchor="middle" class="body">榜单 · 热门 · 大厅 · 点赞 · 评论区（2025 年 Glitch / SIMMER / Replit / itch / Newgrounds 的死法）　·　录像　·　AI 总结　·　热图与漏斗</text>
+  <text x="1480" y="3752" text-anchor="middle" class="body">地图与任何基于位置的东西　·　运行用户代码（只分发文件、转发连接）　·　让玩家注册或安装</text>
+  <text x="1480" y="3796" text-anchor="middle" class="small">留门不推进：作品简历页（把结果交给发行商 / 评委的一页只读链接）· 反馈附截图 · QUIC</text>
+
+  <!-- ===== 4 安全边界 ===== -->
+  <rect x="80" y="3940" width="2800" height="760" rx="8" class="panel"/>
+  <circle cx="126" cy="3992" r="26" class="rough" stroke="#c8522f" stroke-width="3"/>
+  <text x="126" y="4003" text-anchor="middle" font-size="29" font-weight="700" class="red">4</text>
+  <text x="176" y="4006" class="panel-title">三条边界，为什么这么切</text>
+  <text x="760" y="4003" class="body muted">公网托管用户内容天生是钓鱼与滥用的渠道；每条边界都在压这个面</text>
+
+  <rect x="180" y="4070" width="820" height="520" rx="6" class="box soft-navy"/>
+  <text x="590" y="4132" text-anchor="middle" class="h navy">两个域名不混</text>
+  <text x="225" y="4194" class="body">任何作品都是一个能跑任意 JS 的源</text>
+  <text x="225" y="4240" class="body">登录若也在 playtest.run 下，作品就能</text>
+  <text x="225" y="4286" class="body">对父域种 cookie 干扰控制台会话</text>
+  <path d="M225 4318 C400 4308 700 4328 950 4316" class="rough" stroke="#2e4d72" stroke-width="3"/>
+  <text x="225" y="4372" class="body">*.playtest.run：只有玩家看的东西，没有登录</text>
+  <text x="225" y="4418" class="body">playtest.roviix.com：令牌、控制台、API</text>
+  <text x="225" y="4464" class="body">为什么是子域而不是买 playtest.sh：</text>
+  <text x="225" y="4510" class="body">隔离只要求「另一个可注册域」，roviix.com 够了</text>
+  <text x="590" y="4566" text-anchor="middle" class="small">内容域迟早会在微信里被封，品牌域不能陪葬</text>
+
+  <rect x="1070" y="4070" width="820" height="520" rx="6" class="box soft-amber"/>
+  <text x="1480" y="4132" text-anchor="middle" class="h amberink">边缘不问控制面</text>
+  <text x="1115" y="4194" class="body">清单与「当前版本」指针在对象存储里</text>
+  <text x="1115" y="4240" class="body">边缘只读它；控制面挂了，已有链接照常能开</text>
+  <text x="1115" y="4286" class="body">隧道令牌控制面签、边缘只验公钥</text>
+  <path d="M1115 4318 C1290 4308 1590 4328 1840 4316" class="rough" stroke="#8a6a1f" stroke-width="3"/>
+  <text x="1115" y="4372" class="body">代价：撤销不能只等令牌过期</text>
+  <text x="1115" y="4418" class="body">所以令牌短（一小时、活不过作品）</text>
+  <text x="1115" y="4464" class="body">被挤掉的旧令牌进边缘的驱逐名单（409）</text>
+  <text x="1115" y="4510" class="body">用量在边缘累计，60 秒一批上报</text>
+  <text x="1480" y="4566" text-anchor="middle" class="small">这样边缘可以多地部署、单独扩，控制面是单点也不怕</text>
+
+  <rect x="1960" y="4070" width="820" height="520" rx="6" class="box soft-red"/>
+  <text x="2370" y="4132" text-anchor="middle" class="h red">从不运行用户的代码</text>
+  <text x="2005" y="4194" class="body">只分发静态文件、转发连接</text>
+  <text x="2005" y="4240" class="body">没有服务端执行面，滥用上限就是</text>
+  <text x="2005" y="4286" class="body">「托管一个坏页面」</text>
+  <path d="M2005 4318 C2180 4308 2500 4328 2740 4316" class="rough" stroke="#c8522f" stroke-width="3"/>
+  <text x="2005" y="4372" class="body">门禁页本身是反钓鱼的：</text>
+  <text x="2005" y="4418" class="body">多一次点击 + 一个写着别人名字的告示牌</text>
+  <text x="2005" y="4464" class="body">slug 黑名单（login · wechat · alipay …）</text>
+  <text x="2005" y="4510" class="body">匿名链接 24 小时、限流量、每小时熔断</text>
+  <text x="2370" y="4566" text-anchor="middle" class="small">举报 → 下架 → 令牌撤销 → 边缘立即断；处理时限进服务条款</text>
+
+  <!-- ===== 5 状态 ===== -->
+  <rect x="80" y="4780" width="2800" height="640" rx="8" class="panel"/>
+  <circle cx="126" cy="4832" r="26" class="rough" stroke="#c9973b" stroke-width="3"/>
+  <text x="126" y="4843" text-anchor="middle" font-size="29" font-weight="700" class="amberink">5</text>
+  <text x="176" y="4846" class="panel-title">每个框现在是什么状态</text>
+  <text x="820" y="4843" class="body muted">每句「已验证」都能指到 docs/spikes/ 里一条带日期的记录</text>
+
+  <text x="250" y="4930" class="body" font-weight="700">框</text>
+  <text x="620" y="4930" class="body" font-weight="700">在线？</text>
+  <text x="1300" y="4930" class="body" font-weight="700">真机验过</text>
+  <text x="2200" y="4930" class="body" font-weight="700">还差</text>
+  <path d="M240 4948 C700 4938 2100 4958 2750 4946" class="rough" stroke="#8a6a1f" stroke-width="2.5"/>
+
+  <text x="250" y="4996" class="body">playtest 命令行</text>
+  <text x="620" y="4996" class="body green">Releases v0.1.0，五平台单文件</text>
+  <text x="1300" y="4996" class="body">下载 → 校验 → cd 导出目录 → playtest . → 1.0 秒出链接</text>
+  <text x="2200" y="4996" class="body red">login · 上传时自动注入 SDK</text>
+
+  <text x="250" y="5046" class="body">edge</text>
+  <text x="620" y="5046" class="body green">香港在线</text>
+  <text x="1300" y="5046" class="body">响应头四项、门禁页、隧道、熔断、事件上报</text>
+  <text x="2200" y="5046" class="body red">第二个区域 · QUIC · 晚高峰压测</text>
+
+  <text x="250" y="5096" class="body">api</text>
+  <text x="620" y="5096" class="body green">香港在线</text>
+  <text x="1300" y="5096" class="body">上传四步、隧道令牌、事件与反馈写入、结果读取</text>
+  <text x="2200" y="5096" class="body red">GitHub 登录 · 回滚 · 撤销 · 带宽配额</text>
+
+  <text x="250" y="5146" class="body">控制台</text>
+  <text x="620" y="5146" class="body green">/console/ 在线</text>
+  <text x="1300" y="5146" class="body">390px 手机视口走完四页，数据是真实浏览器产生的</text>
+  <text x="2200" y="5146" class="body red">登录（现在粘令牌）</text>
+
+  <text x="250" y="5196" class="body">playtest.js</text>
+  <text x="620" y="5196" class="body green">边缘同源提供</text>
+  <text x="1300" y="5196" class="body">错误、事件跨域落库，出现在点名册里</text>
+  <text x="2200" y="5196" class="body red">反馈附截图（v0.2）</text>
+
+  <text x="250" y="5246" class="body">对象存储</text>
+  <text x="620" y="5246" class="body">机器磁盘上的目录</text>
+  <text x="1300" y="5246" class="body">15 个 blob 服务三个作品，无重复</text>
+  <text x="2200" y="5246" class="body red">S3 兼容实现（第二个边缘时）</text>
+
+  <path d="M240 5290 C700 5280 2100 5300 2750 5288" class="rough" stroke="#8f887a" stroke-width="2"/>
+  <text x="1480" y="5346" text-anchor="middle" class="body red" font-weight="700">还没有人用手机真点过一次；微信、Godot、Unity 都没真机</text>
+  <text x="1480" y="5390" text-anchor="middle" class="small">生死线：14 天私测 20 个开发者 —— 一半以上没回来发第二版、或每版打开人数不到 5，就停</text>
+
+  <!-- ===== 结论 ===== -->
+  <rect x="80" y="5460" width="2800" height="60" rx="8" fill="none" stroke="#6a4b83" stroke-width="3" stroke-dasharray="9 11"/>
+  <text x="1480" y="5500" text-anchor="middle" class="body">导出目录 →（哈希、只传缺的）→ 对象存储 →（清单、响应头）→ 门禁页 →（开始）→ 作品 →（事件、每 60 秒）→ 控制面 →（点名册）→ 开发者</text>
+  <text x="1480" y="5548" text-anchor="middle" class="small muted">代码：common · api · edge · cli · sdk · console · deploy　·　定义：docs/DESIGN.md　·　记录：docs/spikes/</text>
 </svg>
 </div>
 
 <div id="zoomer">
-  <button id="zi" title="放大">+</button>
-  <button id="zo" title="缩小">−</button>
-  <button id="zf" title="适应窗口">⤢</button>
+  <button id="zi" title="放大">＋</button>
+  <button id="zo" title="缩小">－</button>
+  <button id="zf" title="适配宽度">⤢</button>
 </div>
 
 <script>
 (() => {
   const board = document.getElementById('board');
-  const width = 2400;
+  const width = 2960;
   let zoom = Math.min(1, Math.max(.3, (window.innerWidth - 20) / width));
   const apply = () => { board.style.zoom = zoom; };
   document.getElementById('zi').onclick = () => { zoom = Math.min(2.5, zoom * 1.2); apply(); };

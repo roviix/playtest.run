@@ -694,3 +694,68 @@ async fn expired_anonymous_sites_are_swept() {
         .await
         .error(StatusCode::UNAUTHORIZED, ErrorCode::TokenExpired);
 }
+
+/// blob 是跨作品去重的，删作品时不动它；一天一次的回收只删「没有任何清单引用、且落盘超过一天」的。
+#[tokio::test]
+async fn orphaned_blobs_are_collected_but_never_live_ones() {
+    let h = Harness::start().await;
+    let token = h.anon_token().await;
+
+    // 作品 A 用 index.html；作品 B 用 index.html + 一个只有它有的文件。
+    let shared = entry("index.html", INDEX_HTML);
+    let only_b = entry("game.js", b"console.log('b')");
+    let a = h.new_site(&token).await;
+    let b = h.new_site(&token).await;
+    for (site, files) in [(&a, vec![shared.clone()]), (&b, vec![shared.clone(), only_b.clone()])] {
+        let prepared: PrepareUploadResponse = h
+            .post(&paths::site_uploads(&site.slug), Some(&token), &prepare_request(files.clone()))
+            .await
+            .json();
+        for f in &files {
+            if prepared.missing.contains(&f.hash) {
+                let bytes: &[u8] = if f.path == "index.html" { INDEX_HTML } else { b"console.log('b')" };
+                h.put_bytes(&paths::blob(&f.hash), &token, bytes).await;
+            }
+        }
+        h.post(
+            &paths::site_upload_commit(&site.slug, &prepared.upload_id),
+            Some(&token),
+            &serde_json::json!({}),
+        )
+        .await
+        .json::<CommitUploadResponse>();
+    }
+    // 还有一个谁都没提交过的 blob（上传了一半的人）。
+    let dangling = entry("stray.bin", b"nobody committed me");
+    h.put_bytes(&paths::blob(&dangling.hash), &token, b"nobody committed me").await;
+
+    // 把三个 blob 的修改时间都拨到两天前，否则「落盘不到一天」的保护会让什么都不删。
+    let two_days_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 86400);
+    for hash in [&shared.hash, &only_b.hash, &dangling.hash] {
+        let path = h.store.blob_path(hash).unwrap();
+        let f = std::fs::File::options().write(true).open(&path).unwrap();
+        f.set_modified(two_days_ago).unwrap();
+    }
+
+    // 两个作品都活着：只有那个没人提交的 blob 该被回收。
+    let (removed, _) = playtest_api::sweeper::collect_blobs(&h.state).await.unwrap();
+    assert_eq!(removed, 1);
+    assert!(!h.store.has_blob(&dangling.hash).await.unwrap());
+    assert!(h.store.has_blob(&shared.hash).await.unwrap());
+    assert!(h.store.has_blob(&only_b.hash).await.unwrap());
+
+    // 删掉作品 B：它独有的 game.js 变成孤儿，index.html 仍被 A 引用。
+    h.request("DELETE", &paths::site(&b.slug), Some(&token), Body::empty(), false)
+        .await;
+    let (removed, _) = playtest_api::sweeper::collect_blobs(&h.state).await.unwrap();
+    assert_eq!(removed, 1);
+    assert!(!h.store.has_blob(&only_b.hash).await.unwrap());
+    assert!(h.store.has_blob(&shared.hash).await.unwrap(), "A 还在用它");
+
+    // 回收过的 blob 再上传时，控制面要重新说「缺」——库里的记录也删了。
+    let prepared: PrepareUploadResponse = h
+        .post(&paths::site_uploads(&a.slug), Some(&token), &prepare_request(vec![shared.clone(), only_b.clone()]))
+        .await
+        .json();
+    assert_eq!(prepared.missing, vec![only_b.hash.clone()]);
+}

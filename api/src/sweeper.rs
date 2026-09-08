@@ -27,6 +27,71 @@ pub fn spawn(state: AppState) -> tokio::task::JoinHandle<()> {
     })
 }
 
+/// blob 多久没人引用才删。上传是「先传 blob、再提交清单」，提交之前的 blob 在任何清单里都找不到，
+/// 给足一天，再慢的上传也提交完了；匿名作品到期删清单之后，它的 blob 一天内消失。
+pub const BLOB_GRACE: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// 多久回收一次 blob。比清作品慢得多：要读全部清单，一天一次够了。
+pub const BLOB_GC_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// 玩家数据保留多久（DESIGN §3.4「数据默认保留 90 天」）。按会话的最后一次活动算。
+pub const RETENTION_DAYS: i64 = 90;
+
+/// 每天一次的慢活：回收孤儿 blob，删过期的会话数据。
+pub fn spawn_blob_gc(state: AppState) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(BLOB_GC_INTERVAL);
+        loop {
+            ticker.tick().await;
+            match collect_blobs(&state).await {
+                Ok((removed, bytes)) if removed > 0 => {
+                    tracing::info!(removed, bytes, "回收了没有清单引用的 blob")
+                }
+                Ok(_) => {}
+                Err(err) => tracing::error!(error = format!("{err:#}"), "blob 回收没做完，明天再试"),
+            }
+            match expire_sessions(&state).await {
+                Ok(n) if n > 0 => tracing::info!(sessions = n, "删掉了超过 {RETENTION_DAYS} 天的会话数据"),
+                Ok(_) => {}
+                Err(err) => tracing::error!(error = format!("{err:#}"), "会话数据清理没做完，明天再试"),
+            }
+        }
+    })
+}
+
+/// 删掉最后一次活动早于 [`RETENTION_DAYS`] 天前的会话及其事件、反馈。
+pub async fn expire_sessions(state: &AppState) -> anyhow::Result<usize> {
+    let before = clock::format(clock::now() - time::Duration::days(RETENTION_DAYS));
+    let mut conn = state.db().lock().await;
+    Ok(db::delete_sessions_before(&mut conn, &before)?)
+}
+
+/// 删掉所有「没有任何活着的清单引用、且落盘超过 [`BLOB_GRACE`]」的 blob。返回（个数，字节数）。
+///
+/// 任何一份清单读不出来就整轮放弃：宁可多留一天垃圾，也不能误删一个还在被玩的文件。
+pub async fn collect_blobs(state: &AppState) -> anyhow::Result<(usize, u64)> {
+    let store = state.store();
+    let referenced = store.referenced_hashes().await?;
+    let cutoff = std::time::SystemTime::now() - BLOB_GRACE;
+    let mut removed = 0usize;
+    let mut bytes = 0u64;
+    for (hash, modified) in store.list_blobs().await? {
+        if referenced.contains(&hash) || modified > cutoff {
+            continue;
+        }
+        let size = tokio::fs::metadata(store.blob_path(&hash)?)
+            .await
+            .map(|m| m.len())
+            .unwrap_or(0);
+        store.remove_blob(&hash).await?;
+        let conn = state.db().lock().await;
+        db::delete_blob(&conn, &hash)?;
+        removed += 1;
+        bytes += size;
+    }
+    Ok((removed, bytes))
+}
+
 /// 返回这一轮清掉了几个作品。
 pub async fn sweep_once(state: &AppState) -> anyhow::Result<usize> {
     let now = clock::now_string();

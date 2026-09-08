@@ -805,3 +805,62 @@ async fn a_bare_request_still_counts() {
     assert_eq!(ua, None, "没有 UA 就是没有，不编一个");
     assert_eq!(device, None);
 }
+
+/// 「数据默认保留 90 天」不是一句话：最后一次活动超过 90 天的会话，连事件和反馈一起消失；
+/// 最近活跃的一个字节都不动。
+#[tokio::test]
+async fn sessions_older_than_ninety_days_are_forgotten() {
+    let h = Harness::start().await;
+    let slug = h.live_site().await;
+
+    let fresh = session_id('f');
+    let stale = session_id('0');
+    let start = |sid: &String| EdgeEvent {
+        ts: at(0),
+        kind: "start".into(),
+        slug: slug.clone(),
+        version: 1,
+        sid: sid.clone(),
+        ua: PLAYER_UA.into(),
+        referer: String::new(),
+        wechat: false,
+        reason: None,
+        detail: None,
+    };
+    let accepted: Accepted = h
+        .from_edge(&EdgeBatch { events: vec![start(&fresh), start(&stale)] })
+        .await
+        .json();
+    assert_eq!(accepted.accepted, 2);
+    // 一条反馈挂在旧会话上，删会话时要一起删。
+    {
+        let conn = h.state.db().lock().await;
+        conn.execute(
+            "INSERT INTO feedback (session_id, slug, version, ts, text, status)
+             VALUES (?2, ?1, 1, ?3, '好玩', 'new')",
+            rusqlite::params![slug, stale, at(0)],
+        )
+        .unwrap();
+        // 把旧会话的最后活动时间拨到 100 天前。
+        conn.execute(
+            "UPDATE sessions SET last_seen_at = '2020-01-01T00:00:00Z' WHERE id = ?1",
+            rusqlite::params![stale],
+        )
+        .unwrap();
+    }
+
+    assert_eq!(h.count("SELECT COUNT(*) FROM sessions").await, 2);
+    let removed = playtest_api::sweeper::expire_sessions(&h.state).await.unwrap();
+    assert_eq!(removed, 1);
+    assert_eq!(h.count("SELECT COUNT(*) FROM sessions").await, 1);
+    assert_eq!(h.count("SELECT COUNT(*) FROM feedback").await, 0, "反馈跟着会话走");
+    assert_eq!(
+        h.count(&format!("SELECT COUNT(*) FROM session_events WHERE session_id = '{stale}'")).await,
+        0
+    );
+    assert_eq!(
+        h.count(&format!("SELECT COUNT(*) FROM session_events WHERE session_id = '{fresh}'")).await,
+        1,
+        "活跃会话的事件一条不少"
+    );
+}

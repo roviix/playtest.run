@@ -201,7 +201,7 @@ impl FsStore {
         self.read_json(&current_key(slug)).await
     }
 
-    /// 删除一个作品的所有清单与指针。blob 是跨作品去重的，不在这里删。
+    /// 删除一个作品的所有清单与指针。blob 是跨作品去重的，不在这里删（见 [`Self::referenced_hashes`] 与垃圾回收）。
     pub async fn remove_site(&self, slug: &str) -> Result<(), StoreError> {
         Self::check_slug(slug)?;
         let key = format!("sites/{slug}");
@@ -209,6 +209,75 @@ impl FsStore {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(Self::io(&key, e)),
+        }
+    }
+
+    /// 还活着的所有清单引用的全部哈希——垃圾回收的「根」。
+    /// 读的是 `sites/*/manifests/*.json`，包括同一作品的历史版本（回滚要用）；已删作品的目录不在了，自然不算。
+    pub async fn referenced_hashes(&self) -> Result<std::collections::HashSet<String>, StoreError> {
+        let mut out = std::collections::HashSet::new();
+        let sites = self.path_of("sites");
+        let mut site_dirs = match tokio::fs::read_dir(&sites).await {
+            Ok(d) => d,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(out),
+            Err(e) => return Err(Self::io("sites", e)),
+        };
+        while let Some(site) = site_dirs.next_entry().await.map_err(|e| Self::io("sites", e))? {
+            let manifests = site.path().join("manifests");
+            let mut files = match tokio::fs::read_dir(&manifests).await {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            while let Some(f) = files.next_entry().await.map_err(|e| Self::io("manifests", e))? {
+                let Ok(bytes) = tokio::fs::read(f.path()).await else { continue };
+                // 解析不了的清单当作「引用了所有东西」不现实；跳过它，但绝不因此删 blob——
+                // 调用方在有解析失败时应放弃这一轮回收（见返回的 error）。
+                let m: Manifest = serde_json::from_slice(&bytes).map_err(|source| StoreError::BadJson {
+                    key: f.path().display().to_string(),
+                    source,
+                })?;
+                out.extend(m.files.into_iter().map(|e| e.hash));
+            }
+        }
+        Ok(out)
+    }
+
+    /// 所有 blob 的哈希与修改时间（用来只删「够老」的，避免删掉正在上传、还没提交清单的那些）。
+    pub async fn list_blobs(&self) -> Result<Vec<(String, std::time::SystemTime)>, StoreError> {
+        let mut out = Vec::new();
+        let blobs = self.path_of("blobs");
+        let mut shards = match tokio::fs::read_dir(&blobs).await {
+            Ok(d) => d,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(out),
+            Err(e) => return Err(Self::io("blobs", e)),
+        };
+        while let Some(shard) = shards.next_entry().await.map_err(|e| Self::io("blobs", e))? {
+            let mut files = match tokio::fs::read_dir(shard.path()).await {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            while let Some(f) = files.next_entry().await.map_err(|e| Self::io("blobs", e))? {
+                let name = f.file_name().to_string_lossy().into_owned();
+                if !is_valid_hex(&name) {
+                    continue;
+                }
+                let modified = f
+                    .metadata()
+                    .await
+                    .and_then(|m| m.modified())
+                    .map_err(|e| Self::io(&blob_key(&name), e))?;
+                out.push((name, modified));
+            }
+        }
+        Ok(out)
+    }
+
+    pub async fn remove_blob(&self, hash: &str) -> Result<(), StoreError> {
+        let path = self.blob_path(hash)?;
+        match tokio::fs::remove_file(&path).await {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(Self::io(&blob_key(hash), e)),
         }
     }
 

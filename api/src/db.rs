@@ -328,6 +328,29 @@ pub fn record_blob(
     Ok(())
 }
 
+/// blob 被回收之后把记录也删掉，下次同样的文件再来时 `missing` 里要有它。
+pub fn delete_blob(conn: &Connection, hash: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM blobs WHERE hash = ?1", params![hash])?;
+    Ok(())
+}
+
+/// 「数据默认保留 90 天」（DESIGN §3.4）的兑现：最后一次见到早于 `before` 的会话，连同它的事件与反馈一起删。
+/// 返回删掉的会话数。一个事务里做完，不留半个会话。
+pub fn delete_sessions_before(conn: &mut Connection, before: &str) -> rusqlite::Result<usize> {
+    let tx = conn.transaction()?;
+    tx.execute(
+        "DELETE FROM session_events WHERE session_id IN (SELECT id FROM sessions WHERE last_seen_at < ?1)",
+        params![before],
+    )?;
+    tx.execute(
+        "DELETE FROM feedback WHERE session_id IN (SELECT id FROM sessions WHERE last_seen_at < ?1)",
+        params![before],
+    )?;
+    let sessions = tx.execute("DELETE FROM sessions WHERE last_seen_at < ?1", params![before])?;
+    tx.commit()?;
+    Ok(sessions)
+}
+
 // 参数多是因为提交一个版本要写三张表；拆成结构体只是把同样九个字段换个地方写。
 #[allow(clippy::too_many_arguments)]
 /// 提交一个版本：库这一侧的三处改动一起生效，中途失败就都不生效。
