@@ -3,6 +3,7 @@
 pub mod blobs;
 pub mod events;
 pub mod feedback;
+pub mod login;
 pub mod results;
 pub mod sessions;
 pub mod sites;
@@ -29,6 +30,11 @@ pub fn app(state: AppState) -> Router {
     Router::new()
         .route(paths::HEALTH, get(health))
         .route(paths::ANON_SESSIONS, post(sessions::create))
+        .route(paths::LOGIN_DEVICE_START, post(login::device_start))
+        .route(paths::LOGIN_DEVICE_POLL, post(login::device_poll))
+        .route(paths::LOGIN_WEB_START, get(login::web_start))
+        .route(paths::LOGIN_WEB_EXCHANGE, post(login::web_exchange))
+        .route(paths::ME, get(login::me))
         .route(paths::SITES, get(sites::list).post(sites::create))
         .route(
             paths::SITE,
@@ -84,7 +90,8 @@ async fn unknown_route() -> ApiError {
 /// 兜底：把中间层产生的裸响应（方法不对、体积超限）也补成 [`ErrorBody`]，
 /// 客户端才能只写一套解析逻辑。
 async fn as_error_body(response: Response) -> Response {
-    if response.status().is_success() || is_json(&response) {
+    // 3xx 也放过：网页登录的第一步就是一个跳转（login.rs）。
+    if response.status().is_success() || response.status().is_redirection() || is_json(&response) {
         return response;
     }
     let status = response.status();

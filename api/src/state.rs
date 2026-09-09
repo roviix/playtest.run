@@ -1,14 +1,21 @@
 //! 各个处理函数共用的东西。
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use playtest_common::store::FsStore;
 use playtest_common::tunnel::SigningKey;
 use tokio::sync::{Mutex, MutexGuard};
 
-use crate::config::{Config, SLUG_PLACEHOLDER};
+use crate::config::{Config, GitHubApp, SLUG_PLACEHOLDER};
 use crate::db::Db;
 use crate::tunnel_keys;
+
+/// 网页登录的 `state` 从签发到 GitHub 回来之间最多等这么久。
+const LOGIN_STATE_TTL: Duration = Duration::from_secs(10 * 60);
+/// 同时挂着的 `state` 上限：超过就先清过期的，还超就拒——这是防被人刷满内存，不是配额。
+const LOGIN_STATE_CAP: usize = 4096;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -21,10 +28,28 @@ struct Inner {
     site_url_template: String,
     tunnel_key: SigningKey,
     commit_lock: Mutex<()>,
+    github: Option<GitHubApp>,
+    http: reqwest::Client,
+    /// 网页登录流程里发出去、还没回来的 `state`。进程内存里就够：控制面是单进程（DESIGN §4.5）。
+    login_states: std::sync::Mutex<HashMap<String, Instant>>,
 }
 
 impl AppState {
-    pub fn new(db: Db, store: FsStore, site_url_template: String, tunnel_key: SigningKey) -> Self {
+    pub fn new(
+        db: Db,
+        store: FsStore,
+        site_url_template: String,
+        tunnel_key: SigningKey,
+        github: Option<GitHubApp>,
+    ) -> Self {
+        // reqwest 的 rustls-no-provider 没有内置加密后端，建 Client 前必须先装一个。
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let http = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(20))
+            .user_agent(concat!("playtest-api/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .expect("reqwest 客户端用的都是固定配置，建不出来说明构建本身坏了");
         Self {
             inner: Arc::new(Inner {
                 db,
@@ -32,6 +57,9 @@ impl AppState {
                 site_url_template,
                 tunnel_key,
                 commit_lock: Mutex::new(()),
+                github,
+                http,
+                login_states: std::sync::Mutex::new(HashMap::new()),
             }),
         }
     }
@@ -52,6 +80,7 @@ impl AppState {
             FsStore::new(store_root),
             config.site_url_template.clone(),
             tunnel_key,
+            config.github.clone(),
         ))
     }
 
@@ -71,6 +100,38 @@ impl AppState {
     /// 玩家点开的链接。
     pub fn site_url(&self, slug: &str) -> String {
         self.inner.site_url_template.replace(SLUG_PLACEHOLDER, slug)
+    }
+
+    /// GitHub 登录的配置；`None` 就是这个控制面不提供登录。
+    pub fn github(&self) -> Option<&GitHubApp> {
+        self.inner.github.as_ref()
+    }
+
+    pub fn http(&self) -> &reqwest::Client {
+        &self.inner.http
+    }
+
+    /// 记下一个刚发出去的网页登录 `state`。满了返回 `false`。
+    pub fn remember_login_state(&self, state: String) -> bool {
+        let mut states = self.inner.login_states.lock().unwrap();
+        let now = Instant::now();
+        if states.len() >= LOGIN_STATE_CAP {
+            states.retain(|_, issued| now.duration_since(*issued) < LOGIN_STATE_TTL);
+        }
+        if states.len() >= LOGIN_STATE_CAP {
+            return false;
+        }
+        states.insert(state, now);
+        true
+    }
+
+    /// GitHub 带着 `state` 回来了：认识且没过期就消费掉它。
+    pub fn take_login_state(&self, state: &str) -> bool {
+        let mut states = self.inner.login_states.lock().unwrap();
+        match states.remove(state) {
+            Some(issued) => issued.elapsed() < LOGIN_STATE_TTL,
+            None => false,
+        }
     }
 
     /// 提交一个版本要「读当前版本号 → 写清单 → 挪指针 → 回写库」，中间有文件 I/O，

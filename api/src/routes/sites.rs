@@ -20,6 +20,8 @@ use crate::state::AppState;
 
 /// 匿名用户同时能有几个作品（DESIGN §6 免费档 3 个活跃 slug）。
 pub const ANON_MAX_SITES: u32 = 3;
+/// 登录账号的上限。DESIGN §6 公开后的免费档是 3；私测期放宽到 10，看真实用量再定。
+pub const LOGGED_IN_MAX_SITES: u32 = 10;
 
 /// 随机名字最多抽几次。抽不到说明词表用完了，那是我们要加词，不是用户的错。
 const SLUG_ATTEMPTS: usize = 20;
@@ -37,13 +39,17 @@ pub async fn create(
     let row = {
         let conn = state.db().lock().await;
 
+        let live = db::count_live_sites(&conn, &caller.user_id)?;
         if caller.kind.is_anon() {
-            let live = db::count_live_sites(&conn, &caller.user_id)?;
             if live >= ANON_MAX_SITES {
                 return Err(ApiError::quota(format!(
-                    "匿名链接最多同时留 {ANON_MAX_SITES} 个作品，你已经有 {live} 个了。先用 playtest rm 删掉一个再建。"
+                    "匿名链接最多同时留 {ANON_MAX_SITES} 个作品，你已经有 {live} 个了。先用 playtest rm 删掉一个再建，或者 playtest login 之后能留 {LOGGED_IN_MAX_SITES} 个。"
                 )));
             }
+        } else if live >= LOGGED_IN_MAX_SITES {
+            return Err(ApiError::quota(format!(
+                "一个账号最多同时留 {LOGGED_IN_MAX_SITES} 个作品，你已经有 {live} 个了。先用 playtest rm 删掉一个再建。"
+            )));
         }
 
         // 匿名用户不能挑名字：好名字是登录之后的事（DESIGN §3.1），

@@ -35,6 +35,23 @@ pub mod routes {
     /// `POST` → 200 [`super::Site`]：把「当前版本」指针指回某一版（回滚，DESIGN §3.5）。清单不可变，指针一动玩家立刻看到
     pub const SITE_VERSION_ACTIVATE: &str = "/v1/sites/{slug}/versions/{version}/activate";
 
+    // ---- 登录（DESIGN §3.2：`playtest login`，GitHub，一次之后不再问） ----
+    //
+    // 两条路进同一个账号：终端走 GitHub 的设备码流程（不用回调端口，也不用 client secret），
+    // 控制台走网页授权码流程。两条路的最后一步都可以顺带带上手里的匿名令牌，
+    // 那个匿名身份下的作品会一起归到账号里、不再 24 小时后失效。
+
+    /// `POST` → 200 [`super::DeviceLoginStart`]：向 GitHub 要一个设备码。控制面代为请求，CLI 不用知道 client_id。
+    pub const LOGIN_DEVICE_START: &str = "/v1/login/github/device";
+    /// `POST` [`super::DeviceLoginPoll`] → 200 [`super::LoginPollResponse`]。可带 `Authorization: Bearer <匿名令牌>`。
+    pub const LOGIN_DEVICE_POLL: &str = "/v1/login/github/device/poll";
+    /// `GET` → 302 到 GitHub 的授权页。浏览器直接访问；回来时 GitHub 把 `code` 和 `state` 挂在控制台地址上。
+    pub const LOGIN_WEB_START: &str = "/v1/login/github/start";
+    /// `POST` [`super::WebLoginExchange`] → 200 [`super::LoginResponse`]。可带 `Authorization: Bearer <匿名令牌>`。
+    pub const LOGIN_WEB_EXCHANGE: &str = "/v1/login/github/exchange";
+    /// `GET` → 200 [`super::Me`]：这个令牌是谁。
+    pub const ME: &str = "/v1/me";
+
     pub fn site_tunnel(slug: &str) -> String {
         SITE_TUNNEL.replace("{slug}", slug)
     }
@@ -98,6 +115,11 @@ pub enum ErrorCode {
     /// 不在线时由边缘回这个码（503）。页面本身照常能开——静态文件是上传过的。
     /// 对端是游戏里的 `fetch`，不是浏览器导航，所以是 JSON 不是一页 HTML。
     BackendOffline,
+    /// 这个控制面没配 GitHub 登录（自托管、或本机开发没设 client_id）。`message` 说明匿名链接照常能用。
+    LoginUnavailable,
+    /// GitHub 那边没走完：设备码过期、用户在授权页点了拒绝、授权码用过了或 state 对不上。
+    /// 重新 `playtest login` 一次即可；`message` 会说是哪一种。
+    LoginFailed,
     Internal,
 }
 
@@ -106,6 +128,69 @@ pub struct AnonSessionResponse {
     pub token: String,
     /// RFC 3339。到期后令牌与它创建的作品一起失效。
     pub expires_at: String,
+}
+
+/// GitHub 设备码流程的第一步：CLI 把 `user_code` 和 `verification_uri` 打给人看，然后拿 `device_code` 轮询。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceLoginStart {
+    pub device_code: String,
+    /// 给人在浏览器里输入的那串，形如 `WDJB-MJHT`。
+    pub user_code: String,
+    /// 一般是 `https://github.com/login/device`。
+    pub verification_uri: String,
+    /// 这个码还能用几秒。
+    pub expires_in: u32,
+    /// 两次轮询之间至少隔几秒；GitHub 说 `slow_down` 时控制面会把它加大。
+    pub interval: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceLoginPoll {
+    pub device_code: String,
+}
+
+/// 轮询的结果。`pending` 继续等；`ok` 里就是登录结果。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum LoginPollResponse {
+    /// 人还没在浏览器里输完码。`interval` 是下一次至少隔几秒。
+    Pending {
+        interval: u32,
+    },
+    Ok(LoginResponse),
+}
+
+/// 登录成功。`token` 长期有效，之后所有请求都带它。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LoginResponse {
+    pub token: String,
+    /// GitHub 用户名（不带 @）。
+    pub login: String,
+    /// 玩家在门禁页和广场上看到的名字：GitHub 上的显示名，没有就是用户名。
+    pub display_name: String,
+    /// 这次顺带归入账号的匿名作品数（请求带了匿名令牌才会大于 0）。
+    pub migrated_sites: u32,
+}
+
+/// 网页授权码流程的最后一步：控制台把 GitHub 回传的 `code` 与 `state` 交给控制面换令牌。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WebLoginExchange {
+    pub code: String,
+    pub state: String,
+}
+
+/// `GET /v1/me`。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Me {
+    /// `anon` 或 `github`。
+    pub kind: String,
+    pub display_name: String,
+    /// GitHub 用户名；匿名没有。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login: Option<String>,
+    /// 匿名身份的到期时间；登录用户没有。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

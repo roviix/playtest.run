@@ -24,6 +24,10 @@ base64 = "0.22"
 # 只用来读上传请求体的分片流；版本与 features 跟 axum 自己依赖的一致，不会多编一份。
 futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
 rand = "0.9"
+# 只有一个用途：替 CLI 和控制台去问 GitHub（设备码、换令牌、读用户名）。特性选择和 cli 一致：
+# rustls-no-provider + ring，不要 aws-lc-rs，也绝不引入 openssl。
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 # bundled：把 SQLite 源码一起编进来，自托管的人不用先装 libsqlite3（DESIGN §7 一台机器跑通）。
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = "1"

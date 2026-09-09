@@ -74,6 +74,18 @@ impl ApiError {
     pub fn slug_unavailable(message: impl Into<String>) -> Self {
         Self::public(StatusCode::CONFLICT, ErrorCode::SlugUnavailable, message)
     }
+
+    pub fn login_unavailable(message: impl Into<String>) -> Self {
+        Self::public(
+            StatusCode::NOT_IMPLEMENTED,
+            ErrorCode::LoginUnavailable,
+            message,
+        )
+    }
+
+    pub fn login_failed(message: impl Into<String>) -> Self {
+        Self::public(StatusCode::BAD_REQUEST, ErrorCode::LoginFailed, message)
+    }
 }
 
 impl IntoResponse for ApiError {

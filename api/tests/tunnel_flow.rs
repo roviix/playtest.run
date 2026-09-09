@@ -76,6 +76,7 @@ impl Harness {
             listen: "127.0.0.1:0".parse().unwrap(),
             data_dir: dir.path().to_path_buf(),
             site_url_template: template.to_string(),
+            github: None,
         };
         let state = AppState::from_config(&config).await.unwrap();
         Self {
@@ -464,6 +465,7 @@ async fn restarting_keeps_the_same_key() {
         listen: "127.0.0.1:0".parse().unwrap(),
         data_dir: dir.path().to_path_buf(),
         site_url_template: LOCAL_TEMPLATE.to_string(),
+        github: None,
     };
 
     AppState::from_config(&config).await.unwrap();

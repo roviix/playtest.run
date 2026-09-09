@@ -31,7 +31,7 @@ const TOKEN_BYTES: usize = 32;
 pub enum UserKind {
     /// 24 小时匿名链接。
     Anon,
-    /// GitHub 登录。v0.1 还没有登录入口，这一支目前进不来。
+    /// GitHub 登录（[`crate::routes::login`]）。
     GitHub,
 }
 
@@ -61,6 +61,8 @@ pub struct Caller {
     pub user_id: String,
     pub kind: UserKind,
     pub display_name: String,
+    /// GitHub 用户名；匿名没有。
+    pub login: Option<String>,
     /// 这个人的到期时间，作品跟着它走。
     pub expires_at: Option<String>,
 }
@@ -97,6 +99,7 @@ impl FromRequestParts<AppState> for Caller {
             user_id: owner.user_id,
             kind: UserKind::from_db(&owner.kind),
             display_name: owner.display_name,
+            login: owner.login,
             expires_at: owner.user_expires_at,
         })
     }

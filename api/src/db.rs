@@ -15,6 +15,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/001_init.sql"),
     include_str!("migrations/002_sessions_events_feedback.sql"),
     include_str!("migrations/003_plaza.sql"),
+    include_str!("migrations/004_github_login.sql"),
 ];
 
 pub struct Db {
@@ -117,6 +118,7 @@ pub struct TokenOwner {
     pub user_id: String,
     pub kind: String,
     pub display_name: String,
+    pub login: Option<String>,
     pub token_expires_at: Option<String>,
     pub user_expires_at: Option<String>,
 }
@@ -126,7 +128,7 @@ pub fn find_token_owner(
     token_hash: &str,
 ) -> rusqlite::Result<Option<TokenOwner>> {
     conn.query_row(
-        "SELECT u.id, u.kind, u.display_name, t.expires_at, u.expires_at
+        "SELECT u.id, u.kind, u.display_name, t.expires_at, u.expires_at, u.login
            FROM tokens t JOIN users u ON u.id = t.user_id
           WHERE t.token_hash = ?1",
         params![token_hash],
@@ -137,10 +139,71 @@ pub fn find_token_owner(
                 display_name: row.get(2)?,
                 token_expires_at: row.get(3)?,
                 user_expires_at: row.get(4)?,
+                login: row.get(5)?,
             })
         },
     )
     .optional()
+}
+
+// ---- GitHub 登录 ----
+
+/// 认人靠 GitHub 的数字 id；用户名和显示名每次登录都刷新（人会改名）。
+/// 返回我们这边的 user_id。
+pub fn upsert_github_user(
+    conn: &Connection,
+    github_id: i64,
+    login: &str,
+    display_name: &str,
+    now: &str,
+) -> rusqlite::Result<String> {
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT id FROM users WHERE github_id = ?1",
+            params![github_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(id) = existing {
+        conn.execute(
+            "UPDATE users SET login = ?2, display_name = ?3 WHERE id = ?1",
+            params![id, login, display_name],
+        )?;
+        return Ok(id);
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    conn.execute(
+        "INSERT INTO users (id, kind, display_name, created_at, expires_at, github_id, login)
+         VALUES (?1, 'github', ?2, ?3, NULL, ?4, ?5)",
+        params![id, display_name, now, github_id, login],
+    )?;
+    Ok(id)
+}
+
+/// 把一个匿名身份下还活着的作品全部归到账号里：换主人、去掉到期时间。
+/// 返回挪过去的 slug——清单里的到期时间和开发者名字要由调用方另外改（那在对象存储里）。
+pub fn adopt_sites(
+    conn: &Connection,
+    from_user: &str,
+    to_user: &str,
+) -> rusqlite::Result<Vec<String>> {
+    let mut stmt =
+        conn.prepare("SELECT slug FROM sites WHERE user_id = ?1 AND deleted_at IS NULL")?;
+    let slugs: Vec<String> = stmt
+        .query_map(params![from_user], |row| row.get(0))?
+        .collect::<Result<_, _>>()?;
+    if slugs.is_empty() {
+        return Ok(slugs);
+    }
+    conn.execute(
+        "UPDATE sites SET user_id = ?2, expires_at = NULL WHERE user_id = ?1 AND deleted_at IS NULL",
+        params![from_user, to_user],
+    )?;
+    conn.execute(
+        "UPDATE uploads SET user_id = ?2 WHERE user_id = ?1",
+        params![from_user, to_user],
+    )?;
+    Ok(slugs)
 }
 
 // ---- 作品 ----

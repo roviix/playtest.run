@@ -67,6 +67,7 @@ impl Harness {
             listen: "127.0.0.1:0".parse().unwrap(),
             data_dir: dir.path().to_path_buf(),
             site_url_template: "http://{slug}.localhost:8443".to_string(),
+            github: None,
         };
         let state = AppState::from_config(&config).await.unwrap();
         Self {
