@@ -511,8 +511,12 @@ pub fn plaza_line(plaza: &PlazaOut) -> String {
 
 /// 「本次 4.2 秒（哈希 0.3 · 上传 3.1 · 提交 0.8）」。
 ///
-/// DESIGN §8 要的那个数就是句首那个：从敲下命令到链接出现。分段是为了知道慢在哪一段。
+/// DESIGN §8 要的那个数就是句首那个：从敲下命令到链接出现。分段是为了知道慢在哪一段；
+/// 整体不到 2 秒时没有「慢在哪」可问，四个 0.0 只是噪声，不打。
 fn timing_line(elapsed_ms: u64, timings: Timings) -> String {
+    if elapsed_ms < 2000 {
+        return format!("本次 {} 秒", seconds(elapsed_ms));
+    }
     format!(
         "本次 {} 秒（哈希 {} · 准备 {} · 上传 {} · 提交 {}）",
         seconds(elapsed_ms),
@@ -1063,6 +1067,19 @@ mod tests {
                 }
             ),
             "本次 5.1 秒（哈希 0.3 · 准备 0.9 · 上传 3.1 · 提交 0.8）"
+        );
+        assert_eq!(
+            timing_line(
+                240,
+                Timings {
+                    hash_ms: 20,
+                    prepare_ms: 60,
+                    upload_ms: 90,
+                    commit_ms: 40
+                }
+            ),
+            "本次 0.2 秒",
+            "一下就完的上传不用拆段"
         );
     }
 }

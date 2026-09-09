@@ -407,10 +407,9 @@ fn without_the_flag_stdout_is_still_just_the_link() {
         "`playtest ./dist | pbcopy` 拿到的必须就是链接"
     );
 
-    // 「几秒」是数字：结尾那行给总数和分段。
+    // 「几秒」是数字：结尾那行给总数。对着本机假服务器一下就完，分段不打（那是慢的时候才有用的）。
     let stderr = stderr_of(&output);
     assert!(stderr.contains("本次 "), "{stderr}");
-    assert!(stderr.contains("（哈希 "), "{stderr}");
-    assert!(stderr.contains("· 上传 "), "{stderr}");
-    assert!(stderr.contains("· 提交 "), "{stderr}");
+    assert!(stderr.contains(" 秒"), "{stderr}");
+    assert!(!stderr.contains("（哈希 0.0"), "四个 0.0 是噪声：{stderr}");
 }

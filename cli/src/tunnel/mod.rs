@@ -264,13 +264,22 @@ fn say_ignored(cli_args: &UploadArgs) {
     if cli_args.no_isolated {
         ignored.push("--no-isolated");
     }
-    if ignored.is_empty() {
-        return;
+    if cli_args.summary.is_some() {
+        ignored.push("--summary");
     }
-    ui::say(&format!(
-        "{} 只在上传目录时有用，这次是隧道模式，先忽略了。",
-        ignored.join("、")
-    ));
+    if cli_args.cover.is_some() {
+        ignored.push("--cover");
+    }
+    if !ignored.is_empty() {
+        ui::say(&format!(
+            "{} 只在上传目录时有用，这次是隧道模式，先忽略了。",
+            ignored.join("、")
+        ));
+    }
+    // 广场上的卡片必须随时点得开，而隧道随你的电脑一起下线；所以广场只收上传的版本。
+    if cli_args.public || cli_args.seek.is_some() {
+        ui::say("--public / --seek 先忽略了：广场只放上传的版本，隧道一关卡片就点不开。要上广场，用 playtest ./dist --public。");
+    }
 }
 
 /// 令牌快到期了吗。看不懂服务器给的时间就当没到期——宁可让边缘拒一次，也不要没事就换。

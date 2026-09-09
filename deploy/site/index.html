@@ -7,49 +7,91 @@
 <title>playtest · 一条命令，把这个版本放到别人面前</title>
 <meta name="description" content="把你手上这个能玩的版本，用一条命令放到别人面前，然后知道他们玩成了什么样。">
 <style>
-:root{--bg:#fbfaf8;--panel:#fff;--ink:#17181a;--muted:#6b7076;--line:#e3e1dc;--link:#1b52b8;--good:#1c6b4a;--good-bg:#e9f5ee}
-@media(prefers-color-scheme:dark){:root{--bg:#131416;--panel:#1b1d20;--ink:#ecebe8;--muted:#9aa0a6;--line:#2e3237;--link:#8fb4ff;--good:#7fd0a6;--good-bg:#16291f}}
+/* 和控制台（console/src/style.css）、玩家侧（edge/src/html.rs）同一套记号：同样的琥珀色、同样的圆角。
+   这一页只是开发者第一次来时读的说明，所以是浅色、窄栏、正文优先；右边那张暗色卡片是玩家会看到的门禁页，用 CSS 画出来的。 */
+:root{--bg:#f6f5f2;--panel:#fff;--panel-2:#f1efea;--ink:#17181a;--muted:#6b7076;--line:#e3e1dc;--link:#1b52b8;--accent:#b5731a;--accent-bg:#fff3dc;--good:#1c6b4a;--good-bg:#e9f5ee;
+  --shadow:0 1px 2px rgba(20,20,30,.04),0 8px 24px -18px rgba(20,20,30,.25)}
+@media(prefers-color-scheme:dark){:root{--bg:#0e0f13;--panel:#16181d;--panel-2:#1d2027;--ink:#eef0f4;--muted:#9aa2b1;--line:#272b34;--link:#8fb4ff;--accent:#ffb224;--accent-bg:#2b2210;--good:#7fd0a6;--good-bg:#16291f;--shadow:0 24px 60px -36px rgba(0,0,0,.9)}}
 *{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink)}
-body{font:16px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;-webkit-text-size-adjust:100%}
+body{font:16px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased}
 a{color:var(--link);text-decoration:none}a:hover{text-decoration:underline}
-main{max-width:720px;margin:0 auto;padding:40px 20px 64px}
-h1{font-size:28px;line-height:1.25;margin:0 0 12px}
-.lead{font-size:18px;color:var(--muted);margin:0 0 28px}
-pre{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font:15px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0 0 10px}
-pre .c{color:var(--muted)}
-h2{font-size:17px;margin:36px 0 10px}
-p{margin:0 0 12px}
-.step{display:grid;grid-template-columns:28px 1fr;gap:10px;margin:0 0 14px}
-.n{width:28px;height:28px;border-radius:50%;background:var(--good-bg);color:var(--good);font-weight:600;display:grid;place-items:center;font-size:14px}
-.tag{display:inline-block;padding:1px 8px;border:1px solid var(--line);border-radius:999px;font-size:13px;color:var(--muted);margin-right:6px}
-footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em}
+.shell{max-width:46rem;margin:0 auto;padding:0 1rem env(safe-area-inset-bottom)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem 0;border-bottom:1px solid var(--line)}
+.top nav{display:flex;gap:1.1rem;font-size:.9rem}
+.top nav a{color:var(--muted)}
+.brand{font-weight:700;font-size:1.1rem;letter-spacing:-.01em;color:var(--ink)}
+.brand::after{content:".run";color:var(--accent)}
+.hero{padding:2.6rem 0 1.4rem}
+h1{font-size:1.85rem;line-height:1.28;margin:0 0 .8rem;letter-spacing:-.01em}
+.lead{font-size:1.05rem;color:var(--muted);margin:0 0 1.6rem;max-width:38rem}
+pre{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:.95rem 1.1rem;overflow:auto;font:.9rem/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0;box-shadow:var(--shadow)}
+pre .c{color:var(--muted)}pre b{font-weight:600;color:var(--accent)}
+.facts{display:flex;flex-wrap:wrap;gap:.4rem .5rem;margin:.9rem 0 0;padding:0;list-style:none;font-size:.82rem;color:var(--muted)}
+.facts li{padding:.1rem .6rem;border:1px solid var(--line);border-radius:999px;background:var(--panel)}
+h2{font-size:1.02rem;margin:2.6rem 0 .8rem;letter-spacing:.01em}
+p{margin:0 0 .75rem}
+.two{display:grid;grid-template-columns:1fr;gap:1.4rem;align-items:start}
+@media(min-width:46rem){.two{grid-template-columns:1fr 17rem}}
+.step{display:grid;grid-template-columns:1.7rem 1fr;gap:.7rem;margin:0 0 .9rem}
+.n{width:1.7rem;height:1.7rem;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-weight:600;display:grid;place-items:center;font-size:.85rem}
+/* 玩家那一侧的门禁页：暗、安静、一个按钮。这里只是缩影，真的那页在 edge/src/gate.rs。 */
+.gate{background:radial-gradient(120% 80% at 50% 0%,#1c1f26 0%,#0b0c10 60%);border:1px solid #23262e;border-radius:16px;padding:1.1rem 1.1rem 1rem;color:#e9eaee;box-shadow:0 30px 60px -40px rgba(0,0,0,.9)}
+.gate small{display:block;color:#9aa2b1;font-size:.78rem}
+.gate .t{font-size:1.2rem;font-weight:700;margin:.15rem 0 .8rem}.gate .t span{font-size:.72rem;font-weight:400;color:#9aa2b1;margin-left:.3rem}
+.gate .go{display:block;text-align:center;background:#ffb224;color:#1a1200;font-weight:700;border-radius:10px;padding:.7rem;font-size:.95rem}
+.gate .exp{margin:.7rem 0 0;color:#9aa2b1;font-size:.72rem;text-align:center}
+.status{background:var(--panel-2);border-radius:12px;padding:.9rem 1.1rem;font-size:.95rem}
+.status p:last-child{margin:0}
+.ok{color:var(--good)}
+footer{margin:3rem 0 3.5rem;padding-top:1rem;border-top:1px solid var(--line);color:var(--muted);font-size:.84rem;line-height:1.7}
 </style>
 </head>
 <body>
-<main>
-<h1>一条命令，把你手上这个能玩的版本放到别人面前，<br>然后知道他们玩成了什么样。</h1>
-<p class="lead">给用 AI 写小东西的人、Game Jam 的参赛者、独立开发者、创意编码作者。产物是浏览器里跑的东西，观众是具体的人——朋友、测试者、评委、学生。</p>
+<div class="shell">
+<header class="top">
+  <a class="brand" href="/">playtest</a>
+  <nav><a href="https://playtest.run/">广场</a><a href="/console/">控制台</a><a href="#install">安装</a></nav>
+</header>
 
-<pre><code>playtest ./dist     <span class="c"># 上传引擎导出的目录 → https://xxx.playtest.run 和一张二维码</span>
-playtest 5173       <span class="c"># 把正在跑的本地开发服务器或联机后端接出去，链接长得一样</span></code></pre>
-<p><span class="tag">不注册</span><span class="tag">不装东西</span><span class="tag">手机扫码就能玩</span><span class="tag">24 小时匿名链接</span></p>
+<section class="hero">
+<h1>一条命令，把你手上这个能玩的版本放到别人面前，<br>然后知道他们玩成了什么样。</h1>
+<p class="lead">给用 AI 写小东西的人、Game Jam 参赛者、独立开发者、创意编码作者。产物是浏览器里跑的东西，观众是具体的人——朋友、测试者、评委、学生。</p>
+<pre><code><b>playtest</b> ./dist                <span class="c"># 上传导出目录 → https://xxx.playtest.run 和一张二维码</span>
+<b>playtest</b> 5173                  <span class="c"># 把正在跑的本地开发服务器接出去，链接长得一样</span>
+<b>playtest</b> ./dist --backend 3000 <span class="c"># 静态文件上传，/api 和 WebSocket 穿隧道回你的后端</span></code></pre>
+<ul class="facts"><li>玩家不注册、不装东西</li><li>手机扫码就能玩</li><li>匿名链接 24 小时</li><li>不运行你的代码，只分发文件</li></ul>
+</section>
 
 <h2>玩家点开之后</h2>
+<div class="two">
+<div>
 <div class="step"><div class="n">1</div><div>先看到一页「某某 邀请你试玩《作品名》· v7」和一个「开始」按钮。这一下点击解锁了浏览器的音频，也是会话的起点。</div></div>
-<div class="step"><div class="n">2</div><div>进入作品。<code>.wasm</code>、预压缩的 <code>.br</code>、Godot 4 需要的跨源隔离、断点续传——这些引擎导出物最容易白屏的地方，边缘替你配好了。</div></div>
+<div class="step"><div class="n">2</div><div>进入作品。<code>.wasm</code>、预压缩的 <code>.br</code>、Godot 4 需要的跨源隔离、断点续传——引擎导出物最容易白屏的地方，边缘替你配好了。</div></div>
 <div class="step"><div class="n">3</div><div>你在<a href="/console/">控制台</a>看到的不是仪表盘，是点名册：几个人打开、几个人进到游戏、停留多久、在什么设备上报了什么错、说了什么。</div></div>
+</div>
+<div class="gate" aria-hidden="true">
+  <small>匿名开发者 邀请你试玩</small>
+  <div class="t">《跳跳》<span>· v7</span></div>
+  <div class="go">开始</div>
+  <p class="exp">这个链接在 明天 17:58 后失效</p>
+</div>
+</div>
 
 <h2>现在的状态</h2>
-<p>私测中。已经能用：上传、隧道、门禁页、第一层数据、可选的 <code>playtest.js</code>（加一行 <code>&lt;script src="/_playtest/sdk.js"&gt;&lt;/script&gt;</code> 就有 JS 错误、加载用时、自定义事件和一个反馈按钮）、控制台。还没做：登录（现在全是 24 小时后失效的匿名链接）、口令与邀请名单、自定义域名。做不到的地方命令会明说。</p>
+<div class="status">
+<p><span class="ok">已经能用：</span>上传、隧道、静态加后端的混合模式、门禁页、点名册、可选的 <code>playtest.js</code>（加一行 <code>&lt;script src="/_playtest/sdk.js"&gt;&lt;/script&gt;</code> 就有 JS 错误、加载用时、自定义事件和一个反馈按钮）、广场（<code>--public</code> 与 <code>--seek</code>）、版本回滚。</p>
+<p><span style="color:var(--accent)">还没做：</span>登录（现在全是 24 小时后失效的匿名链接）、口令与邀请名单、自定义域名。做不到的地方命令会明说。</p>
 <p>控制台需要一个令牌：在作品目录里运行一次 <code>playtest</code>，它会自己申请一个，令牌就在 <code>~/.config/playtest/config.json</code> 里。</p>
+</div>
 
-<h2>安装</h2>
-<p>一个单文件，macOS（Apple Silicon 与 Intel）、Linux（x86_64 与 arm64）、Windows 各一份，在 <a href="https://github.com/roviix/playtest.run/releases">GitHub Releases</a> 下载，解开后把 <code>playtest</code> 放到 PATH 里。私测阶段仓库是私有的，链接只有受邀的人打得开；macOS 第一次运行若被拦，在「系统设置 → 隐私与安全性」里放行一次（还没有签名与公证）。</p>
+<h2 id="install">安装</h2>
+<p>一个单文件，macOS（Apple Silicon 与 Intel）、Linux（x86_64 与 arm64）、Windows 各一份，在 <a href="https://github.com/roviix/playtest.run/releases">GitHub Releases</a> 下载。私测阶段仓库是私有的，链接只有受邀的人打得开；macOS 第一次运行若被拦，在「系统设置 → 隐私与安全性」里放行一次（还没有签名与公证）。</p>
 <pre><code><span class="c"># macOS / Linux：解开、放进 PATH、发一个</span>
 tar -xzf playtest-*.tar.gz &amp;&amp; sudo mv playtest-*/playtest /usr/local/bin/
 cd 你的导出目录 &amp;&amp; playtest .</code></pre>
 
-<footer>玩家看到的东西全在 <code>*.playtest.run</code> 上；登录、令牌、控制台只在这个域名下。我们从不运行你的代码，只分发文件和转发连接；不记玩家 IP，不收集位置。数据默认保留 90 天。<br>一个 <a href="https://roviix.com">roviix</a> 出品。</footer>
-</main>
+<footer>玩家看到的东西全在 <code>*.playtest.run</code> 上；登录、令牌、控制台只在这个域名下。我们从不运行你的代码，只分发文件和转发连接；不记玩家 IP，不收集位置。数据默认保留 90 天。<br>一个 <a href="https://roviix.com">roviix</a> 出品 · <a href="https://playtest.run/">去广场看看别人在测什么</a></footer>
+</div>
 </body>
 </html>

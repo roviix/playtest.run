@@ -3,7 +3,7 @@
 // 只用 Node 22 自带的 fetch 与 WebSocket，不装依赖。写 docs/spikes/ 时用它，不是产品的一部分。
 //
 // 用法：
-//   node scripts/headless-check.mjs <url> [--settle <点击前等多久 ms>] [--click "<css 选择器>"] [--wait <点击后等多久 ms>] [--shot <png 路径>]
+//   node scripts/headless-check.mjs <url> [--settle <点击前等多久 ms>] [--click "<css 选择器>"] [--wait <点击后等多久 ms>] [--shot <png 路径>] [--viewport 1380x900]
 // 先要有一个开着远程调试的无头 Chrome：
 //   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --remote-debugging-port=9222 \
 //     --user-data-dir=/tmp/pt-chrome --window-size=420,860 --hide-scrollbars about:blank
@@ -25,6 +25,8 @@ const settleMs = Number(opt("--settle", "300"));
 const waitMs = Number(opt("--wait", "2500"));
 const shot = opt("--shot", null);
 const debugPort = opt("--port", "9222");
+// 默认按手机竖屏看；审桌面版面时传 --viewport 1380x900。
+const [vw, vh] = opt("--viewport", "420x860").split("x").map(Number);
 
 const log = (s) => process.stderr.write(`[headless-check] ${s}\n`);
 // 任何一步卡住都不该让脚本挂着：整体最多 45 秒。
@@ -86,7 +88,7 @@ const evalJs = async (expression) => (await send("Runtime.evaluate", { expressio
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Log.enable");
-await send("Emulation.setDeviceMetricsOverride", { width: 420, height: 860, deviceScaleFactor: 1, mobile: true });
+await send("Emulation.setDeviceMetricsOverride", { width: vw, height: vh, deviceScaleFactor: 1, mobile: vw < 700 });
 
 log(`打开 ${url}`);
 await send("Page.navigate", { url });
@@ -94,6 +96,13 @@ await waitEvent("Page.loadEventFired");
 // 游戏引擎在 load 之后还要启动一会儿（Phaser 解析 1 MB 脚本再建场景），点太早会点在空画布上。
 await sleep(settleMs);
 log("首屏已加载");
+
+// --eval 在首屏之后跑一段 JS（比如往 localStorage 放令牌再 reload），审控制台登录后的页面用。
+const evalAfterLoad = opt("--eval", null);
+if (evalAfterLoad) {
+  await evalJs(evalAfterLoad);
+  await sleep(settleMs);
+}
 
 const report = { url, status: await evalJs("document.title"), first_page_text: await evalJs("document.body.innerText") };
 
