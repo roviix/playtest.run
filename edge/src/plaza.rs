@@ -264,7 +264,8 @@ color:var(--dim);font:inherit;font-size:.8rem;line-height:1.6;letter-spacing:.02
 @media(min-width:88rem){.grid{grid-template-columns:repeat(4,1fr)}}\
 .tile{display:flex;flex-direction:column}\
 .cover-link{position:relative;display:block;border-radius:14px;overflow:hidden;border:1px solid var(--line);\
-background:#0e1014;transition:border-color .2s,transform .2s;transform:translateZ(0)}\
+background:#0e1014;text-decoration:none;transition:border-color .2s,transform .2s;transform:translateZ(0)}\
+.cover-link:hover{text-decoration:none}\
 .tile:hover .cover-link{border-color:#39404e;transform:translateY(-2px)}\
 .cover{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;transition:transform .35s ease}\
 .tile:hover img.cover{transform:scale(1.025)}\
