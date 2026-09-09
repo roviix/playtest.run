@@ -283,14 +283,12 @@ fn classify_client(e: &client::Error) -> (Code, Option<String>) {
             Some("这个地址回的不是 playtest 控制面的格式，确认一下 --api。".into()),
         ),
         client::Error::Server { status, body } => match body.code {
-            ErrorCode::QuotaExceeded => (
-                Code::QuotaExceeded,
-                Some("匿名上传有额度上限，登录之后额度更大（登录还没做好）。".into()),
-            ),
+            ErrorCode::QuotaExceeded => (Code::QuotaExceeded, None),
             ErrorCode::Unauthorized | ErrorCode::TokenExpired => (
                 Code::NeedsLogin,
-                Some("匿名身份只保留 24 小时。再跑一次会自动换一个新的，链接也会是新的。".into()),
+                Some("匿名身份只保留 24 小时；再跑一次会自动换一个新的，链接也会是新的。想让作品留下来，playtest login。".into()),
             ),
+            ErrorCode::LoginUnavailable | ErrorCode::LoginFailed => (Code::NeedsLogin, None),
             ErrorCode::Internal => (Code::ServerError, Some("过一会儿再试一次。".into())),
             _ if *status >= 500 => (Code::ServerError, Some("过一会儿再试一次。".into())),
             _ => (Code::BadInput, None),
@@ -472,7 +470,7 @@ pub fn report_upload(report: &UploadReport) {
         ui::say(&plaza_line(plaza));
     }
     if let Some(expires_at) = &report.expires_at {
-        say_expiry(expires_at, "保留、改名需要登录（登录还没做好）。");
+        say_expiry(expires_at, "想让它留下来：playtest login。");
     }
     ui::say(&format!(
         "谁打开了、玩到哪、报了什么错：{}/console/（令牌在 playtest 的配置文件里）",
@@ -821,7 +819,7 @@ pub fn report_online(report: &OnlineReport) {
         }
     }
     if let Some(expires_at) = &report.expires_at {
-        say_expiry(expires_at, "保留、改名需要登录（登录还没做好）。");
+        say_expiry(expires_at, "想让它留下来：playtest login。");
     }
     ui::say(&format!(
         "谁打开了、玩到哪、报了什么错：{}/console/（令牌在 playtest 的配置文件里）",
@@ -918,6 +916,11 @@ pub fn report_stopped(connections: u64, bytes: u64, hybrid: bool) {
 /// stdout 上那一个对象，一行，写完就刷。
 ///
 /// stderr 不带缓冲、stdout 在管道里带，不刷一次两边会错行。
+/// `playtest login --json` 的那一个对象。
+pub fn emit_login<T: Serialize>(value: &T) {
+    emit(value);
+}
+
 fn emit<T: Serialize>(value: &T) {
     let line = serde_json::to_string(value).unwrap_or_else(|e| unprintable(&e));
     let _ = std::io::stderr().flush();

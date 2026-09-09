@@ -6,8 +6,9 @@ use std::time::Duration;
 
 use futures_util::TryStreamExt;
 use playtest_common::api::{
-    routes, AnonSessionResponse, CommitUploadResponse, CreateSiteRequest, ErrorBody, ErrorCode,
-    PrepareUploadRequest, PrepareUploadResponse, Site, UpdateSiteRequest, VersionList,
+    routes, AnonSessionResponse, CommitUploadResponse, CreateSiteRequest, DeviceLoginPoll,
+    DeviceLoginStart, ErrorBody, ErrorCode, LoginPollResponse, Me, PrepareUploadRequest,
+    PrepareUploadResponse, Site, UpdateSiteRequest, VersionList,
 };
 use playtest_common::tunnel::{TunnelGrant, TunnelRequest};
 use reqwest::header::AUTHORIZATION;
@@ -152,6 +153,40 @@ impl Client {
         let response = self
             .http
             .post(self.url(routes::ANON_SESSIONS))
+            .send()
+            .await
+            .map_err(|e| self.transport(e))?;
+        self.read_json(response).await
+    }
+
+    /// 设备码登录的第一步（`playtest login`）。不带令牌。
+    pub async fn device_login_start(&self) -> Result<DeviceLoginStart> {
+        let response = self
+            .http
+            .post(self.url(routes::LOGIN_DEVICE_START))
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .map_err(|e| self.transport(e))?;
+        self.read_json(response).await
+    }
+
+    /// 轮询。带着手里的匿名令牌去，成功时那个身份下的作品会一起归到账号里。
+    pub async fn device_login_poll(&self, device_code: &str) -> Result<LoginPollResponse> {
+        let response = self
+            .request(Method::POST, routes::LOGIN_DEVICE_POLL)
+            .json(&DeviceLoginPoll {
+                device_code: device_code.to_string(),
+            })
+            .send()
+            .await
+            .map_err(|e| self.transport(e))?;
+        self.read_json(response).await
+    }
+
+    pub async fn me(&self) -> Result<Me> {
+        let response = self
+            .request(Method::GET, routes::ME)
             .send()
             .await
             .map_err(|e| self.transport(e))?;

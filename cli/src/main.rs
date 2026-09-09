@@ -7,6 +7,7 @@ mod client;
 mod clock;
 mod config;
 mod inspect;
+mod login;
 mod mcp;
 mod output;
 mod scan;
@@ -22,11 +23,6 @@ use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser};
 
 use args::{Cli, Command, Target};
-
-/// 一个还没做好的功能。说清楚现在能做什么，脚本靠退出码 2 和 `code: not_implemented` 分流。
-fn not_yet(message: &str) -> anyhow::Error {
-    output::not_implemented(message)
-}
 
 fn main() -> ExitCode {
     // 「几秒」要从最早的一刻开始算（DESIGN §3.2），所以这是第一行。
@@ -104,9 +100,7 @@ async fn dispatch(cli: Cli) -> Result<()> {
         ));
     }
     match cli.command {
-        Some(Command::Login) => Err(not_yet(
-            "登录还没做好。现在每次运行拿到的是匿名链接，24 小时后失效。",
-        )),
+        Some(Command::Login { api }) => login::run(api.as_deref()).await,
         Some(Command::Ls { api }) if machine => output::ls(api.as_deref()).await,
         Some(Command::Ls { api }) => sites::ls(api.as_deref()).await,
         Some(Command::Rm { slug, yes, api }) if machine => {

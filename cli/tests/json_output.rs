@@ -31,6 +31,7 @@ struct Refusal {
 #[derive(Default)]
 struct Fake {
     refuse_prepare: Mutex<Option<Refusal>>,
+    login_polls: Mutex<u32>,
 }
 
 fn error_body(refusal: Refusal) -> Response {
@@ -39,6 +40,33 @@ fn error_body(refusal: Refusal) -> Response {
         Json(json!({ "code": refusal.code, "message": "服务器说的那句话" })),
     )
         .into_response()
+}
+
+/// 这个假控制面没配 GitHub：登录要像线上没配时一样明说，而不是装作成功。
+async fn login_unavailable() -> Response {
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(json!({ "code": "login_unavailable", "message": "这个控制面没有开 GitHub 登录。匿名链接照常能用，只是 24 小时后失效。" })),
+    )
+        .into_response()
+}
+
+/// 设备码流程：第一次轮询「还没输完」，第二次成功，并报告归入了 2 个匿名作品。
+async fn device_start() -> Json<Value> {
+    Json(json!({
+        "device_code": "dev-1", "user_code": "WDJB-MJHT",
+        "verification_uri": "https://github.com/login/device", "expires_in": 900, "interval": 0
+    }))
+}
+
+async fn device_poll(State(fake): State<Arc<Fake>>) -> Json<Value> {
+    let mut polls = fake.login_polls.lock().unwrap();
+    *polls += 1;
+    Json(if *polls == 1 {
+        json!({ "status": "pending", "interval": 0 })
+    } else {
+        json!({ "status": "ok", "token": "long-lived", "login": "octo", "display_name": "Octo Cat", "migrated_sites": 2 })
+    })
 }
 
 async fn anon_sessions() -> Json<Value> {
@@ -97,6 +125,7 @@ async fn commit_upload(UrlPath((slug, _upload)): UrlPath<(String, String)>) -> J
 fn start_fake(refuse_prepare: Option<Refusal>) -> String {
     let fake = Arc::new(Fake {
         refuse_prepare: Mutex::new(refuse_prepare),
+        login_polls: Mutex::new(0),
     });
     let (tx, rx) = std::sync::mpsc::channel::<SocketAddr>();
     std::thread::spawn(move || {
@@ -107,6 +136,9 @@ fn start_fake(refuse_prepare: Option<Refusal>) -> String {
         runtime.block_on(async move {
             let app = Router::new()
                 .route(routes::ANON_SESSIONS, post(anon_sessions))
+                .route(routes::LOGIN_DEVICE_START, post(device_start))
+                .route(routes::LOGIN_DEVICE_POLL, post(device_poll))
+                .route(routes::LOGIN_WEB_START, get(login_unavailable))
                 .route(routes::SITES, post(create_site).get(list_sites))
                 .route(routes::SITE_UPLOADS, post(prepare_upload))
                 .route(routes::BLOB, put(put_blob))
@@ -372,14 +404,31 @@ fn a_flag_that_does_not_exist_is_a_usage_error() {
 }
 
 #[test]
-fn what_is_not_built_yet_says_so_instead_of_pretending() {
+fn login_polls_until_github_says_yes_and_keeps_a_long_lived_token() {
     let home = tempfile::tempdir().unwrap();
-    let output = run_cli(home.path(), "http://127.0.0.1:1", &["--json", "login"]);
-    let value = expect_failure(&output, 2, "not_implemented");
-    assert!(
-        value["message"].as_str().unwrap().contains("还没做好"),
-        "{value}"
-    );
+    let api = start_fake(None);
+    let output = run_cli(home.path(), &api, &["--json", "login"]);
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    let value = only_object(&output);
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["action"], "login");
+    assert_eq!(value["login"], "octo");
+    assert_eq!(value["migrated_sites"], 2);
+    // 机器模式下码和网址走 stderr，调用方能转给人。
+    let stderr = stderr_of(&output);
+    assert!(stderr.contains("WDJB-MJHT"), "{stderr}");
+
+    // 令牌落在配置里，没有到期时间，记着是谁。
+    let config_path = home
+        .path()
+        .join(".config")
+        .join("playtest")
+        .join("config.json");
+    let config: Value =
+        serde_json::from_str(&std::fs::read_to_string(config_path).unwrap()).unwrap();
+    assert_eq!(config["token"], "long-lived");
+    assert_eq!(config["login"], "octo");
+    assert!(config.get("token_expires_at").is_none(), "{config}");
 }
 
 #[test]

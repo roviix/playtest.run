@@ -1,4 +1,4 @@
-//! `~/.config/playtest/config.json`：匿名令牌，以及「这个目录上次发到哪个作品」。
+//! `~/.config/playtest/config.json`：令牌（匿名的或登录后的），以及「这个目录上次发到哪个作品」。
 //!
 //! 一个 JSON 文件加一个环境变量就够，所以不引 dirs、也不引 toml。文件里有令牌，权限 0600。
 
@@ -22,9 +22,12 @@ pub struct Config {
     pub api: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
-    /// RFC 3339。
+    /// RFC 3339。匿名令牌有；`playtest login` 之后的令牌是长期的，没有这一项。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token_expires_at: Option<String>,
+    /// 登录后的 GitHub 用户名。有它就说明 `token` 是账号令牌，不是匿名的。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login: Option<String>,
     /// 规范化后的目录绝对路径 → slug。用 BTreeMap 是为了每次写出来的顺序一样。
     #[serde(default)]
     pub sites: BTreeMap<String, String>,
@@ -37,11 +40,27 @@ impl Config {
             return None;
         }
         let token = self.token.as_deref()?;
-        let expires = clock::parse_rfc3339(self.token_expires_at.as_deref()?)?;
-        if expires - now <= time::Duration::seconds(EXPIRY_MARGIN_SECONDS) {
-            return None;
+        // 没有到期时间的是登录令牌，一直能用；有的是匿名令牌，快到期就当没有。
+        if let Some(raw) = self.token_expires_at.as_deref() {
+            let expires = clock::parse_rfc3339(raw)?;
+            if expires - now <= time::Duration::seconds(EXPIRY_MARGIN_SECONDS) {
+                return None;
+            }
         }
         Some(token)
+    }
+
+    /// 已经 `playtest login` 过了。
+    pub fn is_logged_in(&self) -> bool {
+        self.login.is_some() && self.token.is_some()
+    }
+
+    /// 记下登录结果。匿名令牌被替掉；目录 → slug 的记忆保留（作品已经归到账号里）。
+    pub fn set_login(&mut self, api: &str, token: String, login: String) {
+        self.api = Some(api.to_string());
+        self.token = Some(token);
+        self.token_expires_at = None;
+        self.login = Some(login);
     }
 
     pub fn remembered_slug(&self, dir_key: &str) -> Option<&str> {
@@ -139,6 +158,7 @@ mod tests {
             api: Some("http://127.0.0.1:8787".into()),
             token: Some("tok-1".into()),
             token_expires_at: Some("2026-09-08T03:30:00Z".into()),
+            login: None,
             sites: BTreeMap::new(),
         };
         written.remember("/tmp/游戏/dist".into(), "brisk-otter-41".into());
@@ -146,6 +166,21 @@ mod tests {
 
         save(&path, &written).unwrap();
         assert_eq!(load(&path).unwrap(), written);
+    }
+
+    #[test]
+    fn a_login_token_has_no_expiry_and_stays_usable() {
+        let mut config = Config::default();
+        config.set_login("http://a", "long".into(), "octo".into());
+        assert!(config.is_logged_in());
+        assert_eq!(
+            config.usable_token("http://a", at("2030-01-01T00:00:00Z")),
+            Some("long")
+        );
+        assert_eq!(
+            config.usable_token("http://b", at("2030-01-01T00:00:00Z")),
+            None
+        );
     }
 
     #[test]
@@ -174,6 +209,7 @@ mod tests {
             api: Some("http://a".into()),
             token: Some("tok".into()),
             token_expires_at: Some("2026-09-08T03:30:00Z".into()),
+            login: None,
             sites: BTreeMap::new(),
         };
         let now = at("2026-09-07T03:30:00Z");
@@ -187,6 +223,7 @@ mod tests {
             api: Some("http://a".into()),
             token: Some("tok".into()),
             token_expires_at: Some("2026-09-08T03:30:00Z".into()),
+            login: None,
             sites: BTreeMap::new(),
         };
         assert_eq!(

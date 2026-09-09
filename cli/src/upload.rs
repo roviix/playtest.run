@@ -124,6 +124,11 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
 
     let prepared = match client.prepare_upload(&slug, &request).await {
         Ok(prepared) => prepared,
+        Err(e) if e.means_token_gone() && config.is_logged_in() => {
+            return Err(anyhow::anyhow!(
+                "登录已经失效（{e}）。重新运行 playtest login。"
+            ));
+        }
         Err(e) if source == SlugSource::Remembered && e.means_anonymous_link_gone() => {
             if e.means_token_gone() {
                 ui::say("上次的匿名链接已过期（匿名链接只保留 24 小时），这是一个新链接。");
@@ -559,6 +564,13 @@ pub(crate) async fn choose_site(
         Ok(slug) => slug,
         // 本地记着的令牌还没到期，服务器却不认了（比如服务器重置过）：换一个匿名会话再来一次，
         // 否则用户每次重跑都撞同一个旧令牌。
+        Err(e) if e.means_token_gone() && config.is_logged_in() => {
+            // 登录令牌被拒不能悄悄换成匿名的：那会把新作品发到一个 24 小时的身份下。
+            return Err(anyhow::anyhow!(
+                "登录已经失效（{}）。重新运行 playtest login。",
+                e
+            ));
+        }
         Err(e) if e.means_token_gone() => {
             ui::say("上次的匿名身份已经失效，换了一个新的。");
             new_anon_session(client, config, config_path, api).await?;

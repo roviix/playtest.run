@@ -204,7 +204,7 @@ fn client_with_saved_token(api: &str, config: &Config) -> Result<Option<Client>>
     Ok(Some(client))
 }
 
-fn launch_browser(url: &str) {
+pub(crate) fn launch_browser(url: &str) {
     let Some(mut command) = browser_command(url) else {
         ui::warn("不知道怎么在这个系统上开浏览器，复制上面的链接自己打开。");
         return;

@@ -164,7 +164,7 @@ pub fn looks_like_source_tree(paths: &[String]) -> bool {
 pub fn explain_limit(error: &ManifestError, paths: &[String]) -> Option<String> {
     match error {
         ManifestError::VersionTooLarge { total, max } => Some(format!(
-            "这一版一共 {}，匿名上传一个版本最多 {}。要传更大的得先登录，登录还没做好。",
+            "这一版一共 {}，匿名上传一个版本最多 {}。要传更大的得先 playtest login。",
             megabytes(*total),
             megabytes(*max)
         )),

@@ -145,8 +145,12 @@ impl UploadArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// 登录（还没做好）
-    Login,
+    /// 用 GitHub 登录一次；之后发的作品留下来，不再 24 小时后失效
+    Login {
+        /// 控制面地址（也可以用环境变量 PLAYTEST_API）
+        #[arg(long, value_name = "网址")]
+        api: Option<String>,
+    },
 
     /// 列出这台机器上发过的作品
     Ls {
