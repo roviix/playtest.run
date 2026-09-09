@@ -117,6 +117,7 @@ mod tests {
                 gate,
                 isolated: false,
                 max_players: 8,
+                hybrid: false,
                 iat: 0,
                 exp: 0,
                 jti: "j".into(),

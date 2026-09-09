@@ -32,7 +32,7 @@ use tokio::sync::watch;
 use crate::args::{self, UploadArgs};
 use crate::client::Client;
 use crate::config::{self, Config};
-use crate::output::{self, Finding, OnlineReport};
+use crate::output::{self, BackendOut, Finding, OnlineReport};
 use crate::upload::{self, SlugSource};
 use crate::{clock, ui};
 
@@ -51,9 +51,53 @@ const WEIGH_GRACE: Duration = Duration::from_millis(1500);
 /// 连着 401 这么多次还是不行，就当成网络问题按退避重连，别在「换令牌」上打转。
 const MAX_TOKEN_SWAPS: u32 = 2;
 
+/// 混合模式（`playtest ./dist --backend 3000`）里挂到已上传作品上的那个后端。
+///
+/// 作品由上传那一步定下来，隧道只是挂上去：slug 不再按当前目录去记忆里找，
+/// 也不会在服务器不认时悄悄换一个——换了静态文件和后端就各在一个作品上了。
+pub struct Backend {
+    pub slug: String,
+    pub title: String,
+    pub port: u16,
+}
+
+/// `playtest 5173`：整个作品都走隧道。
 pub async fn run(cli_args: &UploadArgs, port: u16) -> Result<()> {
+    run_with(cli_args, port, None).await
+}
+
+/// `playtest ./dist --backend 3000`：目录照常上传，再把目录里没有的路径接到本地端口。
+///
+/// 上传的清单就是分界线（DESIGN §4.3）：目录里有的文件玩家从边缘拿，不经过开发者的家宽；
+/// 目录里没有的路径（`/api/x`、WebSocket……）才穿隧道到后端。没有路径约定，也不用配置。
+/// Ctrl-C 之后页面照常能开，只是那些路径回「后端不在线」。先看端口再上传——
+/// 传完才发现后端没起，链接已经占了名额。
+pub async fn run_hybrid(cli_args: &UploadArgs, shown: &str, port: u16) -> Result<()> {
+    if !probe::is_listening(port).await {
+        return Err(output::bad_input(format!(
+            "端口 {port} 上没有东西在监听。先把后端跑起来，再运行 playtest {shown} --backend {port}。"
+        )));
+    }
+    let report = upload::run(cli_args, shown).await?;
+    output::report_upload(&report);
+    run_with(
+        cli_args,
+        port,
+        Some(Backend {
+            slug: report.slug,
+            title: report.title,
+            port,
+        }),
+    )
+    .await
+}
+
+async fn run_with(cli_args: &UploadArgs, port: u16, backend: Option<Backend>) -> Result<()> {
     let stop = Stop::install();
-    say_ignored(cli_args);
+    let hybrid = backend.is_some();
+    if !hybrid {
+        say_ignored(cli_args);
+    }
 
     // 1. 本地端口上得先有东西在听。没有的话拿到链接的人只会看到一片 502。
     if !probe::is_listening(port).await {
@@ -62,16 +106,22 @@ pub async fn run(cli_args: &UploadArgs, port: u16) -> Result<()> {
         ));
     }
     // 只请求这一次首页，之后再不主动碰本地端口。
-    let page = probe::look(port).await;
-    let weighing = tokio::spawn({
-        let page = page.clone();
-        async move { probe::weigh(port, &page).await }
-    });
+    // 混合模式下这个端口是后端不是一页 HTML：不看首页、不称重，一次也不碰。
+    let (page, weighing) = if hybrid {
+        (probe::Page::default(), None)
+    } else {
+        let page = probe::look(port).await;
+        let weighing = tokio::spawn({
+            let page = page.clone();
+            async move { probe::weigh(port, &page).await }
+        });
+        (page, Some(weighing))
+    };
 
     // 2. 令牌与作品，和上传共用。
-    let mut control = Control::start(cli_args).await?;
+    let mut control = Control::start(cli_args, backend).await?;
     let Some(granted) = stop.race(control.first_grant()).await else {
-        output::report_stopped(0, 0);
+        output::report_stopped(0, 0, hybrid);
         return Ok(());
     };
     let mut grant = granted?;
@@ -82,7 +132,7 @@ pub async fn run(cli_args: &UploadArgs, port: u16) -> Result<()> {
     let mut connected = 0u32;
     let mut retries = 0u32;
     let mut token_swaps = 0u32;
-    let mut weighing = Some(weighing);
+    let mut weighing = weighing;
 
     let ending = loop {
         if expiring_soon(&grant) {
@@ -98,7 +148,15 @@ pub async fn run(cli_args: &UploadArgs, port: u16) -> Result<()> {
                 token_swaps = 0;
                 let attempt = connected;
                 connected += 1;
-                announce(&grant, attempt, cli_args, &page, weighing.take()).await;
+                announce(
+                    &grant,
+                    attempt,
+                    cli_args,
+                    &page,
+                    weighing.take(),
+                    control.backend_out(),
+                )
+                .await;
 
                 match session::serve(wire, port, &stop, Arc::clone(&tally)).await {
                     Ended::ByUser => break Ok(()),
@@ -138,7 +196,7 @@ pub async fn run(cli_args: &UploadArgs, port: u16) -> Result<()> {
 
     match ending {
         Ok(()) => {
-            output::report_stopped(tally.total(), tally.bytes());
+            output::report_stopped(tally.total(), tally.bytes(), hybrid);
             Ok(())
         }
         Err(e) => Err(e),
@@ -146,12 +204,16 @@ pub async fn run(cli_args: &UploadArgs, port: u16) -> Result<()> {
 }
 
 /// 第一次连上时把该说的都说了；重连回来只说一声。
+///
+/// 混合模式下链接和二维码上传那一步已经打过了，这里不再画一遍——同一条链接出现两次，
+/// 看的人会以为换了链接。
 async fn announce(
     grant: &TunnelGrant,
     attempt: u32,
     cli_args: &UploadArgs,
     page: &probe::Page,
     weighing: Option<tokio::task::JoinHandle<Option<u64>>>,
+    backend: Option<BackendOut>,
 ) {
     let mut report = OnlineReport::new(
         grant.slug.clone(),
@@ -161,7 +223,9 @@ async fn announce(
         Vec::new(),
     );
     report.attempt = attempt;
-    if attempt == 0 {
+    let hybrid = backend.is_some();
+    report.backend = backend;
+    if attempt == 0 && !hybrid {
         if !cli_args.no_qr {
             report.qr_text = ui::qr_text(&grant.url);
         }
@@ -176,9 +240,8 @@ async fn findings_for(
     weighing: Option<tokio::task::JoinHandle<Option<u64>>>,
 ) -> Vec<Finding> {
     let mut findings = Vec::new();
-    if let Some(hint) = page.vite_hint() {
-        findings.push(hint);
-    }
+    findings.extend(page.vite_hint());
+    findings.extend(page.exposure_hint());
     let Some(weighing) = weighing else {
         return findings;
     };
@@ -230,29 +293,39 @@ struct Control<'a> {
     title: String,
     slug: String,
     source: SlugSource,
+    /// 混合模式的后端；整作品隧道没有。
+    backend: Option<Backend>,
 }
 
 impl<'a> Control<'a> {
-    async fn start(args: &'a UploadArgs) -> Result<Control<'a>> {
+    async fn start(args: &'a UploadArgs, backend: Option<Backend>) -> Result<Control<'a>> {
         let here = std::env::current_dir().context("看不了当前目录")?;
-        let title = upload::title_for(args, &here, None).map_err(output::as_bad_input)?;
         let api = args::api_base(args.api.as_deref());
         let config_path = config::default_path()?;
         let mut config = config::load(&config_path)?;
         let mut client = Client::new(&api)?;
         upload::ensure_token(&mut client, &mut config, &config_path, &api).await?;
-
         let dir_key = dir_key(&here);
-        let (slug, source) = upload::choose_site(
-            &mut client,
-            args,
-            &mut config,
-            &config_path,
-            &api,
-            &dir_key,
-            &title,
-        )
-        .await?;
+
+        // 混合模式：作品就是刚传完的那个，不查记忆也不认领新的。上传刚用过这个令牌，
+        // 所以 ensure_token 拿到的一定是同一个身份。
+        let (title, slug, source) = match &backend {
+            Some(b) => (b.title.clone(), b.slug.clone(), SlugSource::Explicit),
+            None => {
+                let title = upload::title_for(args, &here, None).map_err(output::as_bad_input)?;
+                let (slug, source) = upload::choose_site(
+                    &mut client,
+                    args,
+                    &mut config,
+                    &config_path,
+                    &api,
+                    &dir_key,
+                    &title,
+                )
+                .await?;
+                (title, slug, source)
+            }
+        };
 
         Ok(Control {
             args,
@@ -264,6 +337,7 @@ impl<'a> Control<'a> {
             title,
             slug,
             source,
+            backend,
         })
     }
 
@@ -272,7 +346,13 @@ impl<'a> Control<'a> {
             title: Some(self.title.clone()),
             gate: self.args.gate,
             isolated: self.args.isolated,
+            hybrid: self.backend.is_some(),
         }
+    }
+
+    /// 输出里「后端接在哪」那一段。
+    fn backend_out(&self) -> Option<BackendOut> {
+        self.backend.as_ref().map(|b| BackendOut { port: b.port })
     }
 
     /// 还没把链接给出去之前要的第一张授权。

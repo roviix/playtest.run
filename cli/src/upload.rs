@@ -64,7 +64,7 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     ));
 
     check_limits(&entries, &paths).map_err(output::as_bad_input)?;
-    let mut checked = inspect_dir(&root, &files, &entries);
+    let mut checked = inspect_dir(&root, &files, &entries, cli_args.backend.is_some());
     // 「传上去一定打不开」的就别传了：匿名作品只有三个名额，一个 404 的链接会白占一个。
     // 拦下时只报这一条（它就是错误本身），别的发现留给下一次。
     if let Some(blocker) = checked
@@ -324,7 +324,12 @@ fn check_limits(entries: &[FileEntry], paths: &[String]) -> Result<()> {
 ///
 /// 只读每个文件的开头：要看的东西（wasm 的 import 段、脚本里的引擎名字）都在最前面，
 /// 而 Godot、Unity 的 `.wasm` 和 `.data` 动辄几十 MB，为一句提示读完不值得。
-fn inspect_dir(root: &Path, files: &[ScannedFile], entries: &[FileEntry]) -> inspect::Report {
+fn inspect_dir(
+    root: &Path,
+    files: &[ScannedFile],
+    entries: &[FileEntry],
+    has_backend: bool,
+) -> inspect::Report {
     let by_path: HashMap<&str, &ScannedFile> =
         files.iter().map(|f| (f.entry.path.as_str(), f)).collect();
     let mut read_prefix = |path: &str, max: usize| {
@@ -339,6 +344,7 @@ fn inspect_dir(root: &Path, files: &[ScannedFile], entries: &[FileEntry]) -> ins
             files: entries,
             // 以「.」开头的目录不上传，所以这一条得直接看磁盘。
             has_git_dir: root.join(".git").exists(),
+            has_backend,
         },
         &mut read_prefix,
     )

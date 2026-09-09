@@ -37,6 +37,12 @@ pub async fn grant(
 
     // 隧道模式没有上传，作品名只能从这次请求来；没给就用建作品时那个。
     let title = clean_title(request.title.as_deref())?.unwrap_or_else(|| site.title.clone());
+    // 混合模式的分界线是上传的清单：没有清单就没有分界线，玩家点开首页只会看到 404。
+    if request.hybrid && site.current_version.is_none() {
+        return Err(ApiError::invalid(
+            "混合模式要先有一个上传过的版本：目录里的文件从边缘给，目录里没有的路径才走到你的后端。先 playtest ./dist 传一次。",
+        ));
+    }
 
     let issued_at = clock::now();
     let expires_at = token_expiry(issued_at, site.expires_at.as_deref());
@@ -56,6 +62,7 @@ pub async fn grant(
         gate: request.gate,
         isolated: request.isolated,
         max_players: MAX_PLAYERS,
+        hybrid: request.hybrid,
         iat: issued_at.unix_timestamp(),
         exp: expires_at.unix_timestamp(),
         jti: Uuid::new_v4().to_string(),

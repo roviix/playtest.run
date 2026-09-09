@@ -68,6 +68,15 @@ impl Page {
             )
         })
     }
+
+    /// 开发服务器接出去意味着什么（DESIGN §4.8）。只在认出开发服务器时说——
+    /// 一个 socket.io 的游戏服务器没有源码可以看，说了就是吓人。
+    pub fn exposure_hint(&self) -> Option<Finding> {
+        self.is_vite().then(|| {
+            Finding::warn("拿到链接的人能看到这个开发服务器的全部：源码、/@fs/ 这类接口都在")
+                .hint("给朋友随手看看没问题；正式测试用 playtest ./dist，只发构建出来的东西")
+        })
+    }
 }
 
 /// 请求一次首页。只为认引擎，不作为健康探测。
@@ -306,6 +315,19 @@ mod tests {
         assert!(hint.contains("server.hmr.clientPort = 443"), "{hint}");
         assert!(hint.contains("也能玩"), "不加也能玩这件事要说清楚：{hint}");
         assert!(Page::default().vite_hint().is_none());
+    }
+
+    #[test]
+    fn a_dev_server_is_told_what_it_is_exposing_but_a_game_server_is_not() {
+        let vite = Page {
+            html: Some("<script src=\"/@vite/client\"></script>".into()),
+            self_bytes: Some(10),
+        };
+        let warning = vite.exposure_hint().expect("开发服务器要说清暴露了什么");
+        assert!(warning.message.contains("源码"), "{}", warning.message);
+        assert!(warning.hint.unwrap().contains("playtest ./dist"));
+        // 没认出开发服务器就不说：socket.io 的房间服务器没有源码可看。
+        assert!(Page::default().exposure_hint().is_none());
     }
 
     #[test]

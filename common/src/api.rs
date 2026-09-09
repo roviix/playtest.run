@@ -94,6 +94,10 @@ pub enum ErrorCode {
     /// 这条隧道令牌对应的会话已被同一作品更新的隧道挤掉（DESIGN §4.3「新的挤掉旧的」）；
     /// 拿着它重连会一直得到这个码，CLI 应退出而不是重试。
     TunnelReplaced,
+    /// 混合模式（`playtest ./dist --backend 3000`）里走隧道的那几条路径，在开发者的电脑
+    /// 不在线时由边缘回这个码（503）。页面本身照常能开——静态文件是上传过的。
+    /// 对端是游戏里的 `fetch`，不是浏览器导航，所以是 JSON 不是一页 HTML。
+    BackendOffline,
     Internal,
 }
 

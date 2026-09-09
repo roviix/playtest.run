@@ -95,6 +95,7 @@ mod tests {
             badge: true,
             gate: GateMode::Once,
             isolated: false,
+            hybrid: false,
         }
     }
 

@@ -71,6 +71,11 @@ pub struct Claims {
     pub isolated: bool,
     /// 同时在线的玩家连接上限（档位配额，DESIGN §6）。
     pub max_players: u32,
+    /// 混合模式（DESIGN §4.3，`playtest ./dist --backend 3000`）：上传的清单里有的文件从边缘给，
+    /// 清单里没有的路径——不论方法，`/api/x`、WebSocket 都算——才经这条隧道到开发者的机器。
+    /// 没有路径约定：清单就是分界线。`false` 是整个作品都走隧道（`playtest 5173`）。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hybrid: bool,
     /// 签发与到期，Unix 秒。
     pub iat: i64,
     pub exp: i64,
@@ -226,6 +231,9 @@ pub struct TunnelRequest {
     pub gate: GateMode,
     #[serde(default)]
     pub isolated: bool,
+    /// 见 [`Claims::hybrid`]。控制面只在作品已有上传过的版本时才签它。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hybrid: bool,
 }
 
 /// `POST /v1/sites/{slug}/tunnel` 的响应：CLI 拿它去连边缘。
@@ -261,6 +269,7 @@ mod tests {
             gate: GateMode::Once,
             isolated: false,
             max_players: 50,
+            hybrid: false,
             iat: now,
             exp: now + TOKEN_TTL_SECS,
             jti: "abc".into(),
@@ -316,5 +325,26 @@ mod tests {
             Err(TokenError::UnknownVersion("pt0".into()))
         );
         assert_eq!(vk.verify("garbage", now), Err(TokenError::Malformed));
+    }
+
+    /// 旧边缘认不出 `hybrid` 时要把它当整站隧道，而不是拒签或崩掉；没开混合模式的令牌不写这一项。
+    #[test]
+    fn hybrid_is_optional_on_the_wire_and_off_by_default() {
+        let sk = SigningKey::generate();
+        let vk = sk.verifying_key();
+        let now = 1_800_000_000;
+
+        let plain = sk.sign(&claims(now));
+        let payload = plain.split('.').nth(1).unwrap();
+        let json = String::from_utf8(unb64(payload).unwrap()).unwrap();
+        assert!(!json.contains("hybrid"), "没开就不该占字节：{json}");
+        assert!(!vk.verify(&plain, now).unwrap().hybrid);
+
+        let mut on = claims(now);
+        on.hybrid = true;
+        assert!(vk.verify(&sk.sign(&on), now).unwrap().hybrid);
+
+        let request: TunnelRequest = serde_json::from_str("{}").unwrap();
+        assert!(!request.hybrid);
     }
 }

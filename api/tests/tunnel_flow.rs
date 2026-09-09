@@ -9,11 +9,12 @@ use axum::http::{header, Request, StatusCode};
 use axum::Router;
 use playtest_api::{app, tunnel_keys, AppState, Config};
 use playtest_common::api::{
-    routes as paths, AnonSessionResponse, CreateSiteRequest, ErrorBody, ErrorCode, Site,
+    routes as paths, AnonSessionResponse, CommitUploadResponse, CreateSiteRequest, ErrorBody,
+    ErrorCode, PrepareUploadRequest, PrepareUploadResponse, Site,
 };
 use playtest_common::hash;
 use playtest_common::limits;
-use playtest_common::manifest::GateMode;
+use playtest_common::manifest::{FileEntry, GateMode};
 use playtest_common::tunnel::{
     key_files, Claims, SigningKey, TunnelGrant, TunnelRequest, VerifyingKey, TOKEN_TTL_SECS,
     WS_PATH,
@@ -141,6 +142,52 @@ impl Harness {
             .json()
     }
 
+    /// 给作品传一版只有 index.html 的东西。混合模式的令牌要靠它兜底。
+    async fn publish(&self, slug: &str, token: &str) -> u32 {
+        const INDEX_HTML: &[u8] = b"<!doctype html><title>x</title>";
+        let file = FileEntry {
+            path: "index.html".to_string(),
+            hash: hash::hash_bytes(INDEX_HTML),
+            size: INDEX_HTML.len() as u64,
+        };
+        let prepared: PrepareUploadResponse = self
+            .post(
+                &paths::site_uploads(slug),
+                Some(token),
+                &PrepareUploadRequest {
+                    files: vec![file.clone()],
+                    title: None,
+                    note: None,
+                    summary: None,
+                    cover: None,
+                    gate: GateMode::Once,
+                    isolated: false,
+                    spa: false,
+                    engine: None,
+                },
+            )
+            .await
+            .json();
+        if !prepared.missing.is_empty() {
+            let put = Request::builder()
+                .method("PUT")
+                .uri(paths::blob(&file.hash))
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::from(INDEX_HTML))
+                .unwrap();
+            self.send(put).await;
+        }
+        let committed: CommitUploadResponse = self
+            .post(
+                &paths::site_upload_commit(slug, &prepared.upload_id),
+                Some(token),
+                &serde_json::json!({}),
+            )
+            .await
+            .json();
+        committed.version
+    }
+
     /// 一个昨天就该失效的匿名令牌。
     async fn stale_token(&self) -> String {
         let token = "expired-token-for-tunnel-test";
@@ -260,6 +307,7 @@ async fn the_request_decides_title_gate_and_isolation() {
                 title: Some("  小球  ".to_string()),
                 gate: GateMode::Always,
                 isolated: true,
+                hybrid: false,
             },
         )
         .await
@@ -365,6 +413,47 @@ async fn an_overlong_title_is_refused() {
         "报错要说清上限是多少：{}",
         body.message
     );
+}
+
+/// 混合模式（`playtest ./dist --backend 3000`）：`hybrid` 要进令牌，而且得先有上传过的版本——
+/// 分界线就是那份清单，没有清单玩家点开首页只会看到 404。
+#[tokio::test]
+async fn a_hybrid_token_needs_an_uploaded_version_first() {
+    let h = Harness::start().await;
+    let token = h.anon_token().await;
+    let site = h.new_site(&token).await;
+    let hybrid = TunnelRequest {
+        hybrid: true,
+        ..TunnelRequest::default()
+    };
+
+    let refused = h
+        .post(&paths::site_tunnel(&site.slug), Some(&token), &hybrid)
+        .await
+        .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
+    assert!(
+        refused.message.contains("playtest ./dist"),
+        "要告诉人先传一版：{}",
+        refused.message
+    );
+
+    h.publish(&site.slug, &token).await;
+    let grant: TunnelGrant = h
+        .post(&paths::site_tunnel(&site.slug), Some(&token), &hybrid)
+        .await
+        .json();
+    assert!(h.edge_key().verify(&grant.token, now()).unwrap().hybrid);
+
+    // 整作品隧道不需要版本，令牌里也不带 hybrid。
+    let whole: TunnelGrant = h
+        .post(
+            &paths::site_tunnel(&site.slug),
+            Some(&token),
+            &serde_json::json!({}),
+        )
+        .await
+        .json();
+    assert!(!h.edge_key().verify(&whole.token, now()).unwrap().hybrid);
 }
 
 /// 重启不换钥匙：换了的话所有在线的隧道会一起掉线，而边缘只在启动时读一次公钥。

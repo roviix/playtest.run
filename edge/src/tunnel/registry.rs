@@ -13,7 +13,7 @@
 //! 而它只在「当前会话确实是这个 jti」时才动手——旧会话退出的通知常常晚于新会话接上来，
 //! 不校验就会把刚连上的人踢掉。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
@@ -166,12 +166,19 @@ pub struct LastSeen {
     pub gate: GateMode,
     #[serde(default)]
     pub isolated: bool,
+    /// 上次那条隧道是混合模式的后端（只接清单里没有的路径）。离线时这些路径要回
+    /// 「后端不在线」，而不是让上传的清单回一页 404。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hybrid: bool,
 }
 
 #[derive(Default)]
 struct Inner {
     live: HashMap<String, Arc<Session>>,
     last_seen: HashMap<String, LastSeen>,
+    /// 去磁盘上找过、确实没有记录的 slug。上传路径每遇到一个清单里没有的路径都会来问一次
+    /// 「有没有掉线的后端」，不记下来的话没开过隧道的作品每个 404 都要碰一次磁盘。
+    never_seen: HashSet<String>,
     evicted: HashMap<String, Instant>,
 }
 
@@ -277,6 +284,7 @@ impl Tunnels {
             badge: session.claims.badge,
             gate: session.claims.gate,
             isolated: session.claims.isolated,
+            hybrid: session.claims.hybrid,
         };
         tracing::info!(
             event = "tunnel_offline",
@@ -290,29 +298,45 @@ impl Tunnels {
         );
 
         if let Ok(mut inner) = self.inner.lock() {
+            inner.never_seen.remove(slug);
             inner.last_seen.insert(slug.to_string(), seen.clone());
         }
         self.persist(slug, &seen).await;
     }
 
-    /// 上次在线。内存里没有就去磁盘上找一次（边缘刚重启的情形）。
+    /// 上次在线。内存里没有就去磁盘上找一次（边缘刚重启的情形）；找过没有的记下来，不再找。
     pub async fn last_seen(&self, slug: &str) -> Option<LastSeen> {
-        if let Some(hit) = self.lock().last_seen.get(slug).cloned() {
-            return Some(hit);
-        }
-        let path = self.file_of(slug)?;
-        let bytes = tokio::fs::read(&path).await.ok()?;
-        let seen: LastSeen = match serde_json::from_slice(&bytes) {
-            Ok(seen) => seen,
-            Err(err) => {
-                tracing::warn!(path = %path.display(), %err, "上次在线的记录读不懂，当没有");
+        {
+            let inner = self.lock();
+            if let Some(hit) = inner.last_seen.get(slug).cloned() {
+                return Some(hit);
+            }
+            if inner.never_seen.contains(slug) {
                 return None;
             }
+        }
+        let path = self.file_of(slug)?;
+        let seen = match tokio::fs::read(&path).await {
+            Ok(bytes) => match serde_json::from_slice::<LastSeen>(&bytes) {
+                Ok(seen) => Some(seen),
+                Err(err) => {
+                    tracing::warn!(path = %path.display(), %err, "上次在线的记录读不懂，当没有");
+                    None
+                }
+            },
+            Err(_) => None,
         };
         if let Ok(mut inner) = self.inner.lock() {
-            inner.last_seen.insert(slug.to_string(), seen.clone());
+            match &seen {
+                Some(seen) => {
+                    inner.last_seen.insert(slug.to_string(), seen.clone());
+                }
+                None => {
+                    inner.never_seen.insert(slug.to_string());
+                }
+            }
         }
-        Some(seen)
+        seen
     }
 
     async fn persist(&self, slug: &str, seen: &LastSeen) {
@@ -409,6 +433,7 @@ mod tests {
             gate: GateMode::Once,
             isolated: false,
             max_players: 8,
+            hybrid: false,
             iat: 1_800_000_000,
             exp: 1_800_003_600,
             jti: jti.into(),

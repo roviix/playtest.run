@@ -27,7 +27,9 @@ use hyper::header::{HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method, Request, StatusCode};
 use hyper_util::rt::TokioIo;
 use playtest_common::api::{ErrorBody, ErrorCode};
-use playtest_common::manifest::GateMode;
+use playtest_common::hash::hash_bytes;
+use playtest_common::manifest::{FileEntry, GateMode, Manifest, SCHEMA};
+use playtest_common::store::{Current, FsStore};
 use playtest_common::tunnel::io::{handshake_request, Mux, Role, WsByteStream};
 use playtest_common::tunnel::{
     key_files, Claims, SigningKey, HEADER_LOCAL_PORT, TOKEN_TTL_SECS, WS_PATH, WS_PROTOCOL,
@@ -44,6 +46,9 @@ const LIMIT: Duration = Duration::from_secs(30);
 
 const UPSTREAM_HTML: &str =
     "<!doctype html><title>开发者机器上的那一版</title><canvas id=c></canvas>";
+/// 混合模式里上传过的那一版首页。
+const UPLOADED_HTML: &str =
+    "<!doctype html><title>上传到边缘的那一版</title><script src=game.js></script>";
 const WASM: &[u8] = b"\0asm\x01\0\0\0not-a-real-module";
 /// 2 MiB。远大于 yamux 单流 256 KiB 的初始接收窗口，能把流控真的走一遍。
 const BIG_LEN: usize = 2 * 1024 * 1024;
@@ -95,6 +100,53 @@ impl Edge {
         }
     }
 
+    /// 往边缘的对象存储里摆一版上传过的作品（v7，只有首页和一个脚本），和 api 写出来的形状一样。
+    async fn upload_static(&self) {
+        let store = FsStore::new(self._dir.path().join("store"));
+        let mut files = Vec::new();
+        for (path, bytes) in [
+            ("index.html", UPLOADED_HTML.as_bytes()),
+            ("game.js", b"console.log('static')".as_slice()),
+        ] {
+            let hash = hash_bytes(bytes);
+            store.put_blob(&hash, bytes).await.unwrap();
+            files.push(FileEntry {
+                path: path.to_string(),
+                hash,
+                size: bytes.len() as u64,
+            });
+        }
+        let manifest = Manifest {
+            schema: SCHEMA,
+            slug: SLUG.into(),
+            version: 7,
+            title: "小球大冒险".into(),
+            developer: "某某".into(),
+            note: None,
+            summary: None,
+            cover: None,
+            created_at: "2026-09-08T00:00:00Z".into(),
+            expires_at: None,
+            badge: true,
+            gate: GateMode::Once,
+            isolated: false,
+            spa: false,
+            engine: None,
+            files,
+        };
+        store.put_manifest(&manifest).await.unwrap();
+        store
+            .set_current(
+                SLUG,
+                &Current {
+                    version: 7,
+                    updated_at: "2026-09-08T00:00:01Z".into(),
+                },
+            )
+            .await
+            .unwrap();
+    }
+
     fn token(&self, jti: &str, shape: impl FnOnce(&mut Claims)) -> String {
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
         let mut claims = Claims {
@@ -107,6 +159,7 @@ impl Edge {
             gate: GateMode::Once,
             isolated: false,
             max_players: 50,
+            hybrid: false,
             iat: now,
             exp: now + TOKEN_TTL_SECS,
             jti: jti.into(),
@@ -149,6 +202,37 @@ async fn upstream() -> SocketAddr {
         .route("/big", get(|| async { Bytes::from(big_body()) }))
         .route("/echo", get(echo));
 
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    addr
+}
+
+/// 混合模式里开发者机器上跑着的后端：只该收到上传清单里没有的路径，首页是它的不是玩家的。
+async fn backend() -> SocketAddr {
+    let app = Router::new()
+        .route(
+            "/",
+            get(|| async {
+                Html("<!doctype html><title>后端自己的首页，玩家不该看到</title>")
+            }),
+        )
+        .route(
+            "/api/now",
+            get(|| async { ([("content-type", "application/json")], r#"{"now":1}"#) }),
+        )
+        .route(
+            "/api/score",
+            axum::routing::post(|body: String| async move {
+                (
+                    [("content-type", "application/json")],
+                    format!(r#"{{"got":{body}}}"#),
+                )
+            }),
+        )
+        .route("/ws", get(echo));
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move {
@@ -519,6 +603,129 @@ async fn the_offline_page_remembers_who_was_here() {
     .expect("超时：离线这一步卡住了");
 }
 
+/// 混合模式（`playtest ./dist --backend 3000`）：上传的清单就是分界线——清单里有的从边缘给，
+/// 清单里没有的（不论方法，WebSocket 也算）交给开发者机器上的后端；后端断了页面照常能开，
+/// 清单外的路径回一份说得清的 503 JSON，而不是一页 404。
+#[tokio::test]
+async fn a_hybrid_tunnel_takes_only_what_the_manifest_does_not_have() {
+    tokio::time::timeout(LIMIT, async {
+        let edge = Edge::start().await;
+        edge.upload_static().await;
+        let dev = backend().await;
+        let cli = FakeCli::connect(&edge, &edge.token("jti-1", |c| c.hybrid = true), dev).await;
+        edge.wait_online().await;
+
+        // 1. 门禁页按上传的版本说话：有真的版本号，不写「在线」。
+        let gate = navigate(edge.addr, "/", None).await;
+        assert_eq!(gate.status, StatusCode::OK);
+        assert!(gate.text().contains("· v7"), "{}", gate.text());
+        assert!(!gate.text().contains("· 在线"));
+        assert!(!gate.text().contains("后端自己的首页"));
+
+        // 2. 点「开始」之后是上传的首页，不是后端的首页；静态文件也从清单给。
+        let started = send(
+            edge.addr,
+            request(Method::POST, "/_playtest/start", &[], "to=%2F"),
+        )
+        .await;
+        let cookie = gate_cookie(&started);
+        let page = navigate(edge.addr, "/", Some(&cookie)).await;
+        assert_eq!(page.status, StatusCode::OK);
+        assert_eq!(page.text(), UPLOADED_HTML);
+        let js = fetch(edge.addr, "/game.js").await;
+        assert_eq!(js.status, StatusCode::OK);
+        assert_eq!(js.text(), "console.log('static')");
+        // 清单里的文件不接受 POST，这和没有后端时一样。
+        assert_eq!(
+            send(edge.addr, request(Method::POST, "/game.js", &[], "x"))
+                .await
+                .status,
+            StatusCode::METHOD_NOT_ALLOWED
+        );
+
+        // 3. 清单里没有的穿隧道到后端：GET、POST、WebSocket 都是。
+        let api = fetch(edge.addr, "/api/now").await;
+        assert_eq!(api.status, StatusCode::OK, "{}", api.text());
+        assert_eq!(api.text(), r#"{"now":1}"#);
+        let posted = send(
+            edge.addr,
+            request(
+                Method::POST,
+                "/api/score",
+                &[("content-type", "text/plain")],
+                "42",
+            ),
+        )
+        .await;
+        assert_eq!(posted.status, StatusCode::OK, "{}", posted.text());
+        assert_eq!(posted.text(), r#"{"got":42}"#);
+        let mut player = format!("ws://{}/ws", edge.addr)
+            .into_client_request()
+            .unwrap();
+        player
+            .headers_mut()
+            .insert("host", HeaderValue::from_static(HOST));
+        let (mut socket, response) = tokio_tungstenite::connect_async(player)
+            .await
+            .expect("WebSocket 该能穿过混合模式的隧道");
+        assert_eq!(response.status(), StatusCode::SWITCHING_PROTOCOLS);
+        socket
+            .send(tokio_tungstenite::tungstenite::Message::text("你好"))
+            .await
+            .unwrap();
+        let back = socket.next().await.unwrap().unwrap();
+        assert_eq!(back.into_text().unwrap().as_str(), "回声：你好");
+        socket.close(None).await.unwrap();
+
+        // 后端没有的路径由后端自己说 404，边缘不替它猜。
+        assert_eq!(
+            fetch(edge.addr, "/nowhere.png").await.status,
+            StatusCode::NOT_FOUND
+        );
+        // 4. 保留路径仍然归边缘：SDK 照常给，不会被送到后端。
+        assert_eq!(
+            fetch(edge.addr, "/_playtest/sdk.js").await.status,
+            StatusCode::OK
+        );
+
+        // 5. 后端断了：页面照常能开，清单外的路径回 503 JSON——游戏里的 fetch 能读懂。
+        cli.disconnect();
+        edge.wait_offline().await;
+        let page = navigate(edge.addr, "/", Some(&cookie)).await;
+        assert_eq!(page.status, StatusCode::OK);
+        assert_eq!(page.text(), UPLOADED_HTML);
+
+        let api = fetch(edge.addr, "/api/now").await;
+        assert_eq!(api.status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            api.header("content-type"),
+            Some("application/json; charset=utf-8")
+        );
+        assert_eq!(api.header("cache-control"), Some("no-store"));
+        let body = error_body(&api);
+        assert_eq!(body.code, ErrorCode::BackendOffline);
+        assert!(body.message.contains("不在线"), "{}", body.message);
+        assert_eq!(
+            send(edge.addr, request(Method::POST, "/api/score", &[], "1"))
+                .await
+                .status,
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+
+        // 6. 边缘重启也记得：上次那条隧道是混合模式，落在磁盘上。
+        let saved = std::fs::read_to_string(
+            edge._dir
+                .path()
+                .join("tunnels")
+                .join(format!("{SLUG}.json")),
+        )
+        .unwrap();
+        assert!(saved.contains("\"hybrid\":true"), "{saved}");
+    })
+    .await
+    .expect("超时：混合模式的某一步卡住了");
+}
+
 #[tokio::test]
 async fn an_isolated_site_keeps_its_cross_origin_headers_through_the_tunnel() {
     tokio::time::timeout(LIMIT, async {
@@ -758,6 +965,7 @@ fn mint(offset: i64) -> Claims {
         gate: GateMode::Once,
         isolated: false,
         max_players: 50,
+        hybrid: false,
         iat: now,
         exp: now + TOKEN_TTL_SECS,
         jti: "jti-mint".into(),

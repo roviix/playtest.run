@@ -397,6 +397,7 @@ mod tests {
             gate: GateMode::Once,
             isolated: false,
             max_players: 2,
+            hybrid: false,
             iat: 0,
             exp: 0,
             jti: "j".into(),

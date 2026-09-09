@@ -144,11 +144,18 @@ async fn run_default(cli: Cli) -> Result<()> {
     };
 
     match args::classify(&target) {
-        Target::Dir(_) => {
-            let report = upload::run(&cli.upload, &target).await?;
-            output::report_upload(&report);
-            Ok(())
-        }
+        Target::Dir(_) => match cli.upload.backend {
+            Some(port) => tunnel::run_hybrid(&cli.upload, &target, port).await,
+            None => {
+                let report = upload::run(&cli.upload, &target).await?;
+                output::report_upload(&report);
+                Ok(())
+            }
+        },
+        Target::Port(_) if cli.upload.backend.is_some() => Err(output::usage(
+            "--backend 只和目录一起用：playtest ./dist --backend 3000 是目录上传、目录里没有的路径走隧道。\
+             要把整个开发服务器接出去，直接 playtest <端口> 就行。",
+        )),
         Target::Port(port) => tunnel::run(&cli.upload, port).await,
         Target::PortOutOfRange(raw) => Err(output::usage(format!(
             "端口号要在 1 到 65535 之间，「{raw}」不是。如果这是一个目录的名字，写成 ./{raw}。"

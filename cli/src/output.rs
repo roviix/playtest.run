@@ -470,16 +470,33 @@ pub fn report_upload(report: &UploadReport) {
         ui::say(&plaza_line(plaza));
     }
     if let Some(expires_at) = &report.expires_at {
-        ui::say(&format!(
-            "这是匿名链接，{} 后失效。保留、改名需要登录（登录还没做好）。",
-            clock::human(expires_at)
-        ));
+        say_expiry(expires_at, "保留、改名需要登录（登录还没做好）。");
     }
     ui::say(&format!(
         "谁打开了、玩到哪、报了什么错：{}/console/（令牌在 playtest 的配置文件里）",
         playtest_common::DEVELOPER_API_URL
     ));
     ui::say(&timing_line(report.elapsed_ms, report.timings));
+}
+
+/// 匿名链接还剩不到这么久就要提醒：一场测试从发链接到大家点开常常要一两个小时，
+/// 中途失效比一开始就是新链接糟得多。
+const EXPIRY_WARNING: time::Duration = time::Duration::hours(2);
+
+/// 匿名链接的有效期那一句。快到期了就换成提醒，并说清到期之后会发生什么——
+/// 再跑一次拿到的是新链接，玩家手里的旧链接打不开。
+fn say_expiry(expires_at: &str, about_login: &str) {
+    match clock::remaining(expires_at, clock::now()) {
+        Some(left) if left < EXPIRY_WARNING => ui::warn(&format!(
+            "这条匿名链接只剩 {} 就失效（{}）。到期后再跑一次会拿到一条新链接，发出去的旧链接会打不开。",
+            clock::human_duration(left),
+            clock::human(expires_at)
+        )),
+        _ => ui::say(&format!(
+            "这是匿名链接，{} 后失效。{about_login}",
+            clock::human(expires_at)
+        )),
+    }
 }
 
 pub fn plaza_line(plaza: &PlazaOut) -> String {
@@ -712,6 +729,9 @@ fn saved_client(api: &str, config: &Config) -> Result<Option<Client>> {
 ///
 /// `attempt` 是第几次连上：0 是这次运行的第一次，之后每重连成功一次加一——链接不变，
 /// 所以 `online` 会再出现一次而不是另起一个事件名。
+///
+/// 混合模式（`playtest ./dist --backend 3000`）先按上传的形状写一个 `{"ok":true,"action":"upload",…}`
+/// 对象，然后才是这一行一个的事件；`online` 里多一段 `backend`，说清后端接在哪个端口。
 #[derive(Debug, Serialize)]
 pub struct OnlineReport {
     event: &'static str,
@@ -726,6 +746,15 @@ pub struct OnlineReport {
     pub qr_text: Option<String>,
     /// 这次启动看出来的事：Vite 的热更新提示、页面太大该改用上传，等等。
     pub findings: Vec<Finding>,
+    /// 混合模式里接在隧道上的后端。整作品隧道没有这一段。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backend: Option<BackendOut>,
+}
+
+/// 混合模式的后端在输出里的样子：上传目录里没有的路径都走到这个本地端口。
+#[derive(Debug, Clone, Serialize)]
+pub struct BackendOut {
+    pub port: u16,
 }
 
 impl OnlineReport {
@@ -745,6 +774,7 @@ impl OnlineReport {
             elapsed_ms: elapsed_ms(),
             qr_text,
             findings,
+            backend: None,
         }
     }
 }
@@ -754,6 +784,19 @@ impl OnlineReport {
 pub fn report_online(report: &OnlineReport) {
     if is_json() {
         emit(report);
+        return;
+    }
+    if let Some(backend) = &report.backend {
+        // 链接、二维码、有效期上传那一步刚说过，这里只说后端接上了没有。
+        if report.attempt > 0 {
+            ui::say("后端已重连。");
+            return;
+        }
+        ui::say(&format!(
+            "后端已接上：目录里有的文件玩家直接从边缘拿，目录里没有的路径（比如 /api/…）都走到你电脑的 {} 端口。",
+            backend.port
+        ));
+        ui::say("按 Ctrl-C 结束；结束后页面照常能开，只是那些路径会回「后端不在线」（503）。");
         return;
     }
     if report.attempt > 0 {
@@ -771,11 +814,12 @@ pub fn report_online(report: &OnlineReport) {
         }
     }
     if let Some(expires_at) = &report.expires_at {
-        ui::say(&format!(
-            "这是匿名链接，{} 后失效。保留、改名、查看结果需要登录（登录还没做好）。",
-            clock::human(expires_at)
-        ));
+        say_expiry(expires_at, "保留、改名需要登录（登录还没做好）。");
     }
+    ui::say(&format!(
+        "谁打开了、玩到哪、报了什么错：{}/console/（令牌在 playtest 的配置文件里）",
+        playtest_common::DEVELOPER_API_URL
+    ));
     say_findings(&report.findings);
     ui::say("按 Ctrl-C 结束，结束后玩家会看到「开发者的电脑暂时不在线」。");
     ui::say(&format!(
@@ -839,7 +883,8 @@ struct StoppedEvent {
 }
 
 /// Ctrl-C 之后的最后一句。`connections` 是这次一共接过多少个玩家连接，`bytes` 是转发的总字节。
-pub fn report_stopped(connections: u64, bytes: u64) {
+/// 混合模式（`hybrid`）下链接并没有离线——页面还是上传的那一版，只有后端接不上了。
+pub fn report_stopped(connections: u64, bytes: u64, hybrid: bool) {
     if is_json() {
         emit(&StoppedEvent {
             event: "stopped",
@@ -848,7 +893,11 @@ pub fn report_stopped(connections: u64, bytes: u64) {
         });
         return;
     }
-    ui::say("已停止，链接现在显示离线。");
+    if hybrid {
+        ui::say("已停止。页面照常能开，目录里没有的路径现在回「后端不在线」。");
+    } else {
+        ui::say("已停止，链接现在显示离线。");
+    }
     if connections > 0 {
         ui::say(&format!(
             "这次一共接了 {connections} 个玩家连接，转发 {}。",

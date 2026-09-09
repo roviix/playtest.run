@@ -12,6 +12,7 @@ use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Router;
 use percent_encoding::percent_decode_str;
+use playtest_common::api::ErrorCode;
 use playtest_common::manifest::{GateMode, Manifest};
 use playtest_common::store::FsStore;
 use playtest_common::{GATE_COOKIE, RESERVED_PATH_PREFIX, SESSION_COOKIE};
@@ -165,8 +166,10 @@ async fn site(
         return tunnel::handshake::respond(&app.tunnels, slug, &mut parts).await;
     }
 
-    // 隧道在线时它说了算：开发者机器上跑着的才是此刻最新的东西。
-    if let Some(session) = app.tunnels.get(slug) {
+    // 整作品隧道在线时它说了算：开发者机器上跑着的才是此刻最新的东西。
+    // 混合模式的隧道（`claims.hybrid`）不在这里接：它只管上传清单里没有的路径，
+    // 分界线由下面 `serve_file` 查完清单之后再定——门禁页、保留路径、静态文件都按上传的版本走。
+    if let Some(session) = app.tunnels.get(slug).filter(|s| !s.claims.hybrid) {
         let manifest = session.manifest();
         let ctx = Ctx::new(&parts, authority, slug, &app.config);
         return match tail {
@@ -220,8 +223,57 @@ async fn site(
     let ctx = Ctx::new(&parts, authority, slug, &app.config);
     match tail {
         Some(tail) => reserved(app, &manifest, &ctx, &tail, parts, body).await,
-        None => serve_file(app, &manifest, &ctx, &parts).await,
+        None => serve_file(app, slug, authority, &manifest, &ctx, parts, body).await,
     }
+}
+
+/// 上传的清单里没有这条路径。混合模式（DESIGN §4.3）下这就是后端的地界：隧道在线就转发
+/// ——不论方法，`POST /api/x`、WebSocket 升级都在内；隧道不在线就说清楚「后端不在线」，
+/// 回 JSON 而不是一页 HTML（对端是游戏里的 `fetch`，给它 HTML 只会得到一个看不懂的解析错）。
+/// 从没开过混合模式的作品，清单里没有就是 404。
+async fn beyond_manifest(
+    app: &App,
+    slug: &str,
+    authority: &str,
+    manifest: &Manifest,
+    ctx: &Ctx,
+    parts: axum::http::request::Parts,
+    body: Body,
+) -> Response {
+    if let Some(session) = app.tunnels.get(slug).filter(|s| s.claims.hybrid) {
+        return tunnel::proxy::forward(
+            &session,
+            tunnel::proxy::Player {
+                authority,
+                public_scheme: &app.config.public_scheme,
+                navigation: ctx.navigation,
+                isolated: manifest.isolated,
+            },
+            parts,
+            body,
+        )
+        .await;
+    }
+    if app
+        .tunnels
+        .last_seen(slug)
+        .await
+        .is_some_and(|seen| seen.hybrid)
+    {
+        return tunnel::error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            ErrorCode::BackendOffline,
+            "开发者的电脑暂时不在线：页面能打开，但后端接不上。",
+        );
+    }
+    if parts.method != Method::GET && parts.method != Method::HEAD {
+        return method_not_allowed("GET, HEAD");
+    }
+    page(
+        StatusCode::NOT_FOUND,
+        pages::file_not_found(),
+        Some((manifest.isolated, false)),
+    )
 }
 
 /// 请求里跟着走、每个分支都要用的那些东西。
@@ -467,13 +519,13 @@ async fn start(
 
 async fn serve_file(
     app: &App,
+    slug: &str,
+    authority: &str,
     manifest: &Manifest,
     ctx: &Ctx,
-    parts: &axum::http::request::Parts,
+    parts: axum::http::request::Parts,
+    body: Body,
 ) -> Response {
-    if parts.method != Method::GET && parts.method != Method::HEAD {
-        return method_not_allowed("GET, HEAD");
-    }
     // 熔断判定在取文件之前，也在门禁页之前：这一小时的额度用完了就一个字节都不出
     // （DESIGN §4.8）。`/_playtest/report` 走的是另一条路，举报入口任何时候都开着。
     let verdict = app
@@ -483,11 +535,19 @@ async fn serve_file(
         return tripped(app, manifest, ctx, verdict).await;
     }
     let isolated = Some((manifest.isolated, false));
+    // 连路径都不成形的（`..`、空段）不是后端的地界，是有人在试探。
     let Some(norm) = paths::normalize(parts.uri.path()) else {
         return page(StatusCode::NOT_FOUND, pages::file_not_found(), isolated);
     };
 
+    // 先查清单再看方法：清单里没有的路径在混合模式下归后端，POST 也要过去。
     match paths::resolve(manifest, &norm, ctx.accept_encoding, ctx.navigation) {
+        Resolved::NotFound => {
+            beyond_manifest(app, slug, authority, manifest, ctx, parts, body).await
+        }
+        _ if parts.method != Method::GET && parts.method != Method::HEAD => {
+            method_not_allowed("GET, HEAD")
+        }
         Resolved::Redirect(location) => {
             let mut headers = base_headers();
             put(&mut headers, "location", &location);
@@ -501,7 +561,6 @@ async fn serve_file(
             );
             (StatusCode::MOVED_PERMANENTLY, headers, body).into_response()
         }
-        Resolved::NotFound => page(StatusCode::NOT_FOUND, pages::file_not_found(), isolated),
         Resolved::File(served) => {
             if gate::should_show(
                 manifest.gate,
@@ -510,9 +569,9 @@ async fn serve_file(
                 ctx.navigation,
                 ctx.has_gate_cookie,
             ) {
-                gate_page(app, manifest, ctx, parts, None).await
+                gate_page(app, manifest, ctx, &parts, None).await
             } else {
-                blob(app, manifest, ctx, parts, &served).await
+                blob(app, manifest, ctx, &parts, &served).await
             }
         }
     }

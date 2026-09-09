@@ -51,6 +51,9 @@ pub struct Input<'a> {
     pub files: &'a [FileEntry],
     /// 目录里有 `.git/`。以「.」开头的目录不上传，所以清单里看不到它，得调用方单独说一声。
     pub has_git_dir: bool,
+    /// 混合模式（`--backend`）：目录里没有的路径会交给开发者的后端，所以「引用了目录里没有的
+    /// 文件」不再是加载失败的预告，只是告诉他哪些请求会到后端那边。
+    pub has_backend: bool,
 }
 
 /// 这个构建要多线程，是怎么看出来的。
@@ -116,7 +119,7 @@ pub fn inspect(input: Input<'_>, read: ReadPrefix<'_>) -> Report {
     }
     findings.extend(index_placement(&here, &paths));
     if let Some(index) = index.as_deref() {
-        findings.extend(missing_references(index, &here));
+        findings.extend(missing_references(index, &here, input.has_backend));
     }
     findings.extend(missing_engine_parts(&paths, index.as_deref()));
     findings.extend(compression(&paths, index.as_deref(), engine));
@@ -259,7 +262,10 @@ fn index_placement(here: &HashSet<&str>, paths: &[&str]) -> Option<Finding> {
 }
 
 /// `index.html` 里引用了、但目录里没有的文件。
-fn missing_references(index: &str, here: &HashSet<&str>) -> Option<Finding> {
+///
+/// 没有后端时这是加载失败的预告；有后端（混合模式）时这些路径会交给后端，
+/// 只说一声让他知道哪些请求会走到自己机器上，不当成错。
+fn missing_references(index: &str, here: &HashSet<&str>, has_backend: bool) -> Option<Finding> {
     let missing: Vec<String> = html::local_references(index)
         .into_iter()
         .filter(|path| !here.contains(path.as_str()))
@@ -279,6 +285,12 @@ fn missing_references(index: &str, here: &HashSet<&str>) -> Option<Finding> {
     } else {
         String::new()
     };
+    if has_backend {
+        return Some(Finding::note(format!(
+            "index.html 引用了 {} 个目录里没有的路径，它们会交给你的后端：{shown}{tail}",
+            missing.len()
+        )));
+    }
     Some(
         Finding::warn(format!(
             "index.html 要用 {} 个目录里没有的文件，玩家那边会加载失败：{shown}{tail}",
@@ -428,10 +440,18 @@ mod tests {
         }
 
         fn inspect(&self) -> Report {
-            self.inspect_with_git(false)
+            self.inspect_with(false, false)
         }
 
         fn inspect_with_git(&self, has_git_dir: bool) -> Report {
+            self.inspect_with(has_git_dir, false)
+        }
+
+        fn inspect_with_backend(&self) -> Report {
+            self.inspect_with(false, true)
+        }
+
+        fn inspect_with(&self, has_git_dir: bool, has_backend: bool) -> Report {
             let bytes = self.bytes.clone();
             // 真实的读法也是只读开头：这里跟着截，才测得到「只读了一段」那条路径。
             let mut read = move |path: &str, max: usize| {
@@ -442,6 +462,7 @@ mod tests {
                 Input {
                     files: &self.files,
                     has_git_dir,
+                    has_backend,
                 },
                 &mut read,
             )
@@ -561,6 +582,26 @@ mod tests {
         assert!(found.message.contains("assets/b.js"), "{found:?}");
         assert!(found.message.contains("hero.png"), "{found:?}");
         assert!(!found.message.contains("a.css"), "{found:?}");
+    }
+
+    /// 有后端时，目录里没有的路径是后端的地界，不是加载失败的预告。
+    #[test]
+    fn with_a_backend_missing_files_are_a_note_about_where_requests_go() {
+        let dir = Dir::new(&[
+            (
+                "index.html",
+                br#"<a href="new">drop</a><script src="/app.js"></script>"#,
+            ),
+            ("app.js", b"1"),
+        ]);
+        let report = dir.inspect_with_backend();
+        let found = about(&report, "交给你的后端");
+        assert_eq!(found.level, Level::Note);
+        assert!(found.message.contains("new"), "{found:?}");
+        assert!(found.hint.is_none(), "没有要他改的东西，就别给建议");
+        assert!(!messages(&report)
+            .iter()
+            .any(|m| m.contains("玩家那边会加载失败")));
     }
 
     /// 缺得多的时候只列前几个。

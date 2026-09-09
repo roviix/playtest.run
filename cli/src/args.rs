@@ -107,6 +107,10 @@ pub struct UploadArgs {
     #[arg(long)]
     pub force: bool,
 
+    /// 目录照常上传，目录里没有的路径（/api/…、WebSocket）走隧道到你电脑的这个端口（带后端的小应用用这个）
+    #[arg(long, value_name = "端口")]
+    pub backend: Option<u16>,
+
     /// 控制面地址（也可以用环境变量 PLAYTEST_API）
     #[arg(long, value_name = "网址")]
     pub api: Option<String>,
@@ -132,6 +136,8 @@ impl UploadArgs {
             || self.gate != GateMode::Once
             || self.site.is_some()
             || self.new
+            || self.force
+            || self.backend.is_some()
             || self.api.is_some()
             || self.no_qr
     }
@@ -336,6 +342,15 @@ mod tests {
         assert!(
             matches!(cli.command, Some(Command::Unlist { slug, .. }) if slug == "brisk-otter-41")
         );
+    }
+
+    #[test]
+    fn backend_is_a_port_and_counts_as_an_upload_flag() {
+        let cli = Cli::try_parse_from(["playtest", "./dist", "--backend", "3000"]).unwrap();
+        assert_eq!(cli.upload.backend, Some(3000));
+        assert!(cli.upload.any_set());
+        assert!(Cli::try_parse_from(["playtest", "./dist", "--backend", "70000"]).is_err());
+        assert!(Cli::try_parse_from(["playtest", "./dist", "--backend", "api"]).is_err());
     }
 
     #[test]
