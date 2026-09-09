@@ -38,6 +38,10 @@ const SWEEP: Duration = Duration::from_secs(10);
 /// 「关掉笔记本、第二天早上那个进程醒过来重连」也能收到 409 而不是又挤一次。
 const EVICTED_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 
+/// 「查过磁盘、确实没有上次在线记录」的 slug 最多记这么多个。一台边缘上有流量的作品远不到这个数，
+/// 到了只可能是有人在扫子域名。
+const NEVER_SEEN_CAP: usize = 4096;
+
 /// 一条连着的隧道。
 ///
 /// 拿住 [`Mux`] 就是拿住这条隧道：句柄全丢掉，驾驭任务就收摊（见 `common` 的 `Mux` 文档）。
@@ -332,6 +336,11 @@ impl Tunnels {
                     inner.last_seen.insert(slug.to_string(), seen.clone());
                 }
                 None => {
+                    // 随机打子域名的扫描器每个 slug 都会来问一次；满了就整个清掉，
+                    // 代价只是下一次多碰一回磁盘，比无界长大好。
+                    if inner.never_seen.len() >= NEVER_SEEN_CAP {
+                        inner.never_seen.clear();
+                    }
                     inner.never_seen.insert(slug.to_string());
                 }
             }
