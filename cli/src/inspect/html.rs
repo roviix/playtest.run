@@ -134,7 +134,11 @@ fn as_local_path(raw: &str) -> Option<String> {
     // 门禁页和边缘都把 `/x` 当作上传目录里的 `x`：index.html 就在根上，两种写法落到同一个文件。
     let path = path.trim_start_matches('/');
     let path = path.strip_prefix("./").unwrap_or(path);
-    if path.is_empty() || path.ends_with('/') || path.split('/').any(|part| part == "..") {
+    // `href="."` 是「回到这一层」，指的是目录不是文件；`..` 跳出上传目录，说不准指到哪。
+    if path.is_empty()
+        || path.ends_with('/')
+        || path.split('/').any(|part| part == ".." || part == ".")
+    {
         return None;
     }
     Some(path.to_string())
@@ -187,6 +191,8 @@ mod tests {
 <a href="mailto:a@b.c">信</a>
 <img src="data:image/png;base64,AAAA">
 <a href="/">根</a>
+<a href=".">这一层</a>
+<a href="./">还是这一层</a>
 <a href="assets/">一个目录</a>
 <a href="../外面.png">上一层</a>
 <img src="我的%20图.png">

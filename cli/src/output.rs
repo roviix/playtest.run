@@ -13,7 +13,7 @@
 //! ```json
 //! {"ok":true,"action":"upload","slug":"brisk-otter-41",
 //!  "url":"https://brisk-otter-41.playtest.run","version":7,
-//!  "elapsed_ms":4200,"timings":{"hash_ms":300,"upload_ms":3100,"commit_ms":800},
+//!  "elapsed_ms":5100,"timings":{"hash_ms":300,"prepare_ms":900,"upload_ms":3100,"commit_ms":800},
 //!  "expires_at":"2026-09-08T04:09:03Z","qr_text":"█▀▀▀▀▀█ …",
 //!  "findings":[{"level":"warn","message":"这个导出用到了 SharedArrayBuffer（线程）","hint":"加 --isolated"}]}
 //! {"ok":true,"action":"list","elapsed_ms":120,
@@ -90,11 +90,13 @@ pub fn ms_since(start: Instant) -> u64 {
     start.elapsed().as_millis() as u64
 }
 
-/// 一次上传里各段花了多久。加起来不等于 `elapsed_ms`——中间还有建会话、建作品这些往返。
+/// 一次上传里各段花了多久。四段加起来接近 `elapsed_ms`，差的是检查目录、画二维码这些本地的零碎。
 #[derive(Debug, Default, Clone, Copy, Serialize)]
 pub struct Timings {
     /// 走一遍目录、读文件、算哈希。
     pub hash_ms: u64,
+    /// 和控制面的几个往返：拿令牌、认领作品、问「缺哪些文件」。慢多半慢在这里——每一步都是一次跨海的往返。
+    pub prepare_ms: u64,
     /// 把服务器缺的那些字节传上去。服务器都已经有了就是 0。
     pub upload_ms: u64,
     /// 提交清单，换回版本号和链接。
@@ -512,9 +514,10 @@ pub fn plaza_line(plaza: &PlazaOut) -> String {
 /// DESIGN §8 要的那个数就是句首那个：从敲下命令到链接出现。分段是为了知道慢在哪一段。
 fn timing_line(elapsed_ms: u64, timings: Timings) -> String {
     format!(
-        "本次 {} 秒（哈希 {} · 上传 {} · 提交 {}）",
+        "本次 {} 秒（哈希 {} · 准备 {} · 上传 {} · 提交 {}）",
         seconds(elapsed_ms),
         seconds(timings.hash_ms),
+        seconds(timings.prepare_ms),
         seconds(timings.upload_ms),
         seconds(timings.commit_ms)
     )
@@ -1028,6 +1031,7 @@ mod tests {
             7,
             Timings {
                 hash_ms: 300,
+                prepare_ms: 900,
                 upload_ms: 3100,
                 commit_ms: 800,
             },
@@ -1050,14 +1054,15 @@ mod tests {
     fn the_timing_line_reads_like_a_sentence() {
         assert_eq!(
             timing_line(
-                4200,
+                5100,
                 Timings {
                     hash_ms: 300,
+                    prepare_ms: 900,
                     upload_ms: 3100,
                     commit_ms: 800
                 }
             ),
-            "本次 4.2 秒（哈希 0.3 · 上传 3.1 · 提交 0.8）"
+            "本次 5.1 秒（哈希 0.3 · 准备 0.9 · 上传 3.1 · 提交 0.8）"
         );
     }
 }

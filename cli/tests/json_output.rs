@@ -206,7 +206,7 @@ fn an_upload_answers_with_one_object_and_keeps_the_talking_on_stderr() {
     assert_eq!(value["version"], 7);
     assert_eq!(value["expires_at"], "2026-09-08T03:30:00Z");
     assert!(value["elapsed_ms"].is_u64(), "{value}");
-    for segment in ["hash_ms", "upload_ms", "commit_ms"] {
+    for segment in ["hash_ms", "prepare_ms", "upload_ms", "commit_ms"] {
         assert!(value["timings"][segment].is_u64(), "缺 {segment}：{value}");
     }
     assert!(value["findings"].is_array(), "{value}");

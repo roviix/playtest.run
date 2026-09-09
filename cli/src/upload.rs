@@ -91,6 +91,7 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         None => None,
     };
 
+    let preparing = Instant::now();
     let api = args::api_base(cli_args.api.as_deref());
     let config_path = config::default_path()?;
     let mut config = config::load(&config_path)?;
@@ -137,6 +138,7 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         }
         Err(e) => return Err(e.into()),
     };
+    timings.prepare_ms = output::ms_since(preparing);
 
     // 令牌和作品都定下来了，后面只读，装进 Arc 好分给并发的上传任务。
     let client = Arc::new(client);
