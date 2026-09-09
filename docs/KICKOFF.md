@@ -41,7 +41,7 @@
 **第三周 · 身份、版本、结果** —— 2026-09-07/08 结果这一半先做完了
 GitHub 设备授权、~~匿名 24 小时链接~~、slug 改名与黑名单（黑名单已在 `common::slug`，改名要登录）、版本列表与回滚、~~短期签名令牌~~（隧道令牌已做）与撤销、~~用量按 60 秒上报~~（边缘事件每 60 秒批量送控制面，`edge/src/ship.rs`；带宽用量还没算）；~~结果第一层（打开、进到游戏、设备、来源、停留、资源失败）~~；~~错误上报与反馈按钮（只收文字）~~（`sdk/`，边缘在 `/_playtest/sdk.js` 同源提供）；~~控制台（作品时间线 · 每版一段话、会话点名册、反馈流），手机可看~~（`console/`，`playtest.roviix.com/console/`）；~~`--json` 与 `playtest mcp`~~；~~上传时的导出物检查与人话报错~~（`cli/src/inspect/`，「一定打不开」的会拦下，`--force` 放行）；~~每 slug 每小时熔断~~。
 spike：`2026-09-07-gate-hardlines-breaker`、`2026-09-07-cli-json-mcp`、`2026-09-07-console-results`、`2026-09-07-gate-user-activation`、`2026-09-08-sdk-ingest-results`、`2026-09-08-cli-inspect`。
-还差：GitHub 登录（需要 OAuth App）、版本回滚接口、令牌撤销推给边缘、带宽配额计量、上传时自动注入 SDK。
+还差：令牌撤销推给边缘、带宽配额计量、上传时自动注入 SDK。GitHub 登录已接上（`playtest login` 设备码、控制台授权码、匿名作品归入账号，2026-09-09），等真机验证进 spike；版本回滚已做（`playtest versions / rollback`）。
 
 **第四周 · 上线与真机** —— 2026-09-07 提前做了前两项
 ~~香港边缘部署~~（AWS 香港这一台已上线，`deploy/`；云在三网晚高峰压测一周后定）、~~泛域名证书~~（Caddy + Cloudflare DNS-01 已签）、对象存储接上（私测用机器磁盘）、~~控制台上线~~（`playtest.roviix.com/console/`）；**手机流量扫码点开一次**（链接已是真的，`docs/spikes/2026-09-07-hk-online-first-links.md`，还没有人用手机试过）；**发布阻断**：微信真机（Android ≥ 6 台、iOS ≥ 4 个系统版本，私聊 / 群聊 / 朋友圈）+ 腾讯对外链规范 §2.5 的书面口径、香港压测记录；写完所有 spike；招 20 个私测开发者（DESIGN §8 八个指标与一个访谈问题从这里开始计；渠道是 Discord、itch 社区、引擎论坛、国内 Jam 社群、AI 编程社群，不是 Show HN）。

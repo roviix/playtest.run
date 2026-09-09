@@ -3,7 +3,7 @@
 > 一条命令，把你手上这个能玩的版本放到别人面前，然后知道他们玩成了什么样。
 > One command to put the build you have right now in front of real people — and see what happened.
 
-**状态：v0.1 私测前——上传、隧道、结果三条线都在线上。** `playtest <目录>`、`playtest <端口>`、`playtest <目录> --backend <端口>` 都能拿到一个真的 `https://<slug>.playtest.run` 链接，控制面与控制台在 `https://playtest.roviix.com`：上传的导出物、穿隧道的 socket.io 联机房间、静态上传加后端走隧道的小应用都在真实 Chrome 里验过；门禁页、第一层数据、SDK、结果端点与控制台接成了一条线。还没做的：GitHub 登录（现在全是 24 小时匿名链接）、令牌撤销、用量配额。做不到的地方命令会明说。真机记录在 [`docs/spikes/`](docs/spikes/)。产品定义在 [`docs/DESIGN.md`](docs/DESIGN.md)，每个结论都带推导过程；方向变了直接改它。施工顺序在 [`docs/KICKOFF.md`](docs/KICKOFF.md)；一张图看架构在 [`docs/architecture.html`](docs/architecture.html)（浏览器直接打开）。
+**状态：v0.1 私测前——上传、隧道、结果三条线都在线上。** `playtest <目录>`、`playtest <端口>`、`playtest <目录> --backend <端口>` 都能拿到一个真的 `https://<slug>.playtest.run` 链接，控制面与控制台在 `https://playtest.roviix.com`：上传的导出物、穿隧道的 socket.io 联机房间、静态上传加后端走隧道的小应用都在真实 Chrome 里验过；门禁页、第一层数据、SDK、结果端点与控制台接成了一条线。GitHub 登录（`playtest login`，设备码流程；登录前发的匿名作品归入账号）刚接上，正在真机验证。还没做的：自己挑链接名字、令牌撤销、用量配额。做不到的地方命令会明说。真机记录在 [`docs/spikes/`](docs/spikes/)。产品定义在 [`docs/DESIGN.md`](docs/DESIGN.md)，每个结论都带推导过程；方向变了直接改它。施工顺序在 [`docs/KICKOFF.md`](docs/KICKOFF.md)；一张图看架构在 [`docs/architecture.html`](docs/architecture.html)（浏览器直接打开）。
 
 ## 它会是什么
 
@@ -38,7 +38,7 @@ Rust 一个 Cargo workspace（`cargo test --workspace`），控制台与 SDK 是
 | `cli/` | `playtest` 命令行：上传、隧道、`ls / rm / open`、`--json`、`mcp`、上传前检查 | Apache-2.0 | 可用；`login` 未做 |
 | `common/` | 三方共享的契约：清单、对象存储布局、API 类型、隧道令牌与 WebSocket↔yamux 字节流 | Apache-2.0 | 可用 |
 | `edge/` | 边缘：泛域名入口、门禁页、按清单分发、隧道接入、熔断、第一层事件与上报、同源 SDK | AGPL-3.0 | 可用；TLS 由前置 Caddy 做 |
-| `api/` | 控制面：匿名令牌、slug、版本、隧道令牌、事件与反馈写入、结果读取 | AGPL-3.0 | 可用；登录、撤销、配额未做 |
+| `api/` | 控制面：匿名令牌与 GitHub 登录、slug、版本、隧道令牌、事件与反馈写入、结果读取 | AGPL-3.0 | 可用；撤销、配额未做 |
 | `sdk/` | `playtest.js`：JS 错误、加载用时、自定义事件、反馈按钮；由边缘在 `/_playtest/sdk.js` 提供 | Apache-2.0 | 可用；上传时自动注入未做 |
 | `console/` | 控制台（Preact）：作品列表、时间线、点名册、反馈流，手机可看 | AGPL-3.0 | 在线：`playtest.roviix.com/console/` |
 | `deploy/` | 一台机器跑通：compose、Caddy（DNS-01 泛域名证书）、服务器上构建与发布脚本 | — | 香港在用 |
