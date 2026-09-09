@@ -171,7 +171,7 @@ impl Playtest {
 // 握手测试会挂——它比对的是握手时真发出去的那个值。
 #[tool_handler(
     name = "playtest",
-    version = "0.1.0",
+    version = "0.2.0",
     instructions = "playtest puts a playable build in front of specific people. Call \
                     playtest_upload with the directory your build step produced; give the user the \
                     returned url, and paste qr_text verbatim in a code block when they will open it \
