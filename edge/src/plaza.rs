@@ -104,7 +104,7 @@ pub fn render(view: &View<'_>) -> String {
     };
 
     // 页脚一行说完，但该如实说的都在（DESIGN §3.8）：只放主动公开的、不排名次、
-    // 「想玩」只在本机、登录未上线所以只有 24 小时作品。多余的解释一个字不留。
+    // 「想玩」只在本机、匿名作品 24 小时后自己下来。多余的解释一个字不留。
     let body = format!(
         "<header class=\"top\">\n\
 <a class=\"brand\" href=\"/\">playtest<span>.run</span></a>\n\
@@ -123,7 +123,7 @@ pub fn render(view: &View<'_>) -> String {
 </nav>\n\
 {grid}\
 <footer class=\"page-foot\">\n\
-<p>只放开发者主动公开的作品，按时间排 · 「想玩」只记在这台设备 · 登录未上线，作品最多停留 24 小时</p>\n\
+<p>只放开发者主动公开的作品，按时间排 · 「想玩」只记在这台设备 · 没登录发的作品 24 小时后自己下来</p>\n\
 <p><code>xxx.{suffix}</code> · <a href=\"{dev}\">开发者从这里开始</a></p>\n\
 </footer>\n\
 <script nonce=\"{nonce}\">{SCRIPT}</script>\n",
@@ -385,7 +385,7 @@ mod tests {
         // 举报入口复用作品自己的。
         assert!(html.contains("href=\"http://brisk-otter-41.localhost:8443/_playtest/report\""));
         // 该如实说的仍在页脚，一行说完。
-        assert!(html.contains("登录未上线，作品最多停留 24 小时"));
+        assert!(html.contains("没登录发的作品 24 小时后自己下来"));
         assert!(html.contains("「想玩」只记在这台设备"));
         assert!(html.contains("只放开发者主动公开的作品"));
         // 脚本带 nonce，CSP 才放行。

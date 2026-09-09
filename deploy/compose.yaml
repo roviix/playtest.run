@@ -56,6 +56,10 @@ services:
       PLAYTEST_API_LISTEN: 0.0.0.0:8787
       PLAYTEST_DATA_DIR: /data
       PLAYTEST_SITE_URL_TEMPLATE: ${PLAYTEST_SITE_URL_TEMPLATE}
+      # GitHub 登录。空着 = 不提供登录，匿名链接照常。
+      PLAYTEST_GITHUB_CLIENT_ID: ${PLAYTEST_GITHUB_CLIENT_ID:-}
+      PLAYTEST_GITHUB_CLIENT_SECRET: ${PLAYTEST_GITHUB_CLIENT_SECRET:-}
+      PLAYTEST_CONSOLE_URL: ${PLAYTEST_CONSOLE_URL:-}
       RUST_LOG: ${RUST_LOG:-info}
     ports:
       # 只绑主机回环：API_HOST 没配时 CLI 走 ssh -L 隧道用；有了公网入口后仍留着给运维。

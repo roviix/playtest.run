@@ -1,40 +1,59 @@
-// 粘贴令牌。
+// 登录，或者粘贴令牌。
 //
-// v0.1 没有登录：CLI 第一次运行会拿到一个 24 小时的匿名令牌，把它粘进来就能看结果。
-// GitHub 登录第三周接，接上之后这一页留着——自托管和 CI 里仍然是粘一个令牌最省事。
+// 正路是「用 GitHub 登录」：浏览器去 GitHub 授权一次，回来就是账号令牌，长期有效，
+// 和终端里 playtest login 进的是同一个账号。手里若已经有一个匿名令牌，登录时会一起带过去，
+// 那个身份下的作品归到账号里、不再 24 小时后失效。
+// 粘贴令牌留着：自托管没配 GitHub、CI 里、或者只想看一眼匿名链接的结果时，粘一个最省事。
 
 import { useState } from "preact/hooks";
 
-import { forgetToken, readToken, saveToken } from "../api";
+import { forgetToken, githubLoginUrl, readToken, saveToken, type Me } from "../api";
 import { go } from "../router";
 
-export function TokenPage() {
+export function TokenPage({ loginError, me }: { loginError: string | null; me: Me | null }) {
   const existing = readToken();
   const [value, setValue] = useState("");
-  const [saved, setSaved] = useState(false);
 
   function submit(event: Event) {
     event.preventDefault();
     const token = value.trim();
     if (!token) return;
     saveToken(token);
-    setSaved(true);
-    go({ name: "sites" });
+    location.hash = "#/";
+    location.reload();
   }
+
+  const loggedIn = me?.kind === "github";
 
   return (
     <>
       <header class="page-head">
-        <h1>令牌</h1>
+        <h1>{loggedIn ? "账号" : "登录"}</h1>
         <p class="muted">
-          令牌只存在这台设备的浏览器里，不会发给第三方。
-          {existing ? "现在这台设备上已经有一个。" : ""}
+          {loggedIn
+            ? `这台设备上登录的是 @${me?.login ?? me?.display_name}。`
+            : existing
+              ? "这台设备上现在是一个 24 小时的匿名身份。登录之后它的作品会归到你的账号里，不再失效。"
+              : "令牌只存在这台设备的浏览器里，不会发给第三方。"}
         </p>
       </header>
 
+      {loginError ? <p class="notice warn">没登录成：{loginError}</p> : null}
+
+      {loggedIn ? null : (
+        <div class="card">
+          <a class="button primary" href={githubLoginUrl}>
+            用 GitHub 登录
+          </a>
+          <p class="muted small">
+            和终端里 <code>playtest login</code> 进的是同一个账号。GitHub 在你这里打不开的话，下面粘令牌也一样能看结果。
+          </p>
+        </div>
+      )}
+
       <form class="card" onSubmit={submit}>
         <label class="field">
-          <span>把 CLI 给你的令牌粘在这里</span>
+          <span>{loggedIn ? "换一个令牌" : "或者，把 CLI 给你的令牌粘在这里"}</span>
           <input
             type="password"
             autocomplete="off"
@@ -45,34 +64,33 @@ export function TokenPage() {
           />
         </label>
         <p class="row-actions">
-          <button class="button primary" type="submit">
+          <button class="button" type="submit">
             存下来
           </button>
           {existing ? (
             <button
-              class="button"
+              class="button quiet"
               type="button"
               onClick={() => {
                 forgetToken();
-                setValue("");
-                setSaved(false);
                 go({ name: "token" });
                 location.reload();
               }}
             >
-              清掉这台设备上的令牌
+              {loggedIn ? "退出这台设备" : "清掉这台设备上的令牌"}
             </button>
           ) : null}
         </p>
-        {saved ? <p class="muted">存好了。</p> : null}
       </form>
 
-      <div class="empty">
-        <p class="muted">
-          还没有令牌？在作品目录里运行 <code>playtest</code>，它会自己申请一个 24 小时的匿名链接，
-          令牌就在那次输出里。
-        </p>
-      </div>
+      {existing ? null : (
+        <div class="empty">
+          <p class="muted">
+            令牌从哪来？在作品目录里运行 <code>playtest</code>，它会自己申请一个 24 小时的匿名链接，
+            令牌在 <code>~/.config/playtest/config.json</code> 里。
+          </p>
+        </div>
+      )}
     </>
   );
 }

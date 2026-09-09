@@ -60,7 +60,7 @@ footer{margin:3rem 0 3.5rem;padding-top:1rem;border-top:1px solid var(--line);co
 <pre><code><b>playtest</b> ./dist                <span class="c"># 上传导出目录 → https://xxx.playtest.run 和一张二维码</span>
 <b>playtest</b> 5173                  <span class="c"># 把正在跑的本地开发服务器接出去，链接长得一样</span>
 <b>playtest</b> ./dist --backend 3000 <span class="c"># 静态文件上传，/api 和 WebSocket 穿隧道回你的后端</span></code></pre>
-<ul class="facts"><li>玩家不注册、不装东西</li><li>手机扫码就能玩</li><li>匿名链接 24 小时</li><li>不运行你的代码，只分发文件</li></ul>
+<ul class="facts"><li>玩家不注册、不装东西</li><li>手机扫码就能玩</li><li>不登录也能发，24 小时</li><li>不运行你的代码，只分发文件</li></ul>
 </section>
 
 <h2>玩家点开之后</h2>
@@ -81,8 +81,8 @@ footer{margin:3rem 0 3.5rem;padding-top:1rem;border-top:1px solid var(--line);co
 <h2>现在的状态</h2>
 <div class="status">
 <p><span class="ok">已经能用：</span>上传、隧道、静态加后端的混合模式、门禁页、点名册、可选的 <code>playtest.js</code>（加一行 <code>&lt;script src="/_playtest/sdk.js"&gt;&lt;/script&gt;</code> 就有 JS 错误、加载用时、自定义事件和一个反馈按钮）、广场（<code>--public</code> 与 <code>--seek</code>）、版本回滚。</p>
-<p><span style="color:var(--accent)">还没做：</span>登录（现在全是 24 小时后失效的匿名链接）、口令与邀请名单、自定义域名。做不到的地方命令会明说。</p>
-<p>控制台需要一个令牌：在作品目录里运行一次 <code>playtest</code>，它会自己申请一个，令牌就在 <code>~/.config/playtest/config.json</code> 里。</p>
+<p><span style="color:var(--accent)">刚接上、还在真机验证：</span>GitHub 登录（<code>playtest login</code>；登录前发的作品会一起归入账号、不再 24 小时后失效）。<span style="color:var(--accent)">还没做：</span>自己挑链接名字、口令与邀请名单、自定义域名。做不到的地方命令会明说。</p>
+<p>不登录也能用：每次运行拿到的是 24 小时的匿名链接；控制台里粘上 <code>~/.config/playtest/config.json</code> 里的令牌就能看结果。</p>
 </div>
 
 <h2 id="install">安装</h2>

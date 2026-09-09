@@ -186,7 +186,58 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   return parsed as T;
 }
 
+/** `GET /v1/me`：这个令牌是谁。 */
+export type Me = {
+  kind: "anon" | "github";
+  display_name: string;
+  login?: string;
+  expires_at?: string;
+};
+
+export type LoginResponse = {
+  token: string;
+  login: string;
+  display_name: string;
+  migrated_sites: number;
+};
+
+/** 浏览器直接访问这个地址就被送到 GitHub；回来时 GitHub 把 code 和 state 挂在控制台地址上。 */
+export const githubLoginUrl = `${API_BASE}/v1/login/github/start`;
+
+/**
+ * 网页登录的最后一步：把 GitHub 回传的 code 与 state 交给控制面换令牌。
+ * 手里若有一个匿名令牌就一起带上——那个身份下的作品会归到账号里。这里不走 call()，
+ * 因为没有令牌也得能调。
+ */
+export async function exchangeGitHubCode(code: string, state: string): Promise<LoginResponse> {
+  const headers = new Headers({ "Content-Type": "application/json" });
+  const anon = readToken();
+  if (anon) headers.set("Authorization", `Bearer ${anon}`);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/v1/login/github/exchange`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ code, state }),
+    });
+  } catch {
+    throw new ApiError(0, "offline", "连不上控制面。确认它在跑，或者检查一下网络。");
+  }
+  const body = (await response.json().catch(() => null)) as
+    | (LoginResponse & { code?: string; message?: string })
+    | null;
+  if (!response.ok || !body?.token) {
+    throw new ApiError(
+      response.status,
+      body?.code ?? "internal",
+      body?.message ?? `控制面返回了 ${response.status}。`,
+    );
+  }
+  return body;
+}
+
 export const api = {
+  me: () => call<Me>("/v1/me"),
   sites: () => call<Site[]>("/v1/sites"),
   updateSite: (slug: string, request: UpdateSiteRequest) =>
     call<Site>(`/v1/sites/${encodeURIComponent(slug)}`, {

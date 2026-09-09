@@ -132,6 +132,11 @@ p {
   font-size: 0.9rem;
 }
 
+.muted.small {
+  font-size: 0.82rem;
+  margin-top: 0.6rem;
+}
+
 .page-head {
   margin-bottom: 1.1rem;
 }
@@ -193,6 +198,8 @@ p {
 }
 
 .button {
+  display: inline-block;
+  text-decoration: none;
   font: inherit;
   font-size: 0.9rem;
   color: var(--ink);
@@ -206,6 +213,7 @@ p {
 
 .button:hover {
   border-color: var(--muted);
+  text-decoration: none;
 }
 
 .button:active {
