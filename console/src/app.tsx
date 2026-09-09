@@ -21,7 +21,10 @@ export function App() {
         <a class="brand" href={href({ name: "sites" })}>
           playtest
         </a>
-        <a href={href({ name: "token" })}>{hasToken ? "换令牌" : "粘贴令牌"}</a>
+        <span class="top-links">
+          <a href="https://playtest.run/">广场</a>
+          <a href={href({ name: "token" })}>{hasToken ? "换令牌" : "粘贴令牌"}</a>
+        </span>
       </nav>
       <main>{page(route, hasToken)}</main>
     </div>
