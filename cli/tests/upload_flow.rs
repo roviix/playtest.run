@@ -462,13 +462,14 @@ fn a_file_that_changes_mid_upload_is_reported_not_retried_forever() {
 
 // 端口那条路现在走隧道，不再是「还没做好」，它的行为在 tunnel_flow.rs 里测。
 
+// `playtest login` 的设备码流程在 json_output.rs 里对着假控制面测；这里只看连不上时它不假装成功。
 #[test]
-fn login_says_it_is_not_built_yet() {
+fn login_with_no_control_plane_fails_like_everything_else() {
     let home = tempfile::tempdir().unwrap();
     let output = run_cli(home.path(), "http://127.0.0.1:1", &["login"]);
-    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(output.status.code(), Some(4), "{}", stderr_of(&output));
     assert!(
-        stderr_of(&output).contains("匿名链接"),
+        stderr_of(&output).contains("连不上服务器"),
         "{}",
         stderr_of(&output)
     );
