@@ -23,8 +23,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     && cp target/release/playtest-api target/release/playtest-edge /out/
 
 FROM debian:bookworm-slim
+# fonts-noto-cjk：邀请卡上的中文由边缘自己排版（edge/src/card.rs），
+# 镜像里一个中文字体都没有的话，卡上会是一排方块。
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl tini \
+    && apt-get install -y --no-install-recommends ca-certificates curl tini fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --home-dir /data --shell /usr/sbin/nologin playtest \
     && mkdir -p /data && chown playtest:playtest /data

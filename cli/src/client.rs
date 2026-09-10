@@ -20,6 +20,23 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 const UPLOAD_CHUNK_BYTES: usize = 64 * 1024;
 
+/// 每个请求都带上，服务端日志里能看出是哪一版 CLI。
+const USER_AGENT: &str = concat!("playtest/", env!("CARGO_PKG_VERSION"));
+
+/// 一个不认路由、也不带令牌的 HTTP 客户端。
+///
+/// 邀请卡在玩家那一侧的域名上（`https://<slug>.playtest.run/_playtest/card.png`），不在控制面：
+/// 那边既不需要、也不该收到开发者的令牌（AGENTS 第 7 条，两个域名不混）。所以拿卡不走 [`Client`]，
+/// 只共用 User-Agent 和「多久算连不上」这套设置。等多久由调用方定——发布之后顺手取一张卡，
+/// 不该为它把一次成功的发布拖上几十秒。
+pub fn new_http(connect: Duration, total: Duration) -> reqwest::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .connect_timeout(connect)
+        .timeout(total)
+        .user_agent(USER_AGENT)
+        .build()
+}
+
 /// 上传时每写出去一段字节就叫一次，用来推进度条。
 pub type OnBytes = Arc<dyn Fn(u64) + Send + Sync>;
 
@@ -124,7 +141,7 @@ impl Client {
     pub fn new(base: &str) -> anyhow::Result<Self> {
         let http = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
-            .user_agent(concat!("playtest/", env!("CARGO_PKG_VERSION")))
+            .user_agent(USER_AGENT)
             .build()?;
         Ok(Self {
             http,

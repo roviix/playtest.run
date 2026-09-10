@@ -32,7 +32,17 @@ struct Refusal {
 struct Fake {
     refuse_prepare: Mutex<Option<Refusal>>,
     login_polls: Mutex<u32>,
+    /// 作品链接。默认长得像玩家域上的一条链接（那台服务器不存在，取邀请卡会连不上，
+    /// 正好也是一种要验的情形）；[`start_fake_as_edge`] 把它改成这个假服务器自己的地址，
+    /// CLI 就会真的来这里取那张卡。
+    site_url: Mutex<Option<String>>,
+    /// PATCH 收到的那个请求体，用来验 CLI 到底把什么传了上去。
+    patched: Mutex<Option<Value>>,
 }
+
+/// 一张「PNG」。只有头八个字节是真的——CLI 认的就是这八个字节加上响应头里的类型，
+/// 塞一张真图进测试只会让这个文件多几十行看不懂的字节。
+const CARD_BYTES: &[u8] = b"\x89PNG\r\n\x1a\nnot-really-a-png";
 
 fn error_body(refusal: Refusal) -> Response {
     (
@@ -73,25 +83,82 @@ async fn anon_sessions() -> Json<Value> {
     Json(json!({ "token": "tok-1", "expires_at": "2099-01-01T00:00:00Z" }))
 }
 
-async fn create_site() -> Json<Value> {
+/// 作品链接：默认那条谁也连不上的，或者这个假服务器自己的地址。
+fn site_url(fake: &Fake) -> String {
+    fake.site_url
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap_or_else(|| format!("http://{SLUG}.localhost:8443"))
+}
+
+async fn create_site(State(fake): State<Arc<Fake>>) -> Json<Value> {
     Json(json!({
         "slug": SLUG,
-        "url": format!("http://{SLUG}.localhost:8443"),
+        "url": site_url(&fake),
         "title": "export",
         "created_at": "2026-09-07T00:00:00Z",
         "expires_at": "2026-09-08T03:30:00Z",
     }))
 }
 
-async fn list_sites() -> Json<Value> {
+async fn list_sites(State(fake): State<Arc<Fake>>) -> Json<Value> {
     Json(json!([{
         "slug": SLUG,
-        "url": format!("http://{SLUG}.localhost:8443"),
+        "url": site_url(&fake),
         "title": "小球试玩",
         "current_version": 3,
         "created_at": "2026-09-07T00:00:00Z",
         "expires_at": "2026-09-08T03:30:00Z",
+        "listing": { "followers": 12 },
     }]))
+}
+
+/// 一个作品此刻的样子。没有封面——`--cover` 那一句提醒要有东西可依据。
+async fn get_site(State(fake): State<Arc<Fake>>, UrlPath(slug): UrlPath<String>) -> Json<Value> {
+    Json(json!({
+        "slug": slug,
+        "url": site_url(&fake),
+        "title": "小球试玩",
+        "current_version": 7,
+        "created_at": "2026-09-07T00:00:00Z",
+        "listing": { "has_cover": false, "followers": 12 },
+    }))
+}
+
+/// 改状态。把收到的东西原样回出去，CLI 报的就该是服务器认下来的那份。
+async fn patch_site(
+    State(fake): State<Arc<Fake>>,
+    UrlPath(slug): UrlPath<String>,
+    Json(request): Json<Value>,
+) -> Json<Value> {
+    *fake.patched.lock().unwrap() = Some(request.clone());
+    Json(json!({
+        "slug": slug,
+        "url": site_url(&fake),
+        "title": "小球试玩",
+        "current_version": 7,
+        "created_at": "2026-09-07T00:00:00Z",
+        "listing": {
+            "public": request["public"].as_bool().unwrap_or(false),
+            "seeking": request["seeking"].as_bool().unwrap_or(false),
+            "seek_note": request["seek_note"],
+            "seats": request["seats"],
+            "community_url": request["community_url"],
+            "has_cover": false,
+            "followers": 12,
+        },
+    }))
+}
+
+/// 边缘那一侧：门禁页上那张邀请卡。
+async fn card_png() -> Response {
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, "image/png")],
+        CARD_BYTES,
+    )
+        .into_response()
 }
 
 async fn prepare_upload(
@@ -112,22 +179,45 @@ async fn put_blob(UrlPath(_hash): UrlPath<String>, _body: axum::body::Bytes) -> 
     StatusCode::CREATED.into_response()
 }
 
-async fn commit_upload(UrlPath((slug, _upload)): UrlPath<(String, String)>) -> Json<Value> {
+async fn commit_upload(
+    State(fake): State<Arc<Fake>>,
+    UrlPath((slug, _upload)): UrlPath<(String, String)>,
+) -> Json<Value> {
     Json(json!({
         "slug": slug,
         "version": 7,
-        "url": format!("http://{slug}.localhost:8443"),
+        "url": site_url(&fake),
         "expires_at": "2026-09-08T03:30:00Z",
     }))
 }
 
 /// 起一个假控制面，返回它的地址。线程随进程一起结束。
 fn start_fake(refuse_prepare: Option<Refusal>) -> String {
-    let fake = Arc::new(Fake {
-        refuse_prepare: Mutex::new(refuse_prepare),
-        login_polls: Mutex::new(0),
-    });
+    start_with(
+        Arc::new(Fake {
+            refuse_prepare: Mutex::new(refuse_prepare),
+            ..Fake::default()
+        }),
+        false,
+    )
+}
+
+/// 同一个假服务器，但它同时假装自己是边缘：作品链接指回它自己，
+/// `/_playtest/card.png` 上真有一张卡。要验邀请卡的测试用这个。
+fn start_fake_as_edge() -> Arc<Fake> {
+    let fake = Arc::new(Fake::default());
+    start_with(Arc::clone(&fake), true);
+    fake
+}
+
+/// 假服务器的地址。起的时候就记在 `site_url` 里了（当边缘用的时候）。
+fn api_of(fake: &Fake) -> String {
+    fake.site_url.lock().unwrap().clone().unwrap()
+}
+
+fn start_with(fake: Arc<Fake>, as_edge: bool) -> String {
     let (tx, rx) = std::sync::mpsc::channel::<SocketAddr>();
+    let state = Arc::clone(&fake);
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -140,25 +230,38 @@ fn start_fake(refuse_prepare: Option<Refusal>) -> String {
                 .route(routes::LOGIN_DEVICE_POLL, post(device_poll))
                 .route(routes::LOGIN_WEB_START, get(login_unavailable))
                 .route(routes::SITES, post(create_site).get(list_sites))
+                .route(routes::SITE, get(get_site).patch(patch_site))
                 .route(routes::SITE_UPLOADS, post(prepare_upload))
                 .route(routes::BLOB, put(put_blob))
                 .route(routes::SITE_UPLOAD_COMMIT, post(commit_upload))
+                .route(playtest_common::CARD_PATH, get(card_png))
                 .route(routes::HEALTH, get(|| async { "ok" }))
-                .with_state(fake);
+                .with_state(state);
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             tx.send(listener.local_addr().unwrap()).unwrap();
             axum::serve(listener, app).await.unwrap();
         });
     });
-    format!("http://{}", rx.recv().expect("假控制面没起来"))
+    let api = format!("http://{}", rx.recv().expect("假控制面没起来"));
+    // 端口是绑完才知道的，所以「作品链接指回自己」只能在这一刻填。
+    if as_edge {
+        *fake.site_url.lock().unwrap() = Some(api.clone());
+    }
+    api
 }
 
 // ---------------------------------------------------------------- 跑二进制
 
 fn run_cli(home: &Path, api: &str, args: &[&str]) -> Output {
+    run_cli_in(home, home, api, args)
+}
+
+/// 同上，但指定在哪个目录里跑——邀请卡默认存到「当前目录」，所以那几个测试要管这件事。
+fn run_cli_in(cwd: &Path, home: &Path, api: &str, args: &[&str]) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_playtest"));
     command
         .args(args)
+        .current_dir(cwd)
         .env("HOME", home)
         .env("PLAYTEST_API", api)
         .env("NO_PROXY", "*")
@@ -267,6 +370,233 @@ fn no_qr_means_the_field_is_simply_absent() {
     assert!(output.status.success(), "{}", stderr_of(&output));
     let value = only_object(&output);
     assert!(value.get("qr_text").is_none(), "{value}");
+}
+
+#[test]
+fn an_upload_saves_the_invite_card_next_to_you_and_says_so_in_the_object() {
+    let home = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let dist = make_export(work.path());
+    let fake = start_fake_as_edge();
+    let api = api_of(&fake);
+
+    let output = run_cli_in(
+        work.path(),
+        home.path(),
+        &api,
+        &["--json", "--no-qr", dist.to_str().unwrap()],
+    );
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    let value = only_object(&output);
+
+    // 卡的地址一直有效，所以它总在；存下来了才有 card_path。
+    assert_eq!(value["card_url"], format!("{api}/_playtest/card.png"));
+    assert_eq!(value["card_path"], "./dist-邀请卡.png", "文件名是作品名");
+    let saved = work.path().join("dist-邀请卡.png");
+    assert_eq!(
+        std::fs::read(&saved).unwrap(),
+        CARD_BYTES,
+        "存下来的就是那张卡"
+    );
+
+    // 「去哪儿看结果」是开发者那一侧的地址，不是玩家域。
+    let console = value["console_url"].as_str().unwrap();
+    assert!(
+        console.ends_with(&format!("/console/#/s/{SLUG}")),
+        "{console}"
+    );
+    assert!(
+        !console.contains("playtest.run"),
+        "控制台在开发者域上：{console}"
+    );
+
+    // 这一版没有封面，提醒一句，但不拦。
+    assert!(
+        value["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["message"].as_str().unwrap_or("").contains("没有封面")),
+        "{value}"
+    );
+}
+
+#[test]
+fn no_card_means_no_file_and_no_path() {
+    let home = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let dist = make_export(work.path());
+    let fake = start_fake_as_edge();
+
+    let output = run_cli_in(
+        work.path(),
+        home.path(),
+        &api_of(&fake),
+        &["--json", "--no-qr", "--no-card", dist.to_str().unwrap()],
+    );
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    let value = only_object(&output);
+    assert!(value.get("card_path").is_none(), "{value}");
+    assert!(value["card_url"].is_string(), "地址还是要给的：{value}");
+    assert!(
+        !work.path().join("dist-邀请卡.png").exists(),
+        "说了不要就一个文件都不该留下"
+    );
+}
+
+#[test]
+fn seats_and_a_group_link_go_up_with_the_version() {
+    let home = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let dist = make_export(work.path());
+    let fake = start_fake_as_edge();
+
+    let output = run_cli_in(
+        work.path(),
+        home.path(),
+        &api_of(&fake),
+        &[
+            "--json",
+            "--no-qr",
+            "--no-card",
+            dist.to_str().unwrap(),
+            "--seats",
+            "10",
+            "--community",
+            "https://t.me/playtest",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr_of(&output));
+
+    let patched = fake.patched.lock().unwrap().clone().expect("该改一次状态");
+    assert_eq!(patched["seats"], 10);
+    assert_eq!(patched["community_url"], "https://t.me/playtest");
+    assert_eq!(patched["public"], true, "想找人测就得在广场上：{patched}");
+    assert_eq!(patched["seeking"], true, "{patched}");
+    assert!(
+        patched.get("feedback_public").is_none(),
+        "CLI 这一轮不碰这一项：{patched}"
+    );
+
+    let value = only_object(&output);
+    assert_eq!(value["seats"], 10);
+    assert!(
+        value["plaza_url"].as_str().unwrap().starts_with("http"),
+        "{value}"
+    );
+}
+
+#[test]
+fn seats_out_of_range_is_caught_here_not_after_the_upload() {
+    let home = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let dist = make_export(work.path());
+    // 连不上任何服务器也该在本地就拦下来——这是输入的问题，不是网络的问题。
+    let output = run_cli(
+        home.path(),
+        "http://127.0.0.1:1",
+        &["--json", dist.to_str().unwrap(), "--seats", "99999"],
+    );
+    let value = expect_failure(&output, 6, "bad_input");
+    let message = value["message"].as_str().unwrap();
+    assert!(message.contains("99999"), "要把他写的那个数说出来：{value}");
+    assert!(
+        message.contains(&playtest_common::limits::MAX_SEATS.to_string()),
+        "也要把上限说出来：{value}"
+    );
+}
+
+#[test]
+fn a_group_link_that_a_browser_cannot_open_is_refused_before_anything_is_sent() {
+    let home = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let dist = make_export(work.path());
+    let output = run_cli(
+        home.path(),
+        "http://127.0.0.1:1",
+        &[
+            "--json",
+            dist.to_str().unwrap(),
+            "--community",
+            "qq://12345",
+        ],
+    );
+    let value = expect_failure(&output, 6, "bad_input");
+    assert!(
+        value["message"].as_str().unwrap().contains("http"),
+        "{value}"
+    );
+}
+
+#[test]
+fn the_card_command_fetches_one_more_copy() {
+    let home = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let dist = make_export(work.path());
+    let fake = start_fake_as_edge();
+    let api = api_of(&fake);
+    // 先发一次，把令牌和这个目录记下来。
+    let first = run_cli_in(
+        work.path(),
+        home.path(),
+        &api,
+        &["--json", "--no-qr", "--no-card", dist.to_str().unwrap()],
+    );
+    assert!(first.status.success(), "{}", stderr_of(&first));
+
+    let out = work.path().join("卡片").join("邀请.png");
+    let output = run_cli_in(
+        work.path(),
+        home.path(),
+        &api,
+        &["--json", "card", SLUG, "--out", out.to_str().unwrap()],
+    );
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    let value = only_object(&output);
+    assert_eq!(value["action"], "card");
+    assert_eq!(value["slug"], SLUG);
+    assert_eq!(std::fs::read(&out).unwrap(), CARD_BYTES);
+    assert!(
+        value["card_path"].as_str().unwrap().contains("邀请.png"),
+        "{value}"
+    );
+
+    // 目录也行：这个目录上次发到哪个作品，我们记着。
+    let output = run_cli_in(
+        work.path(),
+        home.path(),
+        &api,
+        &["--json", "card", dist.to_str().unwrap()],
+    );
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    assert!(work.path().join("小球试玩-邀请卡.png").exists());
+}
+
+#[test]
+fn followers_is_a_number_the_developer_can_act_on() {
+    let home = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let dist = make_export(work.path());
+    let fake = start_fake_as_edge();
+    let api = api_of(&fake);
+    let first = run_cli_in(
+        work.path(),
+        home.path(),
+        &api,
+        &["--json", "--no-qr", "--no-card", dist.to_str().unwrap()],
+    );
+    assert!(first.status.success(), "{}", stderr_of(&first));
+
+    let output = run_cli(home.path(), &api, &["--json", "followers", SLUG]);
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    let value = only_object(&output);
+    assert_eq!(value["action"], "followers");
+    assert_eq!(value["followers"], 12);
+    assert_eq!(value["title"], "小球试玩");
+
+    // 列表里也有这个数，不用为了它单跑一条命令。
+    let listed = run_cli(home.path(), &api, &["ls", "--json"]);
+    assert_eq!(only_object(&listed)["sites"][0]["followers"], 12);
 }
 
 #[test]
@@ -461,4 +791,57 @@ fn without_the_flag_stdout_is_still_just_the_link() {
     assert!(stderr.contains("本次 "), "{stderr}");
     assert!(stderr.contains(" 秒"), "{stderr}");
     assert!(!stderr.contains("（哈希 0.0"), "四个 0.0 是噪声：{stderr}");
+}
+
+/// 发完那一屏，从上到下就是「接下来做什么」的次序（DESIGN §3.2）。
+///
+/// 这里连着真的二进制跑，看的是它真打出来的那几行——单元测试验的是拼句子，这里验的是
+/// 这些句子确实按那个顺序落到了终端上。
+#[test]
+fn what_a_first_timer_sees_after_publishing_comes_in_one_useful_order() {
+    let home = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let dist = make_export(work.path());
+    let fake = start_fake_as_edge();
+
+    let output = run_cli_in(
+        work.path(),
+        home.path(),
+        &api_of(&fake),
+        &[
+            dist.to_str().unwrap(),
+            "--no-qr",
+            "--seats",
+            "10",
+            "--community",
+            "https://t.me/playtest",
+            "--summary",
+            "三关，五分钟能玩完",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr_of(&output));
+
+    let stderr = stderr_of(&output);
+    let said: Vec<&str> = stderr.lines().filter(|l| !l.trim().is_empty()).collect();
+    let order = [
+        "已发布",
+        "邀请卡已存到",
+        "已放到广场上",
+        "想找 10 位试玩者",
+        // 快到期时这一句会换成提醒，两种说法里都有「匿名链接」这四个字。
+        "匿名链接",
+        "来的人玩成什么样",
+        "没有封面",
+        "本次 ",
+    ];
+    let mut at = 0usize;
+    for head in order {
+        at = said[at..]
+            .iter()
+            .position(|line| line.contains(head))
+            .map(|i| at + i + 1)
+            .unwrap_or_else(|| panic!("「{head}」没按顺序出现：\n{stderr}"));
+    }
+    // 链接只在 stdout 上，方便 `| pbcopy`。
+    assert_eq!(stdout_of(&output).trim(), api_of(&fake));
 }

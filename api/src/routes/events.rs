@@ -14,7 +14,7 @@
 //!
 //! **不记 IP**，和边缘一样（DESIGN §3.4，`edge/src/events.rs` 的注释说了为什么）。
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -25,6 +25,7 @@ use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use playtest_common::api::ErrorCode;
 use playtest_common::ingest::{self, Accepted, EdgeBatch, EventBatch};
+use playtest_common::limits;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::de::DeserializeOwned;
 use time::{Duration, OffsetDateTime};
@@ -115,6 +116,7 @@ async fn sdk_batch(
             // SDK 的请求头里那个 Referer 是作品自己的地址，不是玩家从哪来的，
             // 拿它填 referrer_kind 只会填出一个假答案。这一列留给边缘。
             referer: None,
+            from: None,
             plaza_host: "",
             return_before: &clock::format(at - Duration::minutes(RETURN_AFTER_MINUTES)),
         },
@@ -168,19 +170,23 @@ pub async fn from_edge(
     };
     let done = edge_batch(&state, &limiter, &body).await;
     // 这一批里有举报：立刻重算一次广场，够数的当场撤下（DESIGN §3.8），不等 5 分钟那一轮。
-    if matches!(&done, Ok((_, true))) {
+    if matches!(&done, Ok((_, true, _))) {
         crate::plaza::publish(&state).await;
     }
-    let done = done.map(|(accepted, _)| accepted);
+    // 有人留了名：门禁页上「已加入 N 位」当场就该变（DESIGN §3.3）。
+    if let Ok((_, _, named)) = &done {
+        crate::live::publish_all(&state, named).await;
+    }
+    let done = done.map(|(accepted, _, _)| accepted);
     with_cors(done.into_response(), origin.as_deref())
 }
 
-/// 返回收下了几条，以及这批里有没有举报。
+/// 返回收下了几条、这批里有没有举报、哪些作品有人留了名。
 async fn edge_batch(
     state: &AppState,
     limiter: &Limiter,
     body: &Bytes,
-) -> ApiResult<(Json<Accepted>, bool)> {
+) -> ApiResult<(Json<Accepted>, bool, BTreeSet<String>)> {
     let batch: EdgeBatch = parse(body)?;
     if batch.events.len() > ingest::MAX_EVENTS_PER_BATCH {
         return Err(ApiError::invalid(format!(
@@ -197,6 +203,7 @@ async fn edge_batch(
 
     let mut accepted = 0usize;
     let mut had_report = false;
+    let mut named: BTreeSet<String> = BTreeSet::new();
     let mut versions: HashMap<String, u32> = HashMap::new();
     for line in &batch.events {
         if !ingest::edge_kind::known(&line.kind) || !ingest::is_session_id(&line.sid) {
@@ -238,6 +245,7 @@ async fn edge_batch(
                 at: &ts,
                 ua: Some(line.ua.as_str()).filter(|ua| !ua.is_empty()),
                 referer: Some(line.referer.as_str()),
+                from: line.from.as_deref(),
                 plaza_host: &plaza_host,
                 return_before: &clock::format(at - Duration::minutes(RETURN_AFTER_MINUTES)),
             },
@@ -257,15 +265,54 @@ async fn edge_batch(
         )?;
         match line.kind.as_str() {
             ingest::edge_kind::GATE_VIEW => stage(&tx, &line.sid, "gate_view_at", &ts)?,
-            ingest::edge_kind::START => stage(&tx, &line.sid, "start_at", &ts)?,
+            ingest::edge_kind::START => {
+                stage(&tx, &line.sid, "start_at", &ts)?;
+                if let Some(name) = clean_player_name(line.name.as_deref()) {
+                    if crate::db::set_session_name(&tx, &line.sid, &name)? {
+                        named.insert(slug.clone());
+                    }
+                }
+            }
             _ => {}
         }
         accepted += 1;
     }
     tx.commit()?;
 
-    Ok((Json(Accepted { accepted }), had_report))
+    Ok((Json(Accepted { accepted }), had_report, named))
 }
+
+/// 门禁页上留的那个名字（DESIGN §3.3 第 5 条）。
+///
+/// 名字会出现在别人的门禁页上（「已加入」那一行、公开的反馈），所以要过一遍：
+/// 去掉控制字符（换行会把一行变成三行）、按字数截、明显的脏话当作没留名。
+/// **不报错**：玩家点了「开始」就该进得去，为一个名字弹一个错误不值得。
+fn clean_player_name(raw: Option<&str>) -> Option<String> {
+    let text: String = raw?
+        .chars()
+        .filter(|c| !c.is_control())
+        .collect::<String>()
+        .trim()
+        .to_string();
+    if text.is_empty() {
+        return None;
+    }
+    let clipped = match text.char_indices().nth(limits::MAX_PLAYER_NAME_CHARS) {
+        Some((idx, _)) => text[..idx].to_string(),
+        None => text,
+    };
+    let folded = clipped.to_lowercase();
+    if DIRTY_WORDS.iter().any(|word| folded.contains(word)) {
+        return None;
+    }
+    Some(clipped)
+}
+
+/// 一张很短的名单。不是内容审核——那要另一套东西；这只是挡住最常见的几个词，
+/// 免得开发者的门禁页上第一眼就是一句脏话。命中就当没留名，不告诉对方为什么。
+const DIRTY_WORDS: &[&str] = &[
+    "fuck", "shit", "bitch", "cunt", "傻逼", "傻屄", "煞笔", "狗屎", "去死", "妈的",
+];
 
 /// 预检。SDK 发的是 `text/plain` 的体，正常路径上不会走到这里；
 /// 开发者自己用 `fetch` 发 JSON 时会。
@@ -497,6 +544,8 @@ pub struct Seen<'a> {
     pub ua: Option<&'a str>,
     /// `None` 是「不知道从哪来」，和「直接打开」不是一回事。
     pub referer: Option<&'a str>,
+    /// 链接上的 `?from=`（邀请卡、通知）。比 Referer 可信，优先用它。
+    pub from: Option<&'a str>,
     /// 广场所在的根域（[`content_host_suffix`]）；从那里来的记成 `plaza`。空字符串就不认。
     pub plaza_host: &'a str,
     /// 上一次活动早于这个时间就算回头客。
@@ -520,12 +569,18 @@ pub fn touch_session(conn: &Connection, seen: &Seen<'_>) -> rusqlite::Result<()>
     let client = seen.ua.map(ingest::classify_ua);
     // 第一个带会话 id 的事件是「点了开始」，它的 Referer 是作品自己的门禁页，不是玩家从哪来的。
     // 把自己当来源会让所有人都变成「其它」；自己引用自己按「不知道」处理，留给真的外部来源。
-    let referrer_kind = if wechat {
-        Some("wechat")
-    } else {
-        seen.referer
-            .filter(|r| !ingest::is_self_referral(r, seen.slug))
-            .map(|r| ingest::referrer_kind(r, false, seen.plaza_host))
+    let usable_referer = seen
+        .referer
+        .filter(|r| !ingest::is_self_referral(r, seen.slug));
+    let referrer_kind = match (seen.from, usable_referer, wechat) {
+        // `?from=` 是我们自己放在链接上的，最可信：扫卡的人多半在微信里，
+        // 但开发者想知道的是「这张卡带来的」，不是「微信带来的」（`ingest::source_kind`）。
+        (Some(from), _, _) if from == ingest::source::CARD || from == ingest::source::NOTICE => {
+            Some(ingest::source_kind(Some(from), "", wechat, seen.plaza_host))
+        }
+        (_, _, true) => Some(ingest::source::WECHAT),
+        (_, Some(referer), _) => Some(ingest::source_kind(None, referer, false, seen.plaza_host)),
+        _ => None,
     };
 
     let Some((last_seen_at, known_ua)) = existing else {

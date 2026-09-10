@@ -6,11 +6,18 @@
 //!
 //! 这一页上不出现开发者域名：玩家路径与开发者路径是两个域名（AGENTS 第 7 条）。
 
+use playtest_common::capabilities::Capabilities;
+use playtest_common::follow::{edge_paths, FollowTarget};
+use playtest_common::limits::MAX_PLAYER_NAME_CHARS;
+use playtest_common::live::{SiteLive, PUBLIC_FEEDBACK_ON_GATE};
 use playtest_common::manifest::{GateMode, Manifest};
-use playtest_common::RESERVED_PATH_PREFIX;
+use playtest_common::{
+    CARD_WIDE_HEIGHT, CARD_WIDE_PATH, CARD_WIDE_WIDTH, RESERVED_PATH_PREFIX, SHARE_PATH,
+};
 use time::format_description::well_known::Rfc3339;
 use time::{OffsetDateTime, UtcOffset};
 
+use crate::follow;
 use crate::html::{esc, shell_hero};
 
 /// 封面在作品自己的域上的路径（DESIGN §3.3）。
@@ -126,8 +133,25 @@ const RESOURCE_EXTENSIONS: &[&str] = &[
     "tres",
 ];
 
+/// 「开始」表单里那几个字段的名字。app.rs 收表单时认同一份。
+pub mod field {
+    /// 点了开始之后回到哪。
+    pub const TO: &str = "to";
+    /// 玩家自愿留的名字（DESIGN §3.3 第 5 条）。
+    pub const NAME: &str = "name";
+    /// 链接上的 `?from=`，只有 `card` / `notice`（[`playtest_common::FROM_PARAM`]）。
+    pub const FROM: &str = "from";
+    /// 门禁页收到的 Referer，原样带过去。**和 `FROM` 是两回事**：这个是「上一页是谁」，
+    /// 那个是「这条链接是从哪张卡、哪封通知发出去的」，后者可信得多（DESIGN §3.5）。
+    pub const REFERER: &str = "ref";
+}
+
 pub struct GatePage<'a> {
     pub manifest: &'a Manifest,
+    /// 会变的那些：名额、群、公开反馈、头像、在不在广场上（DESIGN §4.5 的 `live.json`）。
+    pub live: &'a SiteLive,
+    /// 控制面现在能做什么。决定「有新版本时告诉我」那一行有没有、长什么样。
+    pub caps: &'a Capabilities,
     /// 点了开始之后回到哪，同源相对路径。
     pub to: &'a str,
     /// 泛域名后缀，角标上显示的就是它（本机是 `localhost`）。
@@ -136,7 +160,7 @@ pub struct GatePage<'a> {
     pub root_url: &'a str,
     /// 这一页自己的地址，给 og:url。
     pub page_url: &'a str,
-    /// 这个作品的源（`scheme://slug.suffix[:port]`），封面的绝对地址接在它后面给 og:image。
+    /// 这个作品的源（`scheme://slug.suffix[:port]`），封面与横版卡的绝对地址接在它后面。
     pub origin: &'a str,
     pub wechat: bool,
     /// 版本那个位置显示什么。上传路径是 `None`，显示 `v7`；隧道路径传「在线」——
@@ -144,8 +168,10 @@ pub struct GatePage<'a> {
     /// 以为自己拿到了一个坏链接。
     pub version_label: Option<&'a str>,
     /// 玩家是从哪个页面点到这条链接的（门禁页请求的 Referer）。会话从「开始」那一下才算起，
-    /// 而那一下的 Referer 是门禁页自己，所以真正的来源要在表单里带过去（DESIGN §3.4「来自哪里」）。
+    /// 而那一下的 Referer 是门禁页自己，所以真正的来源要在表单里带过去（DESIGN §3.5「来自哪里」）。
     pub referer: &'a str,
+    /// 链接上的 `?from=`：扫卡来的是 `card`，通知里点进来的是 `notice`，别的一律 `None`。
+    pub from: Option<&'a str>,
 }
 
 impl GatePage<'_> {
@@ -167,8 +193,6 @@ impl GatePage<'_> {
 
         // 服务端直出分享元数据（DESIGN §3.3）：Discord、iMessage、Telegram 会来抓。
         // 微信对未备案域名的抓取没有任何承诺，这里是尽力而为，不是「支持微信卡片」（§5）。
-        // `og:image` 只在开发者给了封面时才有：编一张假图比没有图糟——玩家看到的第一眼
-        // 应该是这个作品，不是我们的占位符。
         let description = match &summary {
             Some(summary) => format!("{summary} · {developer} {invite}"),
             None => format!("{developer} {invite}《{title}》· {version}"),
@@ -184,30 +208,50 @@ impl GatePage<'_> {
                 .unwrap_or_else(|| format!("{developer} {invite}")),
             url = esc(self.page_url),
         );
-        let hero = if let Some(cover) = &m.cover {
-            head.push_str(&format!(
-                "<meta property=\"og:image\" content=\"{origin}{COVER_PATH}\">\n\
+        // 有封面就用封面；没有封面就用横版邀请卡——一张写着作品名和开发者名的卡不是
+        // 假截图，它和玩家点开后看到的是同一个物件（DESIGN §3.3、§3.4）。
+        let hero = match &m.cover {
+            Some(cover) => {
+                head.push_str(&format!(
+                    "<meta property=\"og:image\" content=\"{origin}{COVER_PATH}\">\n\
 <meta property=\"og:image:type\" content=\"{mime}\">\n\
 <meta name=\"twitter:card\" content=\"summary_large_image\">\n",
-                origin = esc(self.origin),
-                mime = esc(&cover.mime),
-            ));
-            format!("<img class=\"hero\" src=\"{COVER_PATH}\" alt=\"\">\n")
-        } else {
-            String::new()
+                    origin = esc(self.origin),
+                    mime = esc(&cover.mime),
+                ));
+                format!("<img class=\"hero\" src=\"{COVER_PATH}\" alt=\"\">\n")
+            }
+            None => {
+                head.push_str(&format!(
+                    "<meta property=\"og:image\" content=\"{origin}{CARD_WIDE_PATH}\">\n\
+<meta property=\"og:image:type\" content=\"image/png\">\n\
+<meta property=\"og:image:width\" content=\"{CARD_WIDE_WIDTH}\">\n\
+<meta property=\"og:image:height\" content=\"{CARD_WIDE_HEIGHT}\">\n\
+<meta name=\"twitter:card\" content=\"summary_large_image\">\n",
+                    origin = esc(self.origin),
+                ));
+                format!(
+                    "<div class=\"hero word\" style=\"--h:{}\"><span>{title}</span></div>\n",
+                    crate::html::hue(&m.slug)
+                )
+            }
         };
         let summary_html = match &summary {
             Some(summary) => format!("<p class=\"summary\">{summary}</p>\n"),
             None => String::new(),
         };
 
-        let note = match m.note.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
-            Some(note) => format!(
-                "<section class=\"note\"><h2>这版改了什么</h2><p>{}</p></section>\n",
-                esc(note)
-            ),
-            None => String::new(),
-        };
+        // `v7 · 9 月 9 日 · 「改了新手引导」`（DESIGN §3.3 第 3 条）。这一行是版本的告示牌，
+        // 用等宽小字排，和邀请卡票根上那一行是同一句。
+        let mut stamp = version.clone();
+        if self.version_label.is_none() {
+            if let Some(day) = readable_day(&m.created_at) {
+                stamp.push_str(&format!(" · {}", esc(&day)));
+            }
+        }
+        if let Some(note) = m.note.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+            stamp.push_str(&format!(" · <b>「{}」</b>", esc(note)));
+        }
 
         // 微信 UA 只决定要不要多说一句「右上角 → 在浏览器中打开」——那是微信独有的操作，
         // 别的浏览器里说了没意义。**能不能玩不由 UA 判断**：X5 / XWeb 的版本和能力没有
@@ -240,20 +284,41 @@ impl GatePage<'_> {
             String::new()
         };
 
+        let from = match self.from {
+            Some(from) => format!(
+                "<input type=\"hidden\" name=\"{}\" value=\"{}\">\n",
+                field::FROM,
+                esc(from)
+            ),
+            None => String::new(),
+        };
+
         let body = format!(
-            "<h1><span class=\"invite\">{developer} {invite}</span>《{title}》<span class=\"ver\">· {version}</span></h1>\n\
-{summary_html}{note}{tips}\
-<form method=\"post\" action=\"{prefix}start\">\n\
-<input type=\"hidden\" name=\"to\" value=\"{to}\">\n\
-<input type=\"hidden\" name=\"from\" value=\"{from}\">\n\
+            "<p class=\"by\">{avatar}{developer} {invite}</p>\n\
+<h1>《{title}》</h1>\n\
+{summary_html}<p class=\"stamp\">{stamp}</p>\n\
+{seats}{tips}\
+<form class=\"start\" method=\"post\" action=\"{prefix}start\">\n\
+<input type=\"hidden\" name=\"{to_field}\" value=\"{to}\">\n\
+<input type=\"hidden\" name=\"{ref_field}\" value=\"{referer}\">\n{from}\
+<input type=\"text\" name=\"{name_field}\" maxlength=\"{max_name}\" \
+placeholder=\"你的名字（可不填）\" autocomplete=\"nickname\" aria-label=\"你的名字（可不填）\">\n\
 <button type=\"submit\">开始</button>\n\
 </form>\n\
-{capability}{expires}\
+{more}{capability}{expires}{voices}\
 <footer><a href=\"{prefix}report\">有问题？举报</a>{badge}</footer>\n",
+            avatar = self.avatar(),
+            seats = self.seats(),
             prefix = RESERVED_PATH_PREFIX,
+            to_field = field::TO,
             to = esc(self.to),
-            from = esc(self.referer),
+            ref_field = field::REFERER,
+            referer = esc(self.referer),
+            name_field = field::NAME,
+            max_name = MAX_PLAYER_NAME_CHARS,
+            more = self.more(),
             capability = self.capability_note(),
+            voices = self.voices(),
         );
 
         shell_hero(
@@ -262,6 +327,116 @@ impl GatePage<'_> {
             &hero,
             &body,
         )
+    }
+
+    /// 开发者的头像（DESIGN §3.9：一张脸比一个 ID 更像真人）。只认 https，
+    /// 加 `no-referrer` 是不让头像那一跳把玩家在看哪个作品告诉图床。
+    fn avatar(&self) -> String {
+        match self
+            .live
+            .avatar_url
+            .as_deref()
+            .filter(|u| u.starts_with("https://"))
+        {
+            Some(url) => format!(
+                "<img src=\"{}\" alt=\"\" width=\"26\" height=\"26\" \
+referrerpolicy=\"no-referrer\" loading=\"lazy\">",
+                esc(url)
+            ),
+            None => String::new(),
+        }
+    }
+
+    /// 名额那一行（DESIGN §3.3 第 4 条）。**加入 = 留了名字的人**，不是所有打开的人；
+    /// 到齐之后不拦人，只如实说。
+    fn seats(&self) -> String {
+        let Some(seats) = self.live.seats.filter(|n| *n > 0) else {
+            return String::new();
+        };
+        let developer = esc(&self.manifest.developer);
+        if self.live.seats_full() {
+            return format!("<p class=\"seats full\">{seats} 位已到齐 · 你仍然可以玩</p>\n");
+        }
+        let joined = match self.live.joined {
+            0 => String::new(),
+            n => format!(" · 已有 {n} 位加入"),
+        };
+        format!("<p class=\"seats\">{developer}在找 {seats} 位试玩者{joined}</p>\n")
+    }
+
+    /// 「开始」下面弱化的三行（DESIGN §3.3 第 6 条）。一样都没有时整块不出现。
+    fn more(&self) -> String {
+        let mut rows = Vec::new();
+        // 一，有新版本时告诉我。子域上只给邮箱这一种，理由见 `follow.rs` 的模块说明。
+        let tell = follow::email_details(
+            self.caps,
+            "有新版本时告诉我",
+            edge_paths::FOLLOW,
+            &FollowTarget::Site {
+                slug: self.manifest.slug.clone(),
+            },
+            self.to,
+            follow::FROM_GATE,
+            "告诉我",
+        );
+        if !tell.is_empty() {
+            rows.push(tell);
+        }
+        // 二，开发者的群。去哪是开发者的事，我们对去向不承诺，所以 nofollow 加 noopener。
+        if let Some(url) = self
+            .live
+            .community_url
+            .as_deref()
+            .filter(|u| u.starts_with("https://") || u.starts_with("http://"))
+        {
+            rows.push(format!(
+                "<a href=\"{}\" rel=\"noopener nofollow\">开发者的群</a>",
+                esc(url)
+            ));
+        }
+        // 三，分享。私测的邀请不该被转发，所以只有公开的作品有（DESIGN §3.4）。
+        if self.live.listed {
+            rows.push(format!("<a href=\"{SHARE_PATH}\">分享</a>"));
+        }
+        if rows.is_empty() {
+            return String::new();
+        }
+        format!("<div class=\"more\">{}</div>\n", rows.join("\n"))
+    }
+
+    /// 试玩者的话（DESIGN §3.5）：社会证明，不是讨论区——没有回复、没有点赞、没有楼层。
+    fn voices(&self) -> String {
+        if !self.live.feedback_public {
+            return String::new();
+        }
+        let mut items = String::new();
+        for item in self
+            .live
+            .public_feedback
+            .iter()
+            .take(PUBLIC_FEEDBACK_ON_GATE)
+        {
+            let text = item.text.trim();
+            if text.is_empty() {
+                continue;
+            }
+            let who = item
+                .name
+                .as_deref()
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
+                .unwrap_or("一位试玩者");
+            items.push_str(&format!(
+                "<p class=\"voice\">「{}」<cite>{} · v{}</cite></p>\n",
+                esc(text),
+                esc(who),
+                item.version
+            ));
+        }
+        if items.is_empty() {
+            return String::new();
+        }
+        format!("<section class=\"voices\">\n<h2>试玩者的话</h2>\n{items}</section>\n")
     }
 
     /// 跨源隔离的作品在能力不足的浏览器里跑不起来（Godot 4 的线程导出没有
@@ -299,6 +474,36 @@ fn invite_verb(manifest: &Manifest) -> &'static str {
         "邀请你试玩"
     } else {
         "邀请你体验"
+    }
+}
+
+/// 「9 月 9 日」。版本那一行上的日期，和邀请卡票根上是同一种写法。
+fn readable_day(raw: &str) -> Option<String> {
+    let at = OffsetDateTime::parse(raw, &Rfc3339).ok()?;
+    let local = at.to_offset(UtcOffset::from_hms(FALLBACK_OFFSET_HOURS, 0, 0).ok()?);
+    Some(format!("{} 月 {} 日", local.month() as u8, local.day()))
+}
+
+/// 玩家自愿留的名字（DESIGN §3.3 第 5 条）。服务端这一道做三件事：去掉控制字符
+/// （它们会把点名册那一行拆断）、trim、按字符数截断。**脏词表在控制面**（§4.8），
+/// 边缘不判断内容——它不认识作品的语境，也不该替开发者做这个决定。
+pub fn clean_name(raw: &str) -> Option<String> {
+    let cleaned: String = raw
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(MAX_PLAYER_NAME_CHARS)
+        .collect();
+    let trimmed = cleaned.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+/// 链接上的 `?from=`。只认我们自己放上去的那两个值（DESIGN §3.5）：
+/// 别的一律当没有——它是任何人都能在 URL 上改的字段。
+pub fn known_source(raw: Option<&str>) -> Option<&'static str> {
+    match raw.map(str::trim) {
+        Some(playtest_common::FROM_CARD) => Some(playtest_common::FROM_CARD),
+        Some(playtest_common::FROM_NOTICE) => Some(playtest_common::FROM_NOTICE),
+        _ => None,
     }
 }
 
@@ -366,9 +571,13 @@ mod tests {
         }
     }
 
+    /// 这几个测试里绝大多数只关心清单，`live` 与 `caps` 用空的：没有名额、没有群、
+    /// 不公开反馈、控制面什么都做不了——门禁页上对应的那几行一行都不出现。
     fn page<'a>(m: &'a Manifest, wechat: bool) -> GatePage<'a> {
         GatePage {
             manifest: m,
+            live: &EMPTY_LIVE,
+            caps: &NO_CAPS,
             to: "/",
             host_suffix: "localhost",
             root_url: "http://localhost:8443/",
@@ -377,8 +586,14 @@ mod tests {
             wechat,
             version_label: None,
             referer: "",
+            from: None,
         }
     }
+
+    static EMPTY_LIVE: std::sync::LazyLock<SiteLive> =
+        std::sync::LazyLock::new(|| SiteLive::empty("brisk-otter-41"));
+    static NO_CAPS: std::sync::LazyLock<Capabilities> =
+        std::sync::LazyLock::new(Capabilities::default);
 
     #[test]
     fn a_cover_becomes_the_hero_and_the_share_image() {
@@ -403,7 +618,26 @@ mod tests {
         assert!(html.contains(
             "<meta property=\"og:description\" content=\"一个关于小球的冒险，三关，五分钟。\">"
         ));
-        assert!(html.len() < 8 * 1024, "门禁页 {} 字节", html.len());
+        // 有封面就不拿卡去顶替它：玩家看到的第一眼应该是这个作品。
+        assert!(!html.contains(CARD_WIDE_PATH));
+        assert!(html.len() < 10 * 1024, "门禁页 {} 字节", html.len());
+    }
+
+    #[test]
+    fn without_a_cover_the_share_image_is_the_wide_card() {
+        // DESIGN §3.3：一张写着作品名和开发者名的卡不是假截图，它和玩家点开后
+        // 看到的是同一个物件。
+        let m = manifest();
+        let html = page(&m, false).render();
+        assert!(html.contains(
+            "<meta property=\"og:image\" content=\"http://brisk-otter-41.localhost:8443/_playtest/card-wide.png\">"
+        ));
+        assert!(html.contains("<meta property=\"og:image:type\" content=\"image/png\">"));
+        assert!(html.contains("<meta property=\"og:image:width\" content=\"1200\">"));
+        assert!(html.contains("<meta property=\"og:image:height\" content=\"630\">"));
+        // 页面上那一块是字卡，不是把 PNG 拉下来当封面——那要多一次请求。
+        assert!(html.contains("<div class=\"hero word\""));
+        assert!(!html.contains("<img class=\"hero\""));
     }
 
     #[test]
@@ -501,12 +735,180 @@ mod tests {
         assert!(html.contains("<meta property=\"og:description\" content=\"某某 邀请你试玩\">"));
         assert!(html.contains("<meta property=\"og:type\" content=\"website\">"));
         assert!(html.contains("og:url\" content=\"http://brisk-otter-41.localhost:8443/\""));
-        // 没有封面就不给 og:image，不编一张假图。
-        assert!(!html.contains("og:image"));
+        // 版本、日期、这版改了什么，一行等宽小字（DESIGN §3.3 第 3 条）。
+        assert!(html.contains("<p class=\"stamp\">v7 · 9 月 7 日</p>"));
+        // 留名是可选的，不是必填。
+        assert!(html.contains("placeholder=\"你的名字（可不填）\""));
+        assert!(html.contains("maxlength=\"24\""));
+        assert!(!html.contains("required"));
         // 玩家页面上不出现品牌域名。
         assert!(!html.contains(playtest_common::DEVELOPER_HOST));
         // 整页要小（DESIGN §3.3：不超过几 KB，像作品封面不像安全告警）。
-        assert!(html.len() < 6 * 1024, "门禁页 {} 字节", html.len());
+        // 大头是那份内联样式，走线时会被压掉大半。
+        assert!(html.len() < 9 * 1024, "门禁页 {} 字节", html.len());
+    }
+
+    #[test]
+    fn the_seats_line_says_how_many_and_never_turns_anyone_away() {
+        let m = manifest();
+        let mut live = SiteLive::empty("brisk-otter-41");
+        let mut p = page(&m, false);
+
+        // 没设名额就整行不出现。
+        assert!(!p.render().contains("class=\"seats\""));
+
+        live.seats = Some(10);
+        p.live = &live;
+        assert!(p
+            .render()
+            .contains("<p class=\"seats\">某某在找 10 位试玩者</p>"));
+
+        let mut live = live.clone();
+        live.joined = 6;
+        p.live = &live;
+        assert!(p
+            .render()
+            .contains("<p class=\"seats\">某某在找 10 位试玩者 · 已有 6 位加入</p>"));
+
+        // 到齐之后不拦人，只如实说（DESIGN §3.3 第 4 条）。
+        let mut live = live.clone();
+        live.joined = 10;
+        p.live = &live;
+        let html = p.render();
+        assert!(html.contains("10 位已到齐 · 你仍然可以玩"));
+        assert!(html.contains(">开始</button>"));
+    }
+
+    #[test]
+    fn the_three_weak_rows_appear_one_by_one() {
+        let m = manifest();
+        let mut live = SiteLive::empty("brisk-otter-41");
+        let caps = Capabilities {
+            email: true,
+            ..Default::default()
+        };
+        let mut p = page(&m, false);
+
+        // 控制面发不了信、没有群、没公开：一行都没有。
+        assert!(!p.render().contains("class=\"more\""));
+
+        p.caps = &caps;
+        let html = p.render();
+        assert!(html.contains("有新版本时告诉我"));
+        assert!(html.contains("action=\"/_playtest/follow\""));
+        assert!(html.contains("value=\"site:brisk-otter-41\""));
+        // 子域上不提供浏览器通知（作品可能有自己的 Service Worker，见 follow.rs）。
+        assert!(!html.contains("用浏览器通知"));
+        assert!(!html.contains("serviceWorker"));
+
+        live.community_url = Some("https://qq.example/group/12345".into());
+        p.live = &live;
+        let html = p.render();
+        assert!(html.contains("rel=\"noopener nofollow\">开发者的群</a>"));
+        // 群链接旁边不写「加群领…」这类话，去哪是开发者的事。
+        for word in ["领取", "福利", "内测码"] {
+            assert!(!html.contains(word));
+        }
+
+        // 「分享」只给公开的作品：私测的邀请不该被转发（DESIGN §3.4）。
+        assert!(!html.contains(SHARE_PATH));
+        let mut live = live.clone();
+        live.listed = true;
+        p.live = &live;
+        assert!(p.render().contains(">分享</a>"));
+    }
+
+    #[test]
+    fn other_players_words_are_shown_but_never_discussed() {
+        use playtest_common::live::PublicFeedbackItem;
+        let m = manifest();
+        let mut live = SiteLive::empty("brisk-otter-41");
+        let say = |name: Option<&str>, text: &str| PublicFeedbackItem {
+            name: name.map(str::to_string),
+            text: text.into(),
+            version: 7,
+            at: "2026-09-08T00:00:00Z".into(),
+        };
+        live.public_feedback = vec![
+            say(Some("小雨"), "不知道要按哪个键"),
+            say(None, "第三关卡住了"),
+            say(Some("阿吉"), "手感很好"),
+            say(Some("多出来的"), "这条不该出现"),
+        ];
+        let mut p = page(&m, false);
+
+        // 开关没开就一条都不显示，哪怕文件里有。
+        p.live = &live;
+        assert!(!p.render().contains("不知道要按哪个键"));
+
+        let mut live = live.clone();
+        live.feedback_public = true;
+        p.live = &live;
+        let html = p.render();
+        assert!(html.contains("「不知道要按哪个键」<cite>小雨 · v7</cite>"));
+        // 没留名字的显示「一位试玩者」。
+        assert!(html.contains("「第三关卡住了」<cite>一位试玩者 · v7</cite>"));
+        assert_eq!(html.matches("class=\"voice\"").count(), 3, "最多三条");
+        assert!(!html.contains("这条不该出现"));
+        // 不是讨论区：没有回复、点赞、楼层（DESIGN §3.5）。
+        for word in ["回复", "点赞", "评论", "楼"] {
+            assert!(!html.contains(word), "「{word}」不该出现");
+        }
+    }
+
+    #[test]
+    fn the_avatar_is_optional_and_leaks_nothing() {
+        let m = manifest();
+        let mut live = SiteLive::empty("brisk-otter-41");
+        live.avatar_url = Some("https://avatars.githubusercontent.com/u/1?v=4".into());
+        let mut p = page(&m, false);
+        p.live = &live;
+        let html = p.render();
+        assert!(html.contains(
+            "<p class=\"by\"><img src=\"https://avatars.githubusercontent.com/u/1?v=4\""
+        ));
+        assert!(html.contains("referrerpolicy=\"no-referrer\""));
+        assert!(html.contains("loading=\"lazy\""));
+
+        // http 的头像不要：那一跳会在 https 页面上变成混合内容。
+        let mut live = live.clone();
+        live.avatar_url = Some("http://example.com/a.png".into());
+        p.live = &live;
+        assert!(!p.render().contains("<img src=\"http://example.com"));
+    }
+
+    #[test]
+    fn the_source_on_the_link_rides_along_in_the_form() {
+        // 扫卡进来的人要在点名册里显示「来自邀请卡」（DESIGN §3.5）。这一下 POST 的
+        // Referer 是门禁页自己，所以来源必须由门禁页放进表单带过去。
+        let m = manifest();
+        let mut p = page(&m, false);
+        assert!(!p.render().contains("name=\"from\""));
+
+        p.from = Some("card");
+        p.referer = "https://mp.weixin.qq.com/s/abc";
+        let html = p.render();
+        assert!(html.contains("<input type=\"hidden\" name=\"from\" value=\"card\">"));
+        // Referer 走另一个字段：两者是两回事，`from` 可信得多。
+        assert!(html.contains("name=\"ref\" value=\"https://mp.weixin.qq.com/s/abc\""));
+
+        assert_eq!(known_source(Some("card")), Some("card"));
+        assert_eq!(known_source(Some("notice")), Some("notice"));
+        assert_eq!(known_source(Some("javascript:alert(1)")), None);
+        assert_eq!(known_source(None), None);
+    }
+
+    #[test]
+    fn a_name_is_trimmed_not_judged() {
+        assert_eq!(clean_name("  小雨 "), Some("小雨".to_string()));
+        assert_eq!(clean_name("小\u{0}雨\n"), Some("小雨".to_string()));
+        assert_eq!(clean_name("   "), None);
+        assert_eq!(clean_name(""), None);
+        let long = "名".repeat(MAX_PLAYER_NAME_CHARS + 10);
+        assert_eq!(
+            clean_name(&long).unwrap().chars().count(),
+            MAX_PLAYER_NAME_CHARS
+        );
     }
 
     #[test]
@@ -563,13 +965,13 @@ mod tests {
         m.badge = false;
         m.note = Some("  ".into());
         let html = page(&m, false).render();
-        assert!(!html.contains("这版改了什么"));
+        assert!(html.contains("<p class=\"stamp\">v7 · 9 月 7 日</p>"));
         assert!(!html.contains("提供"));
 
+        // 「这版改了什么」跟在版本后面，不另起一节：它是版本的一部分。
         m.note = Some("修了跳跃手感".into());
         let html = page(&m, false).render();
-        assert!(html.contains("这版改了什么"));
-        assert!(html.contains("修了跳跃手感"));
+        assert!(html.contains("v7 · 9 月 7 日 · <b>「修了跳跃手感」</b>"));
     }
 
     #[test]
@@ -656,6 +1058,6 @@ mod tests {
             assert!(!html.contains(forbidden), "{forbidden}");
         }
         // 最胖的一页也要小。
-        assert!(html.len() < 8 * 1024, "门禁页 {} 字节", html.len());
+        assert!(html.len() < 11 * 1024, "门禁页 {} 字节", html.len());
     }
 }

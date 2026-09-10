@@ -1,10 +1,10 @@
 /**
- * playtest.js —— 「加一行脚本才有的」那一层（DESIGN §3.4、§4.6）。
+ * playtest.js —— 「加一行脚本才有的」那一层（DESIGN §3.5、§4.6）。
  *
  * 边界很硬，写在这里免得后来的人往里加东西：
  *
  * - 只收四样：JS 错误、加载用时、开发者自己打的点、最后一次输入。没有热图、没有漏斗、
- *   没有会话录像，那些在 DESIGN §3.7 的「明确不做」里。
+ *   没有会话录像，那些在 DESIGN §3.12 的「明确不做」里。
  * - 不收集玩家身份、不做跨站的任何事、不种第三方 cookie。会话 id 来自同源的
  *   `/_playtest/me`（边缘发的、HttpOnly cookie 的一个只读投影），拿不到就在 localStorage
  *   里生成一个只在这一个站有意义的随机数。
@@ -12,7 +12,7 @@
  * - 出任何问题都闭嘴：这是别人的游戏，我们的统计不能变成他们的 bug。所有回调裹 try/catch，
  *   服务端说不认识我们（4xx）就永久停发。
  *
- * 反馈按钮不设任何必填项——每加一个必填字段填写率就掉一截（DESIGN §3.4）。
+ * 反馈按钮不设任何必填项——每加一个必填字段填写率就掉一截（DESIGN §3.5）。
  */
 
 type Me = {
@@ -51,6 +51,8 @@ type Sample = {
   let api = '';
   let sid = '';
   let slug = '';
+  /** 边缘认出了我们（`/_playtest/me` 回了 200）。只有这时同源才有 `/_playtest/follow`。 */
+  let onEdge = false;
   let dead = false;
   let queue: Sample[] = [];
   let timer = 0;
@@ -139,6 +141,7 @@ type Sample = {
       sid = me.sid;
       slug = me.slug;
       api = forcedApi || me.api || '';
+      onEdge = !!me.slug;
     } else {
       // 开发者自己托管、或者门禁页被关掉了：会话 id 只能自己生成，slug 只能从域名猜。
       sid = anonId();
@@ -279,6 +282,8 @@ type Sample = {
 
   const FONT =
     "font:14px/1.5 -apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;";
+  // 简写 font 会重置字号，所以想要小字得把 font-size 写在 FONT 后面。
+  const SMALL = FONT + 'font-size:12px;';
   // 右下角，离边一点点。整块只有一个按钮宽，游戏中间不会被挡住。
   const ANCHOR = 'position:fixed;right:12px;bottom:12px;z-index:2147483000;' + FONT;
 
@@ -361,7 +366,11 @@ type Sample = {
         text: text,
         seconds_in: Math.round((Date.now() - openedAt) / 1000),
       }).then((ok) => {
-        panel.textContent = ok ? '收到，谢谢' : '没发出去，等下再试一次';
+        if (ok) {
+          landing(panel, close);
+          return;
+        }
+        panel.textContent = '没发出去，等下再试一次';
         panel.style.width = 'auto';
         setTimeout(close, 1600);
       });
@@ -373,6 +382,94 @@ type Sample = {
     panel.appendChild(row);
     document.body.appendChild(panel);
     box.focus();
+  }
+
+  // ------------------------------------------------------------ 玩后的落点
+
+  /**
+   * 根域：去掉当前主机名的第一段。`brisk-otter-41.playtest.run` → `playtest.run`，
+   * 本机 `xxx.localhost:8443` → `localhost:8443`。
+   *
+   * 域名不写死在这个文件里。SDK 只认它现在所在的这个域，和 `/_playtest/me` 告诉它的那个
+   * api 地址——写死一个域名就意味着自托管的人拿到的是我们的广场。
+   */
+  function plazaHref(): string {
+    const rest = location.host.split('.').slice(1).join('.');
+    return rest ? location.protocol + '//' + rest + '/' : '';
+  }
+
+  function hidden(form: HTMLFormElement, name: string, value: string) {
+    const field = document.createElement('input');
+    field.type = 'hidden';
+    field.name = name;
+    field.value = value;
+    form.appendChild(field);
+  }
+
+  /**
+   * 反馈发出去之后的那一屏（DESIGN §4.6）：谢谢、有新版本时告诉我、看看别的作品。
+   * 不往作品画面里注入任何东西的前提下，这是唯一能放社交层的位置，而且它是开发者自己勾的。
+   *
+   * 「告诉我」只做邮箱，不做浏览器通知：浏览器通知要在作品自己的域上注册一个 Service Worker，
+   * 而一个作用域只能有一个——我们注册就等于把开发者自己的 SW 顶掉，他的离线缓存和更新逻辑
+   * 会跟着坏。多一个通知渠道换不来这个代价，想用浏览器通知的玩家在门禁页和广场上还能选。
+   *
+   * 表单是原生的、整页 POST 给同源的边缘，边缘转给控制面之后渲染一页结果再给「返回」。
+   * 玩家的邮箱不经过我们的脚本，也从不直接交给另一个域（DESIGN §4.1）。
+   */
+  function landing(panel: HTMLElement, close: () => void) {
+    panel.textContent = '';
+    panel.appendChild(el('div', 'font-weight:600;margin-bottom:8px;', '谢谢，开发者会看到。'));
+
+    if (onEdge && slug) {
+      const form = el('form', 'display:flex;gap:6px;margin:0;');
+      form.method = 'post';
+      form.action = '/_playtest/follow';
+      hidden(form, 'target', 'site:' + slug);
+      hidden(form, 'from', 'sdk');
+      // 同源的相对路径：边缘那一页上的「返回」把玩家送回他刚才在玩的这一页。
+      hidden(form, 'to', location.pathname + location.search);
+
+      const email = el(
+        'input',
+        'flex:1;min-width:0;padding:6px 8px;border:1px solid #ddd;border-radius:8px;' + FONT,
+      );
+      email.type = 'email';
+      email.name = 'email';
+      email.placeholder = '有新版本时告诉我';
+
+      const tell = el(
+        'button',
+        'flex:0 0 auto;padding:6px 10px;border:0;border-radius:8px;background:#111;color:#fff;' +
+          'cursor:pointer;' +
+          FONT,
+        '告诉我',
+      );
+      tell.type = 'submit';
+
+      form.appendChild(email);
+      form.appendChild(tell);
+      panel.appendChild(form);
+    }
+
+    const foot = el('div', 'display:flex;align-items:baseline;gap:8px;margin-top:10px;');
+    const plaza = plazaHref();
+    if (plaza) {
+      const link = el('a', SMALL + 'color:#666;text-decoration:underline;', '看看别的作品');
+      link.href = plaza;
+      link.target = '_blank';
+      link.rel = 'noreferrer';
+      foot.appendChild(link);
+    }
+    const done = el(
+      'button',
+      SMALL + 'margin-left:auto;padding:0;border:0;background:none;color:#999;cursor:pointer;',
+      '关掉',
+    );
+    done.type = 'button';
+    done.onclick = close;
+    foot.appendChild(done);
+    panel.appendChild(foot);
   }
 
   // ------------------------------------------------------------ 给开发者的三个口子

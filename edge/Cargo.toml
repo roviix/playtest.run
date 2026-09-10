@@ -31,6 +31,23 @@ http-body-util = "0.1"
 bytes = "1"
 mime_guess = "2"
 percent-encoding = "2"
+# 邀请卡（DESIGN §4.9）：自己拼 SVG → usvg 解析 → resvg 光栅化 → tiny-skia 出 PNG。
+# 不要 svgz（我们拼的 SVG 从不压缩）；raster-images 留着，封面可能是 JPEG 或 WebP。
+resvg = { version = "0.48", default-features = false, features = [
+    "text",
+    "system-fonts",
+    "memmap-fonts",
+    "raster-images",
+] }
+usvg = { version = "0.48", default-features = false, features = [
+    "text",
+    "system-fonts",
+] }
+tiny-skia = "0.12"
+# 只要模块矩阵，二维码的形状由我们自己拼成一条 SVG path：它的 image / svg 渲染器都用不上。
+qrcode = { version = "0.14", default-features = false }
+# 封面按 data URI 嵌进 SVG。版本跟 common 一致。
+base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 time = { version = "0.3", features = ["formatting", "parsing", "macros"] }

@@ -35,6 +35,15 @@ pub const MAX_SEEK_NOTE_CHARS: usize = 140;
 /// 一屏十几张，再大就是让每个翻广场的人替一张图付流量。
 pub const MAX_COVER_BYTES: u64 = 2 * MIB;
 
+/// 玩家在门禁页留的名字的长度上限（DESIGN §3.3 第 5 条）。点名册一行放得下的长度。
+pub const MAX_PLAYER_NAME_CHARS: usize = 24;
+
+/// `--seats` 的上限（DESIGN §3.3 第 4 条）。5–50 个具体的人是产品的起点，500 已经是「公开测试」而不是 playtest。
+pub const MAX_SEATS: u32 = 500;
+
+/// `--community` 链接的长度上限。
+pub const MAX_COMMUNITY_URL_CHARS: usize = 300;
+
 // ------------------------------------------------------------------ 带宽配额
 //
 // 两个时间尺度，缺一不可（DESIGN §4.8「额度是双重上限」）：月配额挡长期滥用，

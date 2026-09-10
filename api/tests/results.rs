@@ -107,6 +107,7 @@ impl Harness {
             data_dir: dir.path().to_path_buf(),
             site_url_template: "http://{slug}.localhost:8443".to_string(),
             github: None,
+            ..Config::default()
         };
         let state = AppState::from_config(&config).await.unwrap();
         Self {
@@ -726,7 +727,8 @@ async fn feedback_can_be_filtered_and_marked() {
             &result_paths::site_feedback_item(slug, id),
             &token,
             &UpdateFeedbackRequest {
-                status: FeedbackStatus::Done,
+                status: Some(FeedbackStatus::Done),
+                ..Default::default()
             },
         )
         .await
@@ -748,7 +750,8 @@ async fn feedback_can_be_filtered_and_marked() {
         &result_paths::site_feedback_item(slug, 9999),
         &token,
         &UpdateFeedbackRequest {
-            status: FeedbackStatus::Seen,
+            status: Some(FeedbackStatus::Seen),
+            ..Default::default()
         },
     )
     .await
@@ -793,7 +796,8 @@ async fn results_are_only_visible_to_the_owner() {
         &result_paths::site_feedback_item(slug, 1),
         &theirs,
         &UpdateFeedbackRequest {
-            status: FeedbackStatus::Done,
+            status: Some(FeedbackStatus::Done),
+            ..Default::default()
         },
     )
     .await

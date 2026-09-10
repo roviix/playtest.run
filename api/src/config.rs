@@ -15,11 +15,22 @@ pub const CONSOLE_URL_ENV: &str = "PLAYTEST_CONSOLE_URL";
 /// 测试用：把「GitHub」指到本机的假服务器。线上不设。
 pub const GITHUB_BASE_ENV: &str = "PLAYTEST_GITHUB_BASE_URL";
 
+pub const EMAIL_PROVIDER_ENV: &str = "PLAYTEST_EMAIL_PROVIDER";
+pub const EMAIL_FROM_ENV: &str = "PLAYTEST_EMAIL_FROM";
+pub const RESEND_API_KEY_ENV: &str = "PLAYTEST_RESEND_API_KEY";
+pub const SMTP_URL_ENV: &str = "PLAYTEST_SMTP_URL";
+pub const PUBLIC_ROOT_URL_ENV: &str = "PLAYTEST_PUBLIC_ROOT_URL";
+pub const VAPID_SUBJECT_ENV: &str = "PLAYTEST_VAPID_SUBJECT";
+pub const ADMIN_TOKEN_ENV: &str = "PLAYTEST_ADMIN_TOKEN";
+
 pub const DEFAULT_LISTEN: &str = "127.0.0.1:8787";
 pub const DEFAULT_DATA_DIR: &str = ".data";
 pub const DEFAULT_SITE_URL_TEMPLATE: &str = "http://{slug}.localhost:8443";
 /// 本机开发时控制台是 vite dev server（console/vite.config.ts）。
 pub const DEFAULT_CONSOLE_URL: &str = "http://localhost:5273/";
+/// 玩家侧的根域。`/me`、退订链接、确认链接都挂在它下面（DESIGN §3.10）。
+pub const DEFAULT_PUBLIC_ROOT_URL: &str = "http://localhost:8443";
+pub const DEFAULT_EMAIL_FROM: &str = "playtest.run <notice@playtest.run>";
 
 /// 链接模板里被 slug 替换掉的那一段。
 pub const SLUG_PLACEHOLDER: &str = "{slug}";
@@ -32,6 +43,67 @@ pub struct Config {
     pub site_url_template: String,
     /// 没配就是这个控制面不提供 GitHub 登录，匿名链接照常。
     pub github: Option<GitHubApp>,
+    pub notify: Notify,
+    /// 没配就是这台机器没有管理接口：`/admin/*` 整组不注册，外面看到的是 404。
+    pub admin_token: Option<String>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            listen: DEFAULT_LISTEN.parse().expect("默认监听地址是常量"),
+            data_dir: PathBuf::from(DEFAULT_DATA_DIR),
+            site_url_template: DEFAULT_SITE_URL_TEMPLATE.to_string(),
+            github: None,
+            notify: Notify::default(),
+            admin_token: None,
+        }
+    }
+}
+
+/// 怎么把信送出去（DESIGN §4.10）。
+#[derive(Debug, Clone)]
+pub struct Notify {
+    pub email: EmailProvider,
+    /// 发件人，形如 `playtest.run <notice@playtest.run>`。
+    pub from: String,
+    /// 玩家侧根域，信里的链接都从它拼。
+    pub root_url: String,
+    /// VAPID 的 `sub`，推送服务出问题时他们照这个找我们；形如 `mailto:hi@example.com`。
+    pub vapid_subject: Option<String>,
+}
+
+impl Default for Notify {
+    fn default() -> Self {
+        Self {
+            // 默认只打日志：本机跑起来能看见整封信长什么样，又不会真发出去。
+            email: EmailProvider::Log,
+            from: DEFAULT_EMAIL_FROM.to_string(),
+            root_url: DEFAULT_PUBLIC_ROOT_URL.to_string(),
+            vapid_subject: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EmailProvider {
+    /// 整封信打进日志。默认，也是本机验证用的那档。
+    Log,
+    Resend {
+        api_key: String,
+    },
+    /// `smtps://user:pass@host:465`。
+    Smtp {
+        url: String,
+    },
+    /// 明确关掉：`capabilities.json` 里 `email = false`，边缘就不显示留邮箱那一栏。
+    Off,
+}
+
+impl EmailProvider {
+    pub fn is_on(&self) -> bool {
+        !matches!(self, Self::Off)
+    }
 }
 
 /// GitHub OAuth App。`client_id` 是公开的；`client_secret` 只有网页授权码流程（控制台）要，
@@ -67,6 +139,8 @@ impl Config {
             data_dir: PathBuf::from(env_or(DATA_DIR_ENV, DEFAULT_DATA_DIR)),
             site_url_template,
             github: github_from_env(),
+            notify: notify_from_env()?,
+            admin_token: env_opt(ADMIN_TOKEN_ENV),
         })
     }
 
@@ -112,9 +186,53 @@ fn github_from_env() -> Option<GitHubApp> {
     })
 }
 
+fn notify_from_env() -> anyhow::Result<Notify> {
+    let provider = env_or(EMAIL_PROVIDER_ENV, "log");
+    let email = match provider.trim().to_ascii_lowercase().as_str() {
+        "log" => EmailProvider::Log,
+        "off" | "none" => EmailProvider::Off,
+        "resend" => {
+            let api_key = env_opt(RESEND_API_KEY_ENV).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "{EMAIL_PROVIDER_ENV}=resend 还要配 {RESEND_API_KEY_ENV}；\
+                     暂时不想发信就把 {EMAIL_PROVIDER_ENV} 设成 off"
+                )
+            })?;
+            EmailProvider::Resend { api_key }
+        }
+        "smtp" => {
+            let url = env_opt(SMTP_URL_ENV).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "{EMAIL_PROVIDER_ENV}=smtp 还要配 {SMTP_URL_ENV}，形如 \
+                     smtps://用户名:密码@邮件服务器:465"
+                )
+            })?;
+            EmailProvider::Smtp { url }
+        }
+        other => anyhow::bail!(
+            "{EMAIL_PROVIDER_ENV} 只认 log、resend、smtp、off 四个值，现在是「{other}」"
+        ),
+    };
+    Ok(Notify {
+        email,
+        from: env_or(EMAIL_FROM_ENV, DEFAULT_EMAIL_FROM),
+        root_url: env_or(PUBLIC_ROOT_URL_ENV, DEFAULT_PUBLIC_ROOT_URL)
+            .trim_end_matches('/')
+            .to_string(),
+        vapid_subject: env_opt(VAPID_SUBJECT_ENV),
+    })
+}
+
 fn env_or(key: &str, default: &str) -> String {
     match std::env::var(key) {
         Ok(v) if !v.trim().is_empty() => v,
         _ => default.to_string(),
     }
+}
+
+fn env_opt(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
 }

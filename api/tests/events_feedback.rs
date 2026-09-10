@@ -81,6 +81,7 @@ impl Harness {
             data_dir: dir.path().to_path_buf(),
             site_url_template: "http://{slug}.localhost:8443".to_string(),
             github: None,
+            ..Config::default()
         };
         let state = AppState::from_config(&config).await.unwrap();
         Self {
@@ -279,6 +280,8 @@ async fn a_session_gets_stitched_together_from_both_sides() {
                 ua: PLAYER_UA.into(),
                 referer: "https://mp.weixin.qq.com/s/abc".into(),
                 wechat: true,
+                from: None,
+                name: None,
                 reason: None,
                 detail: None,
             },
@@ -291,6 +294,8 @@ async fn a_session_gets_stitched_together_from_both_sides() {
                 ua: PLAYER_UA.into(),
                 referer: String::new(),
                 wechat: true,
+                from: None,
+                name: None,
                 reason: None,
                 detail: None,
             },
@@ -461,6 +466,8 @@ async fn the_version_comes_from_the_server_not_the_client() {
                 ua: PLAYER_UA.into(),
                 referer: String::new(),
                 wechat: false,
+                from: None,
+                name: None,
                 reason: None,
                 detail: None,
             }],
@@ -827,6 +834,8 @@ async fn sessions_older_than_ninety_days_are_forgotten() {
         ua: PLAYER_UA.into(),
         referer: String::new(),
         wechat: false,
+        from: None,
+        name: None,
         reason: None,
         detail: None,
     };

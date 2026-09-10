@@ -52,6 +52,16 @@ pub mod routes {
     /// `GET` → 200 [`super::Me`]：这个令牌是谁。
     pub const ME: &str = "/v1/me";
 
+    /// `POST` → 200 [`super::Site`]：把某条反馈附带的截图设为封面（DESIGN §3.9「设为封面」）。
+    /// 没有截图的反馈回 `invalid`。
+    pub const SITE_COVER_FROM_FEEDBACK: &str = "/v1/sites/{slug}/cover/from-feedback/{id}";
+
+    pub fn site_cover_from_feedback(slug: &str, id: i64) -> String {
+        SITE_COVER_FROM_FEEDBACK
+            .replace("{slug}", slug)
+            .replace("{id}", &id.to_string())
+    }
+
     pub fn site_tunnel(slug: &str) -> String {
         SITE_TUNNEL.replace("{slug}", slug)
     }
@@ -191,6 +201,9 @@ pub struct Me {
     /// 匿名身份的到期时间；登录用户没有。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<String>,
+    /// GitHub 头像；匿名没有。广场卡片与门禁页上显示（DESIGN §3.9）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -243,9 +256,27 @@ pub struct Listing {
     /// 最新版本有没有封面。
     #[serde(default)]
     pub has_cover: bool,
+    /// 想找几位试玩者（`--seats`，DESIGN §3.3）；`joined` 是留了名字的人数。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seats: Option<u32>,
+    #[serde(default)]
+    pub joined: u32,
+    /// 关注这个作品的人数（DESIGN §3.6）。开发者只看到数字。
+    #[serde(default)]
+    pub followers: u32,
+    /// 开发者的群（`--community`）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub community_url: Option<String>,
+    /// 「让玩家看到彼此的反馈」（DESIGN §3.5）。
+    #[serde(default)]
+    pub feedback_public: bool,
+    /// 推广状态（DESIGN §3.11）：`None` 没有；否则是当前或排队中的那一段。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boost: Option<crate::boost::Boost>,
 }
 
-/// `PATCH /v1/sites/{slug}`：只改带了的字段。`seek_note` 传空字符串表示清掉。
+/// `PATCH /v1/sites/{slug}`：只改带了的字段。
+/// `seek_note` / `community_url` 传空字符串表示清掉；`seats` 传 0 表示清掉。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpdateSiteRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -254,6 +285,12 @@ pub struct UpdateSiteRequest {
     pub seeking: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seek_note: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seats: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub community_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback_public: Option<bool>,
 }
 
 /// 一个已发布的版本。

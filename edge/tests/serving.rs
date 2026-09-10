@@ -110,6 +110,7 @@ impl Site {
             data_dir: dir.path().to_path_buf(),
             host_suffix: "localhost".into(),
             public_scheme: "http".into(),
+            api_internal_url: None,
         };
         Site {
             app: Arc::new(App::new(config)),
@@ -639,7 +640,16 @@ async fn the_cover_is_served_from_the_reserved_path() {
     let reply = plain.get("/_playtest/cover").await;
     assert_eq!(reply.status, StatusCode::NOT_FOUND);
     assert!(reply.body.is_empty());
-    assert!(!plain.get("/").await.text().contains("og:image"));
+
+    // 但分享出去仍然有图：横版邀请卡。它写的是作品名和开发者名，
+    // 不是一张假截图，所以可以当 og:image（DESIGN §3.3）。
+    let html = plain.get("/").await.text();
+    assert!(html.contains(
+        "<meta property=\"og:image\" content=\"http://brisk-otter-41.localhost:8443/_playtest/card-wide.png\">"
+    ));
+    assert!(html.contains("<meta property=\"og:image:width\" content=\"1200\">"));
+    assert!(html.contains("<meta property=\"og:image:height\" content=\"630\">"));
+    assert!(!html.contains("/_playtest/cover"));
 }
 
 #[tokio::test]
@@ -655,7 +665,7 @@ async fn expired_anonymous_link_is_410() {
 async fn host_routing() {
     let site = Site::plain().await;
 
-    // 根域是广场（DESIGN §3.8）：唯一一页可以把开发者引去品牌站的地方。
+    // 根域是广场（DESIGN §3.9）：发布说明里那条控制台链接，是玩家路径上唯一去开发者域的出口。
     // 这个测试的对象存储里没有 plaza.json，所以是空广场，但页面照常出、说明照常在。
     for host in ["localhost:8443", "www.localhost"] {
         let reply = site
@@ -764,7 +774,7 @@ async fn the_real_referrer_survives_the_gate() {
     assert_eq!(gate.status, StatusCode::OK);
     let html = gate.text();
     assert!(
-        html.contains("name=\"from\" value=\"https://discord.com/channels/1/2\""),
+        html.contains("name=\"ref\" value=\"https://discord.com/channels/1/2\""),
         "门禁页要把来源放进表单：{html}"
     );
 
@@ -777,7 +787,7 @@ async fn the_real_referrer_survives_the_gate() {
                 .header("referer", format!("http://{HOST}/"))
                 .header("content-type", "application/x-www-form-urlencoded")
                 .body(Body::from(
-                    "to=%2F&from=https%3A%2F%2Fdiscord.com%2Fchannels%2F1%2F2",
+                    "to=%2F&ref=https%3A%2F%2Fdiscord.com%2Fchannels%2F1%2F2",
                 ))
                 .unwrap(),
         )
@@ -796,7 +806,7 @@ async fn the_real_referrer_survives_the_gate() {
                 .uri("/_playtest/start")
                 .header("host", HOST)
                 .header("content-type", "application/x-www-form-urlencoded")
-                .body(Body::from("to=%2F&from=javascript%3Aalert(1)"))
+                .body(Body::from("to=%2F&ref=javascript%3Aalert(1)"))
                 .unwrap(),
         )
         .await;

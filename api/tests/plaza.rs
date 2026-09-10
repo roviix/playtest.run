@@ -68,6 +68,7 @@ impl Harness {
             data_dir: dir.path().to_path_buf(),
             site_url_template: "http://{slug}.localhost:8443".to_string(),
             github: None,
+            ..Config::default()
         };
         let state = AppState::from_config(&config).await.unwrap();
         Self {
@@ -239,6 +240,8 @@ fn edge_event(kind: &str, slug: &str, sid: &str, referer: &str) -> EdgeEvent {
         ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1".into(),
         referer: referer.into(),
         wechat: false,
+        from: None,
+        name: None,
         reason: None,
         detail: None,
     }
@@ -276,6 +279,7 @@ async fn going_public_rewrites_the_plaza_at_once() {
                 public: None,
                 seeking: Some(true),
                 seek_note: Some("新手引导看得懂吗".into()),
+                ..Default::default()
             },
         )
         .await
@@ -331,6 +335,7 @@ async fn going_public_rewrites_the_plaza_at_once() {
                 public: Some(false),
                 seeking: None,
                 seek_note: None,
+                ..Default::default()
             },
         )
         .await
@@ -354,6 +359,7 @@ async fn a_work_without_a_version_cannot_go_public() {
                 public: Some(true),
                 seeking: None,
                 seek_note: None,
+                ..Default::default()
             },
         )
         .await
@@ -369,6 +375,7 @@ async fn a_work_without_a_version_cannot_go_public() {
             public: Some(false),
             seeking: None,
             seek_note: None,
+            ..Default::default()
         },
     )
     .await
@@ -384,6 +391,7 @@ async fn a_work_without_a_version_cannot_go_public() {
             public: Some(true),
             seeking: Some(true),
             seek_note: Some(too_long),
+            ..Default::default()
         },
     )
     .await
@@ -403,6 +411,7 @@ async fn enough_reports_take_it_off_the_plaza_but_not_off_the_air() {
             public: Some(true),
             seeking: None,
             seek_note: None,
+            ..Default::default()
         },
     )
     .await
@@ -465,6 +474,7 @@ async fn players_are_counted_and_plaza_visitors_are_marked() {
             public: Some(true),
             seeking: None,
             seek_note: None,
+            ..Default::default()
         },
     )
     .await

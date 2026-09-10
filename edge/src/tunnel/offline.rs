@@ -29,7 +29,7 @@ pub fn offline(seen: &LastSeen) -> String {
         None => "<p class=\"meta\">上次在线的时间没记下来</p>\n".to_string(),
     };
     let body = format!(
-        "<h1><span class=\"invite\">{developer} 的电脑暂时不在线</span>《{title}》</h1>\n\
+        "<p class=\"by\">{developer} 的电脑暂时不在线</p>\n<h1>《{title}》</h1>\n\
 <p class=\"lead\">这个作品是从开发者自己的电脑上直接放出来的。他开着的时候你就能玩，现在没开着。</p>\n\
 {when}\
 <p class=\"lead\">过一会儿再点开一次，或者告诉发链接给你的人。</p>\n"

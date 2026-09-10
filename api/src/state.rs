@@ -10,6 +10,7 @@ use tokio::sync::{Mutex, MutexGuard};
 
 use crate::config::{Config, GitHubApp, SLUG_PLACEHOLDER};
 use crate::db::Db;
+use crate::notify;
 use crate::tunnel_keys;
 
 /// 网页登录的 `state` 从签发到 GitHub 回来之间最多等这么久。
@@ -30,6 +31,9 @@ struct Inner {
     commit_lock: Mutex<()>,
     github: Option<GitHubApp>,
     http: reqwest::Client,
+    notify: Arc<notify::Runtime>,
+    admin_token: Option<String>,
+    data_dir: std::path::PathBuf,
     /// 网页登录流程里发出去、还没回来的 `state`。进程内存里就够：控制面是单进程（DESIGN §4.5）。
     login_states: std::sync::Mutex<HashMap<String, Instant>>,
 }
@@ -38,10 +42,9 @@ impl AppState {
     pub fn new(
         db: Db,
         store: FsStore,
-        site_url_template: String,
         tunnel_key: SigningKey,
-        github: Option<GitHubApp>,
-    ) -> Self {
+        config: &Config,
+    ) -> anyhow::Result<Self> {
         // reqwest 的 rustls-no-provider 没有内置加密后端，建 Client 前必须先装一个。
         let _ = rustls::crypto::ring::default_provider().install_default();
         let http = reqwest::Client::builder()
@@ -50,18 +53,23 @@ impl AppState {
             .user_agent(concat!("playtest-api/", env!("CARGO_PKG_VERSION")))
             .build()
             .expect("reqwest 客户端用的都是固定配置，建不出来说明构建本身坏了");
-        Self {
+        let vapid = notify::load_or_create_vapid(&config.data_dir)?;
+        let notify = notify::Runtime::new(config.notify.clone(), vapid, http.clone())?;
+        Ok(Self {
             inner: Arc::new(Inner {
                 db,
                 store,
-                site_url_template,
+                site_url_template: config.site_url_template.clone(),
                 tunnel_key,
                 commit_lock: Mutex::new(()),
-                github,
+                github: config.github.clone(),
                 http,
+                notify,
+                admin_token: config.admin_token.clone(),
+                data_dir: config.data_dir.clone(),
                 login_states: std::sync::Mutex::new(HashMap::new()),
             }),
-        }
+        })
     }
 
     /// 按配置建数据目录、开库、备好对象存储。目录不存在就建。
@@ -75,13 +83,7 @@ impl AppState {
             &store_root,
             tunnel_keys::key_from_env().as_deref(),
         )?;
-        Ok(Self::new(
-            db,
-            FsStore::new(store_root),
-            config.site_url_template.clone(),
-            tunnel_key,
-            config.github.clone(),
-        ))
+        Self::new(db, FsStore::new(store_root), tunnel_key, config)
     }
 
     pub fn db(&self) -> &Db {
@@ -109,6 +111,21 @@ impl AppState {
 
     pub fn http(&self) -> &reqwest::Client {
         &self.inner.http
+    }
+
+    /// 发信与推送要用的东西（[`crate::notify`]）。
+    pub fn notify(&self) -> &notify::Runtime {
+        &self.inner.notify
+    }
+
+    /// 管理接口的令牌。`None` 就是这台机器不开 `/admin/*`。
+    pub fn admin_token(&self) -> Option<&str> {
+        self.inner.admin_token.as_deref()
+    }
+
+    /// 数据目录。周报的时间戳这类「跟迁移无关的一行状态」放在这里。
+    pub fn data_dir(&self) -> &std::path::Path {
+        &self.inner.data_dir
     }
 
     /// 记下一个刚发出去的网页登录 `state`。满了返回 `false`。

@@ -1,8 +1,10 @@
 //! 路由表。路径全部取自 [`playtest_common::api::routes`]，改契约时这里跟着变。
 
+pub mod admin;
 pub mod blobs;
 pub mod events;
 pub mod feedback;
+pub mod follow;
 pub mod login;
 pub mod results;
 pub mod sessions;
@@ -14,9 +16,11 @@ pub mod versions;
 use axum::extract::{FromRequest, Request};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, patch, post, put};
+use axum::routing::{delete, get, patch, post, put};
 use axum::{middleware, Extension, Json, Router};
 use playtest_common::api::{routes as paths, ErrorBody, ErrorCode};
+use playtest_common::boost::routes as admin_paths;
+use playtest_common::follow::routes as follow_paths;
 use playtest_common::ingest::routes as ingest_paths;
 use playtest_common::limits;
 use playtest_common::results::routes as result_paths;
@@ -27,7 +31,7 @@ use crate::error::{ApiError, INTERNAL_MESSAGE};
 use crate::state::AppState;
 
 pub fn app(state: AppState) -> Router {
-    Router::new()
+    let router = Router::new()
         .route(paths::HEALTH, get(health))
         .route(paths::ANON_SESSIONS, post(sessions::create))
         .route(paths::LOGIN_DEVICE_START, post(login::device_start))
@@ -52,6 +56,17 @@ pub fn app(state: AppState) -> Router {
             result_paths::SITE_FEEDBACK_ITEM,
             patch(results::update_feedback),
         )
+        .route(
+            paths::SITE_COVER_FROM_FEEDBACK,
+            post(results::cover_from_feedback),
+        )
+        // 边缘替玩家转过来的那一组：不带开发者令牌，靠限速挡（见 follow.rs）。
+        .route(follow_paths::FOLLOW, post(follow::follow))
+        .route(follow_paths::CONFIRM, post(follow::confirm))
+        .route(follow_paths::UNSUBSCRIBE, post(follow::unsubscribe))
+        .route(follow_paths::ME_VIEW, post(follow::me_view))
+        .route(follow_paths::ME_UNFOLLOW, post(follow::unfollow))
+        .route(follow_paths::ME_SEND_LINK, post(follow::send_link))
         // 玩家的浏览器直连这三个：不带令牌，只认 Origin 和令牌桶（见 events.rs）。
         .route(
             ingest_paths::EVENTS,
@@ -70,7 +85,24 @@ pub fn app(state: AppState) -> Router {
             // 上传是流式的，请求体从头到尾不进内存，所以体积上限要在层里挡，
             // 不能靠那些「先收完再解析」的提取器。
             put(blobs::upload).layer(RequestBodyLimitLayer::new(limits::MAX_FILE_BYTES as usize)),
-        )
+        );
+
+    // 没配管理令牌就整组不注册：外面探到的是 404，看不出这台机器有没有管理接口。
+    let router = if state.admin_token().is_some() {
+        router
+            .route(admin_paths::BOOSTS, get(admin::list).post(admin::grant))
+            .route(admin_paths::BOOST_REVIEW, post(admin::review))
+            .route(admin_paths::BOOST, delete(admin::end))
+            .route(
+                admin_paths::PLAZA_HIDE,
+                post(admin::hide).delete(admin::unhide),
+            )
+            .route(admin_paths::NOTIFICATIONS, get(admin::notifications))
+    } else {
+        router
+    };
+
+    router
         .fallback(unknown_route)
         // 写入端点的令牌桶。一个 app() 一份，进程内存里（见 events.rs）。
         .layer(Extension(events::Limiter::new()))

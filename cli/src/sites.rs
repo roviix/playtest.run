@@ -4,12 +4,12 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 use anyhow::{bail, Result};
-use playtest_common::api::UpdateSiteRequest;
+use playtest_common::api::{Site, UpdateSiteRequest};
 
 use crate::args;
 use crate::client::Client;
 use crate::config::{self, Config};
-use crate::{clock, ui};
+use crate::{card, clock, output, ui};
 
 pub async fn ls(api_flag: Option<&str>) -> Result<()> {
     let api = args::api_base(api_flag);
@@ -128,11 +128,47 @@ pub async fn unlist(slug: &str, api_flag: Option<&str>) -> Result<()> {
             &UpdateSiteRequest {
                 public: Some(false),
                 seeking: Some(false),
-                seek_note: None,
+                // 名额、群、反馈公开与否都不动：下架的是「在广场上出现」这一件事，
+                // 链接还能开，已经进来的玩家看到的东西不该跟着变。
+                ..UpdateSiteRequest::default()
             },
         )
         .await?;
     ui::say(&format!("已把 {slug} 从广场上拿下来了，链接照常能开。"));
+    Ok(())
+}
+
+/// `playtest card <slug 或目录>`：再拿一张这个作品此刻的邀请卡（DESIGN §3.4）。
+///
+/// 发布那一刻已经存过一张，但人会删掉、会换电脑、会在名额加满之后想要一张写着新数字的。
+/// 卡是边缘按当前状态渲染的，所以每次拿到的都是最新的那一张。
+pub async fn card(target: &str, out: Option<&Path>, api_flag: Option<&str>) -> Result<()> {
+    let site = look_up(target, api_flag).await?;
+    let png = card::fetch_or_explain(&site).await?;
+    let path = card::place(&site, out);
+    card::save(&path, &png).map_err(output::as_bad_input)?;
+    ui::say(&format!(
+        "《{}》的邀请卡已存到 {}——发到群里，别人长按识别就能玩",
+        site.title,
+        card::shown(&path)
+    ));
+    Ok(())
+}
+
+/// `playtest followers <slug 或目录>`：有多少人在等下一版（DESIGN §3.6）。
+/// 只有数字——谁关注的我们不告诉开发者，玩家那边也没答应过要留下名字。
+pub async fn followers(target: &str, api_flag: Option<&str>) -> Result<()> {
+    let site = look_up(target, api_flag).await?;
+    match site.listing.followers {
+        0 => ui::say(&format!(
+            "还没有人关注《{}》。玩过的人在反馈之后可以点一下「有新版本告诉我」。",
+            site.title
+        )),
+        n => ui::say(&format!(
+            "{n} 人关注着《{}》，下一版发出去他们会收到通知。",
+            site.title
+        )),
+    }
     Ok(())
 }
 
@@ -176,6 +212,17 @@ pub async fn open(target: &str, api_flag: Option<&str>) -> Result<()> {
     ui::out(&site.url);
     launch_browser(&site.url);
     Ok(())
+}
+
+/// `<slug 或目录>` 指的那个作品此刻的样子。`card` / `followers` 都是先问这一句。
+pub(crate) async fn look_up(target: &str, api_flag: Option<&str>) -> Result<Site> {
+    let api = args::api_base(api_flag);
+    let config = config::load(&config::default_path()?)?;
+    let slug = resolve_slug(target, &config)?;
+    let Some(client) = client_with_saved_token(&api, &config)? else {
+        bail!("这台机器上还没发过东西，没有 {slug} 可看。运行 playtest ./dist 发一个。");
+    };
+    Ok(client.get_site(&slug).await?)
 }
 
 /// 参数可以是 slug，也可以是一个发过的目录。

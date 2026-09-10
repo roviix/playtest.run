@@ -60,6 +60,21 @@ services:
       PLAYTEST_GITHUB_CLIENT_ID: ${PLAYTEST_GITHUB_CLIENT_ID:-}
       PLAYTEST_GITHUB_CLIENT_SECRET: ${PLAYTEST_GITHUB_CLIENT_SECRET:-}
       PLAYTEST_CONSOLE_URL: ${PLAYTEST_CONSOLE_URL:-}
+      # 发信（DESIGN §4.10）。log = 整封信只打进日志，谁都收不到；off = 关注里不出现留邮箱那一栏。
+      # 空着 = log。改成 resend 或 smtp 要配下面对应那一项，否则控制面起不来（明说，不静默降级）。
+      PLAYTEST_EMAIL_PROVIDER: ${PLAYTEST_EMAIL_PROVIDER:-}
+      # 发件人。空着 = playtest.run <notice@playtest.run>。
+      PLAYTEST_EMAIL_FROM: ${PLAYTEST_EMAIL_FROM:-}
+      # PLAYTEST_EMAIL_PROVIDER=resend 时必填。
+      PLAYTEST_RESEND_API_KEY: ${PLAYTEST_RESEND_API_KEY:-}
+      # PLAYTEST_EMAIL_PROVIDER=smtp 时必填，形如 smtps://用户名:密码@邮件服务器:465。
+      PLAYTEST_SMTP_URL: ${PLAYTEST_SMTP_URL:-}
+      # 玩家侧根域，信里的确认 / 退订 / 「我的」链接都从它拼。空着 = http://localhost:8443（只够本机用）。
+      PLAYTEST_PUBLIC_ROOT_URL: ${PLAYTEST_PUBLIC_ROOT_URL:-}
+      # 浏览器推送的联系方式，形如 mailto:hi@example.com；推送服务出问题时他们照这个找人。空着也能推。
+      PLAYTEST_VAPID_SUBJECT: ${PLAYTEST_VAPID_SUBJECT:-}
+      # 管理接口（赠送推广、手工撤下）。空着 = /admin/* 整组不注册，外面看到 404。
+      PLAYTEST_ADMIN_TOKEN: ${PLAYTEST_ADMIN_TOKEN:-}
       RUST_LOG: ${RUST_LOG:-info}
     ports:
       # 只绑主机回环：API_HOST 没配时 CLI 走 ssh -L 隧道用；有了公网入口后仍留着给运维。

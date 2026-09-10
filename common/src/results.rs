@@ -69,6 +69,9 @@ pub struct SiteResults {
     pub current_version: Option<u32>,
     /// 版本倒序，最新的在最前面。
     pub versions: Vec<VersionResults>,
+    /// 关注这个作品的人数（DESIGN §3.6）——「下一版发出去他们会收到通知」那一句的数字。
+    #[serde(default)]
+    pub followers: u32,
 }
 
 /// 一个版本的全部数字。控制台按这些拼那段话，数为 0 的句子不说。
@@ -107,6 +110,19 @@ pub struct VersionResults {
     pub first_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_at: Option<String>,
+    /// 来自哪里，按人数降序（DESIGN §3.5「来自：邀请卡 4 · 广场 2 · 微信 2」）。
+    /// 键是 [`crate::ingest::source`] 里的值。0 的不列。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<SourceTally>,
+    /// 留了名字的人数。
+    #[serde(default)]
+    pub named: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceTally {
+    pub kind: String,
+    pub count: u32,
 }
 
 /// 错误按 fingerprint 归堆之后的样子。
@@ -167,6 +183,9 @@ pub struct SessionRow {
     pub id: String,
     /// 打开的时间。
     pub at: String,
+    /// 点「开始」时留的名字（DESIGN §3.3 第 5 条）。没留就没有，点名册显示会话 id 的头几位。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -174,7 +193,7 @@ pub struct SessionRow {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub os: Option<String>,
     pub wechat: bool,
-    /// wechat / discord / direct / other，尽力而为。
+    /// [`crate::ingest::source`] 里的一个：card / notice / plaza / wechat / discord / direct / other，尽力而为。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub referrer_kind: Option<String>,
     /// 点过门禁页的「开始」。
@@ -284,15 +303,26 @@ pub struct FeedbackItem {
     pub device: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub browser: Option<String>,
-    /// 截图 v0.2 才做，现在永远是 `None`（DESIGN §3.4 说的「附截图」还没实现）。
+    /// 截图 v0.2 才做，现在永远是 `None`（DESIGN §3.5 说的「附截图」还没实现）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub screenshot_hash: Option<String>,
     pub status: FeedbackStatus,
+    /// 说这句话的人在门禁页留的名字（DESIGN §3.5）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// 这一条在门禁页上公开着（作品开了公开反馈、且开发者没把它单独藏起来）。
+    #[serde(default)]
+    pub public: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// `PATCH /v1/sites/{slug}/feedback/{id}`：只改带了的字段。
+/// `public: Some(false)` 是「把这一条藏起来」——作品级的开关在 [`crate::api::UpdateSiteRequest::feedback_public`]。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpdateFeedbackRequest {
-    pub status: FeedbackStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<FeedbackStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public: Option<bool>,
 }
 
 /// 停留秒数的中位数。
@@ -371,6 +401,8 @@ mod tests {
             feedback_count: 0,
             first_at: None,
             last_at: None,
+            sources: vec![],
+            named: 0,
         })
         .unwrap();
         assert!(json["dropped_before_first_frame"].is_null());

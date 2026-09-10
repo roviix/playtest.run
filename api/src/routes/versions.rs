@@ -13,7 +13,7 @@ use crate::auth::Caller;
 use crate::clock;
 use crate::db;
 use crate::error::{ApiError, ApiResult};
-use crate::routes::sites::{to_site, NO_SUCH_SITE};
+use crate::routes::sites::{load_site, NO_SUCH_SITE};
 use crate::state::AppState;
 
 pub async fn list(
@@ -78,5 +78,5 @@ pub async fn activate(
             .ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?
     };
     tracing::info!(slug = %site.slug, version, "把当前版本指回了 v{version}");
-    Ok(Json(to_site(&state, row)))
+    Ok(Json(load_site(&state, row).await?))
 }

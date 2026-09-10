@@ -77,6 +77,7 @@ impl Harness {
             data_dir: dir.path().to_path_buf(),
             site_url_template: template.to_string(),
             github: None,
+            ..Config::default()
         };
         let state = AppState::from_config(&config).await.unwrap();
         Self {
@@ -466,6 +467,7 @@ async fn restarting_keeps_the_same_key() {
         data_dir: dir.path().to_path_buf(),
         site_url_template: LOCAL_TEMPLATE.to_string(),
         github: None,
+        ..Config::default()
     };
 
     AppState::from_config(&config).await.unwrap();

@@ -216,6 +216,44 @@ impl FsStore {
         self.read_json(crate::plaza::KEY).await
     }
 
+    /// 一个作品会变的那些（DESIGN §4.5 的 `live.json`）：名额、关注数、群、公开反馈。控制面写、边缘读。
+    pub async fn put_live(&self, live: &crate::live::SiteLive) -> Result<(), StoreError> {
+        Self::check_slug(&live.slug)?;
+        let key = crate::live::key(&live.slug);
+        let data = serde_json::to_vec(live).map_err(|source| StoreError::BadJson {
+            key: key.clone(),
+            source,
+        })?;
+        let path = self.path_of(&key);
+        self.write_atomic(&key, &path, &data).await
+    }
+
+    /// 没有这份文件的作品按「什么都没有」解析（[`crate::live::SiteLive::default`]），不是错误。
+    pub async fn get_live(&self, slug: &str) -> Result<Option<crate::live::SiteLive>, StoreError> {
+        Self::check_slug(slug)?;
+        self.read_json(&crate::live::key(slug)).await
+    }
+
+    /// 控制面现在能做什么（DESIGN §4.5 的 `capabilities.json`）。控制面启动时写、边缘读。
+    pub async fn put_capabilities(
+        &self,
+        caps: &crate::capabilities::Capabilities,
+    ) -> Result<(), StoreError> {
+        let key = crate::capabilities::KEY;
+        let data = serde_json::to_vec(caps).map_err(|source| StoreError::BadJson {
+            key: key.to_string(),
+            source,
+        })?;
+        let path = self.path_of(key);
+        self.write_atomic(key, &path, &data).await
+    }
+
+    pub async fn get_capabilities(
+        &self,
+    ) -> Result<Option<crate::capabilities::Capabilities>, StoreError> {
+        self.read_json(crate::capabilities::KEY).await
+    }
+
     /// 删除一个作品的所有清单与指针。blob 是跨作品去重的，不在这里删（见 [`Self::referenced_hashes`] 与垃圾回收）。
     pub async fn remove_site(&self, slug: &str) -> Result<(), StoreError> {
         Self::check_slug(slug)?;
@@ -412,10 +450,30 @@ mod tests {
             schema: crate::plaza::SCHEMA,
             generated_at: "2026-09-08T00:00:00Z".into(),
             items: vec![],
+            club_followers: 0,
         };
         store.put_plaza(&plaza).await.unwrap();
         assert_eq!(store.get_plaza().await.unwrap(), Some(plaza));
         assert!(dir.path().join("plaza.json").is_file());
+
+        // live.json 与 capabilities.json 走同一条路。
+        assert!(store.get_live("brisk-otter-41").await.unwrap().is_none());
+        let mut live = crate::live::SiteLive::empty("brisk-otter-41");
+        live.seats = Some(10);
+        live.joined = 3;
+        store.put_live(&live).await.unwrap();
+        assert_eq!(store.get_live("brisk-otter-41").await.unwrap(), Some(live));
+        assert!(dir.path().join("sites/brisk-otter-41/live.json").is_file());
+
+        assert!(store.get_capabilities().await.unwrap().is_none());
+        let caps = crate::capabilities::Capabilities {
+            schema: crate::capabilities::SCHEMA,
+            generated_at: "2026-09-09T00:00:00Z".into(),
+            email: true,
+            push_public_key: None,
+        };
+        store.put_capabilities(&caps).await.unwrap();
+        assert_eq!(store.get_capabilities().await.unwrap(), Some(caps));
     }
 
     #[tokio::test]

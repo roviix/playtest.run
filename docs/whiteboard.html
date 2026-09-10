@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>playtest · 一张大图：四个物件，不是二十个功能</title>
+<style>
+  :root {
+    --paper: #f3efe4;
+    --ink: #2a2924;
+    --mute: #8a8376;
+    --green: #3d6b50;
+    --navy: #2e4d72;
+    --amber: #8a6a1f;
+    --violet: #6a4b83;
+    --red: #c8522f;
+    --card: #faf7ee;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--paper);
+    background-image: radial-gradient(#d6d0c0 1px, transparent 1.2px);
+    background-size: 32px 32px;
+  }
+  #crumb {
+    position: absolute; top: 14px; left: 20px; z-index: 2;
+    font: 14px/1.4 "Kaiti SC", "KaiTi", "Songti SC", serif;
+    color: var(--mute);
+  }
+  #crumb a { color: var(--mute); text-decoration: none; border-bottom: 1px dashed #b9b2a0; }
+  #board { width: 2960px; transform-origin: top left; }
+  svg text {
+    font-family: "Kaiti SC", "KaiTi", "Songti SC", "Segoe Print", "Chalkboard SE", serif;
+    fill: var(--ink);
+    user-select: none;
+  }
+  .panel { fill: #faf7ee; fill-opacity: .32; stroke: #c2bba7; stroke-width: 2; }
+  .lane-now { fill: #eef0e6; fill-opacity: .55; stroke: var(--green); stroke-width: 2.4; }
+  .lane-after { fill: #f5e9cd; fill-opacity: .55; stroke: #8a6a1f; stroke-width: 2.4; }
+  .lane-next { fill: #f0ecf4; fill-opacity: .55; stroke: var(--violet); stroke-width: 2.4; }
+  .box { fill: var(--card); stroke: var(--ink); stroke-width: 3; }
+  .soft-green { fill: #eef0e6; stroke: var(--green); }
+  .soft-navy { fill: #eceef2; stroke: var(--navy); }
+  .soft-amber { fill: #f5e9cd; stroke: #8a6a1f; }
+  .soft-violet { fill: #f0ecf4; stroke: var(--violet); }
+  .soft-red { fill: #f9efe6; stroke: var(--red); }
+  .rough { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .title { font-size: 68px; font-weight: 700; }
+  .panel-title { font-size: 34px; font-weight: 700; }
+  .h { font-size: 28px; font-weight: 700; }
+  .h2 { font-size: 24px; font-weight: 700; }
+  .body { font-size: 22px; }
+  .small { font-size: 18px; fill: #625e55; }
+  .tiny { font-size: 16px; fill: #6d685e; }
+  .muted { fill: var(--mute); }
+  .green { fill: var(--green); }
+  .navy { fill: var(--navy); }
+  .amberink { fill: #8a6a1f; }
+  .violet { fill: var(--violet); }
+  .red { fill: var(--red); }
+  #zoomer {
+    position: fixed; right: 18px; bottom: 18px; z-index: 3;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  #zoomer button {
+    width: 46px; height: 46px; cursor: pointer;
+    background: var(--card); color: var(--ink);
+    border: 2px solid var(--ink); border-radius: 50%;
+    font: 700 20px/1 "Kaiti SC", "KaiTi", serif;
+  }
+  @media print { #zoomer { display: none; } body { background-image: none; } }
+</style>
+</head>
+<body>
+<div id="crumb">
+  playtest · 一张大图
+  · <a href="DESIGN.md">DESIGN.md</a>
+  · <a href="overview.html">可点的五图</a>
+  · <a href="architecture.html">09-08 管子白板（旧）</a>
+</div>
+<div id="board">
+<svg xmlns="http://www.w3.org/2000/svg" width="2960" height="4520" viewBox="0 0 2960 4520" role="img" aria-label="playtest 一张大图">
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L9 5 L0 10" fill="none" stroke="#2a2924" stroke-width="1.8"/>
+    </marker>
+    <marker id="arr-g" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L9 5 L0 10" fill="none" stroke="#3d6b50" stroke-width="1.8"/>
+    </marker>
+    <marker id="arr-a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L9 5 L0 10" fill="none" stroke="#8a6a1f" stroke-width="1.8"/>
+    </marker>
+    <marker id="arr-v" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L9 5 L0 10" fill="none" stroke="#6a4b83" stroke-width="1.8"/>
+    </marker>
+    <marker id="arr-n" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L9 5 L0 10" fill="none" stroke="#2e4d72" stroke-width="1.8"/>
+    </marker>
+    <marker id="arr-r" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L9 5 L0 10" fill="none" stroke="#c8522f" stroke-width="1.8"/>
+    </marker>
+  </defs>
+
+  <text x="120" y="200" class="title">产品是四个物件，不是一张功能清单</text>
+  <path d="M124 236 C 720 222 1480 252 2140 230" class="rough" stroke="#6a4b83" stroke-width="8"/>
+  <text x="120" y="310" font-size="32" fill="#55524a">一条命令，一张卡，一份点名册，一块广场。其余名词都是这四样上面的字段或媒介。</text>
+  <text x="120" y="368" class="body muted">先看下面那张大图。分层的依据不是模块，是「谁在等、等多久」。觉得乱，多半是把三种时间画成了并列的功能。</text>
+
+  <g transform="rotate(-1.1 2480 250)">
+    <rect x="2080" y="110" width="760" height="300" rx="5" fill="#f7e8a8"/>
+    <text x="2460" y="174" text-anchor="middle" class="h">颜色就是时间</text>
+    <path d="M2180 194 C 2360 180 2560 208 2740 192" class="rough" stroke="#c0331f" stroke-width="4"/>
+    <text x="2120" y="240" font-size="22" font-weight="700" class="green">墨绿 = 此刻能玩（秒）</text>
+    <text x="2120" y="278" font-size="22" font-weight="700" class="amberink">琥珀 = 玩完留下（分）</text>
+    <text x="2120" y="316" font-size="22" font-weight="700" class="violet">紫色 = 下一版还来（天）</text>
+    <text x="2120" y="354" font-size="22" font-weight="700" class="navy">蓝色 = 开发者看见</text>
+    <text x="2120" y="386" font-size="20" font-weight="700" class="red">红色 = 不在这张图上</text>
+  </g>
+
+  <!-- ================= 0 大图 ================= -->
+  <rect x="70" y="430" width="2820" height="2280" rx="8" class="panel"/>
+  <circle cx="118" y="484" r="24" class="rough" stroke="#c0331f" stroke-width="3"/>
+  <text x="118" y="494" text-anchor="middle" font-size="28" font-weight="700" class="red">0</text>
+  <text x="164" y="498" class="panel-title">一张大图：从敲命令到第二版还有人</text>
+  <text x="1320" y="496" class="body muted">中间那一列是同一个物件。左边供给，右边人。三条带子是三种等待。</text>
+
+  <!-- ① 此刻 -->
+  <rect x="110" y="540" width="2740" height="680" rx="8" class="lane-now"/>
+  <text x="1480" y="596" text-anchor="middle" class="h green">① 此刻 · 秒级 —— 发出去就能玩。这一整条是 09-08 已经成立的管子。</text>
+  <text x="1480" y="636" text-anchor="middle" class="small">没有关注、没有广场、没有推广。一个人、一条命令、一张能打开的页。</text>
+
+  <rect x="160" y="670" width="520" height="220" rx="6" class="box soft-navy"/>
+  <text x="420" y="736" text-anchor="middle" class="h2 navy">开发者敲一条命令</text>
+  <text x="420" y="784" text-anchor="middle" class="body">playtest ./dist</text>
+  <text x="420" y="828" text-anchor="middle" class="small">或端口、或 --backend；Cursor 里同一件事</text>
+  <text x="420" y="864" text-anchor="middle" class="tiny">没登录也行：24 小时匿名链接</text>
+
+  <rect x="760" y="670" width="560" height="220" rx="6" class="box soft-green"/>
+  <text x="1040" y="736" text-anchor="middle" class="h2 green">得到三样，不是二十样</text>
+  <text x="1040" y="786" text-anchor="middle" class="body">链接 · 二维码 · 一张 PNG</text>
+  <text x="1040" y="828" text-anchor="middle" class="small">卡是链接在微信里的实体</text>
+  <text x="1040" y="864" text-anchor="middle" class="tiny">控制台地址打在下一行，不挡路</text>
+
+  <rect x="1400" y="670" width="700" height="220" rx="6" class="box soft-amber"/>
+  <text x="1750" y="728" text-anchor="middle" class="h2 amberink">中间这一个物件</text>
+  <text x="1750" y="776" text-anchor="middle" class="body">slug.playtest.run</text>
+  <text x="1750" y="818" text-anchor="middle" class="small">门禁页 = 邀请卡 = 分享页 = og:image</text>
+  <text x="1750" y="854" text-anchor="middle" class="tiny">同一封面、同一句「某某邀请你」、同一个版本号</text>
+
+  <rect x="2180" y="670" width="610" height="220" rx="6" class="box soft-green"/>
+  <text x="2485" y="736" text-anchor="middle" class="h2 green">对方点「开始」就玩</text>
+  <text x="2485" y="786" text-anchor="middle" class="body">不登录 · 不安装 · 不跳转</text>
+  <text x="2485" y="828" text-anchor="middle" class="small">「开始」是浏览器要的那一下手势</text>
+  <text x="2485" y="864" text-anchor="middle" class="tiny">作品画面里没有我们的一个像素</text>
+
+  <path d="M680 780 L760 780" class="rough" stroke="#2a2924" stroke-width="3" marker-end="url(#arr)"/>
+  <path d="M1320 780 L1400 780" class="rough" stroke="#2a2924" stroke-width="3" marker-end="url(#arr)"/>
+  <path d="M2100 780 L2180 780" class="rough" stroke="#3d6b50" stroke-width="4" marker-end="url(#arr-g)"/>
+
+  <rect x="160" y="930" width="520" height="240" rx="6" class="box"/>
+  <text x="420" y="992" text-anchor="middle" class="h2">供给只有两条路</text>
+  <text x="420" y="1044" text-anchor="middle" class="body">目录 → 上传</text>
+  <text x="420" y="1088" text-anchor="middle" class="body">进程 → 隧道</text>
+  <text x="420" y="1136" text-anchor="middle" class="small">混合是两条路叠在同一个 slug 上</text>
+
+  <rect x="760" y="930" width="1340" height="240" rx="6" class="box soft-green"/>
+  <text x="1430" y="992" text-anchor="middle" class="h2 green">边缘只做一件事：把这个物件送到人面前</text>
+  <text x="1430" y="1044" text-anchor="middle" class="body">按清单出文件 · 补游戏响应头 · 画那张卡 · 门禁只拦顶层导航</text>
+  <text x="1430" y="1090" text-anchor="middle" class="small">控制面挂了：作品、卡、广场照常。数字旧几分钟。只有「关注」会说现在登记不了。</text>
+  <text x="1430" y="1136" text-anchor="middle" class="tiny">香港一台机器 · 泛域名 · 从不跑用户代码 · 每 slug 每小时熔断</text>
+
+  <rect x="2180" y="930" width="610" height="240" rx="6" class="box soft-navy"/>
+  <text x="2485" y="992" text-anchor="middle" class="h2 navy">开发者看见的第一层</text>
+  <text x="2485" y="1044" text-anchor="middle" class="body">打开了几个人</text>
+  <text x="2485" y="1088" text-anchor="middle" class="body">几个点了开始之后真进了游戏</text>
+  <text x="2485" y="1136" text-anchor="middle" class="small">不用改游戏一行代码</text>
+
+  <path d="M420 890 L420 930" class="rough" stroke="#2a2924" stroke-width="3" marker-end="url(#arr)"/>
+  <path d="M1750 890 L1430 930" class="rough" stroke="#3d6b50" stroke-width="3" marker-end="url(#arr-g)"/>
+  <path d="M2485 890 L2485 930" class="rough" stroke="#2e4d72" stroke-width="3" marker-end="url(#arr-n)"/>
+
+  <!-- ② 玩完 -->
+  <rect x="110" y="1260" width="2740" height="620" rx="8" class="lane-after"/>
+  <text x="1480" y="1318" text-anchor="middle" class="h amberink">② 玩完 · 分钟级 —— 自愿留下。这一整条都不挡在「开始」前面。</text>
+  <text x="1480" y="1358" text-anchor="middle" class="small">09-09 加上的。没有它，管子发完人就散了。有了它，才谈得上下一版。</text>
+
+  <rect x="160" y="1400" width="620" height="420" rx="6" class="box soft-amber"/>
+  <text x="470" y="1464" text-anchor="middle" class="h2 amberink">门禁页底下三行弱化的</text>
+  <text x="200" y="1530" class="body">1. 有新版本时告诉我</text>
+  <text x="200" y="1576" class="body">2. 开发者的群（他填了才有）</text>
+  <text x="200" y="1622" class="body">3. 分享（公开作品才有）</text>
+  <text x="200" y="1688" class="small">留名在「开始」旁边，可不填。</text>
+  <text x="200" y="1728" class="small">公开反馈最多三条，默认关。</text>
+  <text x="200" y="1768" class="tiny">名额是一行字，到齐了不拦人。</text>
+
+  <rect x="840" y="1400" width="700" height="420" rx="6" class="box soft-amber"/>
+  <text x="1190" y="1464" text-anchor="middle" class="h2 amberink">关注不是注册</text>
+  <text x="1190" y="1530" text-anchor="middle" class="body">填邮箱 → 点确认信 → 生效</text>
+  <text x="1190" y="1578" text-anchor="middle" class="body">或允许浏览器通知</text>
+  <text x="1190" y="1640" text-anchor="middle" class="small">确认之后根域有一把钥匙 pt_me</text>
+  <text x="1190" y="1684" text-anchor="middle" class="small">换设备再点一次确认信里的链接</text>
+  <text x="1190" y="1748" text-anchor="middle" class="tiny">没有密码，没有「创建账号」四个字</text>
+  <text x="1190" y="1788" text-anchor="middle" class="tiny">开发者永远看不到邮箱，只看到数字</text>
+
+  <rect x="1600" y="1400" width="580" height="420" rx="6" class="box soft-navy"/>
+  <text x="1890" y="1464" text-anchor="middle" class="h2 navy">点名册多了三列</text>
+  <text x="1650" y="1530" class="body">名字（留了才有）</text>
+  <text x="1650" y="1576" class="body">来自：卡 / 广场 / 通知</text>
+  <text x="1650" y="1622" class="body">N 人关注着这一版</text>
+  <text x="1650" y="1688" class="small">仍然不是仪表盘。</text>
+  <text x="1650" y="1728" class="small">5–50 个人不构成统计。</text>
+  <text x="1650" y="1768" class="tiny">SDK 是可选的：错误、反馈、玩后落点</text>
+
+  <rect x="2240" y="1400" width="550" height="420" rx="6" class="box soft-red"/>
+  <text x="2515" y="1464" text-anchor="middle" class="h2 red">这一带故意没有的</text>
+  <text x="2290" y="1530" class="body">聊天室 · 评论楼</text>
+  <text x="2290" y="1576" class="body">点赞 · 名次 · 算法</text>
+  <text x="2290" y="1622" class="body">玩家 App · 小程序壳</text>
+  <text x="2290" y="1688" class="small">空房间比没有房间更伤。</text>
+  <text x="2290" y="1728" class="small">注入作品画面是物理不做。</text>
+  <text x="2290" y="1768" class="tiny">社交层只走门禁页和开发者勾的 SDK</text>
+
+  <path d="M780 1610 L840 1610" class="rough" stroke="#8a6a1f" stroke-width="3" marker-end="url(#arr-a)"/>
+  <path d="M1540 1610 L1600 1610" class="rough" stroke="#2e4d72" stroke-width="3" marker-end="url(#arr-n)"/>
+
+  <!-- ③ 下一版 -->
+  <rect x="110" y="1920" width="2740" height="720" rx="8" class="lane-next"/>
+  <text x="1480" y="1978" text-anchor="middle" class="h violet">③ 下一版 · 天级 —— 玩过的人还来；不为某一个作品而来的人出现。卖的是这一层。</text>
+  <text x="1480" y="2018" text-anchor="middle" class="small">没有 ② 就没有 ③。没有 ③，广场只是告示板，推广位没有东西可卖。</text>
+
+  <rect x="160" y="2060" width="620" height="520" rx="6" class="box soft-navy"/>
+  <text x="470" y="2128" text-anchor="middle" class="h2 navy">开发者再发一次</text>
+  <text x="470" y="2190" text-anchor="middle" class="body">同一条链接，v8</text>
+  <text x="470" y="2238" text-anchor="middle" class="body">「这版改了什么」进信的正文</text>
+  <text x="470" y="2300" text-anchor="middle" class="small">每个作品每 24 小时最多一封</text>
+  <text x="470" y="2344" text-anchor="middle" class="small">一天发五版，关注者只收到最后那封</text>
+  <text x="470" y="2404" text-anchor="middle" class="tiny">隧道不触发通知：没有版本，只有在线</text>
+  <text x="470" y="2448" text-anchor="middle" class="tiny">控制台：邀请卡预览、名额、群、公开、推广</text>
+  <text x="470" y="2492" text-anchor="middle" class="tiny">推广尚未开放：不放不能点的按钮</text>
+
+  <rect x="840" y="2060" width="700" height="520" rx="6" class="box soft-violet"/>
+  <text x="1190" y="2128" text-anchor="middle" class="h2 violet">关注者收到一封信</text>
+  <text x="1190" y="2190" text-anchor="middle" class="body">《作品》出了 v8：改了新手引导</text>
+  <text x="1190" y="2238" text-anchor="middle" class="body">点进去，来源标「通知」</text>
+  <text x="1190" y="2300" text-anchor="middle" class="small">或关注了广场：周一 09:00 一封周报</text>
+  <text x="1190" y="2344" text-anchor="middle" class="small">没有「你还没玩完」，没有我们自己的消息</text>
+  <text x="1190" y="2404" text-anchor="middle" class="tiny">信底一键退订。点了就退，不问为什么。</text>
+  <text x="1190" y="2448" text-anchor="middle" class="tiny">本机用 log 发信；线上要 SPF / DKIM</text>
+  <text x="1190" y="2492" text-anchor="middle" class="tiny">「我的」是抽屉，不是个人主页</text>
+
+  <rect x="1600" y="2060" width="1190" height="520" rx="6" class="box soft-violet"/>
+  <text x="2195" y="2128" text-anchor="middle" class="h2 violet">广场是目的地，形态是俱乐部</text>
+  <text x="2195" y="2184" text-anchor="middle" class="body">playtest.run/   ·   不用注册就能翻</text>
+  <text x="1680" y="2260" class="body">左边一条栏，右边一面墙。没有筛选，没有分段标题。</text>
+  <text x="1680" y="2310" class="body">栏：品牌 · 广场（当前） · 我的 · 发布作品</text>
+  <text x="1680" y="2356" class="body">墙：推广（最多两张）在最前，其后找人测，再按时间</text>
+  <text x="1680" y="2402" class="body">整张卡是一个链接。卡上没有关注、想玩、举报。</text>
+  <text x="1680" y="2464" class="small">卡少也不先解释，从左边第一列排。微信是分发渠道，不是浏览渠道。</text>
+  <text x="1680" y="2508" class="tiny">目标是几千个会回来的人，不是百万 MAU。没有算法，没有登录。</text>
+
+  <path d="M780 2320 L840 2320" class="rough" stroke="#6a4b83" stroke-width="4" marker-end="url(#arr-v)"/>
+  <path d="M1540 2320 L1600 2320" class="rough" stroke="#6a4b83" stroke-width="3" marker-end="url(#arr-v)"/>
+
+  <rect x="70" y="2760" width="2820" height="200" rx="6" class="box"/>
+  <text x="1480" y="2830" text-anchor="middle" class="h">这张图最该看的一件事</text>
+  <text x="1480" y="2888" text-anchor="middle" class="body">中间只有<tspan font-weight="700" class="amberink">一个物件</tspan>。卡、门禁、链接、分享页、og 图是它的五种媒介，不是五个产品。</text>
+  <text x="1480" y="2936" text-anchor="middle" class="body">① 已经能单独成立。② ③ 是叠在同一条脊柱上的回访。乱，是因为把字段当成了功能。</text>
+
+  <!-- ================= 1 压缩 ================= -->
+  <rect x="70" y="3020" width="2820" height="820" rx="8" class="panel"/>
+  <circle cx="118" y="3074" r="24" class="rough" stroke="#3d6b50" stroke-width="3"/>
+  <text x="118" y="3084" text-anchor="middle" font-size="28" font-weight="700" class="green">1</text>
+  <text x="164" y="3088" class="panel-title">看起来乱的二十几个名词，挂回四个物件</text>
+  <text x="1480" y="3086" class="body muted">能挂回去的是字段。挂不回去的，不该存在。</text>
+
+  <rect x="120" y="3140" width="660" height="640" rx="6" class="box soft-navy"/>
+  <text x="450" y="3210" text-anchor="middle" class="h2 navy">一条命令</text>
+  <path d="M200 3232 C 320 3220 560 3244 700 3228" class="rough" stroke="#2e4d72" stroke-width="3"/>
+  <text x="160" y="3290" class="body">挂在它上面的：</text>
+  <text x="160" y="3340" class="body">./dist · 端口 · --backend</text>
+  <text x="160" y="3386" class="body">--cover --summary --seats</text>
+  <text x="160" y="3432" class="body">--community --public --seek</text>
+  <text x="160" y="3478" class="body">card / followers / mcp</text>
+  <text x="160" y="3544" class="small">不是六种产品。是同一次发布</text>
+  <text x="160" y="3584" class="small">要不要多说一句、多带一张图。</text>
+  <text x="160" y="3640" class="tiny">login / ls / rollback 是这条命令的后勤</text>
+  <text x="160" y="3680" class="tiny">隧道大目录要算等待时间，是老实话</text>
+
+  <rect x="820" y="3140" width="660" height="640" rx="6" class="box soft-amber"/>
+  <text x="1150" y="3210" text-anchor="middle" class="h2 amberink">一张卡</text>
+  <path d="M900 3232 C 1020 3220 1260 3244 1400 3228" class="rough" stroke="#8a6a1f" stroke-width="3"/>
+  <text x="860" y="3290" class="body">同一样东西的五种样子：</text>
+  <text x="860" y="3340" class="body">竖版 PNG（发群）</text>
+  <text x="860" y="3386" class="body">横版 PNG（链接预览）</text>
+  <text x="860" y="3432" class="body">门禁页（点开）</text>
+  <text x="860" y="3478" class="body">分享页（再发出去）</text>
+  <text x="860" y="3524" class="body">字卡（没有封面时）</text>
+  <text x="860" y="3584" class="small">卡上没有人数，没有「领取」。</text>
+  <text x="860" y="3624" class="small">口吻是「某某邀请你」，不是「你获得了」。</text>
+  <text x="860" y="3680" class="tiny">微信不出未备案域名的链接卡片，所以必须是图</text>
+
+  <rect x="1520" y="3140" width="660" height="640" rx="6" class="box soft-navy"/>
+  <text x="1850" y="3210" text-anchor="middle" class="h2 navy">一份点名册</text>
+  <path d="M1600 3232 C 1720 3220 1960 3244 2100 3228" class="rough" stroke="#2e4d72" stroke-width="3"/>
+  <text x="1560" y="3290" class="body">挂在它上面的：</text>
+  <text x="1560" y="3340" class="body">打开 / 进游戏 / 掉队</text>
+  <text x="1560" y="3386" class="body">名字 · 来源 · 关注数</text>
+  <text x="1560" y="3432" class="body">停留中位数 · 每人一行</text>
+  <text x="1560" y="3478" class="body">反馈流（可公开、可隐藏）</text>
+  <text x="1560" y="3544" class="small">没有漏斗，没有留存曲线，</text>
+  <text x="1560" y="3584" class="small">没有 AI 总结，没有热图。</text>
+  <text x="1560" y="3640" class="tiny">控制台就是把这段话显示出来</text>
+  <text x="1560" y="3680" class="tiny">「设为封面」是反馈截图的一个按钮</text>
+
+  <rect x="2220" y="3140" width="620" height="640" rx="6" class="box soft-violet"/>
+  <text x="2530" y="3210" text-anchor="middle" class="h2 violet">一块广场</text>
+  <path d="M2300 3232 C 2420 3220 2640 3244 2760 3228" class="rough" stroke="#6a4b83" stroke-width="3"/>
+  <text x="2260" y="3290" class="body">挂在它上面的：</text>
+  <text x="2260" y="3340" class="body">左栏（广场 · 我的 · 发布作品）</text>
+  <text x="2260" y="3386" class="body">一面网格（推广位 0–2 张在最前）</text>
+  <text x="2260" y="3432" class="body">卡上只有一件事实</text>
+  <text x="2260" y="3478" class="body">周报 · 作品页上举报撤下</text>
+  <text x="2260" y="3544" class="small">稀疏态是同一页的空的时候，</text>
+  <text x="2260" y="3584" class="small">不是另一个产品。</text>
+  <text x="2260" y="3640" class="tiny">卖的是被看见，不卖托管</text>
+  <text x="2260" y="3680" class="tiny">Pro 是身份变化：固定链接、私密、留存</text>
+
+  <!-- ================= 2 不画 ================= -->
+  <rect x="70" y="3900" width="2820" height="560" rx="8" class="panel"/>
+  <circle cx="118" y="3954" r="24" class="rough" stroke="#c8522f" stroke-width="3"/>
+  <text x="118" y="3964" text-anchor="middle" font-size="28" font-weight="700" class="red">2</text>
+  <text x="164" y="3968" class="panel-title">不在这张图上的，才是边界</text>
+  <text x="1180" y="3966" class="body muted">觉得设计膨胀，先对这一栏。在栏里的，不是漏画，是不画。</text>
+
+  <rect x="120" y="4020" width="880" height="380" rx="6" class="box soft-red"/>
+  <text x="560" y="4088" text-anchor="middle" class="h2 red">物理，永远不放</text>
+  <text x="160" y="4154" class="body">不跑用户代码 · 不改你的字节</text>
+  <text x="160" y="4200" class="body">首次游玩不登录不安装</text>
+  <text x="160" y="4246" class="body">免费有硬上限，每小时熔断</text>
+  <text x="160" y="4292" class="body">不落大陆、不备案</text>
+  <text x="160" y="4350" class="small">Glitch / SIMMER 的死因，不是品味。</text>
+
+  <rect x="1040" y="4020" width="880" height="380" rx="6" class="box"/>
+  <text x="1480" y="4088" text-anchor="middle" class="h2">现在不做，理由在形态</text>
+  <text x="1080" y="4154" class="body">聊天室、私信、开放评论</text>
+  <text x="1080" y="4200" class="body">算法推荐、官方精选榜</text>
+  <text x="1080" y="4246" class="body">给玩家卖东西、卖测试者</text>
+  <text x="1080" y="4292" class="body">关注某个开发者、开发者主页</text>
+  <text x="1080" y="4350" class="small">方向变了先改 DESIGN，再出现在图上。</text>
+
+  <rect x="1960" y="4020" width="880" height="380" rx="6" class="box soft-amber"/>
+  <text x="2400" y="4088" text-anchor="middle" class="h2 amberink">图画了、线上还空着的</text>
+  <text x="2000" y="4154" class="body">真发信（要域名 DNS）</text>
+  <text x="2000" y="4200" class="body">推广开卖（要境外主体）</text>
+  <text x="2000" y="4246" class="body">GitHub 登录上服务器</text>
+  <text x="2000" y="4292" class="body">微信里长按识卡（发布阻断）</text>
+  <text x="2000" y="4350" class="small">控制台里写「尚未开放」，不放假按钮。</text>
+</svg>
+</div>
+<div id="zoomer">
+  <button type="button" id="zin" aria-label="放大">+</button>
+  <button type="button" id="zout" aria-label="缩小">−</button>
+  <button type="button" id="zfit" aria-label="适应宽度">↔</button>
+</div>
+<script>
+  const board = document.getElementById("board");
+  let scale = Math.min(1, (window.innerWidth - 24) / 2960);
+  const apply = () => { board.style.transform = "scale(" + scale + ")"; };
+  apply();
+  document.getElementById("zin").onclick = () => { scale = Math.min(2, scale + 0.12); apply(); };
+  document.getElementById("zout").onclick = () => { scale = Math.max(0.18, scale - 0.12); apply(); };
+  document.getElementById("zfit").onclick = () => { scale = Math.min(1, (window.innerWidth - 24) / 2960); apply(); };
+</script>
+</body>
+</html>

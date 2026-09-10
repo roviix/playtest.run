@@ -11,6 +11,7 @@
 use std::time::Instant;
 
 use anyhow::{Context, Result};
+use base64::Engine as _;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, ContentBlock};
 use rmcp::transport::stdio;
@@ -20,6 +21,7 @@ use rmcp::{
 use serde::Deserialize;
 
 use crate::args::UploadArgs;
+use crate::card;
 use crate::output;
 use crate::upload;
 
@@ -57,12 +59,26 @@ pub struct UploadParams {
     /// 在广场上标「正在找人测」并告诉来的人重点看什么（最多 140 字）；蕴含 public。
     #[serde(default)]
     pub seek: Option<String>,
+    /// How many testers are wanted; shown on the gate page and the invite card. Implies looking-for-testers.
+    /// 想找几位试玩者；门禁页和邀请卡上会写出来。蕴含「正在找人测」。
+    #[serde(default)]
+    pub seats: Option<u32>,
+    /// Link to the developer's group chat (http/https), shown to players after they play.
+    /// 开发者的群链接（http/https），玩家在门禁页和反馈之后看到。
+    #[serde(default)]
+    pub community: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct SiteParams {
     /// The slug of the work, e.g. brisk-otter-41. 作品的 slug，例如 brisk-otter-41。
     pub slug: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CardParams {
+    /// The slug of the work, or a directory that was published before. 作品的 slug，或者一个发过的目录。
+    pub site: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -77,9 +93,12 @@ impl Playtest {
         Self { api }
     }
 
+    /// 上传目录（DESIGN §3.2 五个工具之一）。
     #[tool(
-        description = "Publish a built web game directory and get a shareable link and QR code. \
-                       把构建好的目录发出去，拿到一条可以直接分享的链接和一张二维码。"
+        description = "Publish a built web game directory: returns a shareable link, a QR code and \
+                       the invite card as an image block — hand the image to the user, it is what \
+                       they forward to a group chat. \
+                       把构建好的目录发出去，拿到链接、二维码，以及一张可以直接转发的邀请卡图片。"
     )]
     async fn playtest_upload(
         &self,
@@ -95,6 +114,8 @@ impl Playtest {
             cover: params.cover.map(std::path::PathBuf::from),
             public: params.public.unwrap_or(false),
             seek: params.seek,
+            seats: params.seats,
+            community: params.community,
             isolated: params.isolated.unwrap_or(false),
             api: self.api.clone(),
             ..UploadArgs::default()
@@ -103,15 +124,17 @@ impl Playtest {
             Ok(mut report) => {
                 // 进程从早上就开着，这次调用花了多久才是要报的数。
                 report.elapsed_ms = output::ms_since(started);
-                Ok(answer(&report))
+                let card = report.take_card_png();
+                Ok(answer_with_card(&report, card, &report.card_url))
             }
             Err(e) => Ok(refuse(&e, started)),
         }
     }
 
+    /// 列出作品。
     #[tool(
-        description = "List the works published from this machine, with their links and versions. \
-                       列出这台机器上发过的作品、它们的链接和版本。"
+        description = "List the works published from this machine, with their links, versions and \
+                       follower counts. 列出这台机器上发过的作品：链接、版本、有多少人关注着。"
     )]
     async fn playtest_list(&self) -> Result<CallToolResult, McpError> {
         let started = Instant::now();
@@ -126,9 +149,11 @@ impl Playtest {
         }
     }
 
+    /// 看这一版的结果。
     #[tool(
-        description = "Look up one work by its slug: link, title, current version, expiry. \
-                       按 slug 查一个作品：链接、名字、当前版本、什么时候失效。"
+        description = "See how this version is doing: link, current version, how many people follow \
+                       it, and the console page where the roster and feedback live. \
+                       看这一版怎么样了：链接、当前版本、有多少人关注，以及去哪儿看谁玩过、说了什么。"
     )]
     async fn playtest_site(
         &self,
@@ -139,6 +164,9 @@ impl Playtest {
             Ok(site) => Ok(answer(&serde_json::json!({
                 "ok": true,
                 "action": "site",
+                // 「谁玩过、玩到哪、说了什么」在控制台里，不在这个返回里（DESIGN §3.5）：
+                // 那是一页要看的东西，塞进对话不如把地址给出去。
+                "console_url": output::console_url(&site.slug),
                 "site": site,
                 "elapsed_ms": output::ms_since(started),
             }))),
@@ -146,6 +174,40 @@ impl Playtest {
         }
     }
 
+    /// 拿邀请卡。
+    #[tool(
+        description = "Fetch the invite card for a work as an image: a 1080x1350 PNG with the cover, \
+                       the title, the seats left and a QR code. Hand the image to the user so they \
+                       can forward it. 拿这个作品的邀请卡（一张竖版 PNG，含封面、作品名、名额和二维码），\
+                       把图交给用户，他直接转发到群里。"
+    )]
+    async fn playtest_card(
+        &self,
+        Parameters(params): Parameters<CardParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let started = Instant::now();
+        let site = match crate::sites::look_up(&params.site, self.api.as_deref()).await {
+            Ok(site) => site,
+            Err(e) => return Ok(refuse(&e, started)),
+        };
+        let png = match card::fetch_or_explain(&site).await {
+            Ok(png) => png,
+            Err(e) => return Ok(refuse(&e, started)),
+        };
+        let card_url = playtest_common::card_url(&site.url);
+        let answered = serde_json::json!({
+            "ok": true,
+            "action": "card",
+            "slug": site.slug,
+            "title": site.title,
+            "url": site.url,
+            "card_url": card_url,
+            "elapsed_ms": output::ms_since(started),
+        });
+        Ok(answer_with_card(&answered, Some(png), &card_url))
+    }
+
+    /// 分享端口。这条路还没上线，如实说（AGENTS 第 4 条）。
     #[tool(
         description = "Share a locally running dev server through a tunnel. NOT AVAILABLE YET — \
                        this call always fails; upload a built directory instead. \
@@ -174,9 +236,10 @@ impl Playtest {
     version = "0.2.0",
     instructions = "playtest puts a playable build in front of specific people. Call \
                     playtest_upload with the directory your build step produced; give the user the \
-                    returned url, and paste qr_text verbatim in a code block when they will open it \
-                    on a phone. Every tool answers with one JSON object; ok:false means it did not \
-                    happen — read code and hint before retrying."
+                    returned url, paste qr_text verbatim in a code block when they will open it on \
+                    a phone, and pass on the invite card image — that image is what they forward to \
+                    a group chat. Every tool answers with one JSON object in its first content \
+                    block; ok:false means it did not happen — read code and hint before retrying."
 )]
 impl ServerHandler for Playtest {}
 
@@ -198,6 +261,31 @@ pub async fn run(setup: bool, api: Option<String>) -> Result<()> {
 /// 工具做成了：把和 `--json` 一模一样的对象贴回对话。
 fn answer<T: serde::Serialize>(value: &T) -> CallToolResult {
     CallToolResult::success(vec![ContentBlock::text(output::to_json_pretty(value))])
+}
+
+/// 同上，再贴一张邀请卡。
+///
+/// 图为什么值得单独贴一块：卡是用户真正要发出去的那个东西（DESIGN §3.4）。只给一个地址的话，
+/// 对面得自己下载、再拖进微信；贴成图片块，编辑器里直接就能存、能转。
+///
+/// 第一块永远是那个 JSON，图排在后面——读结果的是程序，它按顺序取第一块。
+/// 卡没拿到不算这次工具失败：链接已经能玩了，多说一句去哪儿拿就行。
+fn answer_with_card<T: serde::Serialize>(
+    value: &T,
+    png: Option<Vec<u8>>,
+    card_url: &str,
+) -> CallToolResult {
+    let mut blocks = vec![ContentBlock::text(output::to_json_pretty(value))];
+    match png {
+        Some(png) => blocks.push(ContentBlock::image(
+            base64::engine::general_purpose::STANDARD.encode(png),
+            "image/png".to_string(),
+        )),
+        None => blocks.push(ContentBlock::text(format!(
+            "邀请卡这会儿还没渲染好，稍后在 {card_url} 能拿到，或者再调一次 playtest_card。"
+        ))),
+    }
+    CallToolResult::success(blocks)
 }
 
 /// 工具没做成。用 `CallToolResult::error` 而不是协议错——协议错在多数客户端里只显示
@@ -233,5 +321,6 @@ fn print_setup(api: Option<&str>) {
     eprintln!();
     println!("{}", output::to_json_pretty(&config));
     eprintln!();
-    eprintln!("装好之后在对话里说「把 ./dist 发出去」，助手会调 playtest_upload 并把链接贴回来。");
+    eprintln!("装好之后在对话里说「把 ./dist 发出去」，助手会调 playtest_upload，把链接、二维码和邀请卡贴回来。");
+    eprintln!("一共五件事：分享端口（还没上线）、上传目录、列出作品、看这一版的结果、拿邀请卡。");
 }

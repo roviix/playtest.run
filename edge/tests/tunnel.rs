@@ -86,6 +86,7 @@ impl Edge {
             data_dir: dir.path().to_path_buf(),
             host_suffix: "localhost".into(),
             public_scheme: "http".into(),
+            api_internal_url: None,
         }));
         let service = router(app.clone());
         tokio::spawn(async move {
@@ -910,6 +911,7 @@ async fn without_a_verifying_key_the_edge_says_so_instead_of_guessing() {
             data_dir: dir.path().to_path_buf(),
             host_suffix: "localhost".into(),
             public_scheme: "http".into(),
+            api_internal_url: None,
         }));
         let service = router(app.clone());
         tokio::spawn(async move {

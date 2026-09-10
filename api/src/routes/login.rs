@@ -191,6 +191,7 @@ pub async fn me(caller: Caller) -> Json<Me> {
         display_name: caller.display_name,
         login: caller.login,
         expires_at: caller.expires_at,
+        avatar_url: caller.avatar_url,
     })
 }
 
@@ -276,6 +277,7 @@ async fn finish(
         id: i64,
         login: String,
         name: Option<String>,
+        avatar_url: Option<String>,
     }
     let user: GitHubUser = state
         .http()
@@ -297,16 +299,30 @@ async fn finish(
         .filter(|n| !n.is_empty())
         .unwrap_or(&user.login)
         .to_string();
+    // 头像地址只存字符串，图片仍由 GitHub 自己发；我们不代理、不缓存别人的图。
+    let avatar_url = user
+        .avatar_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|u| u.starts_with("https://"))
+        .map(str::to_string);
 
     let now = clock::now_string();
     let token = auth::new_token();
     let token_hash = hash::hash_bytes(token.as_bytes());
     let anon = anon_caller(state, headers).await;
 
-    let (user_id, adopted) = {
+    let (user_id, adopted, avatar_changed, mine) = {
         let mut conn = state.db().lock().await;
         let tx = conn.transaction()?;
-        let user_id = db::upsert_github_user(&tx, user.id, &user.login, &display_name, &now)?;
+        let (user_id, avatar_changed) = db::upsert_github_user(
+            &tx,
+            user.id,
+            &user.login,
+            &display_name,
+            avatar_url.as_deref(),
+            &now,
+        )?;
         db::insert_token(&tx, &token_hash, &user_id, &now, None)?;
         let adopted = match &anon {
             Some(anon_id) if *anon_id != user_id => db::adopt_sites(&tx, anon_id, &user_id)?,
@@ -320,8 +336,14 @@ async fn finish(
                     .map(|rows| (slug.clone(), rows.into_iter().map(|r| r.version).collect()))
             })
             .collect::<Result<_, _>>()?;
+        // 头像变了，这个人所有作品的 live.json 都得跟着变（门禁页上那张脸）。
+        let mine = if avatar_changed {
+            db::live_slugs_of(&tx, &user_id)?
+        } else {
+            Vec::new()
+        };
         tx.commit()?;
-        (user_id, versions)
+        (user_id, versions, avatar_changed, mine)
     };
 
     for (slug, versions) in &adopted {
@@ -333,7 +355,10 @@ async fn finish(
             }
         }
     }
-    if !adopted.is_empty() {
+    for slug in mine.iter().chain(adopted.iter().map(|(slug, _)| slug)) {
+        crate::live::publish(state, slug).await;
+    }
+    if !adopted.is_empty() || avatar_changed {
         plaza::publish(state).await;
     }
 

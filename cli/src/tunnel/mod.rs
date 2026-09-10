@@ -34,7 +34,7 @@ use crate::client::Client;
 use crate::config::{self, Config};
 use crate::output::{self, BackendOut, Finding, OnlineReport};
 use crate::upload::{self, SlugSource};
-use crate::{clock, ui};
+use crate::{card, clock, ui};
 
 use backoff::Backoff;
 use session::{Ended, Next, Tally};
@@ -155,6 +155,7 @@ async fn run_with(cli_args: &UploadArgs, port: u16, backend: Option<Backend>) ->
                     &page,
                     weighing.take(),
                     control.backend_out(),
+                    &control.title,
                 )
                 .await;
 
@@ -207,6 +208,7 @@ async fn run_with(cli_args: &UploadArgs, port: u16, backend: Option<Backend>) ->
 ///
 /// 混合模式下链接和二维码上传那一步已经打过了，这里不再画一遍——同一条链接出现两次，
 /// 看的人会以为换了链接。
+#[allow(clippy::too_many_arguments)]
 async fn announce(
     grant: &TunnelGrant,
     attempt: u32,
@@ -214,6 +216,7 @@ async fn announce(
     page: &probe::Page,
     weighing: Option<tokio::task::JoinHandle<Option<u64>>>,
     backend: Option<BackendOut>,
+    title: &str,
 ) {
     let mut report = OnlineReport::new(
         grant.slug.clone(),
@@ -230,6 +233,17 @@ async fn announce(
             report.qr_text = ui::qr_text(&grant.url);
         }
         report.findings = findings_for(page, weighing).await;
+        // 隧道的链接一样有门禁页，门禁页一样有那张卡（DESIGN §3.4）——发到群里的是同一张图。
+        report.with_card(
+            card::take(
+                &grant.url,
+                title,
+                &grant.slug,
+                cli_args.card_out.as_deref(),
+                cli_args.no_card,
+            )
+            .await,
+        );
     }
     output::report_online(&report);
 }
@@ -270,6 +284,9 @@ fn say_ignored(cli_args: &UploadArgs) {
     if cli_args.cover.is_some() {
         ignored.push("--cover");
     }
+    if cli_args.community.is_some() {
+        ignored.push("--community");
+    }
     if !ignored.is_empty() {
         ui::say(&format!(
             "{} 只在上传目录时有用，这次是隧道模式，先忽略了。",
@@ -277,8 +294,9 @@ fn say_ignored(cli_args: &UploadArgs) {
         ));
     }
     // 广场上的卡片必须随时点得开，而隧道随你的电脑一起下线；所以广场只收上传的版本。
-    if cli_args.public || cli_args.seek.is_some() {
-        ui::say("--public / --seek 先忽略了：广场只放上传的版本，隧道一关卡片就点不开。要上广场，用 playtest ./dist --public。");
+    // 名额是广场那一套里的（门禁页上写「还差几位」的前提是这个作品一直在），一起忽略。
+    if cli_args.public || cli_args.seek.is_some() || cli_args.seats.is_some() {
+        ui::say("--public / --seek / --seats 先忽略了：广场只放上传的版本，隧道一关卡片就点不开。要上广场，用 playtest ./dist --public。");
     }
 }
 

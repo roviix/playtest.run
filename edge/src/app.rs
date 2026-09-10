@@ -13,23 +13,29 @@ use axum::response::{IntoResponse, Response};
 use axum::Router;
 use percent_encoding::percent_decode_str;
 use playtest_common::api::ErrorCode;
+use playtest_common::follow::{root_paths, FollowTarget};
 use playtest_common::manifest::{GateMode, Manifest};
 use playtest_common::store::FsStore;
-use playtest_common::{GATE_COOKIE, RESERVED_PATH_PREFIX, SESSION_COOKIE};
+use playtest_common::{GATE_COOKIE, ME_COOKIE, RESERVED_PATH_PREFIX, SESSION_COOKIE};
 use rand::RngCore;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio_util::io::ReaderStream;
 use tower_http::trace::TraceLayer;
 
 use crate::breaker::Breaker;
+use crate::capabilities::CapabilitiesCache;
+use crate::card::{self, Card, Cover, Renderer, Shape};
 use crate::config::Config;
 use crate::events::{is_wechat, EventLog, Kind, Visitor};
+use crate::follow;
 use crate::game_headers::{self, Source};
 use crate::gate::{self, GatePage};
 use crate::host::{self, HostKind};
+use crate::live::LiveCache;
 use crate::paths::{self, AcceptEncoding, Resolved, Served};
 use crate::plaza::{self, PlazaCache};
 use crate::range::{self, Range};
+use crate::share::SharePage;
 use crate::tunnel::{self, Tunnels};
 use crate::{breaker, pages, sites::SiteState, sites::SiteStore};
 
@@ -42,6 +48,18 @@ const MAX_FORM_BYTES: usize = 16 * 1024;
 /// 封面在浏览器里缓存多久。地址带着内容哈希的前几位（控制面拼的 `?v=`），换了封面地址就变，
 /// 所以可以放心缓存一天；直接打 `/_playtest/cover` 不带 `?v=` 的也只是最多旧一天。
 const COVER_MAX_AGE: u64 = 24 * 60 * 60;
+/// `pt_me` 活一年（DESIGN §3.6：换设备是再点一次链接，不是重新注册）。
+const ME_MAX_AGE: u64 = 365 * 24 * 60 * 60;
+/// 封面超过这么大就不往邀请卡上嵌了——base64 之后还要涨三分之一，
+/// 而卡上那一块只有 1080 像素宽，一张 8 MB 的原图在上面看不出区别。
+const CARD_COVER_MAX_BYTES: u64 = 8 * 1024 * 1024;
+
+// `/_playtest/` 后面那一段。契约里给的是完整路径（`playtest_common`），
+// 这里只留尾巴——下面那个 `match` 是按尾巴分的。两者一致由测试守着。
+const CARD_TAIL: &str = "card.png";
+const CARD_WIDE_TAIL: &str = "card-wide.png";
+const SHARE_TAIL: &str = "share";
+const FOLLOW_TAIL: &str = "follow";
 
 pub struct App {
     pub config: Config,
@@ -50,15 +68,23 @@ pub struct App {
     pub breaker: Breaker,
     /// 现在连着的隧道（DESIGN §4.3）。和 `sites` 互不知情，谁说了算在 [`site`] 里定。
     pub tunnels: Arc<Tunnels>,
-    /// 广场那一份 `plaza.json`（DESIGN §3.8），同样只读对象存储。
+    /// 广场那一份 `plaza.json`（DESIGN §3.9），同样只读对象存储。
     pub plaza: PlazaCache,
+    /// 每个作品会变的那些（名额、群、公开反馈、头像）：`sites/<slug>/live.json`。
+    pub live: LiveCache,
+    /// 控制面现在能做什么：`capabilities.json`。
+    pub caps: CapabilitiesCache,
+    /// 邀请卡的字体库与渲染缓存（DESIGN §4.9）。整个进程共用一份。
+    pub cards: Arc<Renderer>,
 }
 
 impl App {
     pub fn new(config: Config) -> Self {
         let store = FsStore::new(config.store_root());
         let sites = SiteStore::new(store.clone());
-        let plaza = PlazaCache::new(store);
+        let plaza = PlazaCache::new(store.clone());
+        let live = LiveCache::new(store.clone());
+        let caps = CapabilitiesCache::new(store);
         let events = EventLog::new(config.events_path());
         let tunnels = Tunnels::new(&config);
         Self {
@@ -68,6 +94,9 @@ impl App {
             breaker: Breaker::new(),
             tunnels,
             plaza,
+            live,
+            caps,
+            cards: card::shared(),
         }
     }
 }
@@ -95,35 +124,262 @@ async fn handle(State(app): State<Arc<App>>, req: Request) -> Response {
 
     let authority = authority_of(&parts);
     match host::classify(&authority, &app.config.host_suffix) {
-        HostKind::Root => root(&app, &parts.method, parts.uri.path(), &authority).await,
+        HostKind::Root => root(&app, &authority, parts, body).await,
         HostKind::Unknown => page(StatusCode::NOT_FOUND, pages::not_found(), None),
         HostKind::Site(slug) => site(&app, &slug, &authority, parts, body).await,
     }
 }
 
-/// 根域就是广场（DESIGN §3.8）。
-async fn root(app: &App, method: &Method, path: &str, authority: &str) -> Response {
-    if method != Method::GET && method != Method::HEAD {
-        return method_not_allowed("GET, HEAD");
+/// 根域：广场、「我的」、关注与退订（DESIGN §3.9、§3.10）。**只有这几条路径**，
+/// 别的一律 404——根域上不放任何用户内容，它是玩家路径里唯一我们说了算的一页。
+async fn root(
+    app: &App,
+    authority: &str,
+    parts: axum::http::request::Parts,
+    body: Body,
+) -> Response {
+    let path = parts.uri.path();
+    let method = &parts.method;
+    let read = *method == Method::GET || *method == Method::HEAD;
+    let me = cookie_value(&parts.headers, ME_COOKIE)
+        .filter(|v| is_me_token(v))
+        .map(str::to_string);
+
+    if path == "/" {
+        return if read {
+            plaza_page(app, authority).await
+        } else {
+            method_not_allowed("GET, HEAD")
+        };
     }
-    if path != "/" {
-        return page(StatusCode::NOT_FOUND, pages::not_found(), None);
+    if path == root_paths::FOLLOW {
+        return if *method == Method::POST {
+            root_follow(app, authority, me.as_deref(), body).await
+        } else {
+            method_not_allowed("POST")
+        };
     }
+    if path == root_paths::ME {
+        return if read {
+            mine(app, authority, me.as_deref()).await
+        } else {
+            method_not_allowed("GET, HEAD")
+        };
+    }
+    if path == root_paths::ME_ACTION {
+        return if *method == Method::POST {
+            me_action(app, authority, me.as_deref(), body).await
+        } else {
+            method_not_allowed("POST")
+        };
+    }
+    if let Some(token) = path.strip_prefix(root_paths::ME_CONFIRM) {
+        return if read {
+            confirm(app, authority, token).await
+        } else {
+            method_not_allowed("GET")
+        };
+    }
+    if let Some(token) = path.strip_prefix(root_paths::ME_UNSUBSCRIBE) {
+        return if read {
+            unsubscribe(app, authority, token).await
+        } else {
+            method_not_allowed("GET")
+        };
+    }
+    if path == follow::SW_PATH {
+        return if read {
+            service_worker(*method == Method::HEAD)
+        } else {
+            method_not_allowed("GET, HEAD")
+        };
+    }
+    page(StatusCode::NOT_FOUND, pages::not_found(), None)
+}
+
+async fn plaza_page(app: &App, authority: &str) -> Response {
     let plaza = app.plaza.get().await;
     let nonce = new_nonce();
     let html = plaza::render(&plaza::View {
         plaza: &plaza,
-        host_suffix: &app.config.host_suffix,
-        nonce: &nonce,
         now: time::OffsetDateTime::now_utc(),
     });
+    // 这一页没有脚本，nonce 只是让根域的 CSP 保持同一个形状。
+    let mut headers = root_headers(app, authority, &nonce);
+    // 这一页对所有人一样，可以短暂公共缓存：内容 30 秒才变一次。
+    put(&mut headers, "cache-control", "public, max-age=30");
+    (StatusCode::OK, headers, html).into_response()
+}
 
+/// 根域上的关注：可以是某个作品，也可以是广场本身。有 `pt_me` 就是一下点击。
+async fn root_follow(app: &App, authority: &str, me: Option<&str>, body: Body) -> Response {
+    let raw = read_form(body).await;
+    let submission = match follow::parse(&raw, None, me) {
+        Ok(sub) => sub,
+        Err(why) => {
+            return root_html(
+                app,
+                authority,
+                StatusCode::BAD_REQUEST,
+                follow::invalid_page(&why, root_paths::ME),
+            )
+        }
+    };
+    let outcome =
+        follow::register(app.config.api_internal_url.as_deref(), &submission.request).await;
+    let back = if submission.to == "/" {
+        root_paths::ME
+    } else {
+        &submission.to
+    };
+    let (status, html) = follow::result_page(&outcome, &submission, back);
+    root_html(app, authority, status, html)
+}
+
+/// 「我的」（DESIGN §3.10）。没有 `pt_me` 的人看到的是一个邮箱输入，不是一页登录墙。
+async fn mine(app: &App, authority: &str, me: Option<&str>) -> Response {
+    let caps = app.caps.get().await;
+    let nonce = new_nonce();
+    let mut stale = false;
+    let view = match me {
+        Some(token) => match follow::view(app.config.api_internal_url.as_deref(), token).await {
+            follow::Mine::View(view) => Some(view),
+            // 控制面不认这把钥匙：清掉，按没有处理。不解释，玩家再点一次确认信就是了。
+            follow::Mine::Stale => {
+                stale = true;
+                None
+            }
+            follow::Mine::Unavailable => None,
+        },
+        None => None,
+    };
+    let html = follow::me_page(&follow::MePage {
+        view: view.as_ref(),
+        caps: &caps,
+        nonce: &nonce,
+    });
+    let mut headers = root_headers(app, authority, &nonce);
+    put(&mut headers, "cache-control", "no-store");
+    if stale {
+        append(
+            &mut headers,
+            "set-cookie",
+            &cookie(ME_COOKIE, "", Some(0), app.config.public_scheme == "https"),
+        );
+    }
+    (StatusCode::OK, headers, html).into_response()
+}
+
+/// 「我的」上那三个动作。做完一律 303 回 `/me`——刷新不会重复提交。
+async fn me_action(app: &App, authority: &str, me: Option<&str>, body: Body) -> Response {
+    let raw = read_form(body).await;
+    let action = field(&raw, "action").unwrap_or_default();
+    let api = app.config.api_internal_url.as_deref();
+    match action.as_str() {
+        follow::ACTION_UNFOLLOW => {
+            let target = field(&raw, playtest_common::follow::form::TARGET)
+                .as_deref()
+                .and_then(FollowTarget::parse);
+            if let (Some(token), Some(target)) = (me, target) {
+                follow::unfollow(api, token, target).await;
+            }
+        }
+        follow::ACTION_SEND_LINK => {
+            let email = field(&raw, playtest_common::follow::form::EMAIL).unwrap_or_default();
+            if playtest_common::follow::looks_like_email(&email) {
+                follow::send_link(api, email.trim()).await;
+            }
+        }
+        // TODO(contract): 关掉浏览器通知没有对应的控制面路由（`follow::routes` 里只有
+        // 取消关注与退订）。这一版按钮只在页面上有，点了之后什么都不做——在报告里说明。
+        follow::ACTION_PUSH_OFF => {
+            tracing::info!("有人想关掉浏览器通知，但控制面还没有这条路由");
+        }
+        _ => {}
+    }
+    let mut headers = base_headers();
+    put(&mut headers, "location", root_paths::ME);
+    put(&mut headers, "cache-control", "no-store");
+    let _ = authority;
+    (StatusCode::SEE_OTHER, headers).into_response()
+}
+
+/// 确认信里那条链接：换到 `pt_me`，种在根域上（host-only，DESIGN §4.1），再 303 到「我的」。
+async fn confirm(app: &App, authority: &str, token: &str) -> Response {
+    let Some(answer) = follow::confirm(app.config.api_internal_url.as_deref(), token).await else {
+        let caps = app.caps.get().await;
+        return root_html(
+            app,
+            authority,
+            StatusCode::OK,
+            follow::confirm_failed_page(&caps),
+        );
+    };
+    let mut headers = base_headers();
+    put(&mut headers, "location", root_paths::ME);
+    put(&mut headers, "cache-control", "no-store");
+    // **不写 `Domain`**：这把钥匙只属于根域这一个主机名，任何一个作品子域都读不到、
+    // 也种不进来（DESIGN §4.1）。
+    append(
+        &mut headers,
+        "set-cookie",
+        &cookie(
+            ME_COOKIE,
+            &answer.me_token,
+            Some(ME_MAX_AGE),
+            app.config.public_scheme == "https",
+        ),
+    );
+    (StatusCode::SEE_OTHER, headers).into_response()
+}
+
+/// 每封信底部那个一键退订。点了就退，不问为什么，也不放「再想想」。
+async fn unsubscribe(app: &App, authority: &str, token: &str) -> Response {
+    let done = follow::unsubscribe(app.config.api_internal_url.as_deref(), token).await;
+    let html = follow::unsubscribed_page(done);
+    let status = if done {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    let mut response = root_html(app, authority, status, html);
+    if done {
+        // 退订之后这台设备上那把钥匙也没意义了。
+        append(
+            response.headers_mut(),
+            "set-cookie",
+            &cookie(ME_COOKIE, "", Some(0), app.config.public_scheme == "https"),
+        );
+    }
+    response
+}
+
+/// 根域上我们自己的 Service Worker（只有它能弹通知）。放在保留前缀下面，
+/// 作用域是整个根域——它要处理的 `push` 事件和页面在不在开着无关。
+fn service_worker(head_only: bool) -> Response {
+    let mut headers = base_headers();
+    put(&mut headers, "content-type", "application/javascript");
+    // 短缓存：改了它要能很快铺开，但也别每次导航都回源。
+    put(&mut headers, "cache-control", "public, max-age=600");
+    put(&mut headers, "service-worker-allowed", "/");
+    if head_only {
+        return (StatusCode::OK, headers).into_response();
+    }
+    (StatusCode::OK, headers, follow::SW_JS).into_response()
+}
+
+/// 根域上一页 HTML 的标准答法。
+fn root_html(app: &App, authority: &str, status: StatusCode, html: String) -> Response {
+    let nonce = new_nonce();
+    let mut headers = root_headers(app, authority, &nonce);
+    put(&mut headers, "cache-control", "no-store");
+    (status, headers, html).into_response()
+}
+
+/// 根域的响应头。我们自己的页面、没有用户脚本，所以能把 CSP 锁死。
+fn root_headers(app: &App, authority: &str, nonce: &str) -> HeaderMap {
     let mut headers = base_headers();
     put(&mut headers, "content-type", "text/html; charset=utf-8");
-    // 这一页可以短暂公共缓存：内容 30 秒才变一次，前面的 Caddy 或浏览器多拿一次是白拿。
-    put(&mut headers, "cache-control", "public, max-age=30");
-    // 我们自己的页面，没有用户脚本，所以能锁死：脚本只放行带这个 nonce 的那段，
-    // 图只从各作品自己的子域来，别的一律不许（DESIGN §3.8「长相」）。
     let port = host::port_of(authority)
         .map(|p| format!(":{p}"))
         .unwrap_or_default();
@@ -131,12 +387,18 @@ async fn root(app: &App, method: &Method, path: &str, authority: &str) -> Respon
         "{}://*.{}{port}",
         app.config.public_scheme, app.config.host_suffix
     );
+    // 图只从各作品自己的子域来，外加一个例外：GitHub 的头像域。开发者的头像是
+    // 「一张脸比一个 ID 更像真人」那一层（DESIGN §3.9），而 GitHub 登录拿到的地址
+    // 就在这个域上。只放这一个来源，不放通配。
+    // 脚本只放行带这个 nonce 的那几段；`connect-src` 给「用浏览器通知」那一下 fetch；
+    // `worker-src` 给我们自己的 Service Worker；`form-action 'self'` 给关注表单。
     put(
         &mut headers,
         "content-security-policy",
         &format!(
-            "default-src 'none'; img-src {img_src}; style-src 'unsafe-inline'; \
-script-src 'nonce-{nonce}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+            "default-src 'none'; img-src {img_src} https://avatars.githubusercontent.com; \
+style-src 'unsafe-inline'; script-src 'nonce-{nonce}'; connect-src 'self'; worker-src 'self'; \
+base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
         ),
     );
     put(
@@ -144,7 +406,13 @@ script-src 'nonce-{nonce}'; base-uri 'none'; form-action 'none'; frame-ancestors
         "referrer-policy",
         "strict-origin-when-cross-origin",
     );
-    (StatusCode::OK, headers, html).into_response()
+    headers
+}
+
+/// `pt_me` 的形态。它是控制面签的，边缘不解读；这一道只挡明显不是它发的东西
+/// （控制字符会把 Set-Cookie 头拆断）。
+fn is_me_token(value: &str) -> bool {
+    (8..=256).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_graphic())
 }
 
 /// CSP 的 nonce：16 字节随机数的十六进制，每个响应一个。
@@ -171,9 +439,11 @@ async fn site(
     // 分界线由下面 `serve_file` 查完清单之后再定——门禁页、保留路径、静态文件都按上传的版本走。
     if let Some(session) = app.tunnels.get(slug).filter(|s| !s.claims.hybrid) {
         let manifest = session.manifest();
-        let ctx = Ctx::new(&parts, authority, slug, &app.config);
+        let mut ctx = Ctx::new(&parts, authority, slug, &app.config);
+        ctx.version_label = Some(tunnel::ONLINE_LABEL);
+        let ctx = &ctx;
         return match tail {
-            Some(tail) => reserved(app, &manifest, &ctx, &tail, parts, body).await,
+            Some(tail) => reserved(app, &manifest, ctx, &tail, parts, body).await,
             None if tunnel::wants_gate(
                 &manifest,
                 &parts.method,
@@ -182,7 +452,7 @@ async fn site(
                 ctx.has_gate_cookie,
             ) =>
             {
-                gate_page(app, &manifest, &ctx, &parts, Some(tunnel::ONLINE_LABEL)).await
+                gate_page(app, &manifest, ctx, &parts).await
             }
             None => {
                 tunnel::proxy::forward(
@@ -290,6 +560,11 @@ struct Ctx {
     has_gate_cookie: bool,
     navigation: bool,
     accept_encoding: AcceptEncoding,
+    /// 版本那个位置显示什么。上传路径是 `None`（显示 `v7`），隧道路径是「在线」——
+    /// 隧道没有版本这个概念（DESIGN §3.5）。门禁页和邀请卡都照它写。
+    version_label: Option<&'static str>,
+    /// 链接上的 `?from=`，只认 `card` / `notice`（DESIGN §3.5）。
+    from: Option<&'static str>,
 }
 
 impl Ctx {
@@ -313,6 +588,13 @@ impl Ctx {
         let suffix = &config.host_suffix;
         let scheme = &config.public_scheme;
         let port_part = port.map(|p| format!(":{p}")).unwrap_or_default();
+        let from = gate::known_source(
+            parts
+                .uri
+                .query()
+                .and_then(|q| field(q, playtest_common::FROM_PARAM))
+                .as_deref(),
+        );
         Self {
             root_url: format!("{scheme}://{suffix}{port_part}/"),
             page_url: format!("{scheme}://{slug}.{suffix}{port_part}{}", parts.uri.path()),
@@ -322,6 +604,8 @@ impl Ctx {
                 sid: sid.clone().unwrap_or_default(),
                 ua,
                 referer,
+                from,
+                name: None,
             },
             sid,
             has_gate_cookie: cookie_value(headers, GATE_COOKIE).is_some(),
@@ -330,6 +614,8 @@ impl Ctx {
                 header_str(headers, "accept"),
             ),
             accept_encoding: paths::parse_accept_encoding(header_str(headers, "accept-encoding")),
+            version_label: None,
+            from,
         }
     }
 }
@@ -382,7 +668,152 @@ async fn reserved(
             cover(app, manifest, &parts).await
         }
         "cover" => method_not_allowed("GET, HEAD"),
+        CARD_TAIL if parts.method == Method::GET || parts.method == Method::HEAD => {
+            card_png(app, manifest, ctx, &parts, Shape::Portrait).await
+        }
+        CARD_WIDE_TAIL if parts.method == Method::GET || parts.method == Method::HEAD => {
+            card_png(app, manifest, ctx, &parts, Shape::Wide).await
+        }
+        CARD_TAIL | CARD_WIDE_TAIL => method_not_allowed("GET, HEAD"),
+        SHARE_TAIL if parts.method == Method::GET || parts.method == Method::HEAD => {
+            let live = app.live.get(&manifest.slug).await;
+            match (SharePage {
+                manifest,
+                live: &live,
+                origin: &ctx.origin,
+            })
+            .render()
+            {
+                Some(html) => page(StatusCode::OK, html, isolated),
+                // 不公开的作品没有这一页。一页「你没有权限」等于告诉别人它存在。
+                None => page(StatusCode::NOT_FOUND, pages::not_found(), isolated),
+            }
+        }
+        SHARE_TAIL => method_not_allowed("GET, HEAD"),
+        FOLLOW_TAIL if parts.method == Method::POST => site_follow(app, manifest, ctx, body).await,
+        FOLLOW_TAIL => method_not_allowed("POST"),
         _ => page(StatusCode::NOT_FOUND, pages::file_not_found(), isolated),
+    }
+}
+
+/// 作品子域上的「有新版本时告诉我」（DESIGN §4.1）：表单交给玩家自己所在的域，
+/// 由边缘转给控制面——玩家的浏览器从不把邮箱直接交给另一个域。
+///
+/// 这里**不认 `pt_me`**：那把钥匙是根域的 host-only cookie，子域上读不到也不该读。
+async fn site_follow(app: &App, manifest: &Manifest, ctx: &Ctx, body: Body) -> Response {
+    let isolated = Some((manifest.isolated, false));
+    let raw = read_form(body).await;
+    let submission = match follow::parse(&raw, Some(&manifest.slug), None) {
+        Ok(sub) => sub,
+        Err(why) => {
+            return page(
+                StatusCode::BAD_REQUEST,
+                follow::invalid_page(&why, "/"),
+                isolated,
+            )
+        }
+    };
+    let outcome =
+        follow::register(app.config.api_internal_url.as_deref(), &submission.request).await;
+    let (status, html) = follow::result_page(&outcome, &submission, &submission.to);
+    let _ = ctx;
+    page(status, html, isolated)
+}
+
+/// 邀请卡（DESIGN §3.4、§4.9）。和封面一样：它是一张图，永远不会拿到 HTML，
+/// 也走这个 slug 的每小时熔断。
+async fn card_png(
+    app: &App,
+    manifest: &Manifest,
+    ctx: &Ctx,
+    parts: &axum::http::request::Parts,
+    shape: Shape,
+) -> Response {
+    let verdict = app
+        .breaker
+        .check(&manifest.slug, breaker::limit_for(manifest));
+    if !verdict.allowed {
+        let mut headers = base_headers();
+        put(
+            &mut headers,
+            "retry-after",
+            &verdict.retry_after.to_string(),
+        );
+        return (StatusCode::TOO_MANY_REQUESTS, headers).into_response();
+    }
+
+    let live = app.live.get(&manifest.slug).await;
+    let cover_bytes = cover_for_card(app, manifest).await;
+    let card = Card {
+        manifest,
+        live: &live,
+        origin: &ctx.origin,
+        host_suffix: &app.config.host_suffix,
+        cover: cover_bytes.as_ref().map(|(mime, bytes)| Cover {
+            mime,
+            bytes: bytes.as_slice(),
+        }),
+        version_label: ctx.version_label,
+        shape,
+    };
+    let etag = card.etag();
+
+    let mut headers = base_headers();
+    put(&mut headers, "content-type", "image/png");
+    put(&mut headers, "etag", &etag);
+    put(
+        &mut headers,
+        "cache-control",
+        &format!("public, max-age={}", card::MAX_AGE),
+    );
+    // 广场和抓分享卡片的机器人从别的源来拿它。
+    put(&mut headers, "access-control-allow-origin", "*");
+    security(&mut headers, manifest.isolated, true);
+    if matches_etag(parts.headers.get("if-none-match"), etag.trim_matches('"')) {
+        return (StatusCode::NOT_MODIFIED, headers).into_response();
+    }
+
+    let png = match app.cards.cached(&etag) {
+        Some(hit) => hit,
+        None => {
+            // 光栅化是纯 CPU 的几十毫秒，不能占着 tokio 的工作线程。
+            let svg = card.svg();
+            let renderer = app.cards.clone();
+            let key = etag.clone();
+            match tokio::task::spawn_blocking(move || renderer.render_svg(key, &svg, shape)).await {
+                Ok(Ok(png)) => png,
+                Ok(Err(err)) => {
+                    tracing::warn!(slug = %manifest.slug, %err, "邀请卡渲染失败");
+                    return (StatusCode::INTERNAL_SERVER_ERROR, base_headers()).into_response();
+                }
+                Err(err) => {
+                    tracing::warn!(slug = %manifest.slug, %err, "渲染邀请卡的线程没回来");
+                    return (StatusCode::INTERNAL_SERVER_ERROR, base_headers()).into_response();
+                }
+            }
+        }
+    };
+    put(&mut headers, "content-length", &png.len().to_string());
+    if parts.method == Method::HEAD {
+        return (StatusCode::OK, headers).into_response();
+    }
+    app.breaker.record(&manifest.slug, png.len() as u64);
+    (StatusCode::OK, headers, Body::from(png)).into_response()
+}
+
+/// 卡上那张封面的字节。读不到就当没有封面——卡照常出，只是换成字卡。
+async fn cover_for_card(app: &App, manifest: &Manifest) -> Option<(String, Vec<u8>)> {
+    let cover = manifest.cover.as_ref()?;
+    if cover.size > CARD_COVER_MAX_BYTES {
+        return None;
+    }
+    let path = app.sites.store().blob_path(&cover.hash).ok()?;
+    match tokio::fs::read(&path).await {
+        Ok(bytes) => Some((cover.mime.clone(), bytes)),
+        Err(err) => {
+            tracing::warn!(slug = %manifest.slug, %err, "邀请卡上的封面读不到，改用字卡");
+            None
+        }
     }
 }
 
@@ -455,15 +886,20 @@ async fn start(
     body: Body,
 ) -> Response {
     let form = read_form(body).await;
-    let target = field(&form, "to")
-        .or_else(|| parts.uri.query().and_then(|q| field(q, "to")))
+    let target = field(&form, gate::field::TO)
+        .or_else(|| parts.uri.query().and_then(|q| field(q, gate::field::TO)))
         .unwrap_or_default();
     let location = same_origin_target(&target);
     // 玩家真正从哪来：门禁页把自己收到的 Referer 放在表单里带过来。这一下 POST 的 Referer
     // 永远是门禁页自己，没有信息量。只留一个 URL 形态的值，别的当没有。
-    let came_from = field(&form, "from")
+    let came_from = field(&form, gate::field::REFERER)
         .filter(|f| f.starts_with("http://") || f.starts_with("https://"))
         .unwrap_or_default();
+    // 链接上带的来源比 Referer 干净：扫卡的人多半在微信里，UA 会说「微信」，
+    // 但开发者想知道的是「这个人是我发出去的卡带来的」（DESIGN §3.5）。
+    let source = gate::known_source(field(&form, gate::field::FROM).as_deref());
+    // 留名是自愿的，不填就是不填——没有名字的会话在点名册里显示设备和时间（DESIGN §3.3）。
+    let name = field(&form, gate::field::NAME).and_then(|raw| gate::clean_name(&raw));
 
     let secure = app.config.public_scheme == "https";
     let mut headers = base_headers();
@@ -499,6 +935,8 @@ async fn start(
     let visitor = Visitor {
         sid,
         referer: came_from,
+        from: source,
+        name,
         ..ctx.visitor.clone()
     };
     app.events
@@ -569,7 +1007,7 @@ async fn serve_file(
                 ctx.navigation,
                 ctx.has_gate_cookie,
             ) {
-                gate_page(app, manifest, ctx, &parts, None).await
+                gate_page(app, manifest, ctx, &parts).await
             } else {
                 blob(app, manifest, ctx, &parts, &served).await
             }
@@ -577,14 +1015,11 @@ async fn serve_file(
     }
 }
 
-/// `version_label` 是版本那个位置显示什么：上传路径传 `None`（显示 `v7`），
-/// 隧道路径传「在线」——隧道没有版本这个概念（DESIGN §3.5）。
 async fn gate_page(
     app: &App,
     manifest: &Manifest,
     ctx: &Ctx,
     parts: &axum::http::request::Parts,
-    version_label: Option<&str>,
 ) -> Response {
     let to = same_origin_target(
         parts
@@ -593,16 +1028,22 @@ async fn gate_page(
             .map(|pq| pq.as_str())
             .unwrap_or("/"),
     );
+    // 两份会变的文件，都是短缓存的本地读；控制面挂了它们就是空的，那几行不出现而已。
+    let live = app.live.get(&manifest.slug).await;
+    let caps = app.caps.get().await;
     let html = GatePage {
         manifest,
+        live: &live,
+        caps: &caps,
         to: &to,
         host_suffix: &app.config.host_suffix,
         root_url: &ctx.root_url,
         page_url: &ctx.page_url,
         origin: &ctx.origin,
         wechat: ctx.visitor.wechat,
-        version_label,
+        version_label: ctx.version_label,
         referer: &ctx.visitor.referer,
+        from: ctx.from,
     }
     .render();
 
@@ -907,7 +1348,7 @@ fn is_session_id(value: &str) -> bool {
 
 /// 只接受以单个 `/` 开头的同源相对路径。`//evil.com` 和 `/\evil.com` 在浏览器里
 /// 都会被当成绝对地址，是开放重定向；非 ASCII 或空白说明这不是我们发出去的值。
-fn same_origin_target(raw: &str) -> String {
+pub(crate) fn same_origin_target(raw: &str) -> String {
     let fallback = "/".to_string();
     if !raw.starts_with('/') {
         return fallback;
@@ -945,7 +1386,7 @@ async fn read_form(body: Body) -> String {
 }
 
 /// `application/x-www-form-urlencoded` 只有这么点规则，没必要为它加一个依赖。
-fn field(raw: &str, key: &str) -> Option<String> {
+pub(crate) fn field(raw: &str, key: &str) -> Option<String> {
     raw.split('&').filter(|p| !p.is_empty()).find_map(|pair| {
         let (name, value) = pair.split_once('=').unwrap_or((pair, ""));
         (decode_component(name) == key).then(|| decode_component(value))
@@ -960,6 +1401,22 @@ fn decode_component(raw: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 这里按尾巴分派，契约里给的是整条路径。两边写岔了，卡和分享页就会 404 得莫名其妙。
+    #[test]
+    fn tails_match_the_contract_paths() {
+        for (tail, full) in [
+            (CARD_TAIL, playtest_common::CARD_PATH),
+            (CARD_WIDE_TAIL, playtest_common::CARD_WIDE_PATH),
+            (SHARE_TAIL, playtest_common::SHARE_PATH),
+            (FOLLOW_TAIL, playtest_common::follow::edge_paths::FOLLOW),
+        ] {
+            assert_eq!(format!("{RESERVED_PATH_PREFIX}{tail}"), full);
+        }
+        // Service Worker 是我们自己的，契约里没有它，但它也得躲在保留前缀后面：
+        // 作品目录里有个同名文件也不能把它顶掉。
+        assert!(follow::SW_PATH.starts_with(RESERVED_PATH_PREFIX));
+    }
 
     #[test]
     fn reserved_prefix_is_never_a_site_file() {

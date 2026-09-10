@@ -26,8 +26,8 @@ export function TokenPage({ loginError, me }: { loginError: string | null; me: M
   const loggedIn = me?.kind === "github";
 
   return (
-    <>
-      <header class="page-head">
+    <div class="account-page">
+      <header class="stage-head">
         <h1>{loggedIn ? "账号" : "登录"}</h1>
         <p class="muted">
           {loggedIn
@@ -38,36 +38,62 @@ export function TokenPage({ loginError, me }: { loginError: string | null; me: M
         </p>
       </header>
 
-      {loginError ? <p class="notice warn">没登录成：{loginError}</p> : null}
+      {loginError ? <p class="notice">没登录成：{loginError}</p> : null}
 
-      {loggedIn ? null : (
-        <div class="card">
-          <a class="button primary" href={githubLoginUrl}>
-            用 GitHub 登录
-          </a>
-          <p class="muted small">
-            和终端里 <code>playtest login</code> 进的是同一个账号。GitHub 在你这里打不开的话，下面粘令牌也一样能看结果。
+      {loggedIn ? (
+        <section class="block">
+          <div class="block-head">
+            <h2>
+              {me?.avatar_url ? <img class="avatar big" src={me.avatar_url} alt="" /> : null}@
+              {me?.login ?? me?.display_name}
+            </h2>
+            <p class="muted">玩家在门禁页和广场上看到的是同一张脸、同一个名字。</p>
+          </div>
+        </section>
+      ) : (
+        <section class="block">
+          <div class="block-head">
+            <h2>用 GitHub 登录</h2>
+            <p class="muted">
+              和终端里 <code>playtest login</code> 进的是同一个账号。GitHub 在你这里打不开的话，下面粘令牌也一样能看结果。
+            </p>
+          </div>
+          <p class="row-actions">
+            <a class="button primary" href={githubLoginUrl}>
+              去 GitHub 授权
+            </a>
           </p>
-        </div>
+        </section>
       )}
 
-      <form class="card" onSubmit={submit}>
-        <label class="field">
-          <span>{loggedIn ? "换一个令牌" : "或者，把 CLI 给你的令牌粘在这里"}</span>
-          <input
-            type="password"
-            autocomplete="off"
-            spellcheck={false}
-            value={value}
-            placeholder="例如 vBoqXNsFgmJsWa5ZzE_WgKxT…"
-            onInput={(event) => setValue((event.target as HTMLInputElement).value)}
-          />
-        </label>
-        <p class="row-actions">
-          <button class="button" type="submit">
+      <form class="block" onSubmit={submit}>
+        <div class="block-head">
+          <h2>{loggedIn ? "换一个令牌" : "或者，粘贴 CLI 给你的令牌"}</h2>
+          {existing ? null : (
+            <p class="muted">
+              在作品目录里运行 <code>playtest</code>，它会自己申请一个 24 小时的匿名链接，令牌在{" "}
+              <code>~/.config/playtest/config.json</code> 里。
+            </p>
+          )}
+        </div>
+        <div class="field-row">
+          <label class="field grow">
+            <span>令牌</span>
+            <input
+              type="password"
+              autocomplete="off"
+              spellcheck={false}
+              value={value}
+              placeholder="例如 vBoqXNsFgmJsWa5ZzE_WgKxT…"
+              onInput={(event) => setValue((event.target as HTMLInputElement).value)}
+            />
+          </label>
+          <button class="button" type="submit" disabled={!value.trim()}>
             存下来
           </button>
-          {existing ? (
+        </div>
+        {existing ? (
+          <p class="row-actions">
             <button
               class="button quiet"
               type="button"
@@ -79,18 +105,9 @@ export function TokenPage({ loginError, me }: { loginError: string | null; me: M
             >
               {loggedIn ? "退出这台设备" : "清掉这台设备上的令牌"}
             </button>
-          ) : null}
-        </p>
-      </form>
-
-      {existing ? null : (
-        <div class="empty">
-          <p class="muted">
-            令牌从哪来？在作品目录里运行 <code>playtest</code>，它会自己申请一个 24 小时的匿名链接，
-            令牌在 <code>~/.config/playtest/config.json</code> 里。
           </p>
-        </div>
-      )}
-    </>
+        ) : null}
+      </form>
+    </div>
   );
 }

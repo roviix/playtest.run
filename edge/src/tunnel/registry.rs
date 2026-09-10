@@ -470,6 +470,7 @@ mod tests {
             data_dir: dir.to_path_buf(),
             host_suffix: "localhost".into(),
             public_scheme: "http".into(),
+            api_internal_url: None,
         })
     }
 

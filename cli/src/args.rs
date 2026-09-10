@@ -79,6 +79,22 @@ pub struct UploadArgs {
     #[arg(long, value_name = "想让人看什么")]
     pub seek: Option<String>,
 
+    /// 想找几位试玩者；门禁页和邀请卡上会写出来，留了名字的人算加入；蕴含 --seek
+    #[arg(long, value_name = "人数")]
+    pub seats: Option<u32>,
+
+    /// 你的群：QQ 群、微信群二维码页、Discord、Telegram 都行；玩家在门禁页和反馈之后看到「开发者的群」
+    #[arg(long, value_name = "链接")]
+    pub community: Option<String>,
+
+    /// 邀请卡存到哪（默认存到当前目录，叫「<作品名>-邀请卡.png」）
+    #[arg(long = "card-out", value_name = "路径")]
+    pub card_out: Option<PathBuf>,
+
+    /// 不存邀请卡
+    #[arg(long = "no-card", conflicts_with = "card_out")]
+    pub no_card: bool,
+
     /// 让页面跑在隔离环境里；Godot 4 的线程导出需要这个才能运行
     #[arg(long)]
     pub isolated: bool,
@@ -130,6 +146,10 @@ impl UploadArgs {
             || self.cover.is_some()
             || self.public
             || self.seek.is_some()
+            || self.seats.is_some()
+            || self.community.is_some()
+            || self.card_out.is_some()
+            || self.no_card
             || self.isolated
             || self.no_isolated
             || self.spa
@@ -140,6 +160,19 @@ impl UploadArgs {
             || self.backend.is_some()
             || self.api.is_some()
             || self.no_qr
+    }
+
+    /// 要不要标「正在找人测」。
+    ///
+    /// `--seats` 蕴含它：说了想找 10 位试玩者，却不在广场上标出来，那 10 个人不会自己出现。
+    /// 没写 `--seek` 的文案就只标一下，不编一句「想让你看什么」。
+    pub fn seeking(&self) -> bool {
+        self.seek.is_some() || self.seats.is_some()
+    }
+
+    /// 要不要放到广场上。求测必须先在广场上，否则没人看得到这个标。
+    pub fn wants_plaza(&self) -> bool {
+        self.public || self.seeking()
     }
 }
 
@@ -198,6 +231,28 @@ pub enum Command {
         /// 例如 3 或 v3
         #[arg(value_name = "版本")]
         version: String,
+
+        #[arg(long, value_name = "网址")]
+        api: Option<String>,
+    },
+
+    /// 重新拿一张邀请卡，存成 PNG；发到群里，别人长按识别就能玩
+    Card {
+        #[arg(value_name = "slug 或目录")]
+        target: String,
+
+        /// 存到哪（默认存到当前目录，叫「<作品名>-邀请卡.png」）
+        #[arg(long, value_name = "路径")]
+        out: Option<PathBuf>,
+
+        #[arg(long, value_name = "网址")]
+        api: Option<String>,
+    },
+
+    /// 有多少人关注着这个作品；下一版发出去，他们会收到通知
+    Followers {
+        #[arg(value_name = "slug 或目录")]
+        target: String,
 
         #[arg(long, value_name = "网址")]
         api: Option<String>,
@@ -346,6 +401,101 @@ mod tests {
         assert!(
             matches!(cli.command, Some(Command::Unlist { slug, .. }) if slug == "brisk-otter-41")
         );
+    }
+
+    #[test]
+    fn seats_implies_looking_for_testers_and_therefore_the_plaza() {
+        let cli = Cli::try_parse_from(["playtest", "./dist", "--seats", "10"]).unwrap();
+        assert_eq!(cli.upload.seats, Some(10));
+        assert!(!cli.upload.public, "没写 --public");
+        assert!(cli.upload.seeking(), "说了想找 10 位试玩者就是在找人测");
+        assert!(
+            cli.upload.wants_plaza(),
+            "找人测得先在广场上，否则没人看得到"
+        );
+        assert!(cli.upload.any_set());
+
+        // 什么都没说的时候，广场一动不动。
+        let plain = Cli::try_parse_from(["playtest", "./dist"]).unwrap();
+        assert!(!plain.upload.seeking());
+        assert!(!plain.upload.wants_plaza());
+
+        // --seek 也蕴含上广场；--public 单独给不算找人测。
+        let sought = Cli::try_parse_from(["playtest", "./dist", "--seek", "看新手引导"]).unwrap();
+        assert!(sought.upload.seeking() && sought.upload.wants_plaza());
+        let opened = Cli::try_parse_from(["playtest", "./dist", "--public"]).unwrap();
+        assert!(!opened.upload.seeking() && opened.upload.wants_plaza());
+    }
+
+    #[test]
+    fn seats_takes_a_number() {
+        assert!(Cli::try_parse_from(["playtest", "./dist", "--seats", "十"]).is_err());
+        assert!(Cli::try_parse_from(["playtest", "./dist", "--seats", "-3"]).is_err());
+        // 范围（1..=MAX_SEATS）在 upload.rs 里查，那里能把话说得更清楚。
+        assert!(Cli::try_parse_from(["playtest", "./dist", "--seats", "0"]).is_ok());
+    }
+
+    #[test]
+    fn community_is_a_flag_of_its_own_and_does_not_touch_the_plaza() {
+        let cli =
+            Cli::try_parse_from(["playtest", "./dist", "--community", "https://t.me/x"]).unwrap();
+        assert_eq!(cli.upload.community.as_deref(), Some("https://t.me/x"));
+        assert!(cli.upload.any_set());
+        assert!(
+            !cli.upload.wants_plaza(),
+            "填了个群号不该把作品挂到广场上去"
+        );
+    }
+
+    #[test]
+    fn the_card_can_go_somewhere_else_or_nowhere() {
+        let cli =
+            Cli::try_parse_from(["playtest", "./dist", "--card-out", "~/Desktop/卡.png"]).unwrap();
+        assert_eq!(cli.upload.card_out, Some(PathBuf::from("~/Desktop/卡.png")));
+        assert!(!cli.upload.no_card);
+        assert!(cli.upload.any_set());
+
+        let cli = Cli::try_parse_from(["playtest", "./dist", "--no-card"]).unwrap();
+        assert!(cli.upload.no_card);
+        assert!(cli.upload.card_out.is_none());
+        assert!(cli.upload.any_set());
+
+        // 「存到这里」和「不要存」一起说，是自相矛盾，当场拦下。
+        assert!(
+            Cli::try_parse_from(["playtest", "./dist", "--no-card", "--card-out", "a.png"])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn card_and_followers_take_a_slug_or_a_directory() {
+        let cli = Cli::try_parse_from(["playtest", "card", "brisk-otter-41"]).unwrap();
+        match cli.command {
+            Some(Command::Card { target, out, .. }) => {
+                assert_eq!(target, "brisk-otter-41");
+                assert!(out.is_none());
+            }
+            other => panic!("解析成了 {other:?}"),
+        }
+
+        let cli =
+            Cli::try_parse_from(["playtest", "card", "./dist", "--out", "/tmp/卡.png"]).unwrap();
+        match cli.command {
+            Some(Command::Card { target, out, .. }) => {
+                assert_eq!(target, "./dist");
+                assert_eq!(out, Some(PathBuf::from("/tmp/卡.png")));
+            }
+            other => panic!("解析成了 {other:?}"),
+        }
+
+        let cli = Cli::try_parse_from(["playtest", "followers", "brisk-otter-41"]).unwrap();
+        assert!(
+            matches!(cli.command, Some(Command::Followers { target, .. }) if target == "brisk-otter-41")
+        );
+
+        // 不给作品就不知道要哪一张卡。
+        assert!(Cli::try_parse_from(["playtest", "card"]).is_err());
+        assert!(Cli::try_parse_from(["playtest", "followers"]).is_err());
     }
 
     #[test]

@@ -228,10 +228,31 @@ pub async fn commit(
             &created_at,
         )?;
     }
+    // 关注者要收到「出新版本了」（DESIGN §3.7）。只入队，真发在 notify 的队列里，
+    // 发信慢或者失败都不该让这次上传变成失败。
+    {
+        let conn = state.db().lock().await;
+        match crate::notify::enqueue_site_version(
+            &conn,
+            &site.slug,
+            &title,
+            version,
+            note.as_deref(),
+            &state.site_url(&site.slug),
+            clock::now(),
+        ) {
+            Ok(queued) if queued > 0 => {
+                tracing::info!(slug = %site.slug, version, queued, "给关注者排了通知")
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!(error = %e, "排版本通知失败，这一版的关注者收不到信"),
+        }
+    }
     // 公开着的作品，新版本要立刻出现在广场上；没公开的这一步只是重写一份一样的文件。
     if site.listing.public {
         crate::plaza::publish(&state).await;
     }
+    crate::live::publish(&state, &site.slug).await;
 
     tracing::info!(slug = %site.slug, version, file_count, total_bytes, "提交了一个版本");
     Ok(Json(CommitUploadResponse {

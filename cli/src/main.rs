@@ -3,6 +3,7 @@
 //! 退出码分层，见 [`output::Code`]；`--json` 的输出形状也在那个模块的开头。
 
 mod args;
+mod card;
 mod client;
 mod clock;
 mod config;
@@ -95,7 +96,7 @@ async fn dispatch(cli: Cli) -> Result<()> {
     let machine = output::is_json();
     if cli.command.is_some() && cli.upload.any_set() {
         return Err(output::usage(
-            "子命令（ls / rm / open / unlist / mcp）不和要发出去的目录一起用。要发目录就只写 playtest ./dist；\
+            "子命令（ls / rm / open / unlist / card / followers / mcp）不和要发出去的目录一起用。要发目录就只写 playtest ./dist；\
              要用子命令就把目录和 --name 这类参数去掉。",
         ));
     }
@@ -111,6 +112,16 @@ async fn dispatch(cli: Cli) -> Result<()> {
             output::open(&target, api.as_deref()).await
         }
         Some(Command::Open { target, api }) => sites::open(&target, api.as_deref()).await,
+        Some(Command::Card { target, out, api }) if machine => {
+            output::card(&target, out.as_deref(), api.as_deref()).await
+        }
+        Some(Command::Card { target, out, api }) => {
+            sites::card(&target, out.as_deref(), api.as_deref()).await
+        }
+        Some(Command::Followers { target, api }) if machine => {
+            output::followers(&target, api.as_deref()).await
+        }
+        Some(Command::Followers { target, api }) => sites::followers(&target, api.as_deref()).await,
         // 机器模式下也走同一条：它只打一行话，`--json` 的调用方看退出码就够了。
         Some(Command::Unlist { slug, api }) => sites::unlist(&slug, api.as_deref()).await,
         Some(Command::Versions { target, api }) => sites::versions(&target, api.as_deref()).await,

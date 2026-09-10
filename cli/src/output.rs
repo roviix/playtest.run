@@ -15,11 +15,17 @@
 //!  "url":"https://brisk-otter-41.playtest.run","version":7,
 //!  "elapsed_ms":5100,"timings":{"hash_ms":300,"prepare_ms":900,"upload_ms":3100,"commit_ms":800},
 //!  "expires_at":"2026-09-08T04:09:03Z","qr_text":"█▀▀▀▀▀█ …",
+//!  "card_url":"https://brisk-otter-41.playtest.run/_playtest/card.png",
+//!  "card_path":"./小球-邀请卡.png","seats":10,
+//!  "plaza_url":"https://playtest.run/",
+//!  "console_url":"https://playtest.roviix.com/console/#/s/brisk-otter-41",
 //!  "findings":[{"level":"warn","message":"这个导出用到了 SharedArrayBuffer（线程）","hint":"加 --isolated"}]}
 //! {"ok":true,"action":"list","elapsed_ms":120,
-//!  "sites":[{"slug":"brisk-otter-41","url":"…","title":"小球","version":7,"expires_at":"…"}]}
+//!  "sites":[{"slug":"brisk-otter-41","url":"…","title":"小球","version":7,"followers":12,"expires_at":"…"}]}
 //! {"ok":true,"action":"remove","slug":"brisk-otter-41","elapsed_ms":90}
 //! {"ok":true,"action":"open","slug":"brisk-otter-41","url":"…","opened":false,"elapsed_ms":80}
+//! {"ok":true,"action":"card","slug":"brisk-otter-41","title":"小球","card_url":"…","card_path":"./小球-邀请卡.png","elapsed_ms":700}
+//! {"ok":true,"action":"followers","slug":"brisk-otter-41","title":"小球","followers":12,"elapsed_ms":80}
 //! {"ok":true,"action":"help","text":"…帮助全文…","elapsed_ms":1}
 //! ```
 //!
@@ -34,7 +40,11 @@
 //!
 //! - `qr_text` 是终端二维码的原文，**JSON 模式下不往终端画**，交给 agent 自己贴回对话；
 //!   加了 `--no-qr` 就没有这个字段。
-//! - `expires_at`、`hint`、`qr_text` 可能不出现（没有就是没有），其余字段一定在。
+//! - `card_url` 总是有——那张卡由边缘按当前版本渲染，地址不随时间变；`card_path` 只有真的
+//!   存下来了才有（加了 `--no-card`、或者这一刻边缘还没渲染好，就没有）。
+//! - `console_url` 是开发者自己看结果的地方，玩家路径上不出现它（AGENTS 第 7 条）。
+//! - `expires_at`、`hint`、`qr_text`、`card_path`、`seats`、`plaza_url` 可能不出现
+//!   （没有就是没有），其余字段一定在。
 //! - `findings` 是上传时对导出物的检查结果，见 [`Finding`]；没有发现就是空数组。
 //! - `elapsed_ms` 从进程启动算到打印这一刻，`timings` 是其中几段。
 //!
@@ -54,7 +64,7 @@ use serde::{Serialize, Serializer};
 
 use crate::client::{self, Client};
 use crate::config::{self, Config};
-use crate::{args, clock, ui};
+use crate::{args, card, clock, sites, ui};
 
 // ---------------------------------------------------------------- 模式与秒表
 
@@ -212,6 +222,16 @@ pub fn bad_input(message: impl Into<String>) -> anyhow::Error {
 /// 同上，但带一句「该怎么办」。
 pub fn bad_input_with_hint(message: impl Into<String>, hint: impl Into<String>) -> anyhow::Error {
     fail(Code::BadInput, message, Some(hint.into()))
+}
+
+/// 连不上对面。控制面那边由 [`client::Error`] 归类，这条给别的地址用（比如拿邀请卡）。
+pub fn network(message: impl Into<String>, hint: impl Into<String>) -> anyhow::Error {
+    fail(Code::Network, message, Some(hint.into()))
+}
+
+/// 连上了，但对面这一刻给不了要的东西。
+pub fn server_error(message: impl Into<String>, hint: impl Into<String>) -> anyhow::Error {
+    fail(Code::ServerError, message, Some(hint.into()))
 }
 
 /// 把一段本地检查里出的错都算成「给的东西有问题」。已经归过类的原样放行。
@@ -404,10 +424,33 @@ pub struct UploadReport {
     pub expires_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub qr_text: Option<String>,
+    /// 那张邀请卡在哪儿（DESIGN §3.4）。边缘按当前版本渲染，所以这个地址一直有效。
+    pub card_url: String,
+    /// 存到本地哪儿了。没存成（`--no-card`，或者这一刻还拿不到）就没有这一项。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub card_path: Option<String>,
+    /// 想找几位试玩者（`--seats`）。没说就没有这一项。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seats: Option<u32>,
+    /// 广场的地址。没放到广场上就没有这一项。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plaza_url: Option<String>,
+    /// 开发者自己看结果的地方。
+    pub console_url: String,
     pub findings: Vec<Finding>,
     /// 这次上传之后作品在广场上的状态（DESIGN §3.8）。没动过广场就没有这一段。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plaza: Option<PlazaOut>,
+    /// 卡的下场。人类模式靠它决定说哪一句；JSON 里看 `card_path` 有没有就够了。
+    #[serde(skip)]
+    pub card: card::Outcome,
+    /// 卡的字节。只有 MCP 用得上（贴一张图回对话），不进 JSON——几百 KB 的 base64
+    /// 塞进一行 stdout，对着管道读的脚本会很难受。
+    #[serde(skip)]
+    pub card_png: Option<Vec<u8>>,
+    /// 这一版没有封面。JSON 里它是 `findings` 里的一条，人类模式排在耗时前面那一行。
+    #[serde(skip)]
+    pub without_cover: bool,
 }
 
 /// 广场状态在输出里的样子。
@@ -436,6 +479,8 @@ impl UploadReport {
         Self {
             ok: true,
             action: "upload",
+            card_url: playtest_common::card_url(&url),
+            console_url: console_url(&slug),
             slug,
             url,
             title,
@@ -444,13 +489,47 @@ impl UploadReport {
             timings,
             expires_at,
             qr_text,
+            card_path: None,
+            seats: None,
+            plaza_url: None,
             findings,
             plaza: None,
+            card: card::Outcome::default(),
+            card_png: None,
+            without_cover: false,
         }
+    }
+
+    /// 广场那一段。`plaza_url` 是 DESIGN §3.2 点名的字段，`plaza` 是同一件事更细的一份：
+    /// 只要地址的脚本读前者，要知道「标了求测没有」的 agent 读后者。
+    pub fn on_plaza(&mut self, plaza: PlazaOut) {
+        self.plaza_url = Some(plaza.url.clone());
+        self.plaza = Some(plaza);
+    }
+
+    /// 那张邀请卡的下场。
+    pub fn with_card(&mut self, taken: card::Taken) {
+        self.card = taken.outcome;
+        self.card_path = taken.path;
+        self.card_png = taken.png;
+    }
+
+    /// 把卡的字节拿走（MCP 要贴进对话）。拿走而不是借用：几百 KB 的图只该有一份。
+    pub fn take_card_png(&mut self) -> Option<Vec<u8>> {
+        self.card_png.take()
     }
 }
 
-/// 上传做成了：JSON 模式给一个对象，人类模式给链接、二维码和耗时。
+/// 开发者看结果的那一页（DESIGN §3.2）。它在开发者那一侧的域名上——玩家路径上永远不出现
+/// 这个地址（AGENTS 第 7 条），但打给开发者自己看是对的。
+pub fn console_url(slug: &str) -> String {
+    format!("{}/console/#/s/{slug}", playtest_common::DEVELOPER_API_URL)
+}
+
+/// 上传做成了：JSON 模式给一个对象，人类模式给 DESIGN §3.2 列的那几行。
+///
+/// 行的顺序就是一个第一次用的人该按什么次序做下一件事：先拿到链接，再拿到能发出去的东西
+/// （二维码、邀请卡），再知道这东西被放到了哪儿、能活多久，最后才是「回头去哪看结果」。
 pub fn report_upload(report: &UploadReport) {
     if is_json() {
         emit(report);
@@ -466,17 +545,83 @@ pub fn report_upload(report: &UploadReport) {
             ui::say("手机扫码就能玩。");
         }
     }
+    for (tone, line) in after_the_link(report) {
+        say_toned(tone, &line);
+    }
+}
+
+/// 一行是平铺直叙，还是要人留意一下。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Tone {
+    Plain,
+    Warn,
+}
+
+fn say_toned(tone: Tone, line: &str) {
+    match tone {
+        Tone::Plain => ui::say(line),
+        Tone::Warn => ui::warn(line),
+    }
+}
+
+/// 链接和二维码之后的那几行，按 DESIGN §3.2 的顺序。
+///
+/// 拎成一个纯函数是因为**顺序本身是产品的一部分**：先给能发出去的东西（卡），再说它被放到了
+/// 哪儿、能活多久，最后才是回头看结果的地方和耗时。散在一串 ui 调用里的顺序没人测得了。
+fn after_the_link(report: &UploadReport) -> Vec<(Tone, String)> {
+    let mut lines = Vec::new();
+    if let Some(line) = card_line(
+        report.card,
+        report.card_path.as_deref(),
+        &report.card_url,
+        &report.slug,
+    ) {
+        lines.push((Tone::Plain, line));
+    }
     if let Some(plaza) = &report.plaza {
-        ui::say(&plaza_line(plaza));
+        lines.push((Tone::Plain, plaza_line(plaza)));
+    }
+    if let Some(seats) = report.seats {
+        lines.push((Tone::Plain, seats_line(seats)));
     }
     if let Some(expires_at) = &report.expires_at {
-        say_expiry(expires_at, "想让它留下来：playtest login。");
+        lines.push(expiry_line(expires_at, "想让它留下来：playtest login。"));
     }
-    ui::say(&format!(
-        "谁打开了、玩到哪、报了什么错：{}/console/（令牌在 playtest 的配置文件里）",
-        playtest_common::DEVELOPER_API_URL
-    ));
-    ui::say(&timing_line(report.elapsed_ms, report.timings));
+    lines.push((Tone::Plain, console_line(&report.slug)));
+    if report.without_cover {
+        lines.push((Tone::Plain, NO_COVER.to_string()));
+    }
+    lines.push((Tone::Plain, timing_line(report.elapsed_ms, report.timings)));
+    lines
+}
+
+/// 邀请卡那一行。`--no-card` 时一个字都不说——他说了不要。
+fn card_line(outcome: card::Outcome, path: Option<&str>, url: &str, slug: &str) -> Option<String> {
+    match (outcome, path) {
+        (card::Outcome::Saved, Some(path)) => {
+            Some(format!("邀请卡已存到 {path}——发到群里，别人长按识别就能玩"))
+        }
+        // 存下来了却没有路径，是不可能的；真出现了也当没拿到说，别打一句半截的话。
+        (card::Outcome::Saved, None) | (card::Outcome::Missing, _) => Some(format!(
+            "邀请卡稍后可以在 {url} 拿到，或 playtest card {slug}"
+        )),
+        (card::Outcome::Skipped, _) => None,
+    }
+}
+
+/// 没有封面时那一句（DESIGN §4.2 的上传时检查，只提醒、不拦）。广场好不好看八成取决于封面，
+/// 但我们不猜、不截图（DESIGN §3.12「从不运行用户代码」），只说一句。
+pub const NO_COVER: &str = "没有封面：加 --cover 一张图，广场和邀请卡都会好看很多";
+
+/// 「来的人玩成什么样」那一行。发完不说这句，「知道结果」这半个产品就没人知道在哪
+/// （`docs/spikes/2026-09-08-dogfood-mofish-airdrop.md` 第四节第 4 条）。
+fn console_line(slug: &str) -> String {
+    format!("来的人玩成什么样，控制台里看得见：{}", console_url(slug))
+}
+
+/// 名额那一行（DESIGN §3.3 第 4 条）。「加入」的定义要说出来，不然发的人会以为是打开的人数。
+fn seats_line(seats: u32) -> String {
+    format!("想找 {seats} 位试玩者，门禁页和邀请卡上都写着；留了名字的人算加入")
 }
 
 /// 匿名链接还剩不到这么久就要提醒：一场测试从发链接到大家点开常常要一两个小时，
@@ -485,17 +630,23 @@ const EXPIRY_WARNING: time::Duration = time::Duration::hours(2);
 
 /// 匿名链接的有效期那一句。快到期了就换成提醒，并说清到期之后会发生什么——
 /// 再跑一次拿到的是新链接，玩家手里的旧链接打不开。
-fn say_expiry(expires_at: &str, about_login: &str) {
+fn expiry_line(expires_at: &str, about_login: &str) -> (Tone, String) {
     match clock::remaining(expires_at, clock::now()) {
-        Some(left) if left < EXPIRY_WARNING => ui::warn(&format!(
-            "这条匿名链接只剩 {} 就失效（{}）。到期后再跑一次会拿到一条新链接，发出去的旧链接会打不开。",
-            clock::human_duration(left),
-            clock::human(expires_at)
-        )),
-        _ => ui::say(&format!(
-            "这是匿名链接，{} 后失效。{about_login}",
-            clock::human(expires_at)
-        )),
+        Some(left) if left < EXPIRY_WARNING => (
+            Tone::Warn,
+            format!(
+                "这条匿名链接只剩 {} 就失效（{}）。到期后再跑一次会拿到一条新链接，发出去的旧链接会打不开。",
+                clock::human_duration(left),
+                clock::human(expires_at)
+            ),
+        ),
+        _ => (
+            Tone::Plain,
+            format!(
+                "这是匿名链接，{} 后失效。{about_login}",
+                clock::human(expires_at)
+            ),
+        ),
     }
 }
 
@@ -548,6 +699,9 @@ pub struct SiteOut {
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<u32>,
+    /// 有多少人关注着它（DESIGN §3.6）。开发者只看到这个数字，看不到是谁——
+    /// 邮箱由我们保管、我们代发，这不是限制，是开发者不用自己扛的那份责任。
+    pub followers: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<String>,
 }
@@ -559,6 +713,7 @@ impl From<Site> for SiteOut {
             url: site.url,
             title: site.title,
             version: site.current_version,
+            followers: site.listing.followers,
             expires_at: site.expires_at,
         }
     }
@@ -645,6 +800,64 @@ pub async fn open(target: &str, api_flag: Option<&str>) -> Result<()> {
         slug: site.slug,
         url: site.url,
         opened: false,
+        elapsed_ms: elapsed_ms(),
+    });
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct CardReport {
+    ok: bool,
+    action: &'static str,
+    slug: String,
+    title: String,
+    card_url: String,
+    card_path: String,
+    elapsed_ms: u64,
+}
+
+#[derive(Debug, Serialize)]
+struct FollowersReport {
+    ok: bool,
+    action: &'static str,
+    slug: String,
+    title: String,
+    followers: u32,
+    elapsed_ms: u64,
+}
+
+/// `playtest card <slug 或目录> --json`。图不进 JSON——一个几百 KB 的 base64 塞进一行 stdout，
+/// 对着管道读的脚本会很难受；这里给的是文件路径，图在文件里。
+pub async fn card(
+    target: &str,
+    out: Option<&std::path::Path>,
+    api_flag: Option<&str>,
+) -> Result<()> {
+    let site = sites::look_up(target, api_flag).await?;
+    let png = card::fetch_or_explain(&site).await?;
+    let path = card::place(&site, out);
+    card::save(&path, &png).map_err(as_bad_input)?;
+    emit(&CardReport {
+        ok: true,
+        action: "card",
+        card_url: playtest_common::card_url(&site.url),
+        card_path: card::shown(&path),
+        slug: site.slug,
+        title: site.title,
+        elapsed_ms: elapsed_ms(),
+    });
+    Ok(())
+}
+
+/// `playtest followers <slug 或目录> --json`。
+pub async fn followers(target: &str, api_flag: Option<&str>) -> Result<()> {
+    let site = sites::look_up(target, api_flag).await?;
+    emit(&FollowersReport {
+        ok: true,
+        action: "followers",
+        slug: site.slug,
+        title: site.title,
+        followers: site.listing.followers,
         elapsed_ms: elapsed_ms(),
     });
     Ok(())
@@ -749,11 +962,18 @@ pub struct OnlineReport {
     pub elapsed_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub qr_text: Option<String>,
+    /// 隧道作品一样有门禁页、一样有邀请卡（DESIGN §3.4）。
+    pub card_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub card_path: Option<String>,
+    pub console_url: String,
     /// 这次启动看出来的事：Vite 的热更新提示、页面太大该改用上传，等等。
     pub findings: Vec<Finding>,
     /// 混合模式里接在隧道上的后端。整作品隧道没有这一段。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backend: Option<BackendOut>,
+    #[serde(skip)]
+    pub card: card::Outcome,
 }
 
 /// 混合模式的后端在输出里的样子：上传目录里没有的路径都走到这个本地端口。
@@ -772,15 +992,24 @@ impl OnlineReport {
     ) -> Self {
         Self {
             event: "online",
+            card_url: playtest_common::card_url(&url),
+            console_url: console_url(&slug),
             slug,
             url,
             expires_at,
             attempt: 0,
             elapsed_ms: elapsed_ms(),
             qr_text,
+            card_path: None,
             findings,
             backend: None,
+            card: card::Outcome::default(),
         }
+    }
+
+    pub fn with_card(&mut self, taken: card::Taken) {
+        self.card = taken.outcome;
+        self.card_path = taken.path;
     }
 }
 
@@ -818,13 +1047,19 @@ pub fn report_online(report: &OnlineReport) {
             ui::say("手机扫码就能玩。");
         }
     }
-    if let Some(expires_at) = &report.expires_at {
-        say_expiry(expires_at, "想让它留下来：playtest login。");
+    if let Some(line) = card_line(
+        report.card,
+        report.card_path.as_deref(),
+        &report.card_url,
+        &report.slug,
+    ) {
+        ui::say(&line);
     }
-    ui::say(&format!(
-        "谁打开了、玩到哪、报了什么错：{}/console/（令牌在 playtest 的配置文件里）",
-        playtest_common::DEVELOPER_API_URL
-    ));
+    if let Some(expires_at) = &report.expires_at {
+        let (tone, line) = expiry_line(expires_at, "想让它留下来：playtest login。");
+        say_toned(tone, &line);
+    }
+    ui::say(&console_line(&report.slug));
     say_findings(&report.findings);
     ui::say("按 Ctrl-C 结束，结束后玩家会看到「开发者的电脑暂时不在线」。");
     ui::say(&format!(
@@ -1055,6 +1290,163 @@ mod tests {
         assert_eq!(json["findings"][0]["level"], "warn");
         assert_eq!(json["findings"][0]["hint"], "加 --isolated");
         assert!(json.get("qr_text").is_none(), "--no-qr 时不该有这个字段");
+    }
+
+    /// 一个刚发完的作品，用来试各种输出。
+    fn a_report() -> UploadReport {
+        UploadReport::new(
+            "brisk-otter-41".into(),
+            "https://brisk-otter-41.playtest.run".into(),
+            "小球大冒险".into(),
+            7,
+            Timings::default(),
+            None,
+            None,
+            Vec::new(),
+        )
+    }
+
+    #[test]
+    fn the_card_and_the_console_are_fields_of_their_own() {
+        let mut report = a_report();
+        let json = serde_json::to_value(&report).unwrap();
+        // 卡的地址一直有效（边缘按当前版本渲染），所以它总在。
+        assert_eq!(
+            json["card_url"],
+            "https://brisk-otter-41.playtest.run/_playtest/card.png"
+        );
+        assert_eq!(
+            json["console_url"],
+            format!(
+                "{}/console/#/s/brisk-otter-41",
+                playtest_common::DEVELOPER_API_URL
+            )
+        );
+        assert!(json.get("card_path").is_none(), "还没存下来就不该有路径");
+        assert!(json.get("seats").is_none(), "没说要找几位就不该有这一项");
+        assert!(json.get("plaza_url").is_none(), "没上广场就不该有这一项");
+
+        report.with_card(card::Taken {
+            outcome: card::Outcome::Saved,
+            path: Some("./小球大冒险-邀请卡.png".into()),
+            png: Some(vec![1, 2, 3]),
+        });
+        report.seats = Some(10);
+        report.on_plaza(PlazaOut {
+            url: "https://playtest.run/".into(),
+            public: true,
+            seeking: true,
+            seek_note: None,
+        });
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json["card_path"], "./小球大冒险-邀请卡.png");
+        assert_eq!(json["seats"], 10);
+        assert_eq!(json["plaza_url"], "https://playtest.run/");
+        assert_eq!(json["plaza"]["seeking"], true);
+        // 卡的字节只给 MCP 贴图用，几百 KB 的 base64 不该出现在 stdout 的那一行里。
+        assert!(json.get("card_png").is_none());
+        assert_eq!(report.take_card_png(), Some(vec![1, 2, 3]));
+    }
+
+    #[test]
+    fn a_listed_work_says_how_many_people_follow_it() {
+        let site = SiteOut::from(Site {
+            slug: "brisk-otter-41".into(),
+            url: "https://brisk-otter-41.playtest.run".into(),
+            title: "小球大冒险".into(),
+            current_version: Some(7),
+            created_at: "2026-09-09T00:00:00Z".into(),
+            expires_at: None,
+            listing: playtest_common::api::Listing {
+                followers: 12,
+                ..Default::default()
+            },
+        });
+        let json = serde_json::to_value(&site).unwrap();
+        assert_eq!(json["followers"], 12);
+        assert_eq!(json["version"], 7);
+        // 一个人都没有也要有这个字段：脚本不该为「没有关注者」写一个分支。
+        let none = serde_json::to_value(SiteOut::from(Site {
+            listing: Default::default(),
+            ..a_site()
+        }))
+        .unwrap();
+        assert_eq!(none["followers"], 0);
+    }
+
+    fn a_site() -> Site {
+        Site {
+            slug: "brisk-otter-41".into(),
+            url: "https://brisk-otter-41.playtest.run".into(),
+            title: "小球大冒险".into(),
+            current_version: Some(7),
+            created_at: "2026-09-09T00:00:00Z".into(),
+            expires_at: None,
+            listing: Default::default(),
+        }
+    }
+
+    /// 行序就是「接下来做什么」的次序，改动它要有理由（DESIGN §3.2）。
+    #[test]
+    fn the_lines_after_the_link_come_in_the_order_a_first_timer_needs_them() {
+        let mut report = a_report();
+        report.expires_at = Some("2126-09-10T20:59:00Z".into());
+        report.with_card(card::Taken {
+            outcome: card::Outcome::Saved,
+            path: Some("./小球大冒险-邀请卡.png".into()),
+            png: None,
+        });
+        report.on_plaza(PlazaOut {
+            url: "https://playtest.run/".into(),
+            public: true,
+            seeking: true,
+            seek_note: Some("新手引导看得懂吗".into()),
+        });
+        report.seats = Some(10);
+        report.without_cover = true;
+
+        let lines: Vec<String> = after_the_link(&report)
+            .into_iter()
+            .map(|(_, line)| line)
+            .collect();
+        let heads = [
+            "邀请卡已存到",
+            "已放到广场上",
+            "想找 10 位",
+            "这是匿名链接",
+            "来的人玩成什么样",
+            "没有封面",
+            "本次",
+        ];
+        assert_eq!(lines.len(), heads.len(), "{lines:#?}");
+        for (line, head) in lines.iter().zip(heads) {
+            assert!(line.starts_with(head), "「{line}」该以「{head}」开头");
+        }
+        assert!(
+            lines[4].contains("/console/#/s/brisk-otter-41"),
+            "{}",
+            lines[4]
+        );
+    }
+
+    #[test]
+    fn nothing_is_said_about_a_card_the_user_asked_us_not_to_save() {
+        let report = a_report();
+        assert_eq!(report.card, card::Outcome::Skipped);
+        let lines = after_the_link(&report);
+        assert!(
+            !lines.iter().any(|(_, line)| line.contains("邀请卡")),
+            "{lines:#?}"
+        );
+        // 拿不到的时候要说去哪儿拿，不能装作没有这回事。
+        let mut missing = a_report();
+        missing.with_card(card::Taken {
+            outcome: card::Outcome::Missing,
+            ..Default::default()
+        });
+        let said = &after_the_link(&missing)[0].1;
+        assert!(said.contains("/_playtest/card.png"), "{said}");
+        assert!(said.contains("playtest card brisk-otter-41"), "{said}");
     }
 
     #[test]

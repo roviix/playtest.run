@@ -138,6 +138,57 @@ pub struct EdgeEvent {
     pub reason: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    /// 作品链接上的 `?from=`（[`crate::FROM_PARAM`]），门禁页放进「开始」表单带过来的。
+    /// 只认 [`source::CARD`] 与 [`source::NOTICE`]，别的值当没有。比 Referer 可信，优先用它（[`source_kind`]）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+    /// 点「开始」时留的名字（DESIGN §3.3 第 5 条），只在 `start` 事件上；边缘已按 [`crate::limits::MAX_PLAYER_NAME_CHARS`] 截过。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+/// 「来自哪里」的全部取值（DESIGN §3.5）。点名册与时间线里的 `referrer_kind` / `sources` 用这些词。
+pub mod source {
+    /// 扫邀请卡二维码。
+    pub const CARD: &str = "card";
+    /// 从关注通知或周报点进来。
+    pub const NOTICE: &str = "notice";
+    /// 从广场点进来。
+    pub const PLAZA: &str = "plaza";
+    pub const WECHAT: &str = "wechat";
+    pub const DISCORD: &str = "discord";
+    pub const DIRECT: &str = "direct";
+    pub const OTHER: &str = "other";
+
+    /// 控制台显示用的中文。
+    pub fn label(kind: &str) -> &'static str {
+        match kind {
+            CARD => "邀请卡",
+            NOTICE => "通知",
+            PLAZA => "广场",
+            WECHAT => "微信",
+            DISCORD => "Discord",
+            DIRECT => "直接打开",
+            _ => "其它",
+        }
+    }
+}
+
+/// 来源判定的完整版：`from` 参数（卡、通知）优先于 Referer 与 UA。
+///
+/// 为什么 `from` 优先：扫卡的人多半在微信里，UA 会说 `wechat`，但开发者想知道的是「这个人是我发出去的卡带来的」，
+/// 微信只是他扫码的地方；通知同理。`from` 是我们自己放上去的，比 Referer 干净。
+pub fn source_kind(
+    from: Option<&str>,
+    referer: &str,
+    wechat: bool,
+    plaza_host: &str,
+) -> &'static str {
+    match from.map(str::trim) {
+        Some(source::CARD) => source::CARD,
+        Some(source::NOTICE) => source::NOTICE,
+        _ => referrer_kind(referer, wechat, plaza_host),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -402,6 +453,24 @@ mod tests {
             "https://brisk-otter-411.playtest.run/",
             "brisk-otter-41"
         ));
+    }
+
+    #[test]
+    fn from_param_beats_referer_and_wechat() {
+        const ROOT: &str = "playtest.run";
+        assert_eq!(source_kind(Some("card"), "", true, ROOT), "card");
+        assert_eq!(
+            source_kind(Some("notice"), "https://playtest.run/", false, ROOT),
+            "notice"
+        );
+        // 不认识的值当没有，退回 Referer 的判断。
+        assert_eq!(
+            source_kind(Some("tiktok"), "https://playtest.run/", false, ROOT),
+            "plaza"
+        );
+        assert_eq!(source_kind(None, "", true, ROOT), "wechat");
+        assert_eq!(source::label("card"), "邀请卡");
+        assert_eq!(source::label("whatever"), "其它");
     }
 
     #[test]

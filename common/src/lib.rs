@@ -7,7 +7,11 @@
 //! - [`api`]：CLI 与控制面之间的请求 / 响应体。
 //! - [`ingest`]：玩家浏览器写进来的东西——SDK 的事件与反馈、边缘补送的第一层事件。
 //! - [`results`]：控制台读出来的东西——作品时间线、会话点名册、反馈流。
-//! - [`plaza`]：广场那一份 `plaza.json` 的形状——控制面写、边缘渲染（DESIGN §3.8）。
+//! - [`plaza`]：广场那一份 `plaza.json` 的形状——控制面写、边缘渲染（DESIGN §3.9）。
+//! - [`live`]：一个作品会变的那些（名额、关注数、群、公开反馈）——`sites/<slug>/live.json`（DESIGN §4.5）。
+//! - [`capabilities`]：控制面现在能做什么（邮件、Web Push）——`capabilities.json`（DESIGN §4.5）。
+//! - [`follow`]：关注与通知的契约——玩家表单、边缘转发、「我的」（DESIGN §3.6、§3.10）。
+//! - [`boost`]：推广位的数据模型与管理接口（DESIGN §3.11）。
 //! - [`hash`]：内容哈希（SHA-256 小写十六进制）。
 //! - [`slug`]：slug 的校验与保留名单。
 //! - [`limits`]：匿名与免费档的配额常量，CLI 报错和 api 校验用同一份数字。
@@ -16,9 +20,13 @@
 //! 改这里要保持向后兼容（只加字段、加 `#[serde(default)]`），因为三个进程不会同时升级。
 
 pub mod api;
+pub mod boost;
+pub mod capabilities;
+pub mod follow;
 pub mod hash;
 pub mod ingest;
 pub mod limits;
+pub mod live;
 pub mod manifest;
 pub mod plaza;
 pub mod results;
@@ -45,5 +53,64 @@ pub const GATE_COOKIE: &str = "pt_gate";
 /// 会话 cookie：从门禁页开始算「这一次打开」，只在本站，不跨站。
 pub const SESSION_COOKIE: &str = "pt_sid";
 
+/// 根域上的玩家钥匙（DESIGN §3.6、§4.1）：host-only，只种在广场所在的那一个主机名上，
+/// 子域读不到也种不进来。它不是登录——只开「我的」这个抽屉，撤销靠退订。
+pub const ME_COOKIE: &str = "pt_me";
+
 /// 匿名链接的有效期。
 pub const ANON_LINK_TTL_HOURS: u64 = 24;
+
+// ---- 邀请卡与分享（DESIGN §3.4） ----
+
+/// 竖版邀请卡（1080×1350），发群里用。边缘按当前版本渲染，PNG。
+pub const CARD_PATH: &str = "/_playtest/card.png";
+/// 横版邀请卡（1200×630），没有封面时做 `og:image`。
+pub const CARD_WIDE_PATH: &str = "/_playtest/card-wide.png";
+/// 分享页：只放那张卡、「保存图片」和「复制链接」。只有公开的作品有。
+pub const SHARE_PATH: &str = "/_playtest/share";
+
+pub const CARD_WIDTH: u32 = 1080;
+pub const CARD_HEIGHT: u32 = 1350;
+pub const CARD_WIDE_WIDTH: u32 = 1200;
+pub const CARD_WIDE_HEIGHT: u32 = 630;
+
+/// 邀请卡的完整地址。`site_url` 是 `https://<slug>.playtest.run`。
+pub fn card_url(site_url: &str) -> String {
+    format!("{}{}", site_url.trim_end_matches('/'), CARD_PATH)
+}
+
+// ---- 来源（DESIGN §3.5「来自哪里」） ----
+
+/// 作品链接上表示「从哪来」的查询参数名。门禁页把它放进「开始」表单带过去。
+pub const FROM_PARAM: &str = "from";
+/// 扫邀请卡上的二维码来的。
+pub const FROM_CARD: &str = "card";
+/// 从关注通知或周报里点进来的。
+pub const FROM_NOTICE: &str = "notice";
+
+/// 邀请卡二维码里的地址：作品链接加 `?from=card`。
+pub fn card_qr_url(site_url: &str) -> String {
+    format!(
+        "{}/?{}={}",
+        site_url.trim_end_matches('/'),
+        FROM_PARAM,
+        FROM_CARD
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn card_and_qr_urls_hang_off_the_site_url() {
+        assert_eq!(
+            card_url("https://brisk-otter-41.playtest.run/"),
+            "https://brisk-otter-41.playtest.run/_playtest/card.png"
+        );
+        assert_eq!(
+            card_qr_url("https://brisk-otter-41.playtest.run"),
+            "https://brisk-otter-41.playtest.run/?from=card"
+        );
+    }
+}

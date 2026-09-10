@@ -20,6 +20,10 @@ pub struct Config {
     pub host_suffix: String,
     /// 拼 OG 链接与角标链接用。边缘自己永远只听明文，这个值说的是玩家在地址栏里看到的东西。
     pub public_scheme: String,
+    /// 控制面的内网地址（`PLAYTEST_API_INTERNAL_URL`，例如 compose 里的 `http://api:8787`）。
+    /// 事件批量上报和关注登记都往这里送；没设就是「控制面不在」——作品照常能玩，
+    /// 关注会如实说「现在登记不了」（DESIGN §4.1）。
+    pub api_internal_url: Option<String>,
 }
 
 impl Config {
@@ -38,6 +42,7 @@ impl Config {
             data_dir: PathBuf::from(env_or("PLAYTEST_DATA_DIR", DEFAULT_DATA_DIR)),
             host_suffix,
             public_scheme,
+            api_internal_url: Self::api_internal_url(),
         })
     }
 

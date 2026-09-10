@@ -9,6 +9,7 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
+use base64::Engine as _;
 use serde_json::{json, Value};
 
 /// 一句话都不该等这么久。等到了就是卡住了，不是慢。
@@ -29,12 +30,22 @@ impl Drop for Server {
 
 impl Server {
     fn start(home: &Path) -> Self {
+        // 用不上：没有令牌就不会有请求。指到 1 号端口，万一发出去了立刻就能看出来。
+        Self::start_against(home, "http://127.0.0.1:1")
+    }
+
+    fn start_against(home: &Path, api: &str) -> Self {
         let mut child = Command::new(env!("CARGO_BIN_EXE_playtest"))
             .args(["mcp"])
             .env("HOME", home)
-            // 用不上：没有令牌就不会有请求。指到 1 号端口，万一发出去了立刻就能看出来。
-            .env("PLAYTEST_API", "http://127.0.0.1:1")
+            .env("PLAYTEST_API", api)
+            .env("NO_PROXY", "*")
             .env_remove("APPDATA")
+            .env_remove("HTTP_PROXY")
+            .env_remove("HTTPS_PROXY")
+            .env_remove("http_proxy")
+            .env_remove("https_proxy")
+            .env_remove("ALL_PROXY")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -138,9 +149,11 @@ fn a_handwritten_client_can_shake_hands_list_tools_and_call_one() {
     let tools = listed["result"]["tools"].as_array().expect("没有工具列表");
     let mut names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
     names.sort_unstable();
+    // DESIGN §3.2 说的那五件事：分享端口、上传目录、列出作品、看这一版的结果、拿邀请卡。
     assert_eq!(
         names,
         [
+            "playtest_card",
             "playtest_list",
             "playtest_share_port",
             "playtest_site",
@@ -170,9 +183,16 @@ fn a_handwritten_client_can_shake_hands_list_tools_and_call_one() {
         .find(|t| t["name"] == "playtest_upload")
         .unwrap();
     assert_eq!(upload["inputSchema"]["required"], json!(["dir"]));
-    assert!(upload["inputSchema"]["properties"]["name"].is_object());
-    assert!(upload["inputSchema"]["properties"]["note"].is_object());
-    assert!(upload["inputSchema"]["properties"]["isolated"].is_object());
+    for optional in ["name", "note", "isolated", "seats", "community"] {
+        assert!(
+            upload["inputSchema"]["properties"][optional].is_object(),
+            "上传该收 {optional}：{upload}"
+        );
+    }
+
+    // 拿卡只要说哪个作品。
+    let card = tools.iter().find(|t| t["name"] == "playtest_card").unwrap();
+    assert_eq!(card["inputSchema"]["required"], json!(["site"]));
 
     // 这台机器上还没发过东西：一个空列表，不是一句话。
     let listed = server.call(3, "playtest_list", json!({}));
@@ -220,6 +240,123 @@ fn a_directory_that_is_not_there_comes_back_as_a_readable_failure() {
     assert_eq!(body["code"], "bad_input", "{body}");
     assert!(
         body["message"].as_str().unwrap().contains("找不到"),
+        "{body}"
+    );
+}
+
+// ---------------------------------------------------------------- 邀请卡贴回对话
+
+/// 一张「PNG」。只有头八个字节是真的——CLI 认的就是这八个字节加响应头里的类型。
+const CARD_BYTES: &[u8] = b"\x89PNG\r\n\x1a\nnot-really-a-png";
+
+/// 一个只回两件事的假服务器：这个作品长什么样、它的邀请卡在哪。它同时扮控制面和边缘。
+fn start_fake_site() -> String {
+    use axum::response::IntoResponse;
+    use axum::routing::get;
+
+    let (tx, rx) = std::sync::mpsc::channel::<std::net::SocketAddr>();
+    std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async move {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            tx.send(addr).unwrap();
+            let app = axum::Router::new()
+                .route(
+                    playtest_common::api::routes::SITE,
+                    get(
+                        move |axum::extract::Path(slug): axum::extract::Path<String>| async move {
+                            axum::Json(json!({
+                                "slug": slug,
+                                "url": format!("http://{addr}"),
+                                "title": "小球试玩",
+                                "current_version": 7,
+                                "created_at": "2026-09-09T00:00:00Z",
+                                "listing": { "followers": 12, "has_cover": true },
+                            }))
+                        },
+                    ),
+                )
+                .route(
+                    playtest_common::CARD_PATH,
+                    get(|| async {
+                        (
+                            [(axum::http::header::CONTENT_TYPE, "image/png")],
+                            CARD_BYTES,
+                        )
+                            .into_response()
+                    }),
+                );
+            axum::serve(listener, app).await.unwrap();
+        });
+    });
+    format!("http://{}", rx.recv().expect("假服务器没起来"))
+}
+
+/// 把一个已经存好的令牌写进配置里，省掉在这个文件里再演一遍上传。
+fn remember_token(home: &Path, api: &str) {
+    let dir = home.join(".config").join("playtest");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("config.json"),
+        json!({ "api": api, "token": "tok-1", "login": "octo" }).to_string(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn the_card_comes_back_as_an_image_the_assistant_can_hand_over() {
+    let home = tempfile::tempdir().unwrap();
+    let api = start_fake_site();
+    remember_token(home.path(), &api);
+    let mut server = Server::start_against(home.path(), &api);
+    handshake(&mut server);
+
+    let reply = server.call(2, "playtest_card", json!({ "site": "brisk-otter-41" }));
+    assert_ne!(reply["result"]["isError"], json!(true), "{reply}");
+
+    // 第一块永远是那个 JSON——读结果的程序按顺序取第一块。
+    let body = payload(&reply);
+    assert_eq!(body["ok"], true, "{body}");
+    assert_eq!(body["action"], "card");
+    assert_eq!(body["slug"], "brisk-otter-41");
+    assert_eq!(body["card_url"], format!("{api}/_playtest/card.png"));
+
+    // 第二块是那张图，按 MCP 的形状：type / data（base64）/ mimeType。
+    let image = &reply["result"]["content"][1];
+    assert_eq!(image["type"], "image", "{reply}");
+    assert_eq!(image["mimeType"], "image/png", "{reply}");
+    let data = image["data"].as_str().expect("图没有 data");
+    assert!(!data.contains('\n'), "base64 不该带换行：{data}");
+    assert_eq!(
+        base64::engine::general_purpose::STANDARD
+            .decode(data)
+            .unwrap(),
+        CARD_BYTES,
+        "贴回去的得是服务器上那张卡"
+    );
+}
+
+#[test]
+fn looking_at_this_version_says_how_many_people_follow_it_and_where_to_look() {
+    let home = tempfile::tempdir().unwrap();
+    let api = start_fake_site();
+    remember_token(home.path(), &api);
+    let mut server = Server::start_against(home.path(), &api);
+    handshake(&mut server);
+
+    let reply = server.call(2, "playtest_site", json!({ "slug": "brisk-otter-41" }));
+    assert_ne!(reply["result"]["isError"], json!(true), "{reply}");
+    let body = payload(&reply);
+    assert_eq!(body["site"]["followers"], 12, "{body}");
+    assert!(
+        body["console_url"]
+            .as_str()
+            .unwrap()
+            .ends_with("/console/#/s/brisk-otter-41"),
         "{body}"
     );
 }

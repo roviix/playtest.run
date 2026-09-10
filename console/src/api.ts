@@ -7,7 +7,29 @@ const API_BASE = import.meta.env.VITE_PLAYTEST_API ?? "";
 
 const TOKEN_KEY = "playtest.token";
 
-/** 广场上的状态（DESIGN §3.8）。旧控制面不返回这一段，按「不公开」处理。 */
+/** 推广的两个 SKU 加一个附加项（common/src/boost.rs）。 */
+export type BoostKind = "days3" | "days7" | "digest";
+
+export type BoostStatus = "pending" | "live" | "ended" | "rejected";
+
+/** 一段推广（DESIGN §3.11）。购买通道还没开，现在只可能是运营者赠送的。 */
+export type Boost = {
+  id: number;
+  slug: string;
+  kind: BoostKind;
+  status: BoostStatus;
+  granted: boolean;
+  /** RFC 3339。pending 时是排到的那一天。 */
+  starts_at: string;
+  ends_at?: string;
+  created_at: string;
+  order_id?: string;
+  /** 人工没放行时的理由。common/src/boost.rs 的 Boost 里还没有这一项，
+   *  控制面补上就显示，没有就只说「没通过」——不替它编一个理由。 */
+  reason?: string;
+};
+
+/** 广场上的状态（DESIGN §3.9）。旧控制面不返回这一段，按「不公开」处理。 */
 export type Listing = {
   public: boolean;
   seeking: boolean;
@@ -16,6 +38,18 @@ export type Listing = {
   /** 被举报到阈值或我们手工撤下：开发者勾着公开，但广场上没有它。必须告诉他。 */
   hidden: boolean;
   has_cover: boolean;
+  /** 想找几位试玩者（DESIGN §3.3）。没设就没有这一项。 */
+  seats?: number;
+  /** 已加入 = 留了名字的人数。 */
+  joined: number;
+  /** 关注这个作品的人数。开发者只看得到数字，看不到邮箱（DESIGN §3.6）。 */
+  followers: number;
+  /** 开发者的群，门禁页和反馈之后给玩家看。 */
+  community_url?: string;
+  /** 「让玩家看到彼此的反馈」（DESIGN §3.5），默认关。 */
+  feedback_public: boolean;
+  /** 当前或排队中的那一段推广；没有就没有这一项。 */
+  boost?: Boost;
 };
 
 export type Site = {
@@ -33,11 +67,19 @@ export type UpdateSiteRequest = {
   seeking?: boolean;
   /** 空字符串表示清掉。 */
   seek_note?: string;
+  /** 0 表示清掉（改回「不限」）。 */
+  seats?: number;
+  /** 空字符串表示清掉。 */
+  community_url?: string;
+  feedback_public?: boolean;
 };
 
 export type ErrorTally = { fingerprint: string; count: number };
 
 export type ErrorSummary = { distinct: number; total: number; top?: ErrorTally[] };
+
+/** 来自哪里，一个来源一条，按人数降序，0 的不列。kind 见 words.ts 的 sourceLabel。 */
+export type SourceTally = { kind: string; count: number };
 
 export type VersionResults = {
   version: number;
@@ -55,6 +97,10 @@ export type VersionResults = {
   feedback_count: number;
   first_at?: string;
   last_at?: string;
+  /** 旧控制面不返回这一项。 */
+  sources?: SourceTally[];
+  /** 在门禁页留了名字的人数。 */
+  named: number;
 };
 
 export type SiteResults = {
@@ -62,6 +108,8 @@ export type SiteResults = {
   title: string;
   current_version?: number;
   versions: VersionResults[];
+  /** 关注这个作品的人数（DESIGN §3.6）。 */
+  followers: number;
 };
 
 export type SessionEvent = {
@@ -75,6 +123,8 @@ export type SessionEvent = {
 export type SessionRow = {
   id: string;
   at: string;
+  /** 点「开始」时留的名字（DESIGN §3.3）。没留就没有，点名册显示会话 id 的头几位。 */
+  name?: string;
   device?: string;
   browser?: string;
   os?: string;
@@ -113,11 +163,62 @@ export type FeedbackItem = {
   seconds_in?: number;
   device?: string;
   browser?: string;
+  /** 截图是 v0.2 的事，现在永远没有——所以「设为封面」现在不会出现。 */
   screenshot_hash?: string;
   status: FeedbackStatus;
+  /** 说这句话的人留的名字。 */
+  name?: string;
+  /** 这一条正显示在门禁页上（作品开了公开反馈、且没被单独藏起来）。 */
+  public: boolean;
 };
 
 export type FeedbackList = { slug: string; items: FeedbackItem[] };
+
+/** 只改带了的字段。`public: false` 是把这一条藏起来，作品级的开关在 UpdateSiteRequest。 */
+export type UpdateFeedbackRequest = {
+  status?: FeedbackStatus;
+  public?: boolean;
+};
+
+/** 一个版本的清单概况（common/src/api.rs 的 VersionInfo）。 */
+export type VersionInfo = {
+  version: number;
+  created_at: string;
+  note?: string;
+  file_count: number;
+  total_bytes: number;
+  /** 玩家现在看到的就是这一版。 */
+  current: boolean;
+};
+
+export type VersionList = {
+  slug: string;
+  current_version?: number;
+  /** 新的在前。 */
+  versions: VersionInfo[];
+};
+
+/** 邀请卡的地址，和 common/src/lib.rs 的 `CARD_PATH` / `CARD_WIDE_PATH` / `card_url()` 是同一份。 */
+export const CARD_PATH = "/_playtest/card.png";
+export const CARD_WIDE_PATH = "/_playtest/card-wide.png";
+/** 封面由边缘按当前版本给（edge/src/app.rs 的 `cover`），带 `?v=` 绕开缓存。 */
+export const COVER_PATH = "/_playtest/cover";
+
+function under(siteUrl: string, path: string): string {
+  return `${siteUrl.replace(/\/+$/, "")}${path}`;
+}
+
+export function cardUrl(siteUrl: string): string {
+  return under(siteUrl, CARD_PATH);
+}
+
+export function cardWideUrl(siteUrl: string): string {
+  return under(siteUrl, CARD_WIDE_PATH);
+}
+
+export function coverUrl(siteUrl: string, version: number): string {
+  return `${under(siteUrl, COVER_PATH)}?v=${version}`;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -192,6 +293,8 @@ export type Me = {
   display_name: string;
   login?: string;
   expires_at?: string;
+  /** GitHub 头像；匿名身份没有。 */
+  avatar_url?: string;
 };
 
 export type LoginResponse = {
@@ -239,13 +342,19 @@ export async function exchangeGitHubCode(code: string, state: string): Promise<L
 export const api = {
   me: () => call<Me>("/v1/me"),
   sites: () => call<Site[]>("/v1/sites"),
+  site: (slug: string) => call<Site>(`/v1/sites/${encodeURIComponent(slug)}`),
+  // 名额传 0、群链接传空字符串就是清掉，见 common/src/api.rs 的 UpdateSiteRequest。
   updateSite: (slug: string, request: UpdateSiteRequest) =>
     call<Site>(`/v1/sites/${encodeURIComponent(slug)}`, {
       method: "PATCH",
       body: JSON.stringify(request),
     }),
+  // 删除：链接立刻失效，版本与结果一起走。控制面回 204。
+  deleteSite: (slug: string) =>
+    call<void>(`/v1/sites/${encodeURIComponent(slug)}`, { method: "DELETE" }),
+  versions: (slug: string) => call<VersionList>(`/v1/sites/${encodeURIComponent(slug)}/versions`),
   results: (slug: string) => call<SiteResults>(`/v1/sites/${encodeURIComponent(slug)}/results`),
-  // 回滚：把「当前版本」指回某一版。清单都在，边缘 1 秒内看到新指针（DESIGN §3.5）。
+  // 回滚：把「当前版本」指回某一版。版本都在，边缘 1 秒内看到新指针（DESIGN §3.7）。
   activateVersion: (slug: string, version: number) =>
     call<Site>(`/v1/sites/${encodeURIComponent(slug)}/versions/${version}/activate`, {
       method: "POST",
@@ -256,9 +365,15 @@ export const api = {
       `/v1/sites/${encodeURIComponent(slug)}/versions/${version}/sessions?sort=${sort}`,
     ),
   feedback: (slug: string) => call<FeedbackList>(`/v1/sites/${encodeURIComponent(slug)}/feedback`),
-  markFeedback: (slug: string, id: number, status: FeedbackStatus) =>
+  updateFeedback: (slug: string, id: number, request: UpdateFeedbackRequest) =>
     call<FeedbackItem>(`/v1/sites/${encodeURIComponent(slug)}/feedback/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(request),
+    }),
+  // 把一条反馈附带的截图设为封面。截图要等 v0.2，所以这条现在没有调用方能碰到。
+  setCoverFromFeedback: (slug: string, id: number) =>
+    call<Site>(`/v1/sites/${encodeURIComponent(slug)}/cover/from-feedback/${id}`, {
+      method: "POST",
+      body: "{}",
     }),
 };

@@ -12,10 +12,11 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use axum::extract::{Path, Query, State};
 use axum::Json;
 use playtest_common::ingest::{edge_kind, kind};
+use playtest_common::manifest;
 use playtest_common::results::{
     median_seconds, ErrorSummary, ErrorTally, FeedbackItem, FeedbackList, FeedbackStatus,
-    RosterSort, SessionEvent, SessionRow, SiteResults, UpdateFeedbackRequest, VersionResults,
-    VersionSessions, LONG_PLAY_SECONDS, MAX_EVENTS_PER_SESSION, TOP_ERRORS,
+    RosterSort, SessionEvent, SessionRow, SiteResults, SourceTally, UpdateFeedbackRequest,
+    VersionResults, VersionSessions, LONG_PLAY_SECONDS, MAX_EVENTS_PER_SESSION, TOP_ERRORS,
 };
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
@@ -29,6 +30,8 @@ use crate::routes::JsonBody;
 use crate::state::AppState;
 
 const NO_SUCH_FEEDBACK: &str = "没有这条反馈，或者它不是你的作品的。";
+const NO_SCREENSHOT: &str =
+    "这条反馈没有截图。玩家留话时还不能附截图，这个功能要等玩家侧支持之后才能用。";
 
 /// 错误的 `name` 是空的时候拿它当 fingerprint。归成一堆总比一条条散着好看。
 const UNNAMED_ERROR: &str = "没带名字的错误";
@@ -72,6 +75,8 @@ pub async fn timeline(
         "SELECT version, COUNT(*) FROM feedback WHERE slug = ?1 GROUP BY version",
         params![&slug],
     )?;
+    let mut sources = db::sources_by_version(&conn, &slug)?;
+    let followers = db::followers_count(&conn, &slug)?;
     drop(conn);
 
     // 版本表里有的，加上只在会话里见过的。两边都列出来：没人打开的新版本要显示
@@ -99,6 +104,12 @@ pub async fn timeline(
                 errors.remove(&version).unwrap_or_default(),
                 load_failures.get(&version).copied().unwrap_or(0),
                 feedback_counts.get(&version).copied().unwrap_or(0),
+                sources
+                    .remove(&version)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(kind, count)| SourceTally { kind, count })
+                    .collect(),
             )
         })
         .collect();
@@ -109,6 +120,7 @@ pub async fn timeline(
         title: site.title,
         current_version: site.current_version,
         versions,
+        followers,
     }))
 }
 
@@ -154,6 +166,7 @@ pub async fn sessions(
 
             SessionRow {
                 at: facts.first_seen_at.clone(),
+                name: facts.name,
                 device: facts.device,
                 browser: facts.browser,
                 os: facts.os,
@@ -214,21 +227,20 @@ pub async fn feedback(
     };
 
     let conn = state.db().lock().await;
-    owned_site(&conn, &slug, &caller)?;
+    let site = owned_site(&conn, &slug, &caller)?;
+    let feedback_public = site.listing.feedback_public;
 
-    let mut stmt = conn.prepare(
-        "SELECT id, session_id, version, ts, text, seconds_in, device, browser, screenshot_hash, status
-           FROM feedback
-          WHERE slug = ?1
-            AND (?2 IS NULL OR version = ?2)
-            AND (?3 IS NULL OR status = ?3)
-          ORDER BY ts DESC, id DESC",
-    )?;
+    let mut stmt = conn.prepare(&format!(
+        "{FEEDBACK_COLUMNS}
+          WHERE f.slug = ?1
+            AND (?2 IS NULL OR f.version = ?2)
+            AND (?3 IS NULL OR f.status = ?3)
+          ORDER BY f.ts DESC, f.id DESC"
+    ))?;
     let items = stmt
-        .query_map(
-            params![&slug, version, status.map(|s| s.as_db())],
-            feedback_from_row,
-        )?
+        .query_map(params![&slug, version, status.map(|s| s.as_db())], |row| {
+            feedback_from_row(row, feedback_public)
+        })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     drop(stmt);
     drop(conn);
@@ -236,34 +248,145 @@ pub async fn feedback(
     Ok(Json(FeedbackList { slug, items }))
 }
 
-/// `PATCH /v1/sites/{slug}/feedback/{id}`：标记已看 / 已处理。
+/// `PATCH /v1/sites/{slug}/feedback/{id}`：标记已看 / 已处理，或把这一条藏起来 / 放出来。
 pub async fn update_feedback(
     State(state): State<AppState>,
     caller: Caller,
     Path((slug, id)): Path<(String, i64)>,
     JsonBody(request): JsonBody<UpdateFeedbackRequest>,
 ) -> ApiResult<Json<FeedbackItem>> {
-    let conn = state.db().lock().await;
-    owned_site(&conn, &slug, &caller)?;
-
-    let changed = conn.execute(
-        "UPDATE feedback SET status = ?3 WHERE id = ?1 AND slug = ?2",
-        params![id, &slug, request.status.as_db()],
-    )?;
-    if changed == 0 {
-        return Err(ApiError::not_found(NO_SUCH_FEEDBACK));
+    if request.status.is_none() && request.public.is_none() {
+        return Err(ApiError::invalid(
+            "这次请求什么都没改。要改状态就带 status，要公开或藏起来就带 public。",
+        ));
     }
 
-    let item = conn
-        .query_row(
-            "SELECT id, session_id, version, ts, text, seconds_in, device, browser, screenshot_hash, status
-               FROM feedback WHERE id = ?1",
-            params![id],
-            feedback_from_row,
+    let (item, touched_public) = {
+        let conn = state.db().lock().await;
+        let site = owned_site(&conn, &slug, &caller)?;
+
+        let mut found = false;
+        if let Some(status) = request.status {
+            found |= db::set_feedback_status(&conn, &slug, id, status.as_db())?;
+        }
+        if let Some(public) = request.public {
+            // `public: false` 就是藏起来。作品级的开关在 PATCH /v1/sites/{slug}。
+            found |= db::set_feedback_hidden(&conn, &slug, id, !public)?;
+        }
+        if !found {
+            return Err(ApiError::not_found(NO_SUCH_FEEDBACK));
+        }
+
+        let item = conn
+            .query_row(
+                &format!("{FEEDBACK_COLUMNS} WHERE f.id = ?1"),
+                params![id],
+                |row| feedback_from_row(row, site.listing.feedback_public),
+            )
+            .optional()?
+            .ok_or_else(|| ApiError::not_found(NO_SUCH_FEEDBACK))?;
+        (
+            item,
+            request.public.is_some() && site.listing.feedback_public,
         )
-        .optional()?
-        .ok_or_else(|| ApiError::not_found(NO_SUCH_FEEDBACK))?;
+    };
+
+    // 门禁页上那三条公开反馈变了。
+    if touched_public {
+        crate::live::publish(&state, &slug).await;
+    }
     Ok(Json(item))
+}
+
+/// `POST /v1/sites/{slug}/cover/from-feedback/{id}`：把一条反馈的截图设成作品封面。
+///
+/// 封面动的是清单里的 `cover` 一项。清单本来是不可变的（每版一份、内容寻址），
+/// 这里破一次例：封面不是目录里的文件，它是「广场上这个作品长什么样」，
+/// 换封面不该逼开发者重发一个版本。破例的边界就到这一项为止。
+pub async fn cover_from_feedback(
+    State(state): State<AppState>,
+    caller: Caller,
+    Path((slug, id)): Path<(String, i64)>,
+) -> ApiResult<Json<FeedbackItem>> {
+    let (item, screenshot) = {
+        let conn = state.db().lock().await;
+        let site = owned_site(&conn, &slug, &caller)?;
+        let item = conn
+            .query_row(
+                &format!("{FEEDBACK_COLUMNS} WHERE f.id = ?1 AND f.slug = ?2"),
+                params![id, &slug],
+                |row| feedback_from_row(row, site.listing.feedback_public),
+            )
+            .optional()?
+            .ok_or_else(|| ApiError::not_found(NO_SUCH_FEEDBACK))?;
+        let screenshot = item.screenshot_hash.clone();
+        (item, screenshot)
+    };
+
+    // 玩家留话时还附不了截图（DESIGN §3.5 那句是 v0.2），所以现在每一条都走这一支。
+    // 与其假装能设，不如把话说清楚（AGENTS 第 4 条）。
+    let Some(hash) = screenshot else {
+        return Err(ApiError::invalid(NO_SCREENSHOT));
+    };
+
+    let size = {
+        let conn = state.db().lock().await;
+        db::blob_size(&conn, &hash)?
+    };
+    let Some(size) = size else {
+        return Err(ApiError::invalid("这条反馈的截图已经不在了，设不成封面。"));
+    };
+    // 库里没记这张图是什么类型，认魔数——扩展名会骗人，而封面要贴到广场那一页上。
+    let mime = sniff_blob_mime(&state, &hash)
+        .await?
+        .ok_or_else(|| ApiError::invalid("这条反馈的截图不是 PNG、JPEG 或 WebP，设不成封面。"))?;
+    let cover = manifest::Cover {
+        hash,
+        size,
+        mime: mime.to_string(),
+    };
+    manifest::validate_cover(&cover).map_err(|e| ApiError::invalid(e.to_string()))?;
+
+    set_cover(&state, &slug, cover).await?;
+    crate::plaza::publish(&state).await;
+    Ok(Json(item))
+}
+
+async fn sniff_blob_mime(state: &AppState, hash: &str) -> ApiResult<Option<&'static str>> {
+    let path = state.store().blob_path(hash)?;
+    let mut head = [0u8; 16];
+    let mut file = tokio::fs::File::open(&path).await?;
+    let read = tokio::io::AsyncReadExt::read(&mut file, &mut head).await?;
+    Ok(manifest::sniff_image_mime(&head[..read]))
+}
+
+/// 把当前版本清单里的 `cover` 换成这一张，并把广场那几列跟着改。
+async fn set_cover(state: &AppState, slug: &str, cover: manifest::Cover) -> ApiResult<()> {
+    let _serialized = state.lock_commit().await;
+    let version = {
+        let conn = state.db().lock().await;
+        db::find_site(&conn, slug)?.and_then(|site| site.current_version)
+    };
+    let Some(version) = version else {
+        return Err(ApiError::invalid("这个作品还没有版本，先发一版再设封面。"));
+    };
+    let Some(mut manifest) = state.store().get_manifest(slug, version).await? else {
+        return Err(ApiError::invalid("这个版本的清单不在了，设不成封面。"));
+    };
+    manifest.cover = Some(cover.clone());
+    state.store().put_manifest(&manifest).await?;
+    {
+        let conn = state.db().lock().await;
+        db::record_version_meta(
+            &conn,
+            slug,
+            None,
+            Some((cover.hash.as_str(), cover.mime.as_str())),
+            manifest.engine.as_deref(),
+            &clock::now_string(),
+        )?;
+    }
+    Ok(())
 }
 
 /// 我的、没删的作品。别人的和不存在的说同一句话，不告诉外面这个 slug 存不存在。
@@ -276,6 +399,8 @@ fn owned_site(conn: &Connection, slug: &str, caller: &Caller) -> ApiResult<SiteR
 struct SessionFacts {
     id: String,
     version: u32,
+    /// 门禁页上留的名字（DESIGN §3.3）。
+    name: Option<String>,
     first_seen_at: String,
     last_seen_at: String,
     start_at: Option<String>,
@@ -297,7 +422,7 @@ fn session_facts(
 ) -> rusqlite::Result<Vec<SessionFacts>> {
     let mut stmt = conn.prepare(
         "SELECT id, version, first_seen_at, last_seen_at, start_at, first_frame_at, last_input_at,
-                device, browser, os, referrer_kind, wechat, is_return
+                device, browser, os, referrer_kind, wechat, is_return, NULLIF(name, '')
            FROM sessions
           WHERE slug = ?1 AND (?2 IS NULL OR version = ?2)
           ORDER BY first_seen_at, id",
@@ -320,6 +445,7 @@ fn session_facts(
             referrer_kind: row.get(10)?,
             wechat: row.get::<_, i64>(11)? != 0,
             is_return: row.get::<_, i64>(12)? != 0,
+            name: row.get(13)?,
         })
     })?;
     rows.collect()
@@ -441,7 +567,16 @@ fn feedback_by_session(
     rows.collect()
 }
 
-fn feedback_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<FeedbackItem> {
+/// 反馈的列。署名从会话上来（同一个人留话时不用再打一遍名字）。
+const FEEDBACK_COLUMNS: &str = "SELECT f.id, f.session_id, f.version, f.ts, f.text, f.seconds_in, \
+    f.device, f.browser, f.screenshot_hash, f.status, NULLIF(s.name, ''), f.hidden \
+    FROM feedback f LEFT JOIN sessions s ON s.id = f.session_id";
+
+/// `feedback_public` 是作品级的开关；一条是不是公开着要两个条件都成立。
+fn feedback_from_row(
+    row: &rusqlite::Row<'_>,
+    feedback_public: bool,
+) -> rusqlite::Result<FeedbackItem> {
     Ok(FeedbackItem {
         id: row.get(0)?,
         session_id: row.get(1)?,
@@ -453,6 +588,8 @@ fn feedback_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<FeedbackItem> 
         browser: row.get(7)?,
         screenshot_hash: row.get(8)?,
         status: FeedbackStatus::from_db(&row.get::<_, String>(9)?),
+        name: row.get(10)?,
+        public: feedback_public && row.get::<_, i64>(11)? == 0,
     })
 }
 
@@ -466,6 +603,7 @@ fn summarize(
     tallies: Vec<ErrorTally>,
     load_failures: u32,
     feedback_count: u32,
+    sources: Vec<SourceTally>,
 ) -> VersionResults {
     let mut dwells: Vec<u32> = rows.iter().map(|s| s.dwell_s).collect();
 
@@ -511,6 +649,8 @@ fn summarize(
         feedback_count,
         first_at: rows.iter().map(|s| s.first_seen_at.clone()).min(),
         last_at: rows.iter().map(|s| s.last_seen_at.clone()).max(),
+        sources,
+        named: rows.iter().filter(|s| s.name.is_some()).count() as u32,
     }
 }
 

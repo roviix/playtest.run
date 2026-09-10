@@ -52,6 +52,12 @@ struct Line<'a> {
     ua: &'a str,
     referer: &'a str,
     wechat: bool,
+    /// 作品链接上的 `?from=`，只认卡与通知两种（`common::ingest::source`）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    from: Option<&'a str>,
+    /// 点「开始」时自愿留的名字，只在 `start` 上。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<&'a str>,
     /// 举报才有：下拉里选的那一项，和玩家自己写的一段。
     #[serde(skip_serializing_if = "Option::is_none")]
     reason: Option<&'a str>,
@@ -71,6 +77,10 @@ pub struct Visitor {
     pub ua: String,
     pub referer: String,
     pub wechat: bool,
+    /// 链接上的 `?from=`：只在门禁页与「开始」上有，别处是 `None`。
+    pub from: Option<&'static str>,
+    /// 「开始」时留的名字，别的事件上不带。
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -107,6 +117,8 @@ impl EventLog {
             ua: clip(&visitor.ua, MAX_FIELD_CHARS),
             referer: clip(&visitor.referer, MAX_FIELD_CHARS),
             wechat: visitor.wechat,
+            from: visitor.from,
+            name: visitor.name.as_deref(),
             reason: reason.map(|r| clip(r, MAX_FIELD_CHARS)),
             detail: detail.map(|d| clip(d, MAX_DETAIL_CHARS)),
             bytes: None,
@@ -139,6 +151,8 @@ impl EventLog {
             ua: clip(&visitor.ua, MAX_FIELD_CHARS),
             referer: clip(&visitor.referer, MAX_FIELD_CHARS),
             wechat: visitor.wechat,
+            from: None,
+            name: None,
             reason: None,
             detail: None,
             bytes: Some(bytes),
@@ -210,6 +224,8 @@ mod tests {
             ua: "curl/8".into(),
             referer: String::new(),
             wechat: false,
+            from: None,
+            name: None,
         };
         log.append(Kind::GateView, "brisk-otter-41", 7, &visitor, None, None)
             .await;
@@ -244,6 +260,31 @@ mod tests {
         assert_eq!(second["detail"], "假的");
         // 只有熔断带这两个数字。
         assert!(second.get("bytes").is_none());
+    }
+
+    #[tokio::test]
+    async fn start_carries_name_and_source() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = EventLog::new(dir.path().join("edge-events.jsonl"));
+        let visitor = Visitor {
+            sid: "abc".into(),
+            from: Some(playtest_common::ingest::source::CARD),
+            name: Some("小王".into()),
+            ..Visitor::default()
+        };
+        log.append(Kind::Start, "brisk-otter-41", 7, &visitor, None, None)
+            .await;
+
+        let body = std::fs::read_to_string(log.path()).unwrap();
+        let line: serde_json::Value = serde_json::from_str(body.trim()).unwrap();
+        assert_eq!(line["type"], "start");
+        assert_eq!(line["from"], "card");
+        assert_eq!(line["name"], "小王");
+        // 契约那边读的是同一个形状。
+        let parsed: playtest_common::ingest::EdgeEvent =
+            serde_json::from_str(body.trim()).expect("边缘写的一行控制面读得回来");
+        assert_eq!(parsed.from.as_deref(), Some("card"));
+        assert_eq!(parsed.name.as_deref(), Some("小王"));
     }
 
     #[tokio::test]

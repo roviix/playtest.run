@@ -63,6 +63,8 @@ pub struct Caller {
     pub display_name: String,
     /// GitHub 用户名；匿名没有。
     pub login: Option<String>,
+    /// GitHub 头像；匿名没有（DESIGN §3.9 广场卡片上的那张脸）。
+    pub avatar_url: Option<String>,
     /// 这个人的到期时间，作品跟着它走。
     pub expires_at: Option<String>,
 }
@@ -100,6 +102,7 @@ impl FromRequestParts<AppState> for Caller {
             kind: UserKind::from_db(&owner.kind),
             display_name: owner.display_name,
             login: owner.login,
+            avatar_url: owner.avatar_url,
             expires_at: owner.user_expires_at,
         })
     }

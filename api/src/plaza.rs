@@ -7,6 +7,7 @@
 //! 作品链接照常能开，等人复核。**判断和写文件放在同一个地方**，是为了不存在
 //! 「库里已经撤下、广场上还挂着」的窗口——每次重写之前先判一遍。
 
+use playtest_common::boost::MAX_SLOTS;
 use playtest_common::manifest::GAME_ENGINES;
 use playtest_common::plaza::{
     Plaza, PlazaItem, PLAYERS_WINDOW_DAYS, REPORTS_TO_HIDE, REPORTS_WINDOW_HOURS, SCHEMA,
@@ -41,9 +42,17 @@ pub async fn rebuild(state: &AppState) -> anyhow::Result<usize> {
     let players_since = clock::format(now - Duration::days(PLAYERS_WINDOW_DAYS));
     let reports_since = clock::format(now - Duration::hours(REPORTS_WINDOW_HOURS));
 
-    let items = {
+    let (items, club_followers) = {
         let conn = state.db().lock().await;
         let players = db::players_since(&conn, &players_since)?;
+        let joined = db::joined_counts(&conn)?;
+        let followers = db::followers_counts(&conn)?;
+        // 在位的推广，按上位时间排；超过 MAX_SLOTS 的先不上——位子就这么多（DESIGN §3.11）。
+        let boosted: Vec<String> = db::live_plaza_boosts(&conn)?
+            .into_iter()
+            .map(|b| b.slug)
+            .take(MAX_SLOTS)
+            .collect();
         let candidates = db::plaza_candidates(&conn, &now_string)?;
         let mut items = Vec::with_capacity(candidates.len());
         for candidate in candidates {
@@ -68,11 +77,26 @@ pub async fn rebuild(state: &AppState) -> anyhow::Result<usize> {
                 }
                 continue;
             }
-            if let Some(item) = to_item(state, candidate, &players) {
+            let counts = Counts {
+                players: players
+                    .get(&candidate.site.slug)
+                    .copied()
+                    .unwrap_or_default(),
+                joined: joined
+                    .get(&candidate.site.slug)
+                    .copied()
+                    .unwrap_or_default(),
+                followers: followers
+                    .get(&candidate.site.slug)
+                    .copied()
+                    .unwrap_or_default(),
+                boosted: boosted.contains(&candidate.site.slug),
+            };
+            if let Some(item) = to_item(state, candidate, counts) {
                 items.push(item);
             }
         }
-        items
+        (items, db::plaza_followers_count(&conn)?)
     };
 
     let mut items = items;
@@ -84,26 +108,34 @@ pub async fn rebuild(state: &AppState) -> anyhow::Result<usize> {
             schema: SCHEMA,
             generated_at: now_string,
             items,
+            club_followers,
         })
         .await?;
     Ok(count)
 }
 
-/// 广场的默认顺序（DESIGN §3.8）：正在找人测的在前，其余按最近更新；同一时间按 slug 稳定。
+/// 广场的默认顺序（DESIGN §3.9、§3.11）：推广位在最前（按上位时间，已经在 `boosted`
+/// 里排好，这里只把它们提到前面），然后正在找人测的，其余按最近更新；同一时间按 slug 稳定。
 pub fn sort_default(items: &mut [PlazaItem]) {
     items.sort_by(|a, b| {
-        b.seeking
-            .cmp(&a.seeking)
+        b.boosted
+            .cmp(&a.boosted)
+            .then_with(|| b.seeking.cmp(&a.seeking))
             .then_with(|| b.updated_at.cmp(&a.updated_at))
             .then_with(|| a.slug.cmp(&b.slug))
     });
 }
 
-fn to_item(
-    state: &AppState,
-    candidate: db::PlazaCandidate,
-    players: &std::collections::HashMap<String, u32>,
-) -> Option<PlazaItem> {
+/// 一个作品身上那几个要现算的数字。
+#[derive(Default, Clone, Copy)]
+struct Counts {
+    players: u32,
+    joined: u32,
+    followers: u32,
+    boosted: bool,
+}
+
+fn to_item(state: &AppState, candidate: db::PlazaCandidate, counts: Counts) -> Option<PlazaItem> {
     let site = candidate.site;
     let version = site.current_version?;
     let listing = site.listing;
@@ -122,7 +154,7 @@ fn to_item(
         .as_deref()
         .is_some_and(|e| GAME_ENGINES.contains(&e));
     Some(PlazaItem {
-        players: players.get(&site.slug).copied().unwrap_or(0),
+        players: counts.players,
         slug: site.slug,
         url,
         title: site.title,
@@ -141,6 +173,11 @@ fn to_item(
         } else {
             None
         },
+        seats: listing.seats.filter(|n| *n > 0),
+        joined: counts.joined,
+        followers: counts.followers,
+        avatar_url: candidate.avatar_url,
+        boosted: counts.boosted,
     })
 }
 
@@ -175,6 +212,11 @@ mod tests {
             players: 0,
             seeking,
             seek_note: None,
+            seats: None,
+            joined: 0,
+            followers: 0,
+            avatar_url: None,
+            boosted: false,
         }
     }
 
@@ -189,5 +231,18 @@ mod tests {
         sort_default(&mut items);
         let order: Vec<&str> = items.iter().map(|i| i.slug.as_str()).collect();
         assert_eq!(order, ["seek-new", "seek-old", "new", "old"]);
+    }
+
+    #[test]
+    fn boosted_goes_above_everything_else() {
+        let mut items = vec![
+            item("new", false, "2026-09-08T00:00:00Z"),
+            item("seek-new", true, "2026-09-07T00:00:00Z"),
+            item("paid", false, "2026-09-01T00:00:00Z"),
+        ];
+        items[2].boosted = true;
+        sort_default(&mut items);
+        let order: Vec<&str> = items.iter().map(|i| i.slug.as_str()).collect();
+        assert_eq!(order, ["paid", "seek-new", "new"]);
     }
 }

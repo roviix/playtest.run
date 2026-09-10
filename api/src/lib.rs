@@ -11,10 +11,14 @@
 //!   边算 SHA-256，哈希对上才改名进对象存储，数据库里只留一行「这个哈希有了」。
 
 pub mod auth;
+pub mod boosts;
+pub mod capabilities;
 pub mod clock;
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod live;
+pub mod notify;
 pub mod plaza;
 pub mod routes;
 pub mod state;

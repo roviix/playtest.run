@@ -1,10 +1,10 @@
 // 每版那段话在这里生成，不在控制面。
 //
-// 控制面只给数（DESIGN §3.4：只有计数和中位数，没有比例），句子是呈现：
+// 控制面只给数（DESIGN §3.5：只有计数和中位数，没有比例），句子是呈现：
 // 手机上要短、`--json` 要原始数字、`playtest mcp` 要另一种说法。措辞钉在服务端的话，
 // 每一处都得先把句子拆回数字。规则集中在这个文件，改文案只改这里。
 
-import type { VersionResults } from "./api";
+import type { SourceTally, VersionResults } from "./api";
 
 /** 秒 → 人话。「45 秒」「3 分 20 秒」「1 小时 2 分」。 */
 export function seconds(value: number): string {
@@ -27,6 +27,14 @@ export function moment(iso: string | undefined): string {
   return `${at.getMonth() + 1} 月 ${at.getDate()} 日 ${clock}`;
 }
 
+/** RFC 3339 → 「9 月 12 日」。推广的起止那种只关心哪一天的地方用。 */
+export function day(iso: string | undefined): string {
+  if (!iso) return "";
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return iso;
+  return `${at.getMonth() + 1} 月 ${at.getDate()} 日`;
+}
+
 /** RFC 3339 → 「14:20:05」。点名册和事件流里用，同一天的行不用重复日期。 */
 export function clock(iso: string | undefined): string {
   if (!iso) return "";
@@ -39,9 +47,41 @@ function pad(value: number): string {
   return value.toString().padStart(2, "0");
 }
 
+/** 多久之前。「刚刚」「12 分钟前」「3 小时前」，隔了一天以上就回到具体日期。 */
+export function ago(iso: string | undefined, now = Date.now()): string {
+  if (!iso) return "";
+  const at = new Date(iso).getTime();
+  if (Number.isNaN(at)) return iso;
+  const delta = Math.max(0, Math.floor((now - at) / 1000));
+  if (delta < 60) return "刚刚";
+  if (delta < 3600) return `${Math.floor(delta / 60)} 分钟前`;
+  if (delta < 86400) return `${Math.floor(delta / 3600)} 小时前`;
+  return moment(iso);
+}
+
+/** 到期还剩多久。「还剩 5 小时」「还剩 40 分钟」；已过期返回 null。 */
+export function left(iso: string | undefined, now = Date.now()): string | null {
+  if (!iso) return null;
+  const at = new Date(iso).getTime();
+  if (Number.isNaN(at)) return null;
+  const delta = Math.floor((at - now) / 1000);
+  if (delta <= 0) return null;
+  if (delta < 3600) return `还剩 ${Math.max(1, Math.floor(delta / 60))} 分钟`;
+  if (delta < 86400 * 2) return `还剩 ${Math.floor(delta / 3600)} 小时`;
+  return `还剩 ${Math.floor(delta / 86400)} 天`;
+}
+
+/** 字节数 → 「1.2 MB」。版本清单里用，给开发者一个「这版有多大」的感觉。 */
+export function bytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
 /**
  * 一版的那段话。一句一行，数为 0 的句子不说——
- * 「0 条反馈」「0 个错误」占着地方却什么也没告诉人（DESIGN §3.4）。
+ * 「0 条反馈」「0 个错误」占着地方却什么也没告诉人（DESIGN §3.5）。
  */
 export function sentences(version: VersionResults): string[] {
   if (version.opened === 0) {
@@ -63,13 +103,18 @@ export function sentences(version: VersionResults): string[] {
     );
   }
 
+  // 「这些人是谁、从哪来」合成一句，和 DESIGN §3.5 的示例同一行：
+  // 「3 个人玩了 5 分钟以上，2 个人回来过第二次；来自：邀请卡 4 · 广场 2 · 微信 2」。
   const stayed: string[] = [];
+  if (version.named > 0) stayed.push(`${version.named} 位留了名字`);
   if (version.played_5min_plus > 0) stayed.push(`${version.played_5min_plus} 个人玩了 5 分钟以上`);
   if (version.returned > 0) stayed.push(`${version.returned} 个人回来过`);
   if (version.dwell_median_s !== null && version.dwell_median_s !== undefined) {
     stayed.push(`停留中位数 ${seconds(version.dwell_median_s)}`);
   }
-  if (stayed.length > 0) lines.push(`${stayed.join("，")}。`);
+  const from = sources(version.sources);
+  if (stayed.length > 0) lines.push(from ? `${stayed.join("，")}；${from}。` : `${stayed.join("，")}。`);
+  else if (from) lines.push(`${from}。`);
 
   const errors = version.errors;
   if (errors.total > 0) {
@@ -85,6 +130,16 @@ export function sentences(version: VersionResults): string[] {
   if (version.feedback_count > 0) lines.push(`${version.feedback_count} 条反馈。`);
 
   return lines;
+}
+
+/**
+ * 「来自：邀请卡 4 · 广场 2 · 微信 2」。三个环各带来了几个人，这一句是唯一的答案
+ * （DESIGN §3.5）。一个来源都没有就返回 null，整句不说。
+ */
+function sources(tally: SourceTally[] | undefined): string | null {
+  const counted = (tally ?? []).filter((one) => one.count > 0);
+  if (counted.length === 0) return null;
+  return `来自：${counted.map((one) => `${sourceLabel(one.kind)} ${one.count}`).join(" · ")}`;
 }
 
 /** 和上一版比的那一行。没有一处变化就不说话。 */
@@ -139,4 +194,21 @@ const NAMES: Record<string, string> = {
 export function label(value: string | undefined): string {
   if (!value) return "不知道";
   return NAMES[value] ?? value;
+}
+
+/**
+ * 「来自哪里」的中文说法。抄的是 common/src/ingest.rs 的 `source::label`，
+ * 连不认识的值说「其它」这一条也一样——那边加了新来源，这边照着补一行。
+ */
+const SOURCES: Record<string, string> = {
+  card: "邀请卡",
+  notice: "通知",
+  plaza: "广场",
+  wechat: "微信",
+  discord: "Discord",
+  direct: "直接打开",
+};
+
+export function sourceLabel(kind: string): string {
+  return SOURCES[kind] ?? "其它";
 }

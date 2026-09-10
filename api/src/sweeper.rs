@@ -111,6 +111,7 @@ pub async fn sweep_once(state: &AppState) -> anyhow::Result<usize> {
         state.store().remove_site(slug).await?;
         let conn = state.db().lock().await;
         db::mark_site_deleted(&conn, slug, &now)?;
+        db::end_boosts_of(&conn, slug, &now)?;
     }
 
     let tokens = {
@@ -118,12 +119,56 @@ pub async fn sweep_once(state: &AppState) -> anyhow::Result<usize> {
         db::delete_expired_tokens(&conn, &now)?
     };
 
+    // 推广到点上位、到点下位（DESIGN §3.11）。
+    let boosts_moved = {
+        let conn = state.db().lock().await;
+        crate::boosts::advance(&conn, &now)?
+    };
+
     if !slugs.is_empty() || tokens > 0 {
         tracing::info!(sites = slugs.len(), tokens, "清掉了过期的匿名作品和令牌");
     }
-    if !slugs.is_empty() {
-        // 到期的作品不能还挂在广场上（DESIGN §3.8「到期自动下来」）。
+    if !slugs.is_empty() || boosts_moved {
+        // 到期的作品不能还挂在广场上（DESIGN §3.8「到期自动下来」）；推广换人了也要重排。
         crate::plaza::publish(state).await;
     }
     Ok(slugs.len())
+}
+
+/// 周报那一档：到点了就攒一期发出去（DESIGN §3.6）。
+///
+/// 每分钟看一眼而不是「睡到下周一」：进程会重启，睡着的那个 sleep 不会跨过重启活下来。
+pub const DIGEST_TICK: Duration = Duration::from_secs(60);
+
+pub fn spawn_digest(state: AppState) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let marker = crate::notify::digest::Marker::new(state.data_dir());
+        // 第一次跑不补发上一期：新装的机器不该一起来就给所有人寄一封。
+        marker.seed(clock::now());
+        let mut ticker = tokio::time::interval(DIGEST_TICK);
+        loop {
+            ticker.tick().await;
+            let now = clock::now();
+            if !marker.due(now) {
+                continue;
+            }
+            let queued = {
+                let conn = state.db().lock().await;
+                crate::notify::digest::enqueue(&conn, now, |slug| state.site_url(slug))
+            };
+            match queued {
+                // 这一周没有新作品就不发，但「这一期过去了」照样记下——
+                // 否则下一分钟会再试一次，一直试到下周一。
+                Ok(count) => {
+                    marker.record(now);
+                    if count > 0 {
+                        tracing::info!(count, "周报入队");
+                    } else {
+                        tracing::info!("这一周没有新作品，周报不发");
+                    }
+                }
+                Err(err) => tracing::error!(error = %err, "攒周报失败，下一分钟再试"),
+            }
+        }
+    })
 }

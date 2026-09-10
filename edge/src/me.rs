@@ -134,6 +134,7 @@ mod tests {
             data_dir: ".data".into(),
             host_suffix: "localhost".into(),
             public_scheme: "http".into(),
+            api_internal_url: None,
         }
     }
 

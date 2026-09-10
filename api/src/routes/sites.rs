@@ -84,15 +84,22 @@ pub async fn create(
     };
 
     tracing::info!(slug = %row.slug, user_id = %caller.user_id, "建了一个作品");
-    Ok(Json(to_site(&state, row)))
+    // 刚建出来的作品什么都还没有：没人留名、没人关注、没有推广。
+    Ok(Json(to_site(&state, row, Club::default())))
 }
 
 pub async fn list(State(state): State<AppState>, caller: Caller) -> ApiResult<Json<Vec<Site>>> {
-    let rows = {
+    let sites = {
         let conn = state.db().lock().await;
         db::list_live_sites(&conn, &caller.user_id)?
+            .into_iter()
+            .map(|row| {
+                let club = club_of(&conn, &row.slug)?;
+                Ok(to_site(&state, row, club))
+            })
+            .collect::<ApiResult<Vec<_>>>()?
     };
-    Ok(Json(rows.into_iter().map(|r| to_site(&state, r)).collect()))
+    Ok(Json(sites))
 }
 
 pub async fn show(
@@ -105,7 +112,7 @@ pub async fn show(
         db::find_live_site(&conn, &slug, &caller.user_id)?
     };
     let row = row.ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?;
-    Ok(Json(to_site(&state, row)))
+    Ok(Json(load_site(&state, row).await?))
 }
 
 pub async fn remove(
@@ -121,10 +128,14 @@ pub async fn remove(
     }
 
     // 先让链接失效，再改库：反过来的话中途失败会留下一个「列表里没有、点开还能玩」的作品。
+    // `remove_site` 删的是整个 `sites/<slug>/` 目录，`live.json` 跟着一起没了。
     state.store().remove_site(&slug).await?;
     {
+        let now = clock::now_string();
         let conn = state.db().lock().await;
-        db::mark_site_deleted(&conn, &slug, &clock::now_string())?;
+        db::mark_site_deleted(&conn, &slug, &now)?;
+        // 作品没了，它在推广位上的那一段也就结束了。
+        db::end_boosts_of(&conn, &slug, &now)?;
     }
     // 删掉的作品不能还挂在广场上。
     plaza::publish(&state).await;
@@ -133,7 +144,8 @@ pub async fn remove(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// `PATCH /v1/sites/{slug}`：广场上的状态（DESIGN §3.8）。只改带了的字段。
+/// `PATCH /v1/sites/{slug}`：广场上的状态与俱乐部那几项设置（DESIGN §3.8、§3.3、§3.5）。
+/// 只改带了的字段；`seats` 传 0、`seek_note` / `community_url` 传空串都是「清掉」。
 pub async fn update(
     State(state): State<AppState>,
     caller: Caller,
@@ -149,21 +161,35 @@ pub async fn update(
             "「想让你看什么」",
         )?),
     };
-    // 「正在找人测」蕴含「公开」：没公开的作品谁也看不见它在找人。
-    let public = match (request.public, request.seeking) {
-        (None, Some(true)) => Some(true),
-        (public, _) => public,
-    };
-    // 反过来，收回公开就同时不再求测。
-    let seeking = match (public, request.seeking) {
-        (Some(false), _) => Some(false),
-        (_, seeking) => seeking,
+    let seats = clean_seats(request.seats)?;
+    let community_url: Option<Option<String>> = match request.community_url.as_deref() {
+        None => None,
+        Some(raw) => Some(clean_community_url(raw)?),
     };
 
     let row = {
         let conn = state.db().lock().await;
         let site = db::find_live_site(&conn, &slug, &caller.user_id)?
             .ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?;
+
+        // 设了名额就是在找人测（DESIGN §3.3 第 4 条：名额那一行只在门禁页上对求测的作品有意义）。
+        // 明确写了 seeking 的以他写的为准——他可能就是想「留着名额但先不找人」。
+        let asked_seats = matches!(seats, Some(Some(n)) if n > 0);
+        let wants_seeking = match (request.seeking, asked_seats, site.listing.seeking) {
+            (Some(seeking), _, _) => Some(seeking),
+            (None, true, false) => Some(true),
+            _ => None,
+        };
+        // 「正在找人测」蕴含「公开」：没公开的作品谁也看不见它在找人。
+        let public = match (request.public, wants_seeking) {
+            (None, Some(true)) => Some(true),
+            (public, _) => public,
+        };
+        // 反过来，收回公开就同时不再求测。
+        let seeking = match (public, wants_seeking) {
+            (Some(false), _) => Some(false),
+            (_, seeking) => seeking,
+        };
         if public == Some(true) && site.current_version.is_none() {
             return Err(ApiError::invalid(
                 "这个作品还没上传过版本，广场上没东西可以给人玩。先发一版再公开。",
@@ -176,21 +202,93 @@ pub async fn update(
             seeking,
             seek_note.as_ref().map(|n| n.as_deref()),
         )?;
+        db::update_club_settings(
+            &conn,
+            &slug,
+            seats,
+            community_url.as_ref().map(|u| u.as_deref()),
+            request.feedback_public,
+        )?;
         db::find_live_site(&conn, &slug, &caller.user_id)?
             .ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?
     };
     plaza::publish(&state).await;
+    // 名额、群链接、反馈是否公开都在门禁页上（DESIGN §4.5 的 live.json）。
+    crate::live::publish(&state, &slug).await;
 
     tracing::info!(
         %slug,
         public = row.listing.public,
         seeking = row.listing.seeking,
-        "改了广场状态"
+        seats = row.listing.seats,
+        feedback_public = row.listing.feedback_public,
+        "改了作品设置"
     );
-    Ok(Json(to_site(&state, row)))
+    let site = load_site(&state, row).await?;
+    Ok(Json(site))
 }
 
-pub fn to_site(state: &AppState, row: SiteRow) -> Site {
+/// `--seats 0` 是「不找了」。上限挡的是「公开测试」那种量（DESIGN §3.3）。
+fn clean_seats(seats: Option<u32>) -> ApiResult<Option<Option<u32>>> {
+    match seats {
+        None => Ok(None),
+        Some(0) => Ok(Some(None)),
+        Some(n) if n > limits::MAX_SEATS => Err(ApiError::invalid(format!(
+            "名额最多 {} 位，你写的是 {n} 位。要找这么多人，那已经是公开测试而不是 playtest 了。",
+            limits::MAX_SEATS
+        ))),
+        Some(n) => Ok(Some(Some(n))),
+    }
+}
+
+/// 群链接去哪是开发者的事，我们只确认它是一条能点开的地址（DESIGN §3.3 第 6 条）。
+fn clean_community_url(raw: &str) -> ApiResult<Option<String>> {
+    let url = raw.trim();
+    if url.is_empty() {
+        return Ok(None);
+    }
+    let count = url.chars().count();
+    if count > limits::MAX_COMMUNITY_URL_CHARS {
+        return Err(ApiError::invalid(format!(
+            "群链接最多 {} 个字符，这个有 {count} 个。",
+            limits::MAX_COMMUNITY_URL_CHARS
+        )));
+    }
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err(ApiError::invalid(
+            "群链接要以 http:// 或 https:// 开头，比如一张微信群二维码所在的网页地址。",
+        ));
+    }
+    Ok(Some(url.to_string()))
+}
+
+/// 一个作品在广场与俱乐部这一侧的现状：留了名字的人、关注的人、推广。
+/// 都是查库才知道的，所以 [`to_site`] 要它们从外面传进来。
+#[derive(Debug, Clone, Default)]
+pub struct Club {
+    pub joined: u32,
+    pub followers: u32,
+    pub boost: Option<playtest_common::boost::Boost>,
+}
+
+pub fn club_of(conn: &Connection, slug: &str) -> ApiResult<Club> {
+    Ok(Club {
+        joined: db::joined_count(conn, slug)?,
+        followers: db::followers_count(conn, slug)?,
+        boost: db::site_boost(conn, slug)?.map(crate::boosts::to_boost),
+    })
+}
+
+/// 查一次库把 [`Club`] 补齐再拼响应。
+pub async fn load_site(state: &AppState, row: SiteRow) -> ApiResult<Site> {
+    let club = {
+        let conn = state.db().lock().await;
+        club_of(&conn, &row.slug)?
+    };
+    Ok(to_site(state, row, club))
+}
+
+pub fn to_site(state: &AppState, row: SiteRow, club: Club) -> Site {
     let l = row.listing;
     Site {
         url: state.site_url(&row.slug),
@@ -206,6 +304,12 @@ pub fn to_site(state: &AppState, row: SiteRow) -> Site {
             summary: l.summary,
             hidden: l.hidden_at.is_some(),
             has_cover: l.cover_hash.is_some(),
+            seats: l.seats.filter(|n| *n > 0),
+            joined: club.joined,
+            followers: club.followers,
+            community_url: l.community_url,
+            feedback_public: l.feedback_public,
+            boost: club.boost,
         },
     }
 }

@@ -15,6 +15,8 @@ path = "src/main.rs"
 [dependencies]
 playtest-common = { path = "../common", features = ["tunnel-io"] }
 anyhow = "1"
+# MCP 的图片内容块要 base64。和 common 同一个版本，不多拉一份。
+base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 indicatif = "0.17"

@@ -18,11 +18,27 @@ path = "src/main.rs"
 
 [dependencies]
 playtest-common = { path = "../common" }
+# Web Push 的内容加密（RFC 8291）。挑 RustCrypto 这几个是因为它们是纯 Rust：
+# 现成的 web-push crate 无条件依赖 ece，而 ece 的默认后端是 C 的 openssl。
+aes-gcm = "0.10"
 anyhow = "1"
+# Mailer 是 trait object（一个进程只装一种实现），异步方法要它来擦掉返回类型。
+async-trait = "0.1"
 axum = "0.8"
 base64 = "0.22"
+hkdf = "0.12"
 # 只用来读上传请求体的分片流；版本与 features 跟 axum 自己依赖的一致，不会多编一份。
 futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
+# SMTP 那一档。rustls + ring，和 reqwest 用同一个后端；不要 native-tls，它会拉 openssl。
+lettre = { version = "0.11", default-features = false, features = [
+  "builder",
+  "hostname",
+  "pool",
+  "smtp-transport",
+  "tokio1-rustls-tls",
+] }
+# VAPID 签名（RFC 8292）与 Web Push 的 ECDH。
+p256 = { version = "0.13", features = ["ecdh", "ecdsa"] }
 rand = "0.9"
 # 只有一个用途：替 CLI 和控制台去问 GitHub（设备码、换令牌、读用户名）。特性选择和 cli 一致：
 # rustls-no-provider + ring，不要 aws-lc-rs，也绝不引入 openssl。
@@ -32,6 +48,7 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = "1"
 serde_json = "1"
+sha2 = "0.10"
 time = { version = "0.3", features = ["formatting", "parsing"] }
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6", features = ["limit", "trace"] }

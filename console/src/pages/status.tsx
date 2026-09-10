@@ -1,4 +1,4 @@
-// 四个页面共用的三块：在取、没取到、什么都没有。
+// 各页共用的三块：在取、没取到、什么都没有。
 //
 // 「什么都没有」单独做一块是因为它在这个产品里出现得最多——刚发出去的链接、
 // 还没人打开的版本、一条反馈都没有的作品。空状态要说清「接下来会有什么」，
@@ -10,7 +10,7 @@ import { ApiError } from "../api";
 import { href } from "../router";
 
 export function Loading() {
-  return <p class="muted">正在取…</p>;
+  return <p class="muted loading">正在取…</p>;
 }
 
 export function Failed({ error, onRetry }: { error: ApiError; onRetry: () => void }) {
@@ -19,8 +19,8 @@ export function Failed({ error, onRetry }: { error: ApiError; onRetry: () => voi
       <div class="notice">
         <p>{error.message}</p>
         <p>
-          <a class="button" href={href({ name: "token" })}>
-            去粘贴令牌
+          <a class="button small" href={href({ name: "token" })}>
+            去登录
           </a>
         </p>
       </div>
@@ -30,7 +30,7 @@ export function Failed({ error, onRetry }: { error: ApiError; onRetry: () => voi
     <div class="notice">
       <p>{error.message}</p>
       <p>
-        <button class="button" onClick={onRetry}>
+        <button class="button small" onClick={onRetry}>
           再试一次
         </button>
       </p>

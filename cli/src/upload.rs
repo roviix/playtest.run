@@ -20,7 +20,7 @@ use crate::client::{Client, OnBytes};
 use crate::config::{self, Config};
 use crate::output::{self, Finding, PlazaOut, Timings, UploadReport};
 use crate::scan::{self, ScannedFile};
-use crate::{clock, inspect, ui};
+use crate::{card, clock, inspect, ui};
 
 /// 同时传几个。再多在家宽上行（普遍 30–50 Mbps）上不会更快，只会让进度条更跳。
 const UPLOAD_CONCURRENCY: usize = 4;
@@ -85,7 +85,7 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     let title =
         title_for(cli_args, &root, checked.page_title.as_deref()).map_err(output::as_bad_input)?;
     check_note(cli_args).map_err(output::as_bad_input)?;
-    check_plaza_texts(cli_args).map_err(output::as_bad_input)?;
+    check_plaza_inputs(cli_args).map_err(output::as_bad_input)?;
     let cover = match &cli_args.cover {
         Some(path) => Some(read_cover(path).map_err(output::as_bad_input)?),
         None => None,
@@ -167,23 +167,26 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     timings.commit_ms = output::ms_since(committing);
 
     // 广场（DESIGN §3.8）：版本发出去之后再改状态，广场上出现的一定是能玩的东西。
-    let plaza = if cli_args.public || cli_args.seek.is_some() {
-        let site = client
-            .update_site(
-                &slug,
-                &UpdateSiteRequest {
-                    public: Some(true),
-                    seeking: Some(cli_args.seek.is_some()),
-                    seek_note: cli_args.seek.clone(),
-                },
-            )
-            .await?;
-        Some(PlazaOut {
-            url: plaza_url(&committed.url),
-            public: site.listing.public,
-            seeking: site.listing.seeking,
-            seek_note: site.listing.seek_note,
-        })
+    // 只给 `--community` 不上广场——群是给已经点进来的玩家看的（DESIGN §3.3），
+    // 不能因为填了个群号就把作品挂出去。
+    let wants_plaza = cli_args.wants_plaza();
+    let updated = if wants_plaza || cli_args.community.is_some() {
+        Some(
+            client
+                .update_site(
+                    &slug,
+                    &UpdateSiteRequest {
+                        public: wants_plaza.then_some(true),
+                        seeking: wants_plaza.then_some(cli_args.seeking()),
+                        seek_note: cli_args.seek.clone(),
+                        seats: cli_args.seats,
+                        community_url: cli_args.community.clone(),
+                        // 「让玩家看到彼此的反馈」这一轮只在控制台里改（DESIGN §3.5）。
+                        feedback_public: None,
+                    },
+                )
+                .await?,
+        )
     } else {
         None
     };
@@ -203,8 +206,59 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         qr_text,
         checked.findings,
     );
-    report.plaza = plaza;
+    if wants_plaza {
+        if let Some(site) = &updated {
+            report.on_plaza(PlazaOut {
+                url: plaza_url(&report.url),
+                public: site.listing.public,
+                seeking: site.listing.seeking,
+                seek_note: site.listing.seek_note.clone(),
+            });
+        }
+    }
+    // 名额报服务器认下来的那个数，不报命令行里写的那个：控制面还没认这一项时，
+    // 门禁页上不会有「还差几位」，这里也就不该说「想找 10 位」。
+    report.seats = updated.as_ref().and_then(|site| site.listing.seats);
+
+    // 到这里链接已经能发给别人了。下面这两件事都要再问一次服务器，所以都放在
+    // `UploadReport::new` 记下时刻之后——「本次几秒」说的是链接多久能给出去（DESIGN §8），
+    // 不该被一句提醒和一张图撑大。
+    if without_cover(&client, &slug, cli_args, updated.as_ref()).await {
+        report.without_cover = true;
+        report.findings.push(Finding::note(output::NO_COVER));
+    }
+    report.with_card(
+        card::take(
+            &report.url,
+            &report.title,
+            &report.slug,
+            cli_args.card_out.as_deref(),
+            cli_args.no_card,
+        )
+        .await,
+    );
     Ok(report)
+}
+
+/// 这一版有没有封面（DESIGN §4.2 的上传时检查）。
+///
+/// 不能只看这次给没给 `--cover`：上一版传过的封面还在，第二次发不带 `--cover` 也是有封面的。
+/// 所以答案只能问服务器。刚改过广场状态的话答案已经在手里；否则多问一次，问不到就当没这回事
+/// ——一次已经成功的发布不该为了一句提醒变成失败（AGENTS 第 4 条）。
+async fn without_cover(
+    client: &Client,
+    slug: &str,
+    cli_args: &UploadArgs,
+    updated: Option<&playtest_common::api::Site>,
+) -> bool {
+    if cli_args.cover.is_some() {
+        return false;
+    }
+    let listing = match updated {
+        Some(site) => Some(site.listing.clone()),
+        None => client.get_site(slug).await.ok().map(|site| site.listing),
+    };
+    listing.is_some_and(|l| !l.has_cover)
 }
 
 /// 广场的地址就是玩家链接去掉 slug 那一级：`https://brisk-otter-41.playtest.run` → `https://playtest.run/`。
@@ -275,8 +329,9 @@ pub(crate) fn read_cover(path: &Path) -> Result<CoverFile> {
     })
 }
 
-/// `--summary` 与 `--seek` 的长度，本地先拦一道。
-fn check_plaza_texts(cli_args: &UploadArgs) -> Result<()> {
+/// `--summary` `--seek` `--seats` `--community` 本地先拦一道：这些是纯粹的输入错误，
+/// 不值得先把几十 MB 传上去再被服务器退回来。
+pub(crate) fn check_plaza_inputs(cli_args: &UploadArgs) -> Result<()> {
     if let Some(summary) = &cli_args.summary {
         if summary.chars().count() > limits::MAX_SUMMARY_CHARS {
             bail!(
@@ -295,6 +350,39 @@ fn check_plaza_texts(cli_args: &UploadArgs) -> Result<()> {
                 limits::MAX_SEEK_NOTE_CHARS
             );
         }
+    }
+    if let Some(seats) = cli_args.seats {
+        // 0 位试玩者是一句自相矛盾的话，多半是手滑；上限说出具体数字，不让人再试一次。
+        if seats == 0 {
+            bail!("--seats 至少是 1。想取消找人测就别加这个参数。");
+        }
+        if seats > limits::MAX_SEATS {
+            bail!(
+                "--seats 最多 {}，你写了 {seats}。真要这么多人，分几批发更好组织。",
+                limits::MAX_SEATS
+            );
+        }
+    }
+    if let Some(community) = &cli_args.community {
+        check_community(community)?;
+    }
+    Ok(())
+}
+
+/// 群链接。玩家会从门禁页点出去，所以只收 http(s)——`qq://` 这类只有装了客户端的人点得动，
+/// 在浏览器里就是一个死链。
+fn check_community(url: &str) -> Result<()> {
+    let trimmed = url.trim();
+    if !(trimmed.starts_with("https://") || trimmed.starts_with("http://")) {
+        bail!(
+            "--community 要一条 http:// 或 https:// 开头的链接，你给的是「{trimmed}」。\n微信群、QQ 群没有网址的话，把群二维码传成一张图片放在网上，给那张图的地址。"
+        );
+    }
+    if trimmed.chars().count() > limits::MAX_COMMUNITY_URL_CHARS {
+        bail!(
+            "群链接太长了，最多 {} 个字符。",
+            limits::MAX_COMMUNITY_URL_CHARS
+        );
     }
     Ok(())
 }
@@ -730,5 +818,63 @@ async fn put_with_retry(
         }
         tokio::time::sleep(backoff).await;
         backoff *= 2;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args_with(seats: Option<u32>, community: Option<&str>) -> UploadArgs {
+        UploadArgs {
+            seats,
+            community: community.map(str::to_string),
+            ..UploadArgs::default()
+        }
+    }
+
+    #[test]
+    fn seats_has_to_be_a_number_of_people_we_could_actually_find() {
+        assert!(check_plaza_inputs(&args_with(Some(1), None)).is_ok());
+        assert!(check_plaza_inputs(&args_with(Some(limits::MAX_SEATS), None)).is_ok());
+
+        let err = check_plaza_inputs(&args_with(Some(0), None)).unwrap_err();
+        assert!(err.to_string().contains("至少是 1"), "{err}");
+
+        // 超了要把上限那个数说出来，不然只能再猜一次。
+        let err = check_plaza_inputs(&args_with(Some(limits::MAX_SEATS + 1), None)).unwrap_err();
+        assert!(
+            err.to_string().contains(&limits::MAX_SEATS.to_string()),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_group_link_has_to_be_something_a_browser_can_open() {
+        for good in [
+            "https://t.me/playtest",
+            "http://127.0.0.1:8080/qq",
+            "https://example.com/微信群.png",
+        ] {
+            assert!(
+                check_plaza_inputs(&args_with(None, Some(good))).is_ok(),
+                "{good}"
+            );
+        }
+        // qq:// 这类只有装了客户端的人点得动，在门禁页上就是一个死链。
+        for bad in ["qq://group/12345", "微信群 abc", "t.me/playtest", ""] {
+            let err = check_plaza_inputs(&args_with(None, Some(bad))).unwrap_err();
+            assert!(err.to_string().contains("http"), "{bad} → {err}");
+        }
+    }
+
+    #[test]
+    fn a_group_link_that_long_is_not_a_link() {
+        let long = format!(
+            "https://example.com/{}",
+            "x".repeat(limits::MAX_COMMUNITY_URL_CHARS)
+        );
+        let err = check_plaza_inputs(&args_with(None, Some(&long))).unwrap_err();
+        assert!(err.to_string().contains("太长"), "{err}");
     }
 }
