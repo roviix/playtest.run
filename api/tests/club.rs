@@ -243,8 +243,10 @@ impl Harness {
     }
 }
 
+/// 门禁页种下的会话 id 是 32 个十六进制字符（`ingest::is_session_id`），
+/// 所以夹具也只能给这种形状——种子换成它的码位，一个种子一个 id。
 fn session_id(seed: char) -> String {
-    seed.to_string().repeat(32)
+    format!("{:032x}", seed as u32)
 }
 
 /// 服务端只采信最近 24 小时里的客户端时间，所以锚在「现在」附近。

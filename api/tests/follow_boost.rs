@@ -309,6 +309,19 @@ impl Harness {
         .ok()
     }
 
+    /// 最近那一封信要把人送到哪。正文是开发者写的话，链接单独一列——
+    /// 邮件由 `notify::render` 把两者拼起来，推送则把链接放进负载，所以来源要在这一列上。
+    async fn last_notice_url(&self) -> Option<String> {
+        let conn = self.state.db().lock().await;
+        conn.query_row(
+            "SELECT url FROM notifications ORDER BY id DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .ok()
+        .flatten()
+    }
+
     async fn queued(&self, kind: &str) -> i64 {
         let conn = self.state.db().lock().await;
         conn.query_row(
@@ -771,7 +784,8 @@ async fn a_new_version_tells_the_followers_once_a_day() {
     let (_, subject, body, _) = h.last_notice().await.unwrap();
     assert!(subject.contains("小球") && subject.contains("v2"), "{subject}");
     assert!(body.contains("改了第三关的跳跃判定"), "{body}");
-    assert!(body.contains("from=notice"), "链接要带来源：{body}");
+    let url = h.last_notice_url().await.expect("信里要有去处");
+    assert!(url.contains("from=notice"), "链接要带来源：{url}");
 
     // 一天连发几版，收件箱里还是一封——把它改成最新那一版。
     h.publish(&token, &slug, Some("又改了一点")).await;
