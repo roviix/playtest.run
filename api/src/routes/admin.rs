@@ -11,7 +11,7 @@ use axum::extract::{Path, State};
 use axum::http::{header::AUTHORIZATION, request::Parts, StatusCode};
 use axum::Json;
 use playtest_common::boost::{
-    Boost, BoostStatus, GrantBoostRequest, NotificationQueue, ReviewBoostRequest,
+    Boost, BoostStatus, GrantBoostRequest, JobStatus, NotificationQueue, ReviewBoostRequest,
 };
 
 use crate::boosts;
@@ -220,6 +220,11 @@ pub async fn unhide(
 }
 
 /// `GET /admin/notifications`
+/// `GET /admin/jobs`：后台任务板。
+pub async fn jobs(State(state): State<AppState>, _: Admin) -> Json<Vec<JobStatus>> {
+    Json(state.jobs().snapshot())
+}
+
 pub async fn notifications(
     State(state): State<AppState>,
     _: Admin,

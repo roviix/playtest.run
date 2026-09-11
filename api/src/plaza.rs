@@ -161,15 +161,23 @@ fn to_item(state: &AppState, candidate: db::PlazaCandidate, counts: Counts) -> O
     Some(card)
 }
 
-/// 每 [`REFRESH_INTERVAL`] 重写一次。
-pub fn spawn_refresh(state: AppState) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(REFRESH_INTERVAL);
-        loop {
-            ticker.tick().await;
-            publish(&state).await;
-        }
-    })
+/// 每 [`REFRESH_INTERVAL`] 重写一次 `plaza.json`。进程一起来也写一次：
+/// 边缘读的是对象存储里的文件，控制面重启前的那份可能已经旧了。
+pub struct Refresh;
+
+impl crate::scheduler::Job for Refresh {
+    fn name(&self) -> &'static str {
+        "plaza"
+    }
+    fn every(&self) -> std::time::Duration {
+        REFRESH_INTERVAL
+    }
+    fn run<'a>(&'a self, state: &'a AppState) -> crate::scheduler::JobFuture<'a> {
+        Box::pin(async move {
+            publish(state).await;
+            Ok(1)
+        })
+    }
 }
 
 #[cfg(test)]

@@ -103,6 +103,7 @@ pub fn app(state: AppState) -> Router {
                 post(admin::hide).delete(admin::unhide),
             )
             .route(admin_paths::NOTIFICATIONS, get(admin::notifications))
+            .route(admin_paths::JOBS, get(admin::jobs))
     } else {
         router
     };

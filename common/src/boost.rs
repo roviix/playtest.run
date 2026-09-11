@@ -27,6 +27,8 @@ pub mod routes {
     pub const PLAZA_HIDE: &str = "/admin/plaza/{slug}/hide";
     /// `GET` → 200 [`super::NotificationQueue`]：通知队列长什么样
     pub const NOTIFICATIONS: &str = "/admin/notifications";
+    /// `GET` → 200 `Vec<`[`super::JobStatus`]`>`：后台任务上次什么时候跑、结果如何
+    pub const JOBS: &str = "/admin/jobs";
 
     pub fn boost_review(id: i64) -> String {
         BOOST_REVIEW.replace("{id}", &id.to_string())
@@ -122,6 +124,24 @@ pub struct ReviewBoostRequest {
     pub approve: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+}
+
+/// 控制面一件后台活的现状（清过期作品、回收 blob、周报、发通知、重写广场与 `live.json`）。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobStatus {
+    pub name: String,
+    pub every_secs: u64,
+    /// RFC 3339；还没跑过是 `None`。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_run_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_ok: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+    pub runs: u64,
+    pub failures: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

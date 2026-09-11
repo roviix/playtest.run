@@ -34,6 +34,8 @@ struct Inner {
     notify: Arc<notify::Runtime>,
     admin_token: Option<String>,
     data_dir: std::path::PathBuf,
+    /// 后台任务的现状（`scheduler::Board`）。
+    jobs: crate::scheduler::Board,
     /// 网页登录流程里发出去、还没回来的 `state`。进程内存里就够：控制面是单进程（DESIGN §4.5）。
     login_states: std::sync::Mutex<HashMap<String, Instant>>,
 }
@@ -67,6 +69,7 @@ impl AppState {
                 notify,
                 admin_token: config.admin_token.clone(),
                 data_dir: config.data_dir.clone(),
+                jobs: crate::scheduler::Board::default(),
                 login_states: std::sync::Mutex::new(HashMap::new()),
             }),
         })
@@ -124,6 +127,25 @@ impl AppState {
     }
 
     /// 数据目录。周报的时间戳这类「跟迁移无关的一行状态」放在这里。
+    /// 后台任务板：每个任务上次什么时候跑、结果如何。
+    pub fn jobs(&self) -> &crate::scheduler::Board {
+        &self.inner.jobs
+    }
+
+    /// 测试用：临时目录里一套完整的状态。目录随返回值一起活着（泄漏给测试进程）。
+    #[cfg(test)]
+    pub async fn for_tests() -> Self {
+        let dir = tempfile::tempdir().expect("建不了临时目录");
+        let config = Config {
+            listen: "127.0.0.1:0".parse().expect("字面量"),
+            data_dir: dir.keep(),
+            site_url_template: "http://{slug}.localhost:8443".to_string(),
+            github: None,
+            ..Config::default()
+        };
+        Self::from_config(&config).await.expect("测试状态起不来")
+    }
+
     pub fn data_dir(&self) -> &std::path::Path {
         &self.inner.data_dir
     }

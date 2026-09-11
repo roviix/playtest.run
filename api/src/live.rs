@@ -96,20 +96,17 @@ pub async fn refresh_active(state: &AppState) -> anyhow::Result<usize> {
     Ok(slugs.len())
 }
 
-pub fn spawn_refresh(state: AppState) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(REFRESH_INTERVAL);
-        loop {
-            ticker.tick().await;
-            match refresh_active(&state).await {
-                Ok(count) => tracing::debug!(count, "刷了一轮 live.json"),
-                Err(err) => {
-                    tracing::error!(
-                        error = format!("{err:#}"),
-                        "刷 live.json 没做完，下一轮再试"
-                    )
-                }
-            }
-        }
-    })
+/// 每 [`REFRESH_INTERVAL`] 给最近有动静的作品刷一遍 `live.json`。
+pub struct Refresh;
+
+impl crate::scheduler::Job for Refresh {
+    fn name(&self) -> &'static str {
+        "live"
+    }
+    fn every(&self) -> Duration {
+        REFRESH_INTERVAL
+    }
+    fn run<'a>(&'a self, state: &'a AppState) -> crate::scheduler::JobFuture<'a> {
+        Box::pin(refresh_active(state))
+    }
 }

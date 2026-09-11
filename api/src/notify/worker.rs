@@ -7,6 +7,7 @@ use time::Duration;
 
 use crate::clock;
 use crate::db;
+use crate::scheduler::{Job, JobFuture};
 use crate::state::AppState;
 
 /// 多久扫一次队列。
@@ -16,16 +17,19 @@ const BATCH: usize = 50;
 /// 第 1、2、3 次失败之后各等多久再试。三次都不行就不再试了。
 const BACKOFF_MINUTES: [i64; 3] = [1, 5, 30];
 
-pub fn spawn(state: AppState) {
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(TICK).await;
-            let sent = run_once(&state).await;
-            if sent > 0 {
-                tracing::debug!(sent, "这一轮发出去的通知");
-            }
-        }
-    });
+/// 队列的这一头：每 [`TICK`] 把到点的信发出去。
+pub struct Deliver;
+
+impl Job for Deliver {
+    fn name(&self) -> &'static str {
+        "deliver_notifications"
+    }
+    fn every(&self) -> std::time::Duration {
+        TICK
+    }
+    fn run<'a>(&'a self, state: &'a AppState) -> JobFuture<'a> {
+        Box::pin(async move { Ok(run_once(state).await) })
+    }
 }
 
 /// 发一轮。返回成功送出的封数。

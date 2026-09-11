@@ -14,6 +14,8 @@ use time::{Date, OffsetDateTime, Time};
 
 use crate::clock;
 use crate::db;
+use crate::scheduler::{Job, JobFuture};
+use crate::state::AppState;
 
 /// 周报只看最近这么久的新版本。
 const WINDOW_DAYS: i64 = 7;
@@ -251,6 +253,58 @@ impl Marker {
         if self.last().is_none() {
             self.record(now);
         }
+    }
+}
+
+/// 周报那一档：到点了就攒一期发出去（DESIGN §3.6）。
+///
+/// 每分钟看一眼而不是「睡到下周一」：进程会重启，睡着的那个 sleep 不会跨过重启活下来。
+/// 上一期的时间在 [`Marker`] 里，所以重启也不会重发。
+pub const DIGEST_TICK: std::time::Duration = std::time::Duration::from_secs(60);
+
+pub struct WeeklyDigest {
+    marker: Marker,
+}
+
+impl WeeklyDigest {
+    pub fn new(data_dir: &Path) -> Self {
+        let marker = Marker::new(data_dir);
+        // 第一次跑不补发上一期：新装的机器不该一起来就给所有人寄一封。
+        marker.seed(clock::now());
+        Self { marker }
+    }
+}
+
+impl Job for WeeklyDigest {
+    fn name(&self) -> &'static str {
+        "weekly_digest"
+    }
+    fn every(&self) -> std::time::Duration {
+        DIGEST_TICK
+    }
+    fn on_start(&self) -> bool {
+        false
+    }
+    fn run<'a>(&'a self, state: &'a AppState) -> JobFuture<'a> {
+        Box::pin(async move {
+            let now = clock::now();
+            if !self.marker.due(now) {
+                return Ok(0);
+            }
+            let queued = {
+                let conn = state.db().lock().await;
+                enqueue(&conn, now, |slug| state.site_url(slug))?
+            };
+            // 这一周没有新作品就不发，但「这一期过去了」照样记下——
+            // 否则下一分钟会再试一次，一直试到下周一。
+            self.marker.record(now);
+            if queued > 0 {
+                tracing::info!(queued, "周报入队");
+            } else {
+                tracing::info!("这一周没有新作品，周报不发");
+            }
+            Ok(queued)
+        })
     }
 }
 

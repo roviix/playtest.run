@@ -18,15 +18,15 @@ use axum::http::{header, Request, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use playtest_api::config::GitHubApp;
-use playtest_api::{app, boosts, clock, db, live, notify, plaza, AppState, Config};
+use playtest_api::{app, boosts, clock, db, live, notify, plaza, scheduler, AppState, Config};
 use playtest_common::api::{
     routes as paths, CommitUploadResponse, CreateSiteRequest, DeviceLoginPoll, DeviceLoginStart,
     ErrorBody, ErrorCode, LoginPollResponse, Me, PrepareUploadRequest, PrepareUploadResponse, Site,
     UpdateSiteRequest,
 };
 use playtest_common::boost::{
-    routes as admin_paths, Boost, BoostKind, BoostStatus, GrantBoostRequest, NotificationQueue,
-    ReviewBoostRequest, MAX_SLOTS,
+    routes as admin_paths, Boost, BoostKind, BoostStatus, GrantBoostRequest, JobStatus,
+    NotificationQueue, ReviewBoostRequest, MAX_SLOTS,
 };
 use playtest_common::follow::{
     routes as follow_paths, ConfirmRequest, ConfirmResponse, FollowChannel, FollowRequest,
@@ -1288,6 +1288,52 @@ async fn the_queue_view_says_how_much_is_waiting() {
         .json();
     assert_eq!(queue.pending, 0);
     assert_eq!(queue.sent_24h, 1);
+}
+
+#[tokio::test]
+async fn the_job_board_shows_every_background_task_after_one_tick() {
+    let h = Harness::start(true).await;
+    // 还没跑过：六行都在，但都没有时间。
+    let rows: Vec<JobStatus> = h.admin::<()>("GET", admin_paths::JOBS, None).await.json();
+    assert!(rows.is_empty(), "调度器没起来时板子是空的");
+
+    let mut scheduler =
+        scheduler::Scheduler::new(scheduler::jobs(&h.state), h.state.jobs().clone());
+    let rows: Vec<JobStatus> = h.admin::<()>("GET", admin_paths::JOBS, None).await.json();
+    let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "expire_sites",
+            "daily_cleanup",
+            "weekly_digest",
+            "deliver_notifications",
+            "plaza",
+            "live"
+        ]
+    );
+    assert!(rows.iter().all(|r| r.last_run_at.is_none()));
+
+    scheduler
+        .run_due(&h.state, tokio::time::Instant::now())
+        .await;
+    let rows: Vec<JobStatus> = h.admin::<()>("GET", admin_paths::JOBS, None).await.json();
+    for row in &rows {
+        if row.name == "weekly_digest" {
+            assert!(row.last_run_at.is_none(), "周报到点才发，起步不跑");
+            continue;
+        }
+        assert_eq!(
+            row.last_ok,
+            Some(true),
+            "{}: {:?}",
+            row.name,
+            row.last_error
+        );
+        assert_eq!(row.runs, 1);
+    }
+    // 第一个滴答就把广场写出来了。
+    assert!(h.state.store().get_plaza().await.unwrap().is_some());
 }
 
 // ---------------------------------------------------------------- 头像与 live.json

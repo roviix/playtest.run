@@ -7,24 +7,25 @@ use std::time::Duration;
 
 use crate::clock;
 use crate::db;
+use crate::scheduler::{Job, JobFuture};
 use crate::state::AppState;
 
 /// 多久扫一次。链接是 24 小时到期，晚十分钟消失不影响谁；扫得太勤只是白转。
 pub const INTERVAL: Duration = Duration::from_secs(10 * 60);
 
-pub fn spawn(state: AppState) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(INTERVAL);
-        loop {
-            ticker.tick().await;
-            if let Err(err) = sweep_once(&state).await {
-                tracing::error!(
-                    error = format!("{err:#}"),
-                    "清理过期匿名作品没做完，下一轮再试"
-                );
-            }
-        }
-    })
+/// 清过期的匿名作品与令牌，推广到点上下位（每 [`INTERVAL`]）。
+pub struct ExpireSites;
+
+impl Job for ExpireSites {
+    fn name(&self) -> &'static str {
+        "expire_sites"
+    }
+    fn every(&self) -> Duration {
+        INTERVAL
+    }
+    fn run<'a>(&'a self, state: &'a AppState) -> JobFuture<'a> {
+        Box::pin(sweep_once(state))
+    }
 }
 
 /// blob 多久没人引用才删。上传是「先传 blob、再提交清单」，提交之前的 blob 在任何清单里都找不到，
@@ -37,32 +38,29 @@ pub const BLOB_GC_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 /// 玩家数据保留多久（DESIGN §3.4「数据默认保留 90 天」）。按会话的最后一次活动算。
 pub const RETENTION_DAYS: i64 = 90;
 
-/// 每天一次的慢活：回收孤儿 blob，删过期的会话数据。
-pub fn spawn_blob_gc(state: AppState) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(BLOB_GC_INTERVAL);
-        loop {
-            ticker.tick().await;
-            match collect_blobs(&state).await {
-                Ok((removed, bytes)) if removed > 0 => {
-                    tracing::info!(removed, bytes, "回收了没有清单引用的 blob")
-                }
-                Ok(_) => {}
-                Err(err) => {
-                    tracing::error!(error = format!("{err:#}"), "blob 回收没做完，明天再试")
-                }
+/// 每天一次的慢活：回收孤儿 blob，删过期的会话数据。返回删掉的 blob 数加会话数。
+pub struct DailyCleanup;
+
+impl Job for DailyCleanup {
+    fn name(&self) -> &'static str {
+        "daily_cleanup"
+    }
+    fn every(&self) -> Duration {
+        BLOB_GC_INTERVAL
+    }
+    fn run<'a>(&'a self, state: &'a AppState) -> JobFuture<'a> {
+        Box::pin(async move {
+            let (removed, bytes) = collect_blobs(state).await?;
+            if removed > 0 {
+                tracing::info!(removed, bytes, "回收了没有清单引用的 blob");
             }
-            match expire_sessions(&state).await {
-                Ok(n) if n > 0 => {
-                    tracing::info!(sessions = n, "删掉了超过 {RETENTION_DAYS} 天的会话数据")
-                }
-                Ok(_) => {}
-                Err(err) => {
-                    tracing::error!(error = format!("{err:#}"), "会话数据清理没做完，明天再试")
-                }
+            let sessions = expire_sessions(state).await?;
+            if sessions > 0 {
+                tracing::info!(sessions, "删掉了超过 {RETENTION_DAYS} 天的会话数据");
             }
-        }
-    })
+            Ok(removed + sessions)
+        })
+    }
 }
 
 /// 删掉最后一次活动早于 [`RETENTION_DAYS`] 天前的会话及其事件、反馈。
@@ -133,42 +131,4 @@ pub async fn sweep_once(state: &AppState) -> anyhow::Result<usize> {
         crate::plaza::publish(state).await;
     }
     Ok(slugs.len())
-}
-
-/// 周报那一档：到点了就攒一期发出去（DESIGN §3.6）。
-///
-/// 每分钟看一眼而不是「睡到下周一」：进程会重启，睡着的那个 sleep 不会跨过重启活下来。
-pub const DIGEST_TICK: Duration = Duration::from_secs(60);
-
-pub fn spawn_digest(state: AppState) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        let marker = crate::notify::digest::Marker::new(state.data_dir());
-        // 第一次跑不补发上一期：新装的机器不该一起来就给所有人寄一封。
-        marker.seed(clock::now());
-        let mut ticker = tokio::time::interval(DIGEST_TICK);
-        loop {
-            ticker.tick().await;
-            let now = clock::now();
-            if !marker.due(now) {
-                continue;
-            }
-            let queued = {
-                let conn = state.db().lock().await;
-                crate::notify::digest::enqueue(&conn, now, |slug| state.site_url(slug))
-            };
-            match queued {
-                // 这一周没有新作品就不发，但「这一期过去了」照样记下——
-                // 否则下一分钟会再试一次，一直试到下周一。
-                Ok(count) => {
-                    marker.record(now);
-                    if count > 0 {
-                        tracing::info!(count, "周报入队");
-                    } else {
-                        tracing::info!("这一周没有新作品，周报不发");
-                    }
-                }
-                Err(err) => tracing::error!(error = %err, "攒周报失败，下一分钟再试"),
-            }
-        }
-    })
 }
