@@ -128,7 +128,11 @@ function Rail({
     <aside class="rail">
       <a class="brand" href={href({ name: "sites" })}>
         <span class="mark" aria-hidden="true">
-          p<i />
+          <svg class="mark-svg" viewBox="0 0 24 24">
+            <rect x="6" y="3.5" width="12" height="17" rx="2.2" />
+            <path d="M8.6 8h6.8M8.6 11.2h4.6" />
+            <circle class="dot" cx="14.8" cy="16.4" r="1.55" />
+          </svg>
         </span>
         <span class="brand-text">
           <span class="wordmark">

@@ -26,9 +26,10 @@ impl Session {
     /// 读配置、定下控制面地址。不联网。
     pub fn open(api_flag: Option<&str>) -> Result<Self> {
         let config_path = config::default_path()?;
+        let config = config::load(&config_path)?;
         Ok(Self {
-            api: args::api_base(api_flag),
-            config: config::load(&config_path)?,
+            api: args::api_base(api_flag, config.api.as_deref()),
+            config,
             config_path,
         })
     }

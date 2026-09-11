@@ -341,15 +341,18 @@ pub fn classify(raw: &str) -> Target {
     Target::Dir(PathBuf::from(raw))
 }
 
-/// `--api`、环境变量、默认值，按这个顺序。
-pub fn api_base(flag: Option<&str>) -> String {
-    if let Some(url) = flag {
-        return url.trim_end_matches('/').to_string();
+/// `--api`、环境变量、配置里上次记下的地址、默认线上，按这个顺序。
+pub fn api_base(flag: Option<&str>, saved: Option<&str>) -> String {
+    pick_api(flag, std::env::var("PLAYTEST_API").ok().as_deref(), saved)
+}
+
+fn pick_api(flag: Option<&str>, env: Option<&str>, saved: Option<&str>) -> String {
+    for candidate in [flag, env, saved] {
+        if let Some(url) = candidate.map(str::trim).filter(|s| !s.is_empty()) {
+            return url.trim_end_matches('/').to_string();
+        }
     }
-    match std::env::var("PLAYTEST_API") {
-        Ok(url) if !url.trim().is_empty() => url.trim().trim_end_matches('/').to_string(),
-        _ => DEFAULT_API.to_string(),
-    }
+    DEFAULT_API.to_string()
 }
 
 #[cfg(test)]
@@ -587,5 +590,19 @@ mod tests {
         let cli = Cli::try_parse_from(["playtest"]).unwrap();
         assert!(cli.upload.target.is_none());
         assert!(cli.command.is_none());
+    }
+
+    #[test]
+    fn control_plane_flag_then_env_then_saved_then_online() {
+        assert_eq!(
+            pick_api(Some("http://a/"), Some("http://b"), Some("http://c")),
+            "http://a"
+        );
+        assert_eq!(
+            pick_api(None, Some(" http://b/ "), Some("http://c")),
+            "http://b"
+        );
+        assert_eq!(pick_api(None, Some(""), Some("http://c/")), "http://c");
+        assert_eq!(pick_api(None, None, None), DEFAULT_API);
     }
 }

@@ -29,9 +29,9 @@ struct LoginReport {
 }
 
 pub async fn run(api_flag: Option<&str>) -> Result<()> {
-    let api = args::api_base(api_flag);
     let config_path = config::default_path()?;
     let mut config = config::load(&config_path)?;
+    let api = args::api_base(api_flag, config.api.as_deref());
     let machine = output::is_json();
 
     let mut client = Client::new(&api)?;

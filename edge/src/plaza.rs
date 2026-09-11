@@ -10,13 +10,15 @@
 //! 这一页是我们自己的，没有用户脚本，所以能带严格的 CSP（`app.rs`）；封面来自各作品自己的子域，
 //! 头像来自 GitHub——CSP 的 `img-src` 里只多这一个来源。
 
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::time::Duration;
 
 use playtest_common::follow::root_paths;
 use playtest_common::plaza::{Plaza, PlazaItem, PLAYERS_WINDOW_DAYS};
 use playtest_common::project::{Blurb, Fact};
 use playtest_common::store::FsStore;
+
+use crate::cache::Cached;
 use playtest_common::DEVELOPER_API_URL;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -28,8 +30,7 @@ pub const TTL: Duration = Duration::from_secs(30);
 
 pub struct PlazaCache {
     store: FsStore,
-    cached: Mutex<Option<(Instant, Arc<Plaza>)>>,
-    ttl: Duration,
+    cached: Cached<Plaza>,
 }
 
 impl PlazaCache {
@@ -40,42 +41,23 @@ impl PlazaCache {
     pub fn with_ttl(store: FsStore, ttl: Duration) -> Self {
         Self {
             store,
-            cached: Mutex::new(None),
-            ttl,
+            cached: Cached::new(ttl),
         }
     }
 
     /// 读不到（控制面还没写过、或文件坏了）就当作空的：广场页照常出，只是没有卡片。
     pub async fn get(&self) -> Arc<Plaza> {
-        if let Some(hit) = self.cached.lock().ok().and_then(|c| {
-            c.as_ref()
-                .filter(|(at, _)| at.elapsed() < self.ttl)
-                .map(|(_, p)| p.clone())
-        }) {
-            return hit;
-        }
-        let plaza = match self.store.get_plaza().await {
-            Ok(Some(p)) => p,
-            Ok(None) => empty(),
-            Err(err) => {
-                tracing::warn!(%err, "读 plaza.json 失败，广场按空的出");
-                empty()
-            }
-        };
-        let plaza = Arc::new(plaza);
-        if let Ok(mut cache) = self.cached.lock() {
-            *cache = Some((Instant::now(), plaza.clone()));
-        }
-        plaza
-    }
-}
-
-fn empty() -> Plaza {
-    Plaza {
-        schema: playtest_common::plaza::SCHEMA,
-        generated_at: String::new(),
-        club_followers: 0,
-        items: Vec::new(),
+        self.cached
+            .get(|| async {
+                match self.store.get_plaza().await {
+                    Ok(plaza) => plaza,
+                    Err(err) => {
+                        tracing::warn!(%err, "读 plaza.json 失败，广场按空的出");
+                        None
+                    }
+                }
+            })
+            .await
     }
 }
 
@@ -143,13 +125,14 @@ fn rail(here: Here) -> String {
     format!(
         "<aside class=\"sidebar\">\n\
 <a class=\"brand\" href=\"/\" aria-label=\"playtest.run 首页\">\
-<span class=\"mark\" aria-hidden=\"true\">p<i></i></span>\
+<span class=\"mark\" aria-hidden=\"true\">{mark}</span>\
 <span class=\"wordmark\">playtest<span>.run</span></span></a>\n\
 <nav class=\"nav\" aria-label=\"页面\">{plaza}{mine}</nav>\n\
 <div class=\"sidebar-bottom\">\n\
 <a class=\"nav-item publish\" href=\"#publish-dialog\">{plus}发布</a>\n\
 </div>\n\
 </aside>\n",
+        mark = icon("mark"),
         plus = icon("plus"),
     )
 }
@@ -332,11 +315,7 @@ fn publish_sheet() -> String {
 <div class=\"sheet\" role=\"dialog\" aria-labelledby=\"publish-title\">\n\
 <div class=\"dialog-head\"><h2 id=\"publish-title\">从一条命令开始</h2>\
 <a class=\"close\" href=\"#\" aria-label=\"关闭\">{close}</a></div>\n\
-<p class=\"dialog-desc\">不必等到做完。能玩，就发出去。</p>\n\
-<ol class=\"steps\">\n\
-<li><span class=\"n\">1</span><h3>安装</h3>\
-<p>从 <a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">Releases</a> 下载 playtest，放进 PATH。</p></li>\n\
-<li class=\"pub-box\"><span class=\"n\">2</span><h3>发布</h3>\
+<div class=\"pub-box\">\n\
 <div class=\"tabs\" role=\"tablist\" aria-label=\"发布方式\">\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-static\" checked>\n\
 <label for=\"tab-static\">导出目录</label>\n\
@@ -348,11 +327,9 @@ fn publish_sheet() -> String {
 <div class=\"codebox\" id=\"panel-static\"><b>$</b><code>playtest ./dist --public -m \"想让人看什么\"</code></div>\n\
 <div class=\"codebox\" id=\"panel-local\"><b>$</b><code>playtest 5173</code></div>\n\
 <div class=\"codebox\" id=\"panel-backend\"><b>$</b><code>playtest ./dist --backend 3000 --public -m \"想让人看什么\"</code></div>\n\
-</li>\n\
-<li><span class=\"n\">3</span><h3>之后</h3>\
-<p>链接、二维码、邀请卡一起出来。谁来玩过，在 \
-<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">开发者控制台</a> 看。</p></li>\n\
-</ol>\n\
+</div>\n\
+<p class=\"dialog-foot\">从 <a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">Releases</a> 下载，放进 PATH。发出去之后，谁来玩过在 \
+<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">开发者控制台</a> 看。</p>\n\
 </div>\n\
 </div>\n",
         close = icon("close"),
@@ -407,6 +384,9 @@ fn icon(name: &str) -> &'static str {
         "plus" => {
             r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>"#
         }
+        "mark" => {
+            r#"<svg class="mark-svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3.5" width="12" height="17" rx="2.2"/><path d="M8.6 8h6.8M8.6 11.2h4.6"/><circle class="dot" cx="14.8" cy="16.4" r="1.55"/></svg>"#
+        }
         _ => "",
     }
 }
@@ -426,7 +406,7 @@ fn icon(name: &str) -> &'static str {
 /// - `.tag::before` 是「正在找人测」前面那个发光的点；推广标没有点。
 /// - `.fact i` 是名额那一件事实旁边 28px 的进度线，`--p` 是百分比。
 /// - `.verb` 能悬停才出来；触屏（`hover:none`）上一直在；键盘焦点落到卡上也出来。
-/// - `.mark` 是栏顶的标记：一个 p 和一个琥珀点；`.wordmark` 在桌面上只留给读屏，手机顶条上才显示。
+/// - `.mark` 是栏顶的竖卡线稿；`.wordmark` 在桌面上只留给读屏，手机顶条上才显示。
 /// - `.nav-dot` 是当前那间房旁边的一竖琥珀，贴在栏的左边沿。
 /// - 发布说明桌面居中、手机从底部升起，都是 `:target`，没有脚本；`.codebox b` 是提示符。
 const PLAZA_CSS: &str = r#"
@@ -440,9 +420,10 @@ body.page footer{display:block;margin:0;padding:0;border:0;font-size:inherit;col
 .icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .sidebar{position:fixed;inset:0 auto 0 0;width:76px;display:flex;flex-direction:column;align-items:center;padding:18px 10px 14px;border-right:1px solid var(--line);background:var(--rail);z-index:10}
 .brand{display:flex;align-items:center;gap:10px;border-radius:10px}
-.mark{position:relative;display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:linear-gradient(160deg,#202024,#141417);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff14,0 6px 14px -8px #000;color:var(--fg);font-size:20px;font-weight:750;letter-spacing:-.04em;line-height:1;padding-bottom:3px}
-.mark i{position:absolute;right:9px;bottom:9px;width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent)}
-.wordmark{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);font-size:19px;font-weight:700;letter-spacing:-.035em;line-height:1;color:var(--fg);white-space:nowrap}
+.mark{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:linear-gradient(160deg,#202024,#141417);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff14,0 6px 14px -8px #000;color:var(--fg)}
+.mark-svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}
+.mark-svg .dot{fill:var(--accent);stroke:none}
+.wordmark{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);font-size:19px;font-weight:700;letter-spacing:-.04em;line-height:1;color:var(--fg);white-space:nowrap}
 .wordmark span{color:var(--dim);font-weight:400}
 .nav{display:flex;flex-direction:column;gap:6px;width:100%;margin:26px 0 0}
 .nav-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;padding:10px 0 9px;border-radius:12px;color:var(--dim);font-size:11px;font-weight:500;letter-spacing:.02em;line-height:1;transition:color .15s,background .15s}
@@ -504,31 +485,26 @@ body.page .more>.ghost{justify-self:start}
 .overlay{display:none;position:fixed;inset:0;z-index:40;align-items:center;justify-content:center;padding:24px}
 .overlay:target{display:flex}
 .overlay-back{position:absolute;inset:0;background:#000000b3;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.sheet{position:relative;z-index:1;width:min(34rem,100%);max-height:calc(100dvh - 48px);overflow:auto;padding:28px 28px 26px;border-radius:18px;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff12,0 40px 100px -30px #000}
+.sheet{position:relative;z-index:1;width:min(32rem,100%);max-height:calc(100dvh - 48px);overflow:auto;padding:24px 24px 22px;border-radius:18px;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff12,0 40px 100px -30px #000}
 .dialog-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
-.dialog-head h2{margin:0;font-size:22px;line-height:1.3;font-weight:650;letter-spacing:-.02em}
+.dialog-head h2{margin:0;font-size:20px;line-height:1.3;font-weight:650;letter-spacing:-.02em}
 .close{flex:0 0 auto;display:grid;place-items:center;width:32px;height:32px;border-radius:9px;color:var(--dim);box-shadow:inset 0 0 0 1px var(--line);transition:color .15s,background .15s}
 .close .icon{width:14px;height:14px;stroke-width:1.8}
 .close:hover{color:var(--fg);background:#ffffff0a}
-.dialog-desc{margin:6px 0 0;font-size:14px;line-height:1.7;color:var(--dim)}
-.steps{list-style:none;margin:24px 0 0;padding:0}
-.steps li{display:grid;grid-template-columns:24px minmax(0,1fr);column-gap:16px;align-items:start;padding:18px 0 0;border-top:1px solid var(--line)}
-.steps li>*{grid-column:2}
-.steps .n{grid-column:1;grid-row:1;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;font:12px/1 var(--mono);color:var(--soft);background:var(--card2);box-shadow:inset 0 0 0 1px var(--line2)}
-.steps h3{margin:0;font-size:14px;line-height:24px;font-weight:600}
-.steps p{margin:4px 0 0;font-size:13.5px;line-height:1.7;color:var(--dim)}
-body.page .steps p a{color:var(--fg);text-decoration:underline;text-decoration-color:#ffffff3a;text-underline-offset:3px}
-.tabs{position:relative;display:flex;gap:18px;margin:8px 0 12px;border-bottom:1px solid var(--line)}
+.pub-box{margin:20px 0 0;border-radius:12px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;margin:0;border-bottom:1px solid var(--line)}
 .tabs input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
-.tabs label{padding:6px 0 9px;margin-bottom:-1px;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--dim);cursor:pointer;transition:color .15s,border-color .15s}
+.tabs label{display:flex;align-items:center;justify-content:center;min-height:40px;margin:0 0 -1px;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--dim);cursor:pointer;text-align:center;transition:color .15s,border-color .15s}
 .tabs label:hover{color:var(--fg)}
 .pub-box:has(#tab-static:checked) label[for=tab-static],.pub-box:has(#tab-local:checked) label[for=tab-local],.pub-box:has(#tab-backend:checked) label[for=tab-backend]{color:var(--fg);border-bottom-color:var(--accent)}
 .tabs input:focus-visible+label{outline:2px solid var(--accent);outline-offset:1px}
-.codebox{display:none;gap:10px;padding:13px 16px;border-radius:12px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line)}
+.codebox{display:none;align-items:flex-start;gap:10px;margin:0;padding:14px 16px;min-height:52px;border-radius:0;background:transparent;box-shadow:none}
 .pub-box:has(#tab-static:checked) #panel-static,.pub-box:has(#tab-local:checked) #panel-local,.pub-box:has(#tab-backend:checked) #panel-backend{display:flex}
 .codebox b{flex:0 0 auto;font:12.5px/1.8 var(--mono);font-weight:400;color:var(--accent)}
 .codebox code{display:block;padding:0;border:0;background:none;font:12.5px/1.8 var(--mono);color:var(--soft);white-space:pre-wrap;overflow-wrap:anywhere}
-@media(max-width:47.99rem){.sidebar{position:static;width:auto;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:8px;padding:10px 12px;border-right:0;border-bottom:1px solid var(--line)}.mark{width:32px;height:32px;border-radius:9px;font-size:17px}.mark i{right:7px;bottom:7px;width:4px;height:4px}.wordmark{position:static;width:auto;height:auto;clip:auto;font-size:17px}.nav{flex-direction:row;gap:4px;width:auto;margin:0 0 0 auto}.nav-item{flex-direction:row;gap:6px;width:auto;min-height:36px;padding:0 12px 0 10px;border-radius:999px;font-size:13px;letter-spacing:0}.nav-item .icon{width:16px;height:16px}.nav-item.active{background:#ffffff0d;box-shadow:inset 0 0 0 1px var(--line)}.nav-dot{display:none}.sidebar-bottom{width:auto;margin:0}body.page .publish{flex-direction:row;gap:6px;min-height:36px;padding:0 12px 0 8px;border-radius:999px;font-size:13px}body.page .publish .icon{width:20px;height:20px;padding:3px;border-radius:7px}.main{margin:0;background:none}.content{padding:14px 14px 72px}.grid{gap:12px}body.page a.tile{padding:5px;border-radius:14px}.shot{border-radius:10px}.tile-body{padding:10px 6px 6px}.tile-body h2{font-size:14px}.tile .summary{font-size:12.5px}.tile .meta{margin-top:8px;padding-top:8px}.cover.word b{font-size:46px}.cover.word i{display:none}.main>.drawer{margin:14px;padding:22px 18px 24px}.overlay{align-items:flex-end;padding:0}.sheet{width:100%;max-height:90dvh;padding:22px 20px calc(24px + env(safe-area-inset-bottom));border-radius:18px 18px 0 0}.dialog-head h2{font-size:20px}}
+.dialog-foot{margin:16px 0 0;font-size:13px;line-height:1.7;color:var(--dim)}
+body.page .dialog-foot a{color:var(--fg);text-decoration:underline;text-decoration-color:#ffffff3a;text-underline-offset:3px}
+@media(max-width:47.99rem){.sidebar{position:static;width:auto;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:8px;padding:10px 12px;border-right:0;border-bottom:1px solid var(--line)}.mark{width:32px;height:32px;border-radius:9px}.mark-svg{width:15px;height:15px}.wordmark{position:static;width:auto;height:auto;clip:auto;font-size:17px}.nav{flex-direction:row;gap:4px;width:auto;margin:0 0 0 auto}.nav-item{flex-direction:row;gap:6px;width:auto;min-height:36px;padding:0 12px 0 10px;border-radius:999px;font-size:13px;letter-spacing:0}.nav-item .icon{width:16px;height:16px}.nav-item.active{background:#ffffff0d;box-shadow:inset 0 0 0 1px var(--line)}.nav-dot{display:none}.sidebar-bottom{width:auto;margin:0}body.page .publish{flex-direction:row;gap:6px;min-height:36px;padding:0 12px 0 8px;border-radius:999px;font-size:13px}body.page .publish .icon{width:20px;height:20px;padding:3px;border-radius:7px}.main{margin:0;background:none}.content{padding:14px 14px 72px}.grid{gap:12px}body.page a.tile{padding:5px;border-radius:14px}.shot{border-radius:10px}.tile-body{padding:10px 6px 6px}.tile-body h2{font-size:14px}.tile .summary{font-size:12.5px}.tile .meta{margin-top:8px;padding-top:8px}.cover.word b{font-size:46px}.cover.word i{display:none}.main>.drawer{margin:14px;padding:22px 18px 24px}.overlay{align-items:flex-end;padding:0}.sheet{width:100%;max-height:90dvh;padding:22px 20px calc(24px + env(safe-area-inset-bottom));border-radius:18px 18px 0 0}.dialog-head h2{font-size:20px}}
 "#;
 
 #[cfg(test)]
@@ -651,6 +627,13 @@ mod tests {
         assert!(!html.contains("点开就玩，不用注册"));
         assert!(html.contains("href=\"#publish-dialog\""));
         assert!(html.contains("从一条命令开始"));
+        assert!(html.contains("class=\"mark-svg\""));
+        assert!(!html.contains("<span class=\"mark\" aria-hidden=\"true\">p"));
+        assert!(!html.contains("class=\"steps\""));
+        assert!(!html.contains("--seek"));
+        assert!(html.contains("class=\"dialog-foot\""));
+        assert!(html.contains("for=\"tab-static\">导出目录</label>"));
+        assert!(html.contains("playtest ./dist --public -m"));
         assert!(!html.contains("href=\"#about-dialog\""));
         assert!(html.contains(&format!(
             "href=\"{DEVELOPER_API_URL}/console/\" target=\"_blank\" rel=\"noopener\">"
@@ -866,7 +849,7 @@ mod tests {
 
     #[test]
     fn empty_plaza_says_so() {
-        let plaza = empty();
+        let plaza = Plaza::default();
         let html = render(&view(&plaza));
         assert!(html.contains("广场上还没有作品"));
         assert!(!html.contains("class=\"grid\""));

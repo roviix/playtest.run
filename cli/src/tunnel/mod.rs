@@ -362,9 +362,9 @@ struct Control<'a> {
 impl<'a> Control<'a> {
     async fn start(args: &'a UploadArgs, backend: Option<Backend>) -> Result<Control<'a>> {
         let here = std::env::current_dir().context("看不了当前目录")?;
-        let api = args::api_base(args.api.as_deref());
         let config_path = config::default_path()?;
         let mut config = config::load(&config_path)?;
+        let api = args::api_base(args.api.as_deref(), config.api.as_deref());
         let mut client = Client::new(&api)?;
         upload::ensure_token(&mut client, &mut config, &config_path, &api).await?;
         let dir_key = dir_key(&here);

@@ -92,9 +92,9 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     };
 
     let preparing = Instant::now();
-    let api = args::api_base(cli_args.api.as_deref());
     let config_path = config::default_path()?;
     let mut config = config::load(&config_path)?;
+    let api = args::api_base(cli_args.api.as_deref(), config.api.as_deref());
     let mut client = Client::new(&api)?;
     ensure_token(&mut client, &mut config, &config_path, &api).await?;
 
