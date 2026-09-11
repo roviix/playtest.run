@@ -222,7 +222,7 @@ pub mod key_files {
     pub const VERIFYING_KEY_OBJECT: &str = "keys/tunnel.pub";
 }
 
-/// `POST /v1/sites/{slug}/tunnel` 的请求体。
+/// `POST /v1/projects/{slug}/tunnel` 的请求体。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TunnelRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -236,7 +236,7 @@ pub struct TunnelRequest {
     pub hybrid: bool,
 }
 
-/// `POST /v1/sites/{slug}/tunnel` 的响应：CLI 拿它去连边缘。
+/// `POST /v1/projects/{slug}/tunnel` 的响应：CLI 拿它去连边缘。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TunnelGrant {
     pub slug: String,

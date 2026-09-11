@@ -84,7 +84,7 @@ async fn create_site(
     State(fake): State<Arc<Fake>>,
     Json(request): Json<CreateSiteRequest>,
 ) -> Json<Site> {
-    fake.record("POST /v1/sites".into());
+    fake.record("POST /v1/projects".into());
     Json(Site {
         slug: NEW_SLUG.into(),
         url: format!("http://{NEW_SLUG}.localhost:8443"),
@@ -101,7 +101,7 @@ async fn prepare_upload(
     UrlPath(slug): UrlPath<String>,
     Json(request): Json<PrepareUploadRequest>,
 ) -> Response {
-    fake.record(format!("POST /v1/sites/{slug}/uploads"));
+    fake.record(format!("POST /v1/projects/{slug}/uploads"));
     if fake.behaviour.remembered_slug_expired && slug == GONE_SLUG {
         return refuse(
             StatusCode::UNAUTHORIZED,
@@ -151,7 +151,7 @@ async fn commit_upload(
     State(fake): State<Arc<Fake>>,
     UrlPath((slug, upload_id)): UrlPath<(String, String)>,
 ) -> Json<CommitUploadResponse> {
-    fake.record(format!("POST /v1/sites/{slug}/uploads/{upload_id}/commit"));
+    fake.record(format!("POST /v1/projects/{slug}/uploads/{upload_id}/commit"));
     Json(CommitUploadResponse {
         slug: slug.clone(),
         version: 1,
@@ -281,9 +281,9 @@ fn uploads_only_the_blobs_the_server_is_missing() {
         steps_without_puts(&calls),
         [
             "POST /v1/anon/sessions".to_string(),
-            "POST /v1/sites".to_string(),
-            format!("POST /v1/sites/{NEW_SLUG}/uploads"),
-            format!("POST /v1/sites/{NEW_SLUG}/uploads/upload-1/commit"),
+            "POST /v1/projects".to_string(),
+            format!("POST /v1/projects/{NEW_SLUG}/uploads"),
+            format!("POST /v1/projects/{NEW_SLUG}/uploads/upload-1/commit"),
         ]
     );
 
@@ -368,11 +368,11 @@ fn a_second_run_reuses_the_remembered_site_and_uploads_nothing() {
     assert!(
         calls
             .iter()
-            .any(|c| c == &format!("POST /v1/sites/{NEW_SLUG}/uploads")),
+            .any(|c| c == &format!("POST /v1/projects/{NEW_SLUG}/uploads")),
         "应该沿用记住的作品：{calls:?}"
     );
     assert!(
-        !calls.iter().any(|c| c == "POST /v1/sites"),
+        !calls.iter().any(|c| c == "POST /v1/projects"),
         "记住了就不该再新建作品：{calls:?}"
     );
 }
@@ -414,12 +414,12 @@ fn an_expired_anonymous_link_is_replaced_with_a_new_one() {
         steps_without_puts(&fake.calls()),
         [
             // 先拿着旧令牌去问记住的那个作品，被拒。
-            format!("POST /v1/sites/{GONE_SLUG}/uploads"),
+            format!("POST /v1/projects/{GONE_SLUG}/uploads"),
             // 于是换一个匿名会话、建一个新作品，再来一次。
             "POST /v1/anon/sessions".to_string(),
-            "POST /v1/sites".to_string(),
-            format!("POST /v1/sites/{NEW_SLUG}/uploads"),
-            format!("POST /v1/sites/{NEW_SLUG}/uploads/upload-1/commit"),
+            "POST /v1/projects".to_string(),
+            format!("POST /v1/projects/{NEW_SLUG}/uploads"),
+            format!("POST /v1/projects/{NEW_SLUG}/uploads/upload-1/commit"),
         ]
     );
 

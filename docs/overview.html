@@ -180,7 +180,7 @@ const pages = [];
   S.push(txt('la',60,134,'A · 上传（M2 / M3 · 导出目录）',{fs:12.5,bold:true,color:'#333'}));
   S.push(box('a_dir',60,170,160,56,'./dist',['引擎导出的静态目录'],'local'));
   S.push(box('a_cli',240,160,160,76,'playtest ./dist',['遍历 → 每个文件 SHA-256','问缺哪些 → 只传缺的 → 提交'],'local',
-    {desc:'<p>四步：<code>POST /v1/sites</code> 拿 slug → <code>POST …/uploads</code> 送全部路径+哈希 → <code>PUT /v1/blobs/{hash}</code> 只传缺的（并行、可重试，服务端校验哈希）→ <code>POST …/commit</code> 得到 vN。改一行只传一个文件。</p>',ref:'DESIGN §4.2 · common/src/api.rs'}));
+    {desc:'<p>四步：<code>POST /v1/projects</code> 拿 slug → <code>POST …/uploads</code> 送全部路径+哈希 → <code>PUT /v1/blobs/{hash}</code> 只传缺的（并行、可重试，服务端校验哈希）→ <code>POST …/commit</code> 得到 vN。改一行只传一个文件。</p>',ref:'DESIGN §4.2 · common/src/api.rs'}));
   S.push(box('a_api',470,160,220,76,'控制面 API',['缺哪些哈希 · 校验 · 提交清单','SQLite：用户 / slug / 版本 / 会话'],'dev',{ref:'api/src/routes/uploads.rs'}));
   S.push(box('a_blobs',720,140,230,44,'blobs/<hash>',['内容寻址，不可变，长缓存'],'fact',{small:true,ref:'common/src/store.rs'}));
   S.push(box('a_manifest',720,192,230,56,'manifests/<slug>/v7.json',['路径 → 哈希 · title · developer','expires_at · cover · engine'],'fact',{small:true,
@@ -312,7 +312,7 @@ const pages = [];
   E.push(arrow('r_sdk','r_ingest2','',{out:[1,0.5],in:[0,0.5]}));
   E.push(arrow('r_ingest','r_db','',{out:[1,0.5],in:[0,0.25]}));
   E.push(arrow('r_ingest2','r_db','',{out:[1,0.5],in:[0,0.8]}));
-  E.push(arrow('r_db','r_console','GET /v1/sites/\n{slug}/results',{out:[1,0.5],in:[0,0.5],lx:1120,ly:222}));
+  E.push(arrow('r_db','r_console','GET /v1/projects/\n{slug}/results',{out:[1,0.5],in:[0,0.5],lx:1120,ly:222}));
   E.push(arrow('r_db','r_plaza','每 5 分钟整理成 plaza.json',{out:[0.5,0],in:[0.5,0],via:[[980,138],[1485,138]],lx:1240,ly:138,dashed:true,color:'#c9a24a'}));
   S.push(txt('r_ex',60,340,'v7 · 9 月 5 日 14:20 · 「改了新手引导」 — 8 个人打开，6 个人进到游戏（2 个在加载时走了——其中 1 个微信 Android，game.wasm 下到 61% 中断）— 3 个人玩了 5 分钟以上 — 1 个 JS 错误撞了 3 次 — 1 条反馈：「不知道要按哪个键」· 附截图 · iPhone 15 Safari · 进入 47 秒',{fs:11.5,color:'#555'}));
   S.push(txt('r_ex2',60,362,'↑ 点名册的句式（DESIGN §3.4）。计数和点名，不是百分比；「这 3 个人停在第三关」，不是「37% 流失」。',{fs:11.5,color:'#888'}));

@@ -452,6 +452,6 @@ mod tests {
     fn urls_do_not_double_up_slashes() {
         install_crypto_provider();
         let client = Client::new("http://127.0.0.1:8787/").unwrap();
-        assert_eq!(client.url(routes::SITES), "http://127.0.0.1:8787/v1/sites");
+        assert_eq!(client.url(routes::SITES), "http://127.0.0.1:8787/v1/projects");
     }
 }

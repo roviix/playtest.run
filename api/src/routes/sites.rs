@@ -144,7 +144,7 @@ pub async fn remove(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// `PATCH /v1/sites/{slug}`：广场上的状态与俱乐部那几项设置（DESIGN §3.8、§3.3、§3.5）。
+/// `PATCH /v1/projects/{slug}`：广场上的状态与俱乐部那几项设置（DESIGN §3.8、§3.3、§3.5）。
 /// 只改带了的字段；`seats` 传 0、`seek_note` / `community_url` 传空串都是「清掉」。
 pub async fn update(
     State(state): State<AppState>,

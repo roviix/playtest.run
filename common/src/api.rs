@@ -5,10 +5,10 @@
 //!
 //! 上传一个版本的四步（DESIGN §4.2）：
 //!
-//! 1. `POST /v1/sites`（首次）拿到 slug；
-//! 2. `POST /v1/sites/{slug}/uploads` 送全部文件的路径、哈希、大小，拿回缺哪些哈希；
+//! 1. `POST /v1/projects`（首次）拿到 slug；
+//! 2. `POST /v1/projects/{slug}/uploads` 送全部文件的路径、哈希、大小，拿回缺哪些哈希；
 //! 3. `PUT /v1/blobs/{hash}` 只传缺的（可并行、可重试，服务端校验哈希）；
-//! 4. `POST /v1/sites/{slug}/uploads/{upload_id}/commit` 提交，拿到 `vN` 与链接。
+//! 4. `POST /v1/projects/{slug}/uploads/{upload_id}/commit` 提交，拿到 `vN` 与链接。
 
 use serde::{Deserialize, Serialize};
 
@@ -30,23 +30,23 @@ pub mod routes {
     /// `POST` → [`super::AnonSessionResponse`]
     pub const ANON_SESSIONS: &str = "/v1/anon/sessions";
     /// `GET` 列出我的作品 → `Vec<`[`super::Site`]`>`；`POST` 新建 → 200 [`super::Site`]
-    pub const SITES: &str = "/v1/sites";
+    pub const SITES: &str = "/v1/projects";
     /// `GET` → [`super::Site`]；`PATCH` [`super::UpdateSiteRequest`] → 200 [`super::Site`]；`DELETE` → 204
-    pub const SITE: &str = "/v1/sites/{slug}";
+    pub const SITE: &str = "/v1/projects/{slug}";
     /// `POST` → [`super::PrepareUploadResponse`]
-    pub const SITE_UPLOADS: &str = "/v1/sites/{slug}/uploads";
+    pub const SITE_UPLOADS: &str = "/v1/projects/{slug}/uploads";
     /// `POST` → [`super::CommitUploadResponse`]
-    pub const SITE_UPLOAD_COMMIT: &str = "/v1/sites/{slug}/uploads/{upload_id}/commit";
+    pub const SITE_UPLOAD_COMMIT: &str = "/v1/projects/{slug}/uploads/{upload_id}/commit";
     /// `PUT` 原始字节 → 201（已存在则 200）
     pub const BLOB: &str = "/v1/blobs/{hash}";
     /// `POST` [`crate::tunnel::TunnelRequest`] → 200 [`crate::tunnel::TunnelGrant`]：签一个隧道令牌
-    pub const SITE_TUNNEL: &str = "/v1/sites/{slug}/tunnel";
+    pub const SITE_TUNNEL: &str = "/v1/projects/{slug}/tunnel";
     /// `GET` → 200 [`super::VersionList`]：这个作品发过的每一版，新的在前
-    pub const SITE_VERSIONS: &str = "/v1/sites/{slug}/versions";
+    pub const SITE_VERSIONS: &str = "/v1/projects/{slug}/versions";
     /// `POST` → 200 [`super::Site`]：把「当前版本」指针指回某一版（回滚，DESIGN §3.5）。清单不可变，指针一动玩家立刻看到
-    pub const SITE_VERSION_ACTIVATE: &str = "/v1/sites/{slug}/versions/{version}/activate";
+    pub const SITE_VERSION_ACTIVATE: &str = "/v1/projects/{slug}/versions/{version}/activate";
     /// `GET` → 200 [`super::VersionFiles`]：这一版里到底有哪些文件。
-    pub const SITE_VERSION_FILES: &str = "/v1/sites/{slug}/versions/{version}/files";
+    pub const SITE_VERSION_FILES: &str = "/v1/projects/{slug}/versions/{version}/files";
 
     // ---- 登录（DESIGN §3.2：`playtest login`，GitHub，一次之后不再问） ----
     //
@@ -284,7 +284,7 @@ pub struct Listing {
     pub boost: Option<crate::boost::Boost>,
 }
 
-/// `PATCH /v1/sites/{slug}`：只改带了的字段。
+/// `PATCH /v1/projects/{slug}`：只改带了的字段。
 /// `seek_note` / `community_url` 传空字符串表示清掉；`seats` 传 0 表示清掉。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpdateSiteRequest {
@@ -323,7 +323,7 @@ pub struct VersionList {
     pub versions: Vec<VersionInfo>,
 }
 
-/// 一个版本里的文件清单（`GET /v1/sites/{slug}/versions/{version}/files`）。
+/// 一个版本里的文件清单（`GET /v1/projects/{slug}/versions/{version}/files`）。
 ///
 /// 只有清单和哈希，没有字节：文件本身在作品自己的域上按路径取就行。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -396,10 +396,10 @@ mod tests {
 
     #[test]
     fn route_helpers_fill_placeholders() {
-        assert_eq!(routes::site("brisk-otter-41"), "/v1/sites/brisk-otter-41");
+        assert_eq!(routes::site("brisk-otter-41"), "/v1/projects/brisk-otter-41");
         assert_eq!(
             routes::site_upload_commit("a", "u1"),
-            "/v1/sites/a/uploads/u1/commit"
+            "/v1/projects/a/uploads/u1/commit"
         );
         assert_eq!(routes::blob("ff"), "/v1/blobs/ff");
     }

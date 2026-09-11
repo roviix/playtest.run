@@ -415,8 +415,8 @@ playtest rm <slug> -y
 ## HTTP API
 
 If you cannot run the binary: {api}/llms-full.txt and {api}/openapi.json.
-Publishing is `POST /v1/sites` -> `POST /v1/sites/{{slug}}/uploads` -> `PUT /v1/blobs/{{hash}}`
--> `POST /v1/sites/{{slug}}/uploads/{{id}}/commit`.
+Publishing is `POST /v1/projects` -> `POST /v1/projects/{{slug}}/uploads` -> `PUT /v1/blobs/{{hash}}`
+-> `POST /v1/projects/{{slug}}/uploads/{{id}}/commit`.
 ",
         hours = playtest_common::ANON_LINK_TTL_HOURS,
         api = DEVELOPER_API_URL,

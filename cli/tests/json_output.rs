@@ -21,7 +21,7 @@ const SLUG: &str = "brisk-otter-41";
 
 // ---------------------------------------------------------------- 假控制面
 
-/// 让 `POST /v1/sites/{slug}/uploads` 回一个指定的错，用来验各条退出码。
+/// 让 `POST /v1/projects/{slug}/uploads` 回一个指定的错，用来验各条退出码。
 #[derive(Clone, Copy)]
 struct Refusal {
     status: u16,

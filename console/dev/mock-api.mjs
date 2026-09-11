@@ -377,12 +377,12 @@ createServer(async (req, res) => {
   }
 
   if (path === '/v1/me') return json(res, me);
-  if (path === '/v1/sites' && req.method === 'GET') return json(res, sites);
+  if (path === '/v1/projects' && req.method === 'GET') return json(res, sites);
 
-  // /v1/sites/<slug>/...
+  // /v1/projects/<slug>/...
   const slug = parts[2];
   const site = sites.find((one) => one.slug === slug);
-  if (parts[0] === 'v1' && parts[1] === 'sites' && site) {
+  if (parts[0] === 'v1' && parts[1] === 'projects' && site) {
     const tail = parts.slice(3);
     if (tail.length === 0) {
       if (req.method === 'PATCH') {

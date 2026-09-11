@@ -47,7 +47,7 @@ pub struct FeedbackQuery {
     status: Option<String>,
 }
 
-/// `GET /v1/sites/{slug}/results`：作品时间线，每版一条摘要，版本倒序。
+/// `GET /v1/projects/{slug}/results`：作品时间线，每版一条摘要，版本倒序。
 pub async fn timeline(
     State(state): State<AppState>,
     caller: Caller,
@@ -120,7 +120,7 @@ pub async fn timeline(
     }))
 }
 
-/// `GET /v1/sites/{slug}/versions/{version}/sessions`：点名册。
+/// `GET /v1/projects/{slug}/versions/{version}/sessions`：点名册。
 pub async fn sessions(
     State(state): State<AppState>,
     caller: Caller,
@@ -203,7 +203,7 @@ pub async fn sessions(
     }))
 }
 
-/// `GET /v1/sites/{slug}/feedback`：反馈流，时间倒序。
+/// `GET /v1/projects/{slug}/feedback`：反馈流，时间倒序。
 pub async fn feedback(
     State(state): State<AppState>,
     caller: Caller,
@@ -244,7 +244,7 @@ pub async fn feedback(
     Ok(Json(FeedbackList { slug, items }))
 }
 
-/// `PATCH /v1/sites/{slug}/feedback/{id}`：标记已看 / 已处理，或把这一条藏起来 / 放出来。
+/// `PATCH /v1/projects/{slug}/feedback/{id}`：标记已看 / 已处理，或把这一条藏起来 / 放出来。
 pub async fn update_feedback(
     State(state): State<AppState>,
     caller: Caller,
@@ -266,7 +266,7 @@ pub async fn update_feedback(
             found |= db::set_feedback_status(&conn, &slug, id, status.as_db())?;
         }
         if let Some(public) = request.public {
-            // `public: false` 就是藏起来。作品级的开关在 PATCH /v1/sites/{slug}。
+            // `public: false` 就是藏起来。作品级的开关在 PATCH /v1/projects/{slug}。
             found |= db::set_feedback_hidden(&conn, &slug, id, !public)?;
         }
         if !found {

@@ -21,13 +21,13 @@ use serde::{Deserialize, Serialize};
 
 pub mod routes {
     /// `GET` → [`super::SiteResults`]
-    pub const SITE_RESULTS: &str = "/v1/sites/{slug}/results";
+    pub const SITE_RESULTS: &str = "/v1/projects/{slug}/results";
     /// `GET`（`?sort=dwell|time`）→ [`super::VersionSessions`]
-    pub const SITE_VERSION_SESSIONS: &str = "/v1/sites/{slug}/versions/{version}/sessions";
+    pub const SITE_VERSION_SESSIONS: &str = "/v1/projects/{slug}/versions/{version}/sessions";
     /// `GET`（`?version=N`、`?status=new|seen|done`）→ [`super::FeedbackList`]
-    pub const SITE_FEEDBACK: &str = "/v1/sites/{slug}/feedback";
+    pub const SITE_FEEDBACK: &str = "/v1/projects/{slug}/feedback";
     /// `PATCH` [`super::UpdateFeedbackRequest`] → [`super::FeedbackItem`]
-    pub const SITE_FEEDBACK_ITEM: &str = "/v1/sites/{slug}/feedback/{id}";
+    pub const SITE_FEEDBACK_ITEM: &str = "/v1/projects/{slug}/feedback/{id}";
 
     pub fn site_results(slug: &str) -> String {
         SITE_RESULTS.replace("{slug}", slug)
@@ -315,7 +315,7 @@ pub struct FeedbackItem {
     pub public: bool,
 }
 
-/// `PATCH /v1/sites/{slug}/feedback/{id}`：只改带了的字段。
+/// `PATCH /v1/projects/{slug}/feedback/{id}`：只改带了的字段。
 /// `public: Some(false)` 是「把这一条藏起来」——作品级的开关在 [`crate::api::UpdateSiteRequest::feedback_public`]。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpdateFeedbackRequest {
@@ -346,15 +346,15 @@ mod tests {
     fn route_helpers_fill_placeholders() {
         assert_eq!(
             routes::site_results("brisk-otter-41"),
-            "/v1/sites/brisk-otter-41/results"
+            "/v1/projects/brisk-otter-41/results"
         );
         assert_eq!(
             routes::site_version_sessions("brisk-otter-41", 7),
-            "/v1/sites/brisk-otter-41/versions/7/sessions"
+            "/v1/projects/brisk-otter-41/versions/7/sessions"
         );
         assert_eq!(
             routes::site_feedback_item("brisk-otter-41", 12),
-            "/v1/sites/brisk-otter-41/feedback/12"
+            "/v1/projects/brisk-otter-41/feedback/12"
         );
     }
 

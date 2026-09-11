@@ -339,32 +339,32 @@ export async function exchangeGitHubCode(code: string, state: string): Promise<L
 
 export const api = {
   me: () => call<Me>("/v1/me"),
-  sites: () => call<Site[]>("/v1/sites"),
-  site: (slug: string) => call<Site>(`/v1/sites/${encodeURIComponent(slug)}`),
+  sites: () => call<Site[]>("/v1/projects"),
+  site: (slug: string) => call<Site>(`/v1/projects/${encodeURIComponent(slug)}`),
   // 名额传 0、群链接传空字符串就是清掉，见 common/src/api.rs 的 UpdateSiteRequest。
   updateSite: (slug: string, request: UpdateSiteRequest) =>
-    call<Site>(`/v1/sites/${encodeURIComponent(slug)}`, {
+    call<Site>(`/v1/projects/${encodeURIComponent(slug)}`, {
       method: "PATCH",
       body: JSON.stringify(request),
     }),
   // 删除：链接立刻失效，版本与结果一起走。控制面回 204。
   deleteSite: (slug: string) =>
-    call<void>(`/v1/sites/${encodeURIComponent(slug)}`, { method: "DELETE" }),
-  versions: (slug: string) => call<VersionList>(`/v1/sites/${encodeURIComponent(slug)}/versions`),
-  results: (slug: string) => call<SiteResults>(`/v1/sites/${encodeURIComponent(slug)}/results`),
+    call<void>(`/v1/projects/${encodeURIComponent(slug)}`, { method: "DELETE" }),
+  versions: (slug: string) => call<VersionList>(`/v1/projects/${encodeURIComponent(slug)}/versions`),
+  results: (slug: string) => call<SiteResults>(`/v1/projects/${encodeURIComponent(slug)}/results`),
   // 回滚：把「当前版本」指回某一版。版本都在，边缘 1 秒内看到新指针（DESIGN §3.7）。
   activateVersion: (slug: string, version: number) =>
-    call<Site>(`/v1/sites/${encodeURIComponent(slug)}/versions/${version}/activate`, {
+    call<Site>(`/v1/projects/${encodeURIComponent(slug)}/versions/${version}/activate`, {
       method: "POST",
       body: "{}",
     }),
   sessions: (slug: string, version: number, sort: RosterSort) =>
     call<VersionSessions>(
-      `/v1/sites/${encodeURIComponent(slug)}/versions/${version}/sessions?sort=${sort}`,
+      `/v1/projects/${encodeURIComponent(slug)}/versions/${version}/sessions?sort=${sort}`,
     ),
-  feedback: (slug: string) => call<FeedbackList>(`/v1/sites/${encodeURIComponent(slug)}/feedback`),
+  feedback: (slug: string) => call<FeedbackList>(`/v1/projects/${encodeURIComponent(slug)}/feedback`),
   updateFeedback: (slug: string, id: number, request: UpdateFeedbackRequest) =>
-    call<FeedbackItem>(`/v1/sites/${encodeURIComponent(slug)}/feedback/${id}`, {
+    call<FeedbackItem>(`/v1/projects/${encodeURIComponent(slug)}/feedback/${id}`, {
       method: "PATCH",
       body: JSON.stringify(request),
     }),
