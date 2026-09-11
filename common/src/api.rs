@@ -45,6 +45,8 @@ pub mod routes {
     pub const SITE_VERSIONS: &str = "/v1/sites/{slug}/versions";
     /// `POST` → 200 [`super::Site`]：把「当前版本」指针指回某一版（回滚，DESIGN §3.5）。清单不可变，指针一动玩家立刻看到
     pub const SITE_VERSION_ACTIVATE: &str = "/v1/sites/{slug}/versions/{version}/activate";
+    /// `GET` → 200 [`super::VersionFiles`]：这一版里到底有哪些文件。
+    pub const SITE_VERSION_FILES: &str = "/v1/sites/{slug}/versions/{version}/files";
 
     // ---- 登录（DESIGN §3.2：`playtest login`，GitHub，一次之后不再问） ----
     //
@@ -62,6 +64,12 @@ pub mod routes {
     pub const LOGIN_WEB_EXCHANGE: &str = "/v1/login/github/exchange";
     /// `GET` → 200 [`super::Me`]：这个令牌是谁。
     pub const ME: &str = "/v1/me";
+
+    pub fn site_version_files(slug: &str, version: u32) -> String {
+        SITE_VERSION_FILES
+            .replace("{slug}", slug)
+            .replace("{version}", &version.to_string())
+    }
 
     pub fn site_tunnel(slug: &str) -> String {
         SITE_TUNNEL.replace("{slug}", slug)
@@ -313,6 +321,30 @@ pub struct VersionList {
     pub current_version: Option<u32>,
     /// 新的在前。
     pub versions: Vec<VersionInfo>,
+}
+
+/// 一个版本里的文件清单（`GET /v1/sites/{slug}/versions/{version}/files`）。
+///
+/// 只有清单和哈希，没有字节：文件本身在作品自己的域上按路径取就行。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VersionFiles {
+    pub slug: String,
+    pub version: u32,
+    /// 玩家现在看到的就是这一版。
+    pub current: bool,
+    pub total_bytes: u64,
+    /// 按路径排序，和清单里一致。
+    pub files: Vec<VersionFile>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VersionFile {
+    pub path: String,
+    pub size: u64,
+    /// 内容哈希（SHA-256 小写十六进制）。同样的哈希就是同样的字节，不用再传一遍。
+    pub hash: String,
+    /// 直接能打开的地址。
+    pub url: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

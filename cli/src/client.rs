@@ -8,7 +8,7 @@ use futures_util::TryStreamExt;
 use playtest_common::api::{
     routes, AnonSessionResponse, CommitUploadResponse, CreateSiteRequest, DeviceLoginPoll,
     DeviceLoginStart, ErrorBody, ErrorCode, LoginPollResponse, Me, PrepareUploadRequest,
-    PrepareUploadResponse, Site, UpdateSiteRequest, VersionList,
+    PrepareUploadResponse, Site, UpdateSiteRequest, VersionFiles, VersionList,
 };
 use playtest_common::tunnel::{TunnelGrant, TunnelRequest};
 use reqwest::header::AUTHORIZATION;
@@ -265,6 +265,16 @@ impl Client {
     pub async fn list_versions(&self, slug: &str) -> Result<VersionList> {
         let response = self
             .request(Method::GET, &routes::site_versions(slug))
+            .send()
+            .await
+            .map_err(|e| self.transport(e))?;
+        self.read_json(response).await
+    }
+
+    /// 某一版里到底有哪些文件。
+    pub async fn version_files(&self, slug: &str, version: u32) -> Result<VersionFiles> {
+        let response = self
+            .request(Method::GET, &routes::site_version_files(slug, version))
             .send()
             .await
             .map_err(|e| self.transport(e))?;

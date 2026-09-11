@@ -56,6 +56,7 @@ pub fn app(state: AppState) -> Router {
         .route(paths::SITE_TUNNEL, post(tunnel::grant))
         .route(paths::SITE_VERSIONS, get(versions::list))
         .route(paths::SITE_VERSION_ACTIVATE, post(versions::activate))
+        .route(paths::SITE_VERSION_FILES, get(versions::files))
         .route(result_paths::SITE_RESULTS, get(results::timeline))
         .route(result_paths::SITE_VERSION_SESSIONS, get(results::sessions))
         .route(result_paths::SITE_FEEDBACK, get(results::feedback))

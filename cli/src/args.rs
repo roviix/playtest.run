@@ -183,6 +183,25 @@ pub enum Command {
         api: Option<String>,
     },
 
+    /// 这个令牌是谁、什么档位、这台机器上有几个作品
+    Whoami {
+        #[arg(long, value_name = "网址")]
+        api: Option<String>,
+    },
+
+    /// 线上这一版里到底有哪些文件：每个路径、多大、内容哈希
+    Files {
+        #[arg(value_name = "slug 或目录")]
+        target: String,
+
+        /// 看某一版（默认看玩家现在看到的那一版）
+        #[arg(long, value_name = "版本")]
+        version: Option<String>,
+
+        #[arg(long, value_name = "网址")]
+        api: Option<String>,
+    },
+
     /// 列出这台机器上发过的作品
     Ls {
         /// 控制面地址（也可以用环境变量 PLAYTEST_API）

@@ -342,6 +342,46 @@ async fn anonymous_upload_reaches_v2() {
     assert!(list.versions[0].current && !list.versions[1].current);
     assert_eq!(list.versions[1].note.as_deref(), Some("第一版：能动了"));
 
+    // 读回：线上这一版到底是哪些文件。换了电脑、或者接手别人发的作品时，
+    // 这是「现在线上是什么」唯一不用重新构建就能回答的路子。
+    let live: playtest_common::api::VersionFiles = h
+        .get(&paths::site_version_files(&site.slug, 2), &token)
+        .await
+        .json();
+    assert_eq!(live.version, 2);
+    assert!(live.current, "v2 正是玩家看到的那一版");
+    assert!(!live.files.is_empty());
+    assert_eq!(
+        live.total_bytes,
+        live.files.iter().map(|f| f.size).sum::<u64>()
+    );
+    let index = live
+        .files
+        .iter()
+        .find(|f| f.path == "index.html")
+        .expect("清单里该有 index.html");
+    assert_eq!(index.hash.len(), 64, "内容哈希是 sha256：{}", index.hash);
+    assert!(
+        index.url.ends_with("/index.html") && index.url.contains(&site.slug),
+        "要给一条能直接打开的地址：{}",
+        index.url
+    );
+
+    // 旧版本一样读得回来，而且标出它不是当前那一版。
+    let old: playtest_common::api::VersionFiles = h
+        .get(&paths::site_version_files(&site.slug, 1), &token)
+        .await
+        .json();
+    assert_eq!(old.version, 1);
+    assert!(!old.current);
+
+    // 没发过的那一版：说清楚，不给一张空清单。
+    let nope = h
+        .get(&paths::site_version_files(&site.slug, 9), &token)
+        .await
+        .error(StatusCode::NOT_FOUND, ErrorCode::NotFound);
+    assert!(nope.message.contains("v9"), "{}", nope.message);
+
     // 回滚到 v1：指针动了，清单没动，玩家立刻看到 v1。
     let rolled: Site = h
         .post(

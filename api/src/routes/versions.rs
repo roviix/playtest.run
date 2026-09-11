@@ -6,7 +6,7 @@
 
 use axum::extract::{Path, State};
 use axum::Json;
-use playtest_common::api::{Site, VersionInfo, VersionList};
+use playtest_common::api::{Site, VersionFile, VersionFiles, VersionInfo, VersionList};
 use playtest_common::store::Current;
 
 use crate::auth::Caller;
@@ -39,6 +39,52 @@ pub async fn list(
         slug: site.slug,
         current_version: site.current_version,
         versions,
+    }))
+}
+
+/// 一个版本里到底有哪些文件（REWRITE §1.3「读回」）。
+///
+/// 为什么值得有：发出去之后，「线上现在到底是哪一份」只有我们知道。开发者换了台电脑、
+/// 或者一个 agent 接手了别人发的作品时，唯一的办法是重新构建再对比——而清单本来就在
+/// 我们这儿，按内容哈希存着，说出来是不花钱的。
+///
+/// 只给清单和哈希，不给字节：文件本身在作品自己的域上按路径就能取，走的是玩家那条路。
+pub async fn files(
+    State(state): State<AppState>,
+    caller: Caller,
+    Path((slug, version)): Path<(String, u32)>,
+) -> ApiResult<Json<VersionFiles>> {
+    let site = {
+        let conn = state.db().lock().await;
+        db::find_live_site(&conn, &slug, &caller.user_id)?
+            .ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?
+    };
+    let manifest = state
+        .store()
+        .get_manifest(&site.slug, version)
+        .await?
+        .ok_or_else(|| {
+            ApiError::not_found(format!(
+                "这个作品没有 v{version}。用 playtest versions {} 看看发过哪几版。",
+                site.slug
+            ))
+        })?;
+    let url = state.site_url(&site.slug);
+    Ok(Json(VersionFiles {
+        slug: site.slug,
+        version,
+        current: site.current_version == Some(version),
+        total_bytes: manifest.files.iter().map(|f| f.size).sum(),
+        files: manifest
+            .files
+            .iter()
+            .map(|f| VersionFile {
+                url: format!("{}/{}", url.trim_end_matches('/'), f.path),
+                path: f.path.clone(),
+                size: f.size,
+                hash: f.hash.clone(),
+            })
+            .collect(),
     }))
 }
 

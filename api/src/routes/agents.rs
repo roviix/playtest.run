@@ -245,6 +245,11 @@ fn endpoints() -> Vec<(&'static str, &'static str, &'static str)> {
             "roll back: point players at an older version",
         ),
         (
+            "GET",
+            paths::SITE_VERSION_FILES,
+            "what is actually in a version: path, size, sha256, direct url",
+        ),
+        (
             "POST",
             paths::SITE_TUNNEL,
             "a signed token for the tunnel (the CLI uses this)",
@@ -401,6 +406,7 @@ playtest ls                 # projects on this machine (with follower counts)
 playtest versions <slug>    # every version, and which one players see
 playtest rollback <slug> 3  # point players back at v3; no bytes re-uploaded
 playtest card <slug>        # fetch the current invite card again
+playtest files <slug>       # what is actually live: every path, size and sha256
 playtest unlist <slug>      # take it off the plaza; the link keeps working
 playtest open <slug>
 playtest rm <slug> -y

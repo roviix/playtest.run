@@ -11,7 +11,7 @@
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use playtest_common::api::{Site, VersionList};
+use playtest_common::api::{Me, Site, VersionFiles, VersionList};
 
 use crate::clock;
 use crate::ui;
@@ -35,6 +35,12 @@ pub enum Report {
     Unlisted { slug: String },
     /// `card`
     Card { site: Site, path: String },
+    /// `whoami`
+    Whoami { me: Me, projects: Option<u32> },
+    /// `whoami`，但这台机器上还没有任何身份。
+    Nobody,
+    /// `files`
+    Files(VersionFiles),
 }
 
 impl Report {
@@ -48,6 +54,8 @@ impl Report {
             Self::RolledBack { .. } => "rollback",
             Self::Unlisted { .. } => "unlist",
             Self::Card { .. } => "card",
+            Self::Whoami { .. } | Self::Nobody => "whoami",
+            Self::Files(_) => "files",
         }
     }
 
@@ -84,6 +92,27 @@ impl Report {
                 "version": version,
             }),
             Self::Unlisted { slug } => json!({ "slug": slug, "listed": false }),
+            Self::Whoami { me, projects } => json!({
+                "kind": me.kind,
+                "display_name": me.display_name,
+                "login": me.login,
+                "avatar_url": me.avatar_url,
+                "expires_at": me.expires_at,
+                "projects": projects,
+            }),
+            Self::Nobody => json!({ "kind": null, "projects": 0 }),
+            Self::Files(files) => json!({
+                "slug": files.slug,
+                "version": files.version,
+                "current": files.current,
+                "total_bytes": files.total_bytes,
+                "files": files.files.iter().map(|f| json!({
+                    "path": f.path,
+                    "size": f.size,
+                    "hash": f.hash,
+                    "url": f.url,
+                })).collect::<Vec<_>>(),
+            }),
             Self::Card { site, path } => json!({
                 "slug": site.slug,
                 "title": site.title,
@@ -150,6 +179,55 @@ impl Report {
                     "《{}》的邀请卡已存到 {path}——发到群里，别人长按识别就能玩",
                     site.title
                 ));
+            }
+            Self::Nobody => {
+                ui::say("这台机器上还没有身份。运行 playtest ./dist 发一个，或者 playtest login。");
+            }
+            Self::Whoami { me, projects } => {
+                match me.login.as_deref() {
+                    Some(login) => ui::say(&format!("{}（GitHub @{login}）", me.display_name)),
+                    None => ui::say(&format!(
+                        "{}——没登录。发出去的链接 {} 小时后失效；playtest login 之后就不会了。",
+                        me.display_name,
+                        playtest_common::ANON_LINK_TTL_HOURS
+                    )),
+                }
+                if let Some(at) = &me.expires_at {
+                    ui::say(&format!("这个身份 {} 到期。", clock::human(at)));
+                }
+                if let Some(n) = projects {
+                    ui::say(&format!("{n} 个作品。"));
+                }
+            }
+            Self::Files(files) => {
+                if files.files.is_empty() {
+                    ui::say(&format!(
+                        "{} v{} 里一个文件都没有。",
+                        files.slug, files.version
+                    ));
+                    return;
+                }
+                let mark = if files.current {
+                    "（玩家现在看到的）"
+                } else {
+                    ""
+                };
+                ui::say(&format!(
+                    "{} v{}{mark}：{} 个文件，共 {}",
+                    files.slug,
+                    files.version,
+                    files.files.len(),
+                    ui::bytes(files.total_bytes)
+                ));
+                for f in &files.files {
+                    // 路径是要拿走的东西（复制去比对、去 curl），所以走 stdout。
+                    ui::out(&format!(
+                        "{:>9}  {}  {}",
+                        ui::bytes(f.size),
+                        &f.hash[..f.hash.len().min(12)],
+                        f.path
+                    ));
+                }
             }
         }
     }
@@ -299,6 +377,43 @@ mod tests {
             assert!(body.is_object(), "{} 的主体要是一个对象", report.action());
             assert!(!report.action().is_empty());
         }
+    }
+
+    #[test]
+    fn whoami_says_when_there_is_nobody_yet() {
+        let body = Report::Nobody.json();
+        assert!(body["kind"].is_null());
+        assert_eq!(body["projects"], 0);
+        assert_eq!(Report::Nobody.action(), "whoami");
+    }
+
+    #[test]
+    fn files_answer_with_the_hash_so_a_script_can_compare() {
+        use playtest_common::api::{VersionFile, VersionFiles};
+        let body = Report::Files(VersionFiles {
+            slug: "brisk-otter-41".into(),
+            version: 7,
+            current: true,
+            total_bytes: 2_200_000,
+            files: vec![VersionFile {
+                path: "index.html".into(),
+                size: 512,
+                hash: "abc123def456".into(),
+                url: "https://brisk-otter-41.playtest.run/index.html".into(),
+            }],
+        })
+        .json();
+        assert_eq!(body["version"], 7);
+        assert_eq!(body["current"], true);
+        assert_eq!(body["files"][0]["hash"], "abc123def456");
+        assert_eq!(body["files"][0]["path"], "index.html");
+        assert!(
+            body["files"][0]["url"]
+                .as_str()
+                .unwrap()
+                .ends_with("/index.html"),
+            "要能直接打开"
+        );
     }
 
     #[test]

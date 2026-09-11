@@ -82,6 +82,39 @@ pub async fn rm(slug: &str, yes: bool, api: Option<&str>, ask: bool) -> Result<R
     })
 }
 
+/// 这个令牌是谁。第一次用的人靠它确认「我到底登没登上」。
+pub async fn whoami(api: Option<&str>) -> Result<Report> {
+    let session = Session::open(api)?;
+    let Some(client) = session.client()? else {
+        return Ok(Report::Nobody);
+    };
+    let me = client.me().await?;
+    // 作品数从同一次往返里拿不到，但它是「我现在占了几个名额」这个问题的答案，
+    // 值得多问一句——whoami 不是热路径。
+    let projects = client.list_sites().await.map(|s| s.len() as u32).ok();
+    Ok(Report::Whoami { me, projects })
+}
+
+/// 线上这一版里到底有哪些文件。
+///
+/// 不给版本号就是「玩家现在看到的那一版」——问这句话的人多半正想知道线上是什么。
+pub async fn files(target: &str, version: Option<&str>, api: Option<&str>) -> Result<Report> {
+    let wanted = version.map(parse_version).transpose()?;
+    let session = Session::open(api)?;
+    let slug = session.slug_of(target)?;
+    let client = session.client_or_say(&format!("没有 {slug} 可看"))?;
+    let version = match wanted {
+        Some(v) => v,
+        None => {
+            let site = client.get_site(&slug).await?;
+            site.current_version.ok_or_else(|| {
+                output::bad_input(format!("{slug} 还没发过任何版本，线上什么都没有。"))
+            })?
+        }
+    };
+    Ok(Report::Files(client.version_files(&slug, version).await?))
+}
+
 pub async fn versions(target: &str, api: Option<&str>) -> Result<Report> {
     let session = Session::open(api)?;
     let slug = session.slug_of(target)?;

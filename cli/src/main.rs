@@ -111,6 +111,12 @@ async fn dispatch(cli: Cli) -> Result<()> {
         None => return run_default(cli).await,
 
         Some(Command::Ls { api }) => commands::ls(api.as_deref()).await?,
+        Some(Command::Whoami { api }) => commands::whoami(api.as_deref()).await?,
+        Some(Command::Files {
+            target,
+            version,
+            api,
+        }) => commands::files(&target, version.as_deref(), api.as_deref()).await?,
         Some(Command::Open { target, api }) => {
             // `--json` 下不弹浏览器：跑在 agent 或 CI 里多半没有浏览器，也不该抢焦点。
             commands::open(&target, api.as_deref(), !machine).await?
