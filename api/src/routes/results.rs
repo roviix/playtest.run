@@ -12,7 +12,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use axum::extract::{Path, Query, State};
 use axum::Json;
 use playtest_common::ingest::{edge_kind, kind};
-use playtest_common::manifest;
 use playtest_common::results::{
     median_seconds, ErrorSummary, ErrorTally, FeedbackItem, FeedbackList, FeedbackStatus,
     RosterSort, SessionEvent, SessionRow, SiteResults, SourceTally, UpdateFeedbackRequest,
@@ -30,9 +29,6 @@ use crate::routes::JsonBody;
 use crate::state::AppState;
 
 const NO_SUCH_FEEDBACK: &str = "没有这条反馈，或者它不是你的作品的。";
-const NO_SCREENSHOT: &str =
-    "这条反馈没有截图。玩家留话时还不能附截图，这个功能要等玩家侧支持之后才能用。";
-
 /// 错误的 `name` 是空的时候拿它当 fingerprint。归成一堆总比一条条散着好看。
 const UNNAMED_ERROR: &str = "没带名字的错误";
 
@@ -296,97 +292,6 @@ pub async fn update_feedback(
         crate::live::publish(&state, &slug).await;
     }
     Ok(Json(item))
-}
-
-/// `POST /v1/sites/{slug}/cover/from-feedback/{id}`：把一条反馈的截图设成作品封面。
-///
-/// 封面动的是清单里的 `cover` 一项。清单本来是不可变的（每版一份、内容寻址），
-/// 这里破一次例：封面不是目录里的文件，它是「广场上这个作品长什么样」，
-/// 换封面不该逼开发者重发一个版本。破例的边界就到这一项为止。
-pub async fn cover_from_feedback(
-    State(state): State<AppState>,
-    caller: Caller,
-    Path((slug, id)): Path<(String, i64)>,
-) -> ApiResult<Json<FeedbackItem>> {
-    let (item, screenshot) = {
-        let conn = state.db().lock().await;
-        let site = owned_site(&conn, &slug, &caller)?;
-        let item = conn
-            .query_row(
-                &format!("{FEEDBACK_COLUMNS} WHERE f.id = ?1 AND f.slug = ?2"),
-                params![id, &slug],
-                |row| feedback_from_row(row, site.listing.feedback_public),
-            )
-            .optional()?
-            .ok_or_else(|| ApiError::not_found(NO_SUCH_FEEDBACK))?;
-        let screenshot = item.screenshot_hash.clone();
-        (item, screenshot)
-    };
-
-    // 玩家留话时还附不了截图（DESIGN §3.5 那句是 v0.2），所以现在每一条都走这一支。
-    // 与其假装能设，不如把话说清楚（AGENTS 第 4 条）。
-    let Some(hash) = screenshot else {
-        return Err(ApiError::invalid(NO_SCREENSHOT));
-    };
-
-    let size = {
-        let conn = state.db().lock().await;
-        db::blob_size(&conn, &hash)?
-    };
-    let Some(size) = size else {
-        return Err(ApiError::invalid("这条反馈的截图已经不在了，设不成封面。"));
-    };
-    // 库里没记这张图是什么类型，认魔数——扩展名会骗人，而封面要贴到广场那一页上。
-    let mime = sniff_blob_mime(&state, &hash)
-        .await?
-        .ok_or_else(|| ApiError::invalid("这条反馈的截图不是 PNG、JPEG 或 WebP，设不成封面。"))?;
-    let cover = manifest::Cover {
-        hash,
-        size,
-        mime: mime.to_string(),
-    };
-    manifest::validate_cover(&cover).map_err(|e| ApiError::invalid(e.to_string()))?;
-
-    set_cover(&state, &slug, cover).await?;
-    crate::plaza::publish(&state).await;
-    Ok(Json(item))
-}
-
-async fn sniff_blob_mime(state: &AppState, hash: &str) -> ApiResult<Option<&'static str>> {
-    let path = state.store().blob_path(hash)?;
-    let mut head = [0u8; 16];
-    let mut file = tokio::fs::File::open(&path).await?;
-    let read = tokio::io::AsyncReadExt::read(&mut file, &mut head).await?;
-    Ok(manifest::sniff_image_mime(&head[..read]))
-}
-
-/// 把当前版本清单里的 `cover` 换成这一张，并把广场那几列跟着改。
-async fn set_cover(state: &AppState, slug: &str, cover: manifest::Cover) -> ApiResult<()> {
-    let _serialized = state.lock_commit().await;
-    let version = {
-        let conn = state.db().lock().await;
-        db::find_site(&conn, slug)?.and_then(|site| site.current_version)
-    };
-    let Some(version) = version else {
-        return Err(ApiError::invalid("这个作品还没有版本，先发一版再设封面。"));
-    };
-    let Some(mut manifest) = state.store().get_manifest(slug, version).await? else {
-        return Err(ApiError::invalid("这个版本的清单不在了，设不成封面。"));
-    };
-    manifest.cover = Some(cover.clone());
-    state.store().put_manifest(&manifest).await?;
-    {
-        let conn = state.db().lock().await;
-        db::record_version_meta(
-            &conn,
-            slug,
-            None,
-            Some((cover.hash.as_str(), cover.mime.as_str())),
-            manifest.engine.as_deref(),
-            &clock::now_string(),
-        )?;
-    }
-    Ok(())
 }
 
 /// 我的、没删的作品。别人的和不存在的说同一句话，不告诉外面这个 slug 存不存在。

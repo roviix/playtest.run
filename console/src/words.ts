@@ -82,93 +82,80 @@ export function bytes(value: number): string {
 /**
  * 一版的那段话。一句一行，数为 0 的句子不说——
  * 「0 条反馈」「0 个错误」占着地方却什么也没告诉人（DESIGN §3.5）。
+ * 措辞按 §3.13「文案」：只报事实，「8 人打开」，不带括号和转折。
  */
 export function sentences(version: VersionResults): string[] {
   if (version.opened === 0) {
-    return ["还没有人打开这一版。"];
+    return ["还没有人打开。"];
   }
 
   const lines: string[] = [];
   const dropped = version.dropped_before_first_frame;
   if (dropped === null || dropped === undefined) {
-    // 首帧要 SDK 才报得出来。没接就说没接，不拿「0 个人在加载时走了」冒充。
-    lines.push(`${version.opened} 个人打开，${version.entered} 个人点了开始。`);
-    lines.push("这一版没接 playtest.js，加载时走掉几个人看不出来。");
+    // 首帧要 SDK 才报得出来。没接就说没接，不拿「0 人在加载时离开」冒充。
+    lines.push(`${version.opened} 人打开，${version.entered} 人点了开始。`);
+    lines.push("没接 playtest.js，看不到加载时离开的人。");
   } else {
     const reached = Math.max(version.entered - dropped, 0);
     lines.push(
       dropped > 0
-        ? `${version.opened} 个人打开，${reached} 个人进到游戏（${dropped} 个在加载时走了）。`
-        : `${version.opened} 个人打开，${reached} 个人进到游戏。`,
+        ? `${version.opened} 人打开，${reached} 人进到游戏，${dropped} 人在加载时离开。`
+        : `${version.opened} 人打开，${reached} 人进到游戏。`,
     );
   }
 
-  // 「这些人是谁、从哪来」合成一句，和 DESIGN §3.5 的示例同一行：
-  // 「3 个人玩了 5 分钟以上，2 个人回来过第二次；来自：邀请卡 4 · 广场 2 · 微信 2」。
   const stayed: string[] = [];
-  if (version.named > 0) stayed.push(`${version.named} 位留了名字`);
-  if (version.played_5min_plus > 0) stayed.push(`${version.played_5min_plus} 个人玩了 5 分钟以上`);
-  if (version.returned > 0) stayed.push(`${version.returned} 个人回来过`);
+  if (version.named > 0) stayed.push(`${version.named} 人留名`);
+  if (version.played_5min_plus > 0) stayed.push(`${version.played_5min_plus} 人玩过 5 分钟`);
+  if (version.returned > 0) stayed.push(`${version.returned} 人回来过`);
   if (version.dwell_median_s !== null && version.dwell_median_s !== undefined) {
-    stayed.push(`停留中位数 ${seconds(version.dwell_median_s)}`);
+    stayed.push(`停留中位 ${seconds(version.dwell_median_s)}`);
   }
+  if (stayed.length > 0) lines.push(`${stayed.join("，")}。`);
+
+  // 三个环各带来了几个人，这一句是唯一的答案（DESIGN §3.5）。单独一行。
   const from = sources(version.sources);
-  if (stayed.length > 0) lines.push(from ? `${stayed.join("，")}；${from}。` : `${stayed.join("，")}。`);
-  else if (from) lines.push(`${from}。`);
+  if (from) lines.push(from);
 
   const errors = version.errors;
   if (errors.total > 0) {
     const counted =
-      errors.distinct === 1
-        ? `1 个错误撞了 ${errors.total} 次`
-        : `${errors.distinct} 种错误一共撞了 ${errors.total} 次`;
+      errors.distinct === 1 ? `1 个错误，出现 ${errors.total} 次` : `${errors.distinct} 个错误，共 ${errors.total} 次`;
     const worst = errors.top?.[0]?.fingerprint;
-    lines.push(worst ? `${counted}（${worst}）。` : `${counted}。`);
+    lines.push(worst ? `${counted}：${worst}` : `${counted}。`);
   }
 
-  if (version.load_failures > 0) lines.push(`${version.load_failures} 次资源没加载出来。`);
+  if (version.load_failures > 0) lines.push(`${version.load_failures} 次加载失败。`);
   if (version.feedback_count > 0) lines.push(`${version.feedback_count} 条反馈。`);
 
   return lines;
 }
 
-/**
- * 「来自：邀请卡 4 · 广场 2 · 微信 2」。三个环各带来了几个人，这一句是唯一的答案
- * （DESIGN §3.5）。一个来源都没有就返回 null，整句不说。
- */
+/** 「来自 邀请卡 4 · 广场 2 · 微信 2」。一个来源都没有就返回 null，整句不说。 */
 function sources(tally: SourceTally[] | undefined): string | null {
   const counted = (tally ?? []).filter((one) => one.count > 0);
   if (counted.length === 0) return null;
-  return `来自：${counted.map((one) => `${sourceLabel(one.kind)} ${one.count}`).join(" · ")}`;
+  return `来自 ${counted.map((one) => `${sourceLabel(one.kind)} ${one.count}`).join(" · ")}`;
 }
 
-/** 和上一版比的那一行。没有一处变化就不说话。 */
+/** 和上一版比的那一行：「比 v6：打开 +3，加载失败 2 → 0，反馈 1 → 2」。没有一处变化就不说话。 */
 export function versus(version: VersionResults, previous: VersionResults): string | null {
   const bits: string[] = [];
 
   const opened = version.opened - previous.opened;
-  if (opened !== 0) bits.push(`${opened > 0 ? "多" : "少"} ${Math.abs(opened)} 个人打开`);
-
+  if (opened !== 0) bits.push(`打开 ${opened > 0 ? "+" : "−"}${Math.abs(opened)}`);
   if (version.load_failures !== previous.load_failures) {
-    bits.push(`加载失败从 ${previous.load_failures} ${moved(previous.load_failures, version.load_failures)}到 ${version.load_failures}`);
+    bits.push(`加载失败 ${previous.load_failures} → ${version.load_failures}`);
   }
   if (version.errors.total !== previous.errors.total) {
-    bits.push(
-      `错误从 ${previous.errors.total} 次${moved(previous.errors.total, version.errors.total)}到 ${version.errors.total} 次`,
-    );
+    bits.push(`错误 ${previous.errors.total} → ${version.errors.total}`);
   }
   if (version.feedback_count !== previous.feedback_count) {
-    bits.push(
-      `反馈从 ${previous.feedback_count} 条${moved(previous.feedback_count, version.feedback_count)}到 ${version.feedback_count} 条`,
-    );
+    bits.push(`反馈 ${previous.feedback_count} → ${version.feedback_count}`);
   }
 
   if (bits.length === 0) return null;
-  return `比 v${previous.version} ${bits.join("，")}。`;
-}
-
-function moved(before: number, after: number): string {
-  return after < before ? "降" : "升";
+  return `比 v${previous.version}：${bits.join("，")}`;
 }
 
 /** 设备 / 浏览器 / 系统的中文说法。库里存的是英文小写。 */

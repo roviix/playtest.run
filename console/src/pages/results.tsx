@@ -27,7 +27,7 @@ export function ResultsTab({
 
   // 回滚只动「当前版本」指针，不删任何版本；确认一句是因为玩家那边会立刻变。
   async function rollbackTo(version: number) {
-    if (!confirm(`让玩家看到的换回 v${version}？链接不变，点开就是那一版。`)) return;
+    if (!confirm(`把 v${version} 设为当前？链接不变。`)) return;
     setBusy(version);
     setProblem(null);
     try {
@@ -48,8 +48,10 @@ export function ResultsTab({
   if (data.versions.length === 0) {
     return (
       <Empty>
-        <p>这个作品还没有版本。</p>
-        <p class="muted">在作品目录里运行 playtest，上传完这里就会出现第一块。</p>
+        <p>还没有版本。</p>
+        <p class="muted">
+          在作品目录里运行 <code>playtest</code>。
+        </p>
       </Empty>
     );
   }
@@ -65,7 +67,7 @@ export function ResultsTab({
             <li key={version.version} class={`ver ${isCurrent ? "current" : ""}`}>
               <header class="ver-head">
                 <span class="ver-no mono">v{version.version}</span>
-                {isCurrent ? <span class="chip good">玩家看到的</span> : null}
+                {isCurrent ? <span class="chip good">当前</span> : null}
                 <span class="muted">{moment(version.created_at ?? version.first_at)}</span>
                 {version.note ? <span class="ver-note">「{version.note}」</span> : null}
               </header>
@@ -83,10 +85,10 @@ export function ResultsTab({
 
               <p class="row-actions">
                 <a href={href({ name: "site", slug, tab: "roster", version: version.version })}>
-                  {version.opened > 0 ? `看这 ${version.opened} 个人 →` : "点名册 →"}
+                  点名册 →
                 </a>
                 {version.feedback_count > 0 ? (
-                  <a href={href({ name: "site", slug, tab: "feedback" })}>看反馈 →</a>
+                  <a href={href({ name: "site", slug, tab: "feedback" })}>反馈 →</a>
                 ) : null}
                 {!isCurrent ? (
                   <button
@@ -95,7 +97,7 @@ export function ResultsTab({
                     disabled={busy !== null}
                     onClick={() => rollbackTo(version.version)}
                   >
-                    {busy === version.version ? "正在换…" : "让玩家看这一版"}
+                    {busy === version.version ? "切换中…" : "设为当前"}
                   </button>
                 ) : null}
               </p>

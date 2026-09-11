@@ -163,8 +163,6 @@ export type FeedbackItem = {
   seconds_in?: number;
   device?: string;
   browser?: string;
-  /** 截图是 v0.2 的事，现在永远没有——所以「设为封面」现在不会出现。 */
-  screenshot_hash?: string;
   status: FeedbackStatus;
   /** 说这句话的人留的名字。 */
   name?: string;
@@ -369,11 +367,5 @@ export const api = {
     call<FeedbackItem>(`/v1/sites/${encodeURIComponent(slug)}/feedback/${id}`, {
       method: "PATCH",
       body: JSON.stringify(request),
-    }),
-  // 把一条反馈附带的截图设为封面。截图要等 v0.2，所以这条现在没有调用方能碰到。
-  setCoverFromFeedback: (slug: string, id: number) =>
-    call<Site>(`/v1/sites/${encodeURIComponent(slug)}/cover/from-feedback/${id}`, {
-      method: "POST",
-      body: "{}",
     }),
 };

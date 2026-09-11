@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::{Request, State};
-use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
+use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Router;
 use percent_encoding::percent_decode_str;
@@ -194,7 +194,49 @@ async fn root(
             method_not_allowed("GET, HEAD")
         };
     }
+    if path == playtest_common::api::routes::LLMS_TXT {
+        return if read {
+            llms_pointer()
+        } else {
+            method_not_allowed("GET, HEAD")
+        };
+    }
     page(StatusCode::NOT_FOUND, pages::not_found(), None)
+}
+
+/// 根域上给助手的一张字条：这里是玩家那一侧，开发者那几个文件在另一个域。
+///
+/// 玩家域上本来只放玩家看的东西（AGENTS 第 7 条）。这是第二个例外，理由和根域介绍页
+/// 那个链接一样：一个搜到 `playtest.run` 的助手要能自己找到路，否则它只能照着首页猜——
+/// 猜出来的结论就是「这个东西不对口」。它不在任何玩家路径上，玩家不会遇到它。
+fn llms_pointer() -> Response {
+    let body = format!(
+        "# playtest\n\n\
+         This host serves the player side: the works themselves, the gate page, the plaza.\n\
+         There is nothing here for you to call.\n\n\
+         Everything an assistant needs — what this is, when not to use it, the CLI, the MCP\n\
+         server and the HTTP API — is on the developer side:\n\n\
+         {api}/llms.txt\n\
+         {api}/llms-full.txt\n\
+         {api}/skill.md\n\
+         {api}/openapi.json\n",
+        api = playtest_common::DEVELOPER_API_URL,
+    );
+    (
+        StatusCode::OK,
+        [
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("text/plain; charset=utf-8"),
+            ),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=3600"),
+            ),
+        ],
+        body,
+    )
+        .into_response()
 }
 
 async fn plaza_page(app: &App, authority: &str) -> Response {

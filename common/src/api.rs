@@ -16,6 +16,17 @@ use crate::manifest::{Cover, FileEntry, GateMode};
 
 pub mod routes {
     pub const HEALTH: &str = "/healthz";
+
+    // ---- 给 AI 助手读的（REWRITE §3.2）。控制面自己出，不是静态文件——
+    // 端点改了文档跟着改，一份写在别处的 API 文档一定会漂。
+    /// 一屏说清「这是什么、什么时候用、什么时候别用」。
+    pub const LLMS_TXT: &str = "/llms.txt";
+    /// 加上完整端点表、配额与失败形态。
+    pub const LLMS_FULL_TXT: &str = "/llms-full.txt";
+    /// 可以直接装进 Claude / Cursor 的 skill 文件。
+    pub const SKILL_MD: &str = "/skill.md";
+    pub const OPENAPI_JSON: &str = "/openapi.json";
+    pub const AGENT_JSON: &str = "/.well-known/agent.json";
     /// `POST` → [`super::AnonSessionResponse`]
     pub const ANON_SESSIONS: &str = "/v1/anon/sessions";
     /// `GET` 列出我的作品 → `Vec<`[`super::Site`]`>`；`POST` 新建 → 200 [`super::Site`]
@@ -51,16 +62,6 @@ pub mod routes {
     pub const LOGIN_WEB_EXCHANGE: &str = "/v1/login/github/exchange";
     /// `GET` → 200 [`super::Me`]：这个令牌是谁。
     pub const ME: &str = "/v1/me";
-
-    /// `POST` → 200 [`super::Site`]：把某条反馈附带的截图设为封面（DESIGN §3.9「设为封面」）。
-    /// 没有截图的反馈回 `invalid`。
-    pub const SITE_COVER_FROM_FEEDBACK: &str = "/v1/sites/{slug}/cover/from-feedback/{id}";
-
-    pub fn site_cover_from_feedback(slug: &str, id: i64) -> String {
-        SITE_COVER_FROM_FEEDBACK
-            .replace("{slug}", slug)
-            .replace("{id}", &id.to_string())
-    }
 
     pub fn site_tunnel(slug: &str) -> String {
         SITE_TUNNEL.replace("{slug}", slug)

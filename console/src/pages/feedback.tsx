@@ -32,8 +32,7 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
   if (data.items.length === 0) {
     return (
       <Empty>
-        <p>还没有人留话。</p>
-        <p class="muted">反馈按钮来自 playtest.js，玩家写一句话就会出现在这里。</p>
+        <p>还没有反馈。</p>
       </Empty>
     );
   }
@@ -44,7 +43,7 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
       const updated = await api.updateFeedback(slug, item.id, request);
       setChanged((all) => ({ ...all, [item.id]: updated }));
     } catch (err) {
-      setFailed(err instanceof ApiError ? err.message : "没能改这一条。");
+      setFailed(err instanceof ApiError ? err.message : "没改成。");
     }
   }
 
@@ -54,8 +53,8 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
     <>
       <p class="tab-lead muted">
         {feedbackPublic
-          ? "这个作品开着「让玩家看到彼此的反馈」：门禁页上显示最近 3 条。哪一条不想让人看到，点「隐藏」。"
-          : "只有你看得到这些话。想让门禁页上显示最近 3 条，去「设置」里打开公开反馈。"}
+          ? "公开反馈开着：门禁页显示最近 3 条。"
+          : "公开反馈关着：只有你看得到。"}
       </p>
       {failed ? <p class="notice">{failed}</p> : null}
       <ul class="quotes">
@@ -90,7 +89,7 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
                   </button>
                 ) : (
                   <button class="button small quiet" type="button" onClick={() => patch(item, { status: "new" })}>
-                    退回还没看
+                    退回
                   </button>
                 )}
                 {feedbackPublic ? (
@@ -98,8 +97,6 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
                     {item.public ? "隐藏" : "恢复"}
                   </button>
                 ) : null}
-                {/* 截图是 v0.2 的事，screenshot_hash 现在永远是空，所以这个按钮现在不会出现。 */}
-                {item.screenshot_hash ? <SetCover slug={slug} id={item.id} /> : null}
                 <a href={href({ name: "site", slug, tab: "roster", version: item.version })}>看这一版的人 →</a>
               </p>
             </li>
@@ -110,28 +107,3 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
   );
 }
 
-function SetCover({ slug, id }: { slug: string; id: number }) {
-  const [state, setState] = useState<"idle" | "working" | "done" | string>("idle");
-
-  if (state === "done") return <span class="muted">已设为封面</span>;
-
-  return (
-    <>
-      <button
-        class="button small"
-        type="button"
-        disabled={state === "working"}
-        onClick={() => {
-          setState("working");
-          api
-            .setCoverFromFeedback(slug, id)
-            .then(() => setState("done"))
-            .catch((err: Error) => setState(err.message));
-        }}
-      >
-        {state === "working" ? "正在设…" : "设为封面"}
-      </button>
-      {state !== "idle" && state !== "working" ? <span class="says warn">{state}</span> : null}
-    </>
-  );
-}

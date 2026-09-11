@@ -15,7 +15,7 @@ export function CardTab({ site }: { site: Site }) {
   if (site.current_version === undefined) {
     return (
       <Empty>
-        <p>上传第一版之后，这里就有一张可以发到群里的卡。</p>
+        <p>上传第一版之后这里有卡。</p>
       </Empty>
     );
   }
@@ -46,8 +46,8 @@ export function CardTab({ site }: { site: Site }) {
   return (
     <div class="cards-page">
       <div class="cards-row">
-        <CardImage src={tall} ratio="1080 / 1350" caption="竖版 · 发到群里，别人长按识别二维码就能玩" />
-        <CardImage src={wide} ratio="1200 / 630" caption="横版 · 链接在 Discord、Telegram、iMessage 里展开时的预览" />
+        <CardImage src={tall} ratio="1080 / 1350" caption="竖版 · 发到群里" />
+        <CardImage src={wide} ratio="1200 / 630" caption="横版 · 链接预览" />
       </div>
       <p class="row-actions">
         <a class="button" href={tall} target="_blank" rel="noreferrer">
@@ -65,11 +65,7 @@ export function CardTab({ site }: { site: Site }) {
           </button>
         ) : null}
       </p>
-      <p class="muted">
-        打开之后右键或长按存图。卡上写的是 {site.listing?.seats ? "当前名额进度和" : ""}
-        v{site.current_version}，发新版本后会自己重画。
-        {site.listing?.public ? "" : " 这个作品没公开，卡上不出现「分享」。"}
-      </p>
+      <p class="muted">打开后右键或长按存图。卡随版本重画。</p>
     </div>
   );
 }
@@ -80,7 +76,7 @@ function CardImage({ src, ratio, caption }: { src: string; ratio: string; captio
     <figure class="card-figure">
       {broken ? (
         <div class="card-image missing" style={`aspect-ratio:${ratio}`}>
-          <p class="muted">邀请卡稍后可拿。它由边缘按当前版本现画，刷新一下多半就有了。</p>
+          <p class="muted">还在画。稍后刷新。</p>
         </div>
       ) : (
         <img

@@ -10,7 +10,7 @@ import { ApiError } from "../api";
 import { href } from "../router";
 
 export function Loading() {
-  return <p class="muted loading">正在取…</p>;
+  return <p class="muted loading">…</p>;
 }
 
 export function Failed({ error, onRetry }: { error: ApiError; onRetry: () => void }) {

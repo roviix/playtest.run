@@ -35,9 +35,7 @@ export function HomePage({ sites, me }: { sites: Loaded<Site[]>; me: Me | null }
     <>
       <header class="stage-head">
         <h1>作品</h1>
-        <p class="muted">
-          {data.length} 个 · 点开看谁来玩过
-        </p>
+        <p class="muted">{data.length} 个</p>
       </header>
       <ul class="wall">
         {data.map((site) => (
@@ -61,7 +59,7 @@ function Tile({ site }: { site: Site }) {
         <p class="tile-slug mono">{site.slug}</p>
         <p class="meta">
           <span class="fact">{factOf(site)}</span>
-          <span class="verb">打开 ↗</span>
+          <span class="verb">打开 →</span>
         </p>
       </div>
     </a>
@@ -98,30 +96,24 @@ function Start({ me }: { me: Me | null }) {
   const anonymous = me?.kind !== "github";
   return (
     <section class="start">
-      <p class="start-kicker mono">第一步在终端里</p>
-      <h1>把手上能玩的版本发出去</h1>
-      <p class="start-lead">
-        在作品目录里跑一条命令，链接、二维码和邀请卡一起出来。发出去之后，谁打开了、玩到哪、说了什么，
-        都会出现在这里。
-      </p>
+      <p class="start-kicker mono">在终端里</p>
+      <h1>把能玩的版本发出去</h1>
+      <p class="start-lead">在作品目录里跑一条命令。链接、二维码、邀请卡一起出来；谁来玩过，回到这里看。</p>
       <ol class="start-commands">
         <li>
           <code>playtest ./dist</code>
-          <span>上传一个静态目录（Godot、Unity、Phaser、Vite 的导出物都行）</span>
+          <span>上传一个静态目录</span>
         </li>
         <li>
           <code>playtest 5173</code>
-          <span>把本机正在跑的端口临时开给别人</span>
+          <span>把本机端口开给别人</span>
         </li>
         <li>
           <code>playtest ./dist --public --seek "想让人看什么"</code>
-          <span>顺手放到广场上，标「正在找人测」</span>
+          <span>放到广场上找人测</span>
         </li>
       </ol>
-      <p class="muted">
-        发布成功时终端里那一行「来的人玩成什么样，控制台里看得见」后面的地址，就是这里。
-        {anonymous ? "现在是 24 小时的匿名身份；用 GitHub 登录之后作品不再到期。" : ""}
-      </p>
+      {anonymous ? <p class="muted">现在是 24 小时匿名身份。用 GitHub 登录后作品不再到期。</p> : null}
     </section>
   );
 }

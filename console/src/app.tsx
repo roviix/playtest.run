@@ -70,7 +70,7 @@ export function App() {
       <Rail route={route} me={me} hasToken={hasToken} sites={sites.data ?? []} plazaUrl={plazaUrl} />
       <main class="stage">
         {callback === "working" ? (
-          <p class="muted stage-note">正在从 GitHub 回来……</p>
+          <p class="muted stage-note">正在登录…</p>
         ) : (
           page(route, hasToken, callback, me, sites, plazaUrl)
         )}
@@ -169,7 +169,7 @@ function Rail({
         </a>
         <a class={`nav-item account ${route.name === "token" ? "active" : ""}`} href={href({ name: "token" })}>
           {me?.avatar_url ? <img class="avatar" src={me.avatar_url} alt="" /> : <span class="avatar blank" />}
-          <span class="account-name">{who ?? (hasToken ? "匿名 · 24 小时" : "登录")}</span>
+          <span class="account-name">{who ?? (hasToken ? "匿名" : "登录")}</span>
         </a>
       </div>
     </aside>
@@ -191,9 +191,7 @@ function PublishNote() {
   return (
     <div class="publish-note">
       <h3>发下一版</h3>
-      <p>
-        在作品目录里再跑一次，链接不变，关注的人会收到通知。
-      </p>
+      <p>同一目录再跑一次。链接不变，关注的人会收到通知。</p>
       <div class="codebox">
         <code>playtest ./dist --note "这版改了什么"</code>
       </div>

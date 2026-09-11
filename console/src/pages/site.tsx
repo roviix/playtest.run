@@ -122,13 +122,13 @@ function Identity({ site }: { site: Site }) {
       setCopied("已复制");
     } catch {
       // 剪贴板要安全上下文加权限；拿不到就让人自己选中地址。
-      setCopied("选中上面的地址复制");
+      setCopied("请手动复制");
     }
     setTimeout(() => setCopied(null), 2500);
   }
 
   const chips: { text: string; tone: string }[] = [];
-  if (site.current_version !== undefined) chips.push({ text: `v${site.current_version} · 玩家看到的`, tone: "good" });
+  if (site.current_version !== undefined) chips.push({ text: `v${site.current_version} · 当前`, tone: "good" });
   else chips.push({ text: "还没有版本", tone: "plain" });
   if (listing?.public) {
     if (listing.hidden) chips.push({ text: "已从广场撤下", tone: "warn" });
@@ -149,7 +149,7 @@ function Identity({ site }: { site: Site }) {
             {site.url.replace(/^https?:\/\//, "")}
           </a>
           <button class="button small" type="button" onClick={copy}>
-            {copied ?? "复制链接"}
+            {copied ?? "复制"}
           </button>
         </p>
         <p class="chips">
@@ -183,9 +183,9 @@ function Now({ site, results }: { site: Site; results: SiteResults | undefined }
   const feedback = useLoad(() => api.feedback(site.slug), [site.slug]);
 
   if (current === undefined) {
-    return <p class="now muted">还没有版本。在作品目录里运行 playtest，第一版上来这里就有话说。</p>;
+    return <p class="now muted">还没有版本。</p>;
   }
-  if (sessions.loading || feedback.loading) return <p class="now muted">正在看此刻……</p>;
+  if (sessions.loading || feedback.loading) return <p class="now muted">…</p>;
 
   const rows = sessions.data?.sessions ?? [];
   const now = Date.now();
@@ -197,27 +197,27 @@ function Now({ site, results }: { site: Site; results: SiteResults | undefined }
   if (recent > 0) {
     bits.push(
       <span key="recent" class="now-lead">
-        近一小时 <b>{recent}</b> 个人打开
+        近一小时 <b>{recent}</b> 人打开
       </span>,
     );
   } else if (rows.length > 0) {
-    bits.push(<span key="last">最近一次打开 {moment(rows[0].at)}</span>);
+    bits.push(<span key="last">上次打开 {moment(rows[0].at)}</span>);
   } else if (version && version.opened > 0) {
-    bits.push(<span key="last">最近一次打开 {moment(version.last_at)}</span>);
+    bits.push(<span key="last">上次打开 {moment(version.last_at)}</span>);
   } else {
-    return <p class="now muted">这一版还没有人打开。把邀请卡发出去，第一个人点开就会出现在这里。</p>;
+    return <p class="now muted">这一版还没有人打开。</p>;
   }
   if (latest) {
     bits.push(
       <span key="fb">
-        最新一条反馈 {ago(latest.ts)}：「{clip(latest.text, 24)}」
+        最新反馈 {ago(latest.ts)}「{clip(latest.text, 24)}」
       </span>,
     );
   }
   if (version && version.errors.total > 0) {
     bits.push(
       <span key="err" class="now-warn">
-        这一版 {version.errors.total} 个错误
+        {version.errors.total} 个错误
       </span>,
     );
   }

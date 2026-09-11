@@ -876,6 +876,31 @@ async fn the_root_host_has_nothing_else_on_it() {
     }
 }
 
+/// 搜到玩家域的助手要能自己找到开发者那一侧，而不是照着首页猜（REWRITE §3.2）。
+///
+/// 这是玩家域上第二个指向开发者域的出口，和根域介绍页那个链接同性质：给机器，不给玩家。
+/// 玩家路径上碰不到它，所以不违反 AGENTS 第 7 条。
+#[tokio::test]
+async fn an_assistant_landing_on_the_player_host_is_pointed_at_the_docs() {
+    let site = Site::plain().await;
+    let reply = site.get_root("/llms.txt").await;
+    assert_eq!(reply.status, StatusCode::OK);
+    let body = reply.text();
+    assert!(
+        body.contains(playtest_common::DEVELOPER_API_URL),
+        "要给出开发者那一侧的地址：{body}"
+    );
+    assert!(
+        body.contains("/skill.md") && body.contains("/openapi.json"),
+        "{body}"
+    );
+    // 这一页不假装自己是 API 入口。
+    assert!(body.contains("nothing here for you to call"), "{body}");
+
+    // 它只是一张字条，不是玩家能走进来的门：作品子域上没有这条路径。
+    assert_eq!(site.get("/llms.txt").await.status, StatusCode::NOT_FOUND);
+}
+
 // ------------------------------------------------------------------ 门禁页那八行
 
 #[tokio::test]

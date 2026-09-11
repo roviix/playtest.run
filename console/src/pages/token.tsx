@@ -33,12 +33,12 @@ export function TokenPage({ loginError, me }: { loginError: string | null; me: M
           {loggedIn
             ? `这台设备上登录的是 @${me?.login ?? me?.display_name}。`
             : existing
-              ? "这台设备上现在是一个 24 小时的匿名身份。登录之后它的作品会归到你的账号里，不再失效。"
-              : "令牌只存在这台设备的浏览器里，不会发给第三方。"}
+              ? "这台设备上是 24 小时匿名身份。登录后作品归到账号，不再到期。"
+              : "令牌只存在这台设备的浏览器里。"}
         </p>
       </header>
 
-      {loginError ? <p class="notice">没登录成：{loginError}</p> : null}
+      {loginError ? <p class="notice">登录失败：{loginError}</p> : null}
 
       {loggedIn ? (
         <section class="block">
@@ -47,7 +47,7 @@ export function TokenPage({ loginError, me }: { loginError: string | null; me: M
               {me?.avatar_url ? <img class="avatar big" src={me.avatar_url} alt="" /> : null}@
               {me?.login ?? me?.display_name}
             </h2>
-            <p class="muted">玩家在门禁页和广场上看到的是同一张脸、同一个名字。</p>
+            <p class="muted">玩家在门禁页和广场上看到的名字。</p>
           </div>
         </section>
       ) : (
@@ -55,12 +55,12 @@ export function TokenPage({ loginError, me }: { loginError: string | null; me: M
           <div class="block-head">
             <h2>用 GitHub 登录</h2>
             <p class="muted">
-              和终端里 <code>playtest login</code> 进的是同一个账号。GitHub 在你这里打不开的话，下面粘令牌也一样能看结果。
+              和终端里 <code>playtest login</code> 是同一个账号。
             </p>
           </div>
           <p class="row-actions">
             <a class="button primary" href={githubLoginUrl}>
-              去 GitHub 授权
+              用 GitHub 登录
             </a>
           </p>
         </section>
@@ -68,11 +68,10 @@ export function TokenPage({ loginError, me }: { loginError: string | null; me: M
 
       <form class="block" onSubmit={submit}>
         <div class="block-head">
-          <h2>{loggedIn ? "换一个令牌" : "或者，粘贴 CLI 给你的令牌"}</h2>
+          <h2>{loggedIn ? "换令牌" : "粘贴令牌"}</h2>
           {existing ? null : (
             <p class="muted">
-              在作品目录里运行 <code>playtest</code>，它会自己申请一个 24 小时的匿名链接，令牌在{" "}
-              <code>~/.config/playtest/config.json</code> 里。
+              运行过 <code>playtest</code> 之后，令牌在 <code>~/.config/playtest/config.json</code>。
             </p>
           )}
         </div>
@@ -89,7 +88,7 @@ export function TokenPage({ loginError, me }: { loginError: string | null; me: M
             />
           </label>
           <button class="button" type="submit" disabled={!value.trim()}>
-            存下来
+            保存
           </button>
         </div>
         {existing ? (
@@ -103,7 +102,7 @@ export function TokenPage({ loginError, me }: { loginError: string | null; me: M
                 location.reload();
               }}
             >
-              {loggedIn ? "退出这台设备" : "清掉这台设备上的令牌"}
+              {loggedIn ? "退出" : "清除令牌"}
             </button>
           </p>
         ) : null}

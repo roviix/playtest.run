@@ -72,14 +72,14 @@ export function SettingsTab({
   );
 }
 
-function Block({ title, lead, children }: { title: string; lead?: string; children: ComponentChildren }) {
+function Block({ title, lead, children }: { title: string; lead?: string; children?: ComponentChildren }) {
   return (
     <section class="block">
       <div class="block-head">
         <h2>{title}</h2>
         {lead ? <p class="muted">{lead}</p> : null}
       </div>
-      <div class="block-body">{children}</div>
+      {children ? <div class="block-body">{children}</div> : null}
     </section>
   );
 }
@@ -104,15 +104,13 @@ function Plaza({
 
   if (!canPublish) {
     return (
-      <Block title="广场" lead="上传第一版之后才能放到广场上。">
-        <p class="muted">广场是玩家不用注册就能翻的地方，只放开发者主动公开的作品。</p>
-      </Block>
+      <Block title="广场" lead="上传第一版之后可以放到广场上。" />
     );
   }
 
   if (!listing.public) {
     return (
-      <Block title="广场" lead="现在只有拿到链接的人能玩。">
+      <Block title="广场" lead="没公开。只有拿到链接的人能玩。">
         <p class="row-actions">
           <button class="button" type="button" disabled={busy} onClick={() => onChange({ public: true })}>
             放到广场上
@@ -123,10 +121,10 @@ function Plaza({
             disabled={busy}
             onClick={() => onChange({ public: true, seeking: true })}
           >
-            放上去，找人测
+            放上去找人测
           </button>
           <a class="muted" href={plazaUrl} target="_blank" rel="noreferrer">
-            广场是什么 ↗
+            广场 ↗
           </a>
         </p>
       </Block>
@@ -138,8 +136,8 @@ function Plaza({
       title="广场"
       lead={
         listing.hidden
-          ? "被多人举报，已从广场撤下等复核。链接照常能开。"
-          : `在广场上${listing.seeking ? "，正在找人测" : ""}。${listing.has_cover ? "" : "加 --cover 可以配一张封面。"}`
+          ? "多人举报，已从广场撤下，待复核。链接仍能打开。"
+          : `在广场上${listing.seeking ? "，正在找人测" : ""}。`
       }
     >
       {listing.seeking ? (
@@ -152,12 +150,12 @@ function Plaza({
         >
           <label class="field">
             <span>
-              想让来的人重点看什么（{Array.from(note).length}/{SEEK_NOTE_MAX}）
+              想让人看什么 · {Array.from(note).length}/{SEEK_NOTE_MAX}
             </span>
             <input
               value={note}
               maxLength={SEEK_NOTE_MAX}
-              placeholder="例如：新手引导看得懂吗？第三关难不难？"
+              placeholder="新手引导看得懂吗？"
               onInput={(event) => setNote((event.target as HTMLInputElement).value)}
             />
           </label>
@@ -169,15 +167,15 @@ function Plaza({
       <p class="row-actions">
         {listing.seeking ? (
           <button class="button" type="button" disabled={busy} onClick={() => onChange({ seeking: false })}>
-            人找够了
+            找够了
           </button>
         ) : (
           <button class="button" type="button" disabled={busy} onClick={() => onChange({ seeking: true })}>
-            标「正在找人测」
+            找人测
           </button>
         )}
         <button class="button quiet" type="button" disabled={busy} onClick={() => onChange({ public: false })}>
-          从广场上拿下来
+          撤下
         </button>
         <a class="muted" href={plazaUrl} target="_blank" rel="noreferrer">
           去广场看 ↗
@@ -197,7 +195,7 @@ function Seats({ listing, busy, onChange }: { listing: Listing; busy: boolean; o
     event.preventDefault();
     const seats = Number(value.trim());
     if (!Number.isInteger(seats) || seats < 1 || seats > MAX_SEATS) {
-      setWrong(`要一个 1 到 ${MAX_SEATS} 之间的整数。想取消就点「不限」。`);
+      setWrong(`1 到 ${MAX_SEATS} 之间的整数。`);
       return;
     }
     setWrong(null);
@@ -211,13 +209,13 @@ function Seats({ listing, busy, onChange }: { listing: Listing; busy: boolean; o
         listing.seats
           ? `在找 ${listing.seats} 位，已有 ${listing.joined} 位加入。`
           : listing.joined > 0
-            ? `没设名额。已有 ${listing.joined} 位留了名字。`
-            : "没设名额，门禁页上不出现这一行。"
+            ? `没设名额。已有 ${listing.joined} 位留名。`
+            : "没设名额。"
       }
     >
       <form class="field-row" onSubmit={save}>
         <label class="field">
-          <span>想找几位试玩者</span>
+          <span>名额</span>
           <input
             type="number"
             min={1}
@@ -248,7 +246,7 @@ function Seats({ listing, busy, onChange }: { listing: Listing; busy: boolean; o
         ) : null}
       </form>
       {wrong ? <p class="notice">{wrong}</p> : null}
-      <p class="muted">留了名字的人算加入；到齐之后玩家仍然可以玩。</p>
+      <p class="muted">留名即加入。满了仍能玩。</p>
     </Block>
   );
 }
@@ -264,7 +262,7 @@ function Community({ listing, busy, onChange }: { listing: Listing; busy: boolea
     const url = value.trim();
     // 空的就是清掉；剩下的只查开头，去哪是开发者的事，我们对去向不承诺（DESIGN §3.3）。
     if (url !== "" && !/^https?:\/\/\S+$/.test(url)) {
-      setWrong("要一个 http:// 或 https:// 开头的地址。留空就是不放。");
+      setWrong("要 http:// 或 https:// 开头的地址。");
       return;
     }
     setWrong(null);
@@ -272,7 +270,7 @@ function Community({ listing, busy, onChange }: { listing: Listing; busy: boolea
   }
 
   return (
-    <Block title="开发者的群" lead="玩家在门禁页和反馈之后看到「开发者的群」。QQ 群、微信群的二维码页、Discord……去哪都行。">
+    <Block title="开发者的群" lead="玩家在门禁页和留言之后看到。任何地址都行。">
       <form class="field-row" onSubmit={save}>
         <label class="field grow">
           <span>地址</span>
@@ -312,12 +310,8 @@ function Community({ listing, busy, onChange }: { listing: Listing; busy: boolea
 function PublicFeedback({ listing, busy, onChange }: { listing: Listing; busy: boolean; onChange: Change }) {
   return (
     <Block
-      title="让玩家看到彼此的反馈"
-      lead={
-        listing.feedback_public
-          ? "开着：门禁页上显示最近 3 条，署他们留的名字；哪一条不想让人看到，在「反馈」里逐条隐藏。"
-          : "关着：只有你看得到反馈。打开之后门禁页上会显示最近 3 条。"
-      }
+      title="公开反馈"
+      lead={listing.feedback_public ? "开着。门禁页显示最近 3 条，署留下的名字。" : "关着。只有你看得到反馈。"}
     >
       <p class="row-actions">
         <button
@@ -346,9 +340,7 @@ function BoostSection({ boost }: { boost?: Boost }) {
     <Block
       title="推广"
       lead={
-        boost
-          ? "推广位的买卖尚未开放：付款通道要等主体落地。这一段是运营者给的。"
-          : "尚未开放：付款通道要等主体落地。开放后可以买 3 天或 7 天，作品会出现在广场顶部并标「推广」，免费流不受影响。"
+        boost ? "尚未开放购买。这一段由运营者给出。" : "尚未开放。开放后可买 3 天或 7 天，作品排在广场顶部，标「推广」。"
       }
     >
       {boost ? <BoostState boost={boost} /> : null}
@@ -362,26 +354,25 @@ function BoostState({ boost }: { boost: Boost }) {
     case "pending":
       return (
         <p>
-          <span class="chip">{kind}</span> 排到 {day(boost.starts_at)}。上推广位之前我们会人工看一眼。
+          <span class="chip">{kind}</span> 排到 {day(boost.starts_at)}，上位前人工复核。
         </p>
       );
     case "live":
       return (
         <p>
-          <span class="chip">{kind}</span> 推广中{boost.ends_at ? `，到 ${day(boost.ends_at)}` : ""}
-          。现在它在广场顶部，标着「推广」。
+          <span class="chip">{kind}</span> 推广中{boost.ends_at ? `，到 ${day(boost.ends_at)}` : ""}。
         </p>
       );
     case "ended":
       return (
         <p class="muted">
-          {kind}已经结束{boost.ends_at ? `（${day(boost.ends_at)}）` : ""}。
+          {kind}已结束{boost.ends_at ? `，${day(boost.ends_at)}` : ""}。
         </p>
       );
     case "rejected":
       return (
         <p class="says warn">
-          {kind}没通过人工复核{boost.reason ? `：${boost.reason}` : ""}。付过的钱会全额退。
+          {kind}未通过复核{boost.reason ? `：${boost.reason}` : ""}。全额退款。
         </p>
       );
   }
@@ -395,7 +386,7 @@ function Versions({ site, onVersionsChanged }: { site: Site; onVersionsChanged: 
   const [problem, setProblem] = useState<string | null>(null);
 
   async function activate(version: number) {
-    if (!confirm(`让玩家看到的换回 v${version}？链接不变，点开就是那一版。`)) return;
+    if (!confirm(`把 v${version} 设为当前？链接不变。`)) return;
     setBusy(version);
     setProblem(null);
     try {
@@ -410,7 +401,7 @@ function Versions({ site, onVersionsChanged }: { site: Site; onVersionsChanged: 
   }
 
   return (
-    <Block title="版本" lead="每次上传就是一版，都留着；换哪一版给玩家看，链接都不变。">
+    <Block title="版本" lead="每次上传是一版，都留着。换版不换链接。">
       {loading ? <Loading /> : null}
       {error ? <Failed error={error} onRetry={reload} /> : null}
       {problem ? <p class="notice">{problem}</p> : null}
@@ -426,7 +417,7 @@ function Versions({ site, onVersionsChanged }: { site: Site; onVersionsChanged: 
               </span>
               <span class="version-note">{one.note ? `「${one.note}」` : ""}</span>
               {one.current ? (
-                <span class="chip good">玩家看到的</span>
+                <span class="chip good">当前</span>
               ) : (
                 <button
                   class="button small"
@@ -434,7 +425,7 @@ function Versions({ site, onVersionsChanged }: { site: Site; onVersionsChanged: 
                   disabled={busy !== null}
                   onClick={() => activate(one.version)}
                 >
-                  {busy === one.version ? "正在换…" : "让玩家看这一版"}
+                  {busy === one.version ? "切换中…" : "设为当前"}
                 </button>
               )}
             </li>
@@ -470,7 +461,7 @@ function Danger({ site }: { site: Site }) {
       <div class="block-head">
         <h2>删除作品</h2>
         <p class="muted">
-          链接立刻失效，所有版本、点名册、反馈一起消失，关注这个作品的人也不再收到通知。删了就找不回来。
+          链接立刻失效，版本、点名册、反馈一起删除。不可恢复。
         </p>
       </div>
       <form class="field-row" onSubmit={remove}>
@@ -487,7 +478,7 @@ function Danger({ site }: { site: Site }) {
           />
         </label>
         <button class="button danger" type="submit" disabled={typed.trim() !== site.slug || state === "working"}>
-          {state === "working" ? "正在删…" : "删除这个作品"}
+          {state === "working" ? "删除中…" : "删除"}
         </button>
       </form>
       {state !== "idle" && state !== "working" ? <p class="notice">{state}</p> : null}

@@ -330,29 +330,28 @@ fn publish_sheet() -> String {
         "<div id=\"publish-dialog\" class=\"overlay\">\n\
 <a class=\"overlay-back\" href=\"#\" aria-label=\"关闭\"></a>\n\
 <div class=\"sheet\" role=\"dialog\" aria-labelledby=\"publish-title\">\n\
-<div class=\"dialog-head\"><div><p class=\"eyebrow\">从一条命令开始</p>\
-<h2 id=\"publish-title\">把这个版本，放到别人面前。</h2></div>\
+<div class=\"dialog-head\"><h2 id=\"publish-title\">从一条命令开始</h2>\
 <a class=\"close\" href=\"#\" aria-label=\"关闭\">{close}</a></div>\n\
-<p class=\"dialog-desc\">不必等到「做完」。把手上能玩的版本发出来，让真实的玩家试试看——三步，都在终端里。</p>\n\
+<p class=\"dialog-desc\">不必等到做完。能玩，就发出去。</p>\n\
 <ol class=\"steps\">\n\
-<li><span class=\"n\">1</span><div class=\"step\"><h3>装好 playtest</h3>\
-<p>从 <a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">Releases</a> 下载单文件，放进 PATH。macOS、Linux、Windows 都有。</p></div></li>\n\
-<li><span class=\"n\">2</span><div class=\"step pub-box\"><h3>在作品目录里跑一条</h3>\
+<li><span class=\"n\">1</span><h3>安装</h3>\
+<p>从 <a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">Releases</a> 下载 playtest，放进 PATH。</p></li>\n\
+<li class=\"pub-box\"><span class=\"n\">2</span><h3>发布</h3>\
 <div class=\"tabs\" role=\"tablist\" aria-label=\"发布方式\">\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-static\" checked>\n\
 <label for=\"tab-static\">导出目录</label>\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-local\">\n\
-<label for=\"tab-local\">本地服务</label>\n\
+<label for=\"tab-local\">本地端口</label>\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-backend\">\n\
-<label for=\"tab-backend\">带后端的应用</label>\n\
+<label for=\"tab-backend\">带后端</label>\n\
 </div>\n\
-<div class=\"codebox\" id=\"panel-static\"><b>$</b><code>playtest ./dist --public --seek \"想请你试试，第一次玩顺不顺畅\"</code></div>\n\
-<div class=\"codebox\" id=\"panel-local\"><b>$</b><code>playtest 5173 --public --seek \"帮我看看，本地这个版本跑得怎么样\"</code></div>\n\
-<div class=\"codebox\" id=\"panel-backend\"><b>$</b><code>playtest ./dist --backend 3000 --public --seek \"想测一下联机是否顺畅\"</code></div>\n\
-<p class=\"copy-hint\"><code>--public</code> 放到广场上，<code>--seek</code> 是你想让路过的人看什么。选中命令即可复制。</p></div></li>\n\
-<li><span class=\"n\">3</span><div class=\"step\"><h3>发出去之后</h3>\
-<p>链接、二维码和邀请卡一起出来。谁打开了、玩到哪、说了什么，在 \
-<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">开发者控制台</a> 里看得见。公开展示由你决定，随时 unlist。</p></div></li>\n\
+<div class=\"codebox\" id=\"panel-static\"><b>$</b><code>playtest ./dist --public --seek \"想让人看什么\"</code></div>\n\
+<div class=\"codebox\" id=\"panel-local\"><b>$</b><code>playtest 5173 --public --seek \"想让人看什么\"</code></div>\n\
+<div class=\"codebox\" id=\"panel-backend\"><b>$</b><code>playtest ./dist --backend 3000 --public --seek \"想让人看什么\"</code></div>\n\
+</li>\n\
+<li><span class=\"n\">3</span><h3>之后</h3>\
+<p>链接、二维码、邀请卡一起出来。谁来玩过，在 \
+<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">开发者控制台</a> 看。</p></li>\n\
 </ol>\n\
 </div>\n\
 </div>\n",
@@ -506,35 +505,30 @@ body.page .more>.ghost{justify-self:start}
 .overlay:target{display:flex}
 .overlay-back{position:absolute;inset:0;background:#000000b3;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .sheet{position:relative;z-index:1;width:min(34rem,100%);max-height:calc(100dvh - 48px);overflow:auto;padding:28px 28px 26px;border-radius:18px;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff12,0 40px 100px -30px #000}
-.dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
-.eyebrow{margin:0 0 8px;font:11px/1 var(--mono);letter-spacing:.08em;color:var(--accent)}
-.dialog-head h2{margin:0;font-size:21px;line-height:1.3;font-weight:600;letter-spacing:-.015em}
+.dialog-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.dialog-head h2{margin:0;font-size:22px;line-height:1.3;font-weight:650;letter-spacing:-.02em}
 .close{flex:0 0 auto;display:grid;place-items:center;width:32px;height:32px;border-radius:9px;color:var(--dim);box-shadow:inset 0 0 0 1px var(--line);transition:color .15s,background .15s}
 .close .icon{width:14px;height:14px;stroke-width:1.8}
 .close:hover{color:var(--fg);background:#ffffff0a}
-.dialog-desc{margin:12px 0 0;font-size:14px;line-height:1.7;color:var(--dim)}
-.steps{list-style:none;margin:22px 0 0;padding:0}
-.steps li{position:relative;display:flex;gap:16px;padding:18px 0 0}
-.steps li+li{margin-top:18px;border-top:1px solid var(--line)}
-.steps .n{flex:0 0 auto;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;font:12px/1 var(--mono);color:var(--soft);background:var(--card2);box-shadow:inset 0 0 0 1px var(--line2)}
-.step{flex:1;min-width:0}
-.step h3{margin:3px 0 0;font-size:14px;font-weight:600;letter-spacing:-.005em}
-.step p{margin:6px 0 0;font-size:13px;line-height:1.7;color:var(--dim)}
-.step p code{padding:1px 6px;border-radius:5px;background:var(--bg);border:1px solid var(--line);font-size:.92em;color:var(--soft)}
-body.page .step p a{color:var(--fg);text-decoration:underline;text-decoration-color:#ffffff3a;text-underline-offset:3px}
-.tabs{position:relative;display:inline-flex;gap:2px;margin:12px 0 10px;padding:3px;border-radius:10px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line)}
+.dialog-desc{margin:6px 0 0;font-size:14px;line-height:1.7;color:var(--dim)}
+.steps{list-style:none;margin:24px 0 0;padding:0}
+.steps li{display:grid;grid-template-columns:24px minmax(0,1fr);column-gap:16px;align-items:start;padding:18px 0 0;border-top:1px solid var(--line)}
+.steps li>*{grid-column:2}
+.steps .n{grid-column:1;grid-row:1;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;font:12px/1 var(--mono);color:var(--soft);background:var(--card2);box-shadow:inset 0 0 0 1px var(--line2)}
+.steps h3{margin:0;font-size:14px;line-height:24px;font-weight:600}
+.steps p{margin:4px 0 0;font-size:13.5px;line-height:1.7;color:var(--dim)}
+body.page .steps p a{color:var(--fg);text-decoration:underline;text-decoration-color:#ffffff3a;text-underline-offset:3px}
+.tabs{position:relative;display:flex;gap:18px;margin:8px 0 12px;border-bottom:1px solid var(--line)}
 .tabs input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
-.tabs label{padding:6px 12px;border-radius:7px;font-size:12.5px;font-weight:500;color:var(--dim);cursor:pointer;transition:color .15s,background .15s}
+.tabs label{padding:6px 0 9px;margin-bottom:-1px;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--dim);cursor:pointer;transition:color .15s,border-color .15s}
 .tabs label:hover{color:var(--fg)}
-.pub-box:has(#tab-static:checked) label[for=tab-static],.pub-box:has(#tab-local:checked) label[for=tab-local],.pub-box:has(#tab-backend:checked) label[for=tab-backend]{color:var(--fg);background:var(--card2);box-shadow:inset 0 0 0 1px var(--line),0 1px 2px #0008}
+.pub-box:has(#tab-static:checked) label[for=tab-static],.pub-box:has(#tab-local:checked) label[for=tab-local],.pub-box:has(#tab-backend:checked) label[for=tab-backend]{color:var(--fg);border-bottom-color:var(--accent)}
 .tabs input:focus-visible+label{outline:2px solid var(--accent);outline-offset:1px}
-.codebox{display:none;gap:10px;padding:14px 16px;border-radius:12px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line)}
+.codebox{display:none;gap:10px;padding:13px 16px;border-radius:12px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line)}
 .pub-box:has(#tab-static:checked) #panel-static,.pub-box:has(#tab-local:checked) #panel-local,.pub-box:has(#tab-backend:checked) #panel-backend{display:flex}
 .codebox b{flex:0 0 auto;font:12.5px/1.8 var(--mono);font-weight:400;color:var(--accent)}
 .codebox code{display:block;padding:0;border:0;background:none;font:12.5px/1.8 var(--mono);color:var(--soft);white-space:pre-wrap;overflow-wrap:anywhere}
-.copy-hint{margin:10px 0 0;font-size:12px;line-height:1.7;color:#6b6862}
-.copy-hint code{padding:1px 5px;border-radius:4px;background:var(--bg);border:1px solid var(--line);font-size:.92em;color:var(--dim)}
-@media(max-width:47.99rem){.sidebar{position:static;width:auto;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:8px;padding:10px 12px;border-right:0;border-bottom:1px solid var(--line)}.mark{width:32px;height:32px;border-radius:9px;font-size:17px}.mark i{right:7px;bottom:7px;width:4px;height:4px}.wordmark{position:static;width:auto;height:auto;clip:auto;font-size:17px}.nav{flex-direction:row;gap:4px;width:auto;margin:0 0 0 auto}.nav-item{flex-direction:row;gap:6px;width:auto;min-height:36px;padding:0 12px 0 10px;border-radius:999px;font-size:13px;letter-spacing:0}.nav-item .icon{width:16px;height:16px}.nav-item.active{background:#ffffff0d;box-shadow:inset 0 0 0 1px var(--line)}.nav-dot{display:none}.sidebar-bottom{width:auto;margin:0}body.page .publish{flex-direction:row;gap:6px;min-height:36px;padding:0 12px 0 8px;border-radius:999px;font-size:13px}body.page .publish .icon{width:20px;height:20px;padding:3px;border-radius:7px}.main{margin:0;background:none}.content{padding:14px 14px 72px}.grid{gap:12px}body.page a.tile{padding:5px;border-radius:14px}.shot{border-radius:10px}.tile-body{padding:10px 6px 6px}.tile-body h2{font-size:14px}.tile .summary{font-size:12.5px}.tile .meta{margin-top:8px;padding-top:8px}.cover.word b{font-size:46px}.cover.word i{display:none}.main>.drawer{margin:14px;padding:22px 18px 24px}.overlay{align-items:flex-end;padding:0}.sheet{width:100%;max-height:90dvh;padding:22px 20px calc(24px + env(safe-area-inset-bottom));border-radius:18px 18px 0 0}.dialog-head h2{font-size:19px}}
+@media(max-width:47.99rem){.sidebar{position:static;width:auto;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:8px;padding:10px 12px;border-right:0;border-bottom:1px solid var(--line)}.mark{width:32px;height:32px;border-radius:9px;font-size:17px}.mark i{right:7px;bottom:7px;width:4px;height:4px}.wordmark{position:static;width:auto;height:auto;clip:auto;font-size:17px}.nav{flex-direction:row;gap:4px;width:auto;margin:0 0 0 auto}.nav-item{flex-direction:row;gap:6px;width:auto;min-height:36px;padding:0 12px 0 10px;border-radius:999px;font-size:13px;letter-spacing:0}.nav-item .icon{width:16px;height:16px}.nav-item.active{background:#ffffff0d;box-shadow:inset 0 0 0 1px var(--line)}.nav-dot{display:none}.sidebar-bottom{width:auto;margin:0}body.page .publish{flex-direction:row;gap:6px;min-height:36px;padding:0 12px 0 8px;border-radius:999px;font-size:13px}body.page .publish .icon{width:20px;height:20px;padding:3px;border-radius:7px}.main{margin:0;background:none}.content{padding:14px 14px 72px}.grid{gap:12px}body.page a.tile{padding:5px;border-radius:14px}.shot{border-radius:10px}.tile-body{padding:10px 6px 6px}.tile-body h2{font-size:14px}.tile .summary{font-size:12.5px}.tile .meta{margin-top:8px;padding-top:8px}.cover.word b{font-size:46px}.cover.word i{display:none}.main>.drawer{margin:14px;padding:22px 18px 24px}.overlay{align-items:flex-end;padding:0}.sheet{width:100%;max-height:90dvh;padding:22px 20px calc(24px + env(safe-area-inset-bottom));border-radius:18px 18px 0 0}.dialog-head h2{font-size:20px}}
 "#;
 
 #[cfg(test)]

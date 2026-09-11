@@ -42,7 +42,7 @@ export function RosterTab({
   if (version === undefined) {
     return (
       <Empty>
-        <p>还没有版本，也就还没有人。</p>
+        <p>还没有版本。</p>
       </Empty>
     );
   }
@@ -90,7 +90,6 @@ function Rows({ slug, version, sort }: { slug: string; version: number; sort: Ro
     return (
       <Empty>
         <p>v{version} 还没有人打开。</p>
-        <p class="muted">把链接发出去，第一个人点开就会出现在这里。</p>
       </Empty>
     );
   }
@@ -101,7 +100,7 @@ function Rows({ slug, version, sort }: { slug: string; version: number; sort: Ro
   return (
     <>
       {anyFirstFrame ? null : (
-        <p class="notice soft">这一版没接 playtest.js：首帧、玩到哪、最后一次输入都看不到。</p>
+        <p class="notice soft">没接 playtest.js：看不到首帧、进度和错误。</p>
       )}
       <ul class="sessions">
         {data.sessions.map((session) => (
@@ -149,7 +148,7 @@ function Session({ session, anyFirstFrame }: { session: SessionRow; anyFirstFram
       {open ? (
         <div class="events">
           {events.length === 0 ? (
-            <p class="muted">这个会话没有事件。错误、加载用时、自定义事件都来自 playtest.js。</p>
+            <p class="muted">没有事件。</p>
           ) : (
             <ol>
               {events.map((event, index) => (
@@ -165,7 +164,7 @@ function Session({ session, anyFirstFrame }: { session: SessionRow; anyFirstFram
             </ol>
           )}
           {session.more_events ? (
-            <p class="muted">事件太多，这里只显示最早的 100 条。</p>
+            <p class="muted">只显示最早的 100 条。</p>
           ) : null}
           <p class="muted mono">会话 {session.id}</p>
         </div>
@@ -182,7 +181,7 @@ function tagsOf(session: SessionRow, anyFirstFrame: boolean): Tag[] {
   } else if (session.first_frame) {
     tags.push({ text: "进到游戏", tone: "plain" });
   } else if (session.started && anyFirstFrame) {
-    tags.push({ text: "点了开始，没等到首帧", tone: "warn" });
+    tags.push({ text: "没等到首帧", tone: "warn" });
   } else {
     tags.push({ text: "点了开始", tone: "plain" });
   }

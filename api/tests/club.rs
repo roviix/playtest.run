@@ -743,17 +743,9 @@ async fn setting_a_cover_from_a_note_says_there_is_no_screenshot_yet() {
         .await
         .json();
 
-    // 玩家留话时还附不了截图，所以现在每一条都走这一支——如实说，不假装能设。
-    let body = h
-        .call::<()>(
-            "POST",
-            &paths::site_cover_from_feedback(&slug, list.items[0].id),
-            Some(&token),
-            None,
-        )
-        .await
-        .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
-    assert!(body.message.contains("截图"), "{}", body.message);
+    // 玩家留话时还附不了截图（那是 v0.2），所以「把截图设成封面」这条路整条都还不存在：
+    // 与其留一个永远拒绝的端点、控制台里一个永远不出现的按钮，不如等截图做出来再一起加。
+    assert!(list.items[0].screenshot_hash.is_none(), "截图是 v0.2 的事");
 }
 
 // ---------------------------------------------------------------- capabilities

@@ -1,6 +1,7 @@
 //! 路由表。路径全部取自 [`playtest_common::api::routes`]，改契约时这里跟着变。
 
 pub mod admin;
+pub mod agents;
 pub mod blobs;
 pub mod events;
 pub mod feedback;
@@ -33,6 +34,12 @@ use crate::state::AppState;
 pub fn app(state: AppState) -> Router {
     let router = Router::new()
         .route(paths::HEALTH, get(health))
+        // 给 AI 助手读的那几个文件（REWRITE §3.2）。不带令牌、不带用户数据。
+        .route(paths::LLMS_TXT, get(agents::llms_txt))
+        .route(paths::LLMS_FULL_TXT, get(agents::llms_full_txt))
+        .route(paths::SKILL_MD, get(agents::skill_md))
+        .route(paths::OPENAPI_JSON, get(agents::openapi_json))
+        .route(paths::AGENT_JSON, get(agents::agent_json))
         .route(paths::ANON_SESSIONS, post(sessions::create))
         .route(paths::LOGIN_DEVICE_START, post(login::device_start))
         .route(paths::LOGIN_DEVICE_POLL, post(login::device_poll))
@@ -55,10 +62,6 @@ pub fn app(state: AppState) -> Router {
         .route(
             result_paths::SITE_FEEDBACK_ITEM,
             patch(results::update_feedback),
-        )
-        .route(
-            paths::SITE_COVER_FROM_FEEDBACK,
-            post(results::cover_from_feedback),
         )
         // 边缘替玩家转过来的那一组：不带开发者令牌，靠限速挡（见 follow.rs）。
         .route(follow_paths::FOLLOW, post(follow::follow))
