@@ -39,6 +39,19 @@ pub struct Plaza {
     pub club_followers: u32,
 }
 
+/// 一面空墙。控制面还没写过这份文件、或者它坏了的时候，边缘按这个出——
+/// 广场页照常出，只是没有卡片。「空的广场长什么样」只该有一个定义。
+impl Default for Plaza {
+    fn default() -> Self {
+        Self {
+            schema: SCHEMA,
+            generated_at: String::new(),
+            items: Vec::new(),
+            club_followers: 0,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

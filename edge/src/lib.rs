@@ -22,6 +22,7 @@
 
 pub mod app;
 pub mod breaker;
+pub mod cache;
 pub mod capabilities;
 pub mod card;
 pub mod config;
@@ -42,6 +43,7 @@ pub mod share;
 pub mod ship;
 pub mod sites;
 pub mod tunnel;
+pub mod upstream;
 
 pub use app::{router, App};
 pub use config::Config;

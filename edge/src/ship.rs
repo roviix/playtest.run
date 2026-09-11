@@ -11,10 +11,6 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
-use hyper::Request;
-use hyper_util::rt::TokioIo;
 use playtest_common::ingest::{self, EdgeBatch, EdgeEvent};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
@@ -22,6 +18,8 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt};
 pub const INTERVAL: Duration = Duration::from_secs(60);
 /// 一次读多少字节的日志再切行。
 const READ_CHUNK: usize = 256 * 1024;
+
+const POST_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub struct Shipper {
     log_path: PathBuf,
@@ -115,51 +113,20 @@ impl Shipper {
         Ok(sent)
     }
 
+    /// 一批的整个往返。后台任务，没人在等，所以给得比 `follow` 那条宽。
     async fn post(&self, events: &[EdgeEvent]) -> anyhow::Result<()> {
-        let url: hyper::Uri = format!("{}{}", self.api_base, ingest::routes::EDGE).parse()?;
-        let host = url
-            .host()
-            .ok_or_else(|| anyhow::anyhow!("控制面地址没有主机名"))?;
-        let port = url.port_u16().unwrap_or(80);
-        if url.scheme_str() != Some("http") {
-            anyhow::bail!("边缘上报只支持 http://（控制面在同一台机器或内网上）");
-        }
-        let stream = tokio::time::timeout(
-            Duration::from_secs(5),
-            tokio::net::TcpStream::connect((host, port)),
+        let answer = crate::upstream::post_json(
+            &self.api_base,
+            ingest::routes::EDGE,
+            &EdgeBatch {
+                events: events.to_vec(),
+            },
+            POST_TIMEOUT,
         )
-        .await
-        .map_err(|_| anyhow::anyhow!("连接控制面超时"))??;
-        let (mut sender, conn) =
-            hyper::client::conn::http1::handshake(TokioIo::new(stream)).await?;
-        tokio::spawn(async move {
-            let _ = conn.await;
-        });
-
-        let body = serde_json::to_vec(&EdgeBatch {
-            events: events.to_vec(),
-        })?;
-        let request = Request::post(url.path())
-            .header("host", format!("{host}:{port}"))
-            .header("content-type", "application/json")
-            .header(
-                "user-agent",
-                concat!("playtest-edge/", env!("CARGO_PKG_VERSION")),
-            )
-            .body(Full::new(Bytes::from(body)))?;
-        let response = tokio::time::timeout(Duration::from_secs(10), sender.send_request(request))
-            .await
-            .map_err(|_| anyhow::anyhow!("控制面没有在 10 秒内响应"))??;
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.into_body().collect().await?.to_bytes();
-            anyhow::bail!(
-                "控制面拒收（{status}）：{}",
-                String::from_utf8_lossy(&text)
-                    .chars()
-                    .take(200)
-                    .collect::<String>()
-            );
+        .await?;
+        if !answer.ok() {
+            // 没送到就不推进 offset，下一轮从同一行再来。
+            anyhow::bail!("控制面拒收（{}）：{}", answer.status, answer.snippet());
         }
         Ok(())
     }

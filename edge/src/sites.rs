@@ -4,14 +4,14 @@
 //! 缓存分两种寿命：清单按 `(slug, version)` 不可变，可以一直留着；
 //! `current` 指针只留 1 秒，回滚要立刻在玩家那边生效。
 
-use std::collections::HashMap;
-use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::time::Duration;
 
 use playtest_common::manifest::Manifest;
 use playtest_common::store::FsStore;
-use std::sync::Arc;
 use time::OffsetDateTime;
+
+use crate::cache::{CachedMap, FOREVER};
 
 /// `current` 指针的缓存寿命。再短就是每个请求都读一次盘，再长回滚就不「立刻」了。
 pub const CURRENT_TTL: Duration = Duration::from_secs(1);
@@ -28,14 +28,12 @@ pub enum SiteState {
 
 pub struct SiteStore {
     store: FsStore,
-    manifests: Mutex<HashMap<(String, u32), Arc<Manifest>>>,
-    current: Mutex<HashMap<String, CachedCurrent>>,
-    ttl: Duration,
-}
-
-struct CachedCurrent {
-    at: Instant,
-    version: Option<u32>,
+    /// 清单按 `(slug, version)` 不可变，留多久都行——但**不能无限多个**：
+    /// 随机打子域名的扫描器每个 slug 都会让我们读一次盘（`crate::cache` 的上限管着这件事）。
+    manifests: CachedMap<(String, u32), Manifest>,
+    /// 「这个 slug 现在是第几版」。`None` 表示没有这个作品，那个答案也要缓存——
+    /// 打进来的多数 slug 根本不存在。
+    current: CachedMap<String, Option<u32>>,
 }
 
 impl SiteStore {
@@ -46,9 +44,8 @@ impl SiteStore {
     pub fn with_ttl(store: FsStore, ttl: Duration) -> Self {
         Self {
             store,
-            manifests: Mutex::new(HashMap::new()),
-            current: Mutex::new(HashMap::new()),
-            ttl,
+            manifests: CachedMap::new(FOREVER),
+            current: CachedMap::new(ttl),
         }
     }
 
@@ -73,54 +70,34 @@ impl SiteStore {
     }
 
     async fn current_version(&self, slug: &str) -> Option<u32> {
-        if let Some(hit) = self.current.lock().ok().and_then(|c| {
-            c.get(slug)
-                .filter(|e| e.at.elapsed() < self.ttl)
-                .map(|e| e.version)
-        }) {
-            return hit;
-        }
-        let version = match self.store.get_current(slug).await {
-            Ok(cur) => cur.map(|c| c.version),
-            Err(err) => {
-                tracing::warn!(slug, %err, "读 current 指针失败");
-                None
-            }
-        };
-        if let Ok(mut cache) = self.current.lock() {
-            cache.insert(
-                slug.to_string(),
-                CachedCurrent {
-                    at: Instant::now(),
-                    version,
-                },
-            );
-        }
-        version
+        *self
+            .current
+            .get_or(slug.to_string(), || async {
+                match self.store.get_current(slug).await {
+                    Ok(cur) => Some(cur.map(|c| c.version)),
+                    Err(err) => {
+                        tracing::warn!(slug, %err, "读 current 指针失败");
+                        // 读盘出错和「没有这个作品」不一样：别把它缓存成「没有」，
+                        // 下一次请求再试一遍。
+                        None
+                    }
+                }
+            })
+            .await
     }
 
     async fn manifest(&self, slug: &str, version: u32) -> Option<Arc<Manifest>> {
-        let key = (slug.to_string(), version);
-        if let Some(hit) = self
-            .manifests
-            .lock()
-            .ok()
-            .and_then(|m| m.get(&key).cloned())
-        {
-            return Some(hit);
-        }
-        let manifest = match self.store.get_manifest(slug, version).await {
-            Ok(Some(m)) => Arc::new(m),
-            Ok(None) => return None,
-            Err(err) => {
-                tracing::warn!(slug, version, %err, "读清单失败");
-                return None;
-            }
-        };
-        if let Ok(mut cache) = self.manifests.lock() {
-            cache.insert(key, manifest.clone());
-        }
-        Some(manifest)
+        self.manifests
+            .get((slug.to_string(), version), || async {
+                match self.store.get_manifest(slug, version).await {
+                    Ok(m) => m,
+                    Err(err) => {
+                        tracing::warn!(slug, version, %err, "读清单失败");
+                        None
+                    }
+                }
+            })
+            .await
     }
 }
 

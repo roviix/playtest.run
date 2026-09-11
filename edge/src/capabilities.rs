@@ -6,19 +6,20 @@
 //! 读不到就是 [`Capabilities::default`]——什么都不显示。**做不到的就不显示，不解释**
 //! （AGENTS 第 4 条）：一个点了没反应的按钮比没有按钮糟。
 
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::time::Duration;
 
 use playtest_common::capabilities::Capabilities;
 use playtest_common::store::FsStore;
+
+use crate::cache::Cached;
 
 /// 缓存寿命。这份文件一天也不见得变一次（控制面启动时写），60 秒足够快地跟上一次重启。
 pub const TTL: Duration = Duration::from_secs(60);
 
 pub struct CapabilitiesCache {
     store: FsStore,
-    cached: Mutex<Option<(Instant, Arc<Capabilities>)>>,
-    ttl: Duration,
+    cached: Cached<Capabilities>,
 }
 
 impl CapabilitiesCache {
@@ -29,32 +30,22 @@ impl CapabilitiesCache {
     pub fn with_ttl(store: FsStore, ttl: Duration) -> Self {
         Self {
             store,
-            cached: Mutex::new(None),
-            ttl,
+            cached: Cached::new(ttl),
         }
     }
 
     pub async fn get(&self) -> Arc<Capabilities> {
-        if let Some(hit) = self.cached.lock().ok().and_then(|c| {
-            c.as_ref()
-                .filter(|(at, _)| at.elapsed() < self.ttl)
-                .map(|(_, caps)| caps.clone())
-        }) {
-            return hit;
-        }
-        let caps = match self.store.get_capabilities().await {
-            Ok(Some(caps)) => caps,
-            Ok(None) => Capabilities::default(),
-            Err(err) => {
-                tracing::warn!(%err, "读 capabilities.json 失败，按什么都做不了出");
-                Capabilities::default()
-            }
-        };
-        let caps = Arc::new(caps);
-        if let Ok(mut cache) = self.cached.lock() {
-            *cache = Some((Instant::now(), caps.clone()));
-        }
-        caps
+        self.cached
+            .get(|| async {
+                match self.store.get_capabilities().await {
+                    Ok(caps) => caps,
+                    Err(err) => {
+                        tracing::warn!(%err, "读 capabilities.json 失败，按什么都做不了出");
+                        None
+                    }
+                }
+            })
+            .await
     }
 }
 

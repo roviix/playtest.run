@@ -16,10 +16,6 @@
 use std::time::Duration;
 
 use axum::http::StatusCode;
-use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
-use hyper::Request;
-use hyper_util::rt::TokioIo;
 use playtest_common::capabilities::Capabilities;
 use playtest_common::follow::{
     form, looks_like_email, mask_email, root_paths, routes, ConfirmRequest, ConfirmResponse,
@@ -227,44 +223,13 @@ async fn try_post<B: serde::Serialize, R: serde::de::DeserializeOwned>(
     path: &str,
     body: &B,
 ) -> anyhow::Result<Call<R>> {
-    let url: hyper::Uri = format!("{}{path}", api_base.trim_end_matches('/')).parse()?;
-    if url.scheme_str() != Some("http") {
-        anyhow::bail!("控制面地址只支持 http://（同机或内网）");
+    let answer = crate::upstream::post_json(api_base, path, body, TIMEOUT).await?;
+    if !answer.ok() {
+        // 控制面明确说了不行（限速、参数不对、令牌过期）。这和「控制面不在」不一样：
+        // 玩家该看到的话不同，重试有没有意义也不同。
+        return Ok(Call::Rejected(answer.status));
     }
-    let host = url
-        .host()
-        .ok_or_else(|| anyhow::anyhow!("控制面地址没有主机名"))?;
-    let port = url.port_u16().unwrap_or(80);
-    let payload = serde_json::to_vec(body)?;
-
-    let answer = tokio::time::timeout(TIMEOUT, async {
-        let stream = tokio::net::TcpStream::connect((host, port)).await?;
-        let (mut sender, conn) =
-            hyper::client::conn::http1::handshake(TokioIo::new(stream)).await?;
-        tokio::spawn(async move {
-            let _ = conn.await;
-        });
-        let request = Request::post(url.path())
-            .header("host", format!("{host}:{port}"))
-            .header("content-type", "application/json")
-            .header(
-                "user-agent",
-                concat!("playtest-edge/", env!("CARGO_PKG_VERSION")),
-            )
-            .body(Full::new(Bytes::from(payload)))?;
-        let response = sender.send_request(request).await?;
-        let status = response.status().as_u16();
-        let bytes = response.into_body().collect().await?.to_bytes();
-        Ok::<_, anyhow::Error>((status, bytes))
-    })
-    .await
-    .map_err(|_| anyhow::anyhow!("控制面没有在 {} 秒内答话", TIMEOUT.as_secs()))??;
-
-    let (status, bytes) = answer;
-    if !(200..300).contains(&status) {
-        return Ok(Call::Rejected(status));
-    }
-    match serde_json::from_slice::<R>(&bytes) {
+    match serde_json::from_slice::<R>(&answer.body) {
         Ok(parsed) => Ok(Call::Ok(parsed)),
         Err(err) => {
             tracing::warn!(%err, path, "控制面的回答看不懂");
