@@ -332,10 +332,12 @@ async fn me_action(app: &App, authority: &str, me: Option<&str>, body: Body) -> 
                 follow::send_link(api, email.trim()).await;
             }
         }
-        // TODO(contract): 关掉浏览器通知没有对应的控制面路由（`follow::routes` 里只有
-        // 取消关注与退订）。这一版按钮只在页面上有，点了之后什么都不做——在报告里说明。
+        // 只有 `pt_me` 的人才有「已开启」那一行可点；没有 `pt_me` 的浏览器要关通知，
+        // 直接在浏览器设置里关，我们没有它的身份。
         follow::ACTION_PUSH_OFF => {
-            tracing::info!("有人想关掉浏览器通知，但控制面还没有这条路由");
+            if let Some(token) = me {
+                follow::push_off(api, token).await;
+            }
         }
         _ => {}
     }

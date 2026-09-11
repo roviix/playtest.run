@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use axum::body::{Body, Bytes};
-use axum::extract::State;
+use axum::extract::{OriginalUri, State};
 use axum::http::{HeaderMap, Request, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::post;
@@ -65,6 +65,7 @@ impl FakeApi {
             .route(routes::UNSUBSCRIBE, post(Self::me))
             .route(routes::ME_VIEW, post(Self::me))
             .route(routes::ME_UNFOLLOW, post(Self::me))
+            .route(routes::ME_PUSH_OFF, post(Self::me))
             .with_state(state.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr: SocketAddr = listener.local_addr().unwrap();
@@ -114,9 +115,10 @@ impl FakeApi {
 
     async fn me(
         State(state): State<FakeApi>,
+        OriginalUri(uri): OriginalUri,
         Json(body): Json<serde_json::Value>,
     ) -> axum::response::Response {
-        state.record(routes::ME_VIEW, &body);
+        state.record(uri.path(), &body);
         match state.answer.lock().unwrap().clone() {
             Answer::Status(code) => StatusCode::from_u16(code).unwrap().into_response(),
             Answer::Follow(_) => Json(me_view()).into_response(),
@@ -702,6 +704,33 @@ async fn me_actions_redirect_back_and_never_repeat_themselves() {
     assert_eq!(reply.status, StatusCode::SEE_OTHER);
     let (_, body) = api.last();
     assert_eq!(body["email"], "zhong@example.com");
+
+    // 关掉浏览器通知：带着 `pt_me` 去控制面清推送订阅。
+    let hits = api.hits.load(std::sync::atomic::Ordering::SeqCst);
+    let reply = site
+        .send(
+            Request::builder()
+                .method("POST")
+                .uri(root_paths::ME_ACTION)
+                .header("host", ROOT)
+                .header("cookie", format!("pt_me={ME_TOKEN}"))
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from("action=push_off"))
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(reply.status, StatusCode::SEE_OTHER);
+    let (path, body) = api.last();
+    assert_eq!(path, routes::ME_PUSH_OFF);
+    assert_eq!(body["me_token"], ME_TOKEN);
+    assert_eq!(api.hits.load(std::sync::atomic::Ordering::SeqCst), hits + 1);
+
+    // 没有 `pt_me` 的浏览器点它：不打控制面（没有身份可清）。
+    let reply = site
+        .post_form(ROOT, root_paths::ME_ACTION, "action=push_off")
+        .await;
+    assert_eq!(reply.status, StatusCode::SEE_OTHER);
+    assert_eq!(api.hits.load(std::sync::atomic::Ordering::SeqCst), hits + 1);
 }
 
 #[tokio::test]

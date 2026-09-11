@@ -653,6 +653,65 @@ async fn a_browser_subscription_takes_effect_at_once() {
 }
 
 #[tokio::test]
+async fn turning_browser_notifications_off_keeps_the_follows() {
+    let h = Harness::start(false).await;
+    let token = h.login().await;
+    let slug = h.site(&token).await;
+    let me_token = h
+        .confirmed(
+            FollowTarget::Site { slug: slug.clone() },
+            "someone@example.com",
+            "203.0.113.7",
+        )
+        .await;
+    // 这个人后来在「我的」里也开了浏览器通知。
+    {
+        let conn = h.state.db().lock().await;
+        conn.execute(
+            "UPDATE players SET push_subscription = '{}', push_endpoint = 'https://push.example.com/x'",
+            [],
+        )
+        .unwrap();
+    }
+    let before: MeView = h
+        .edge_sends(
+            follow_paths::ME_VIEW,
+            "203.0.113.7",
+            &MeRequest {
+                me_token: me_token.clone(),
+            },
+        )
+        .await
+        .json();
+    assert!(before.push);
+
+    let after: MeView = h
+        .edge_sends(
+            follow_paths::ME_PUSH_OFF,
+            "203.0.113.7",
+            &MeRequest {
+                me_token: me_token.clone(),
+            },
+        )
+        .await
+        .json();
+    assert!(!after.push, "推送订阅清掉了");
+    assert_eq!(after.follows.len(), 1, "关注还在，通知改走邮箱");
+    assert_eq!(after.email_masked.as_deref(), Some("s***@example.com"));
+
+    // 伪造的钥匙：401，边缘据此清 cookie。
+    h.edge_sends(
+        follow_paths::ME_PUSH_OFF,
+        "203.0.113.7",
+        &MeRequest {
+            me_token: "nope".to_string(),
+        },
+    )
+    .await
+    .error(StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized);
+}
+
+#[tokio::test]
 async fn an_already_confirmed_person_still_gets_a_letter_when_they_type_an_email() {
     let h = Harness::start(false).await;
     let token = h.login().await;

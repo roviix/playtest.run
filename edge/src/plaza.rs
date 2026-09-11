@@ -24,6 +24,7 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 use crate::html::{esc, hue, page};
+use crate::when;
 
 /// `plaza.json` 的缓存寿命。控制面最快也是每次变动重写一份，30 秒内的旧数据没人分得出来。
 pub const TTL: Duration = Duration::from_secs(30);
@@ -89,7 +90,6 @@ pub fn wrap(title: &str, head: &str, here: Here, main: &str) -> String {
     page(
         title,
         head,
-        PLAZA_CSS,
         &format!(
             "{rail}<main class=\"main\">\n{main}</main>\n{publish}",
             rail = rail(here),
@@ -289,12 +289,12 @@ fn fact(item: &PlazaItem, now: OffsetDateTime) -> String {
     match item.fact() {
         Fact::Seats { joined, seats } => format!("{joined} / {seats} 位"),
         Fact::Expires { at } => match OffsetDateTime::parse(&at, &Rfc3339) {
-            Ok(at) => remaining(at, now),
+            Ok(at) => when::remaining(at, now),
             Err(_) => format!("v{}", item.version),
         },
         Fact::Players { count } => format!("{count} 人玩过"),
         Fact::Updated { at } => match OffsetDateTime::parse(&at, &Rfc3339) {
-            Ok(updated) => ago(updated, now),
+            Ok(updated) => when::ago(updated, now),
             Err(_) => format!("v{}", item.version),
         },
     }
@@ -328,11 +328,14 @@ fn publish_sheet() -> String {
 <div class=\"codebox\" id=\"panel-local\"><b>$</b><code>playtest 5173</code></div>\n\
 <div class=\"codebox\" id=\"panel-backend\"><b>$</b><code>playtest ./dist --backend 3000 --public -m \"想让人看什么\"</code></div>\n\
 </div>\n\
-<p class=\"dialog-foot\">从 <a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">Releases</a> 下载，放进 PATH。发出去之后，谁来玩过在 \
-<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">开发者控制台</a> 看。</p>\n\
+<details class=\"tip\"><summary aria-label=\"还没装，或者发出去之后呢\">{help}</summary>\n\
+<div class=\"tip-body\"><p>还没装：从 <a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">Releases</a> 下载一个文件，放进 PATH。</p>\
+<p>发出去之后，谁来玩过在 <a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">开发者控制台</a> 看。</p></div>\n\
+</details>\n\
 </div>\n\
 </div>\n",
         close = icon("close"),
+        help = icon("help"),
         releases = RELEASES_URL,
         dev = DEVELOPER_API_URL,
     )
@@ -341,39 +344,15 @@ fn publish_sheet() -> String {
 /// CLI 的下载处。它不是开发者域（AGENTS 第 7 条管的是登录、令牌、控制台），是公开的发布页。
 const RELEASES_URL: &str = "https://github.com/roviix/playtest.run/releases";
 
-/// 「还剩 5 小时」。到期时间是匿名作品才有的，广场页缓存 30 秒，误差一分钟以内。
-fn remaining(expires: OffsetDateTime, now: OffsetDateTime) -> String {
-    let left = expires - now;
-    let minutes = left.whole_minutes();
-    if minutes <= 0 {
-        "即将下线".to_string()
-    } else if minutes < 60 {
-        format!("还剩 {minutes} 分钟")
-    } else {
-        format!("还剩 {} 小时", left.whole_hours())
-    }
-}
-
-fn ago(updated: OffsetDateTime, now: OffsetDateTime) -> String {
-    let span = now - updated;
-    let minutes = span.whole_minutes();
-    if minutes < 1 {
-        "刚刚发布".to_string()
-    } else if minutes < 60 {
-        format!("{minutes} 分钟前")
-    } else if span.whole_hours() < 24 {
-        format!("{} 小时前", span.whole_hours())
-    } else {
-        format!("{} 天前", span.whole_days().max(1))
-    }
-}
-
 /// 页面上的几个图标，画在页面里：不靠外部字体、也不靠 `<use href>`
 /// （CSP `default-src 'none'` 会把同页 fragment 的引用挡掉）。都是 24 格里的几笔线。
 fn icon(name: &str) -> &'static str {
     match name {
         "close" => {
             r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg>"#
+        }
+        "help" => {
+            r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.9a2.4 2.4 0 1 1 3.4 2.2c-.7.4-1.1.9-1.1 1.7M12 16.7h.01"/></svg>"#
         }
         "grid" => {
             r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>"#
@@ -390,122 +369,6 @@ fn icon(name: &str) -> &'static str {
         _ => "",
     }
 }
-
-/// 广场自己的那段样式，接在共用样式后面。
-///
-/// 版式（DESIGN §3.9）：桌面上左边一条 76px 的窄栏贴着屏幕不动，右边一面网格。
-/// 三级面：墙、栏、卡，各差一两档，靠发丝线和上沿一道高光分层。卡是一件物件：
-/// 一块面、一圈发丝线、嵌在里面的 4:3 插画窗、窗下的字、底下一条发丝线分出「谁 · 一件事实」。
-/// 颜色只有共用样式里那一套：暖炭、象牙、一支琥珀。
-///
-/// 和共用样式一样不写 CSS 注释（会随每一页发出去）。要解释的几处：
-/// - `.sidebar` 桌面 `position:fixed`：栏不随墙滚动。
-/// - `body.page a.tile` 写全选择器：共用的 `a{color:var(--dim)}` 会把卡上的字压暗。
-/// - `.cover.word` 四层背景：两层细网格、一团光、一层底色，色相都来自 `--h`；
-///   `b` 是花押、`i` 是角上的 slug。
-/// - `.tag::before` 是「正在找人测」前面那个发光的点；推广标没有点。
-/// - `.fact i` 是名额那一件事实旁边 28px 的进度线，`--p` 是百分比。
-/// - `.verb` 能悬停才出来；触屏（`hover:none`）上一直在；键盘焦点落到卡上也出来。
-/// - `.mark` 是栏顶的竖卡线稿；`.wordmark` 在桌面上只留给读屏，手机顶条上才显示。
-/// - `.nav-dot` 是当前那间房旁边的一竖琥珀，贴在栏的左边沿。
-/// - 发布说明桌面居中、手机从底部升起，都是 `:target`，没有脚本；`.codebox b` 是提示符。
-const PLAZA_CSS: &str = r#"
-body.page{display:block;min-height:100vh;padding:0;margin:0;background:var(--bg);color:var(--fg)}
-body.page a{color:inherit;text-decoration:none}
-body.page a:hover{color:inherit}
-body.page button,body.page input{font:inherit}
-body.page button{display:inline-flex;width:auto;min-height:0;margin:0;padding:0;border:0;border-radius:0;background:none;color:inherit;font-size:inherit;font-weight:inherit;letter-spacing:inherit;filter:none;transform:none;cursor:pointer}
-body.page p{margin:0}
-body.page footer{display:block;margin:0;padding:0;border:0;font-size:inherit;color:inherit}
-.icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
-.sidebar{position:fixed;inset:0 auto 0 0;width:76px;display:flex;flex-direction:column;align-items:center;padding:18px 10px 14px;border-right:1px solid var(--line);background:var(--rail);z-index:10}
-.brand{display:flex;align-items:center;gap:10px;border-radius:10px}
-.mark{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:linear-gradient(160deg,#202024,#141417);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff14,0 6px 14px -8px #000;color:var(--fg)}
-.mark-svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}
-.mark-svg .dot{fill:var(--accent);stroke:none}
-.wordmark{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);font-size:19px;font-weight:700;letter-spacing:-.04em;line-height:1;color:var(--fg);white-space:nowrap}
-.wordmark span{color:var(--dim);font-weight:400}
-.nav{display:flex;flex-direction:column;gap:6px;width:100%;margin:26px 0 0}
-.nav-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;padding:10px 0 9px;border-radius:12px;color:var(--dim);font-size:11px;font-weight:500;letter-spacing:.02em;line-height:1;transition:color .15s,background .15s}
-.nav-item .icon{transition:transform .2s cubic-bezier(.2,.7,.2,1)}
-.nav-item:hover{color:var(--fg);background:#ffffff08}
-.nav-item:hover .icon{transform:translateY(-1px)}
-.nav-item.active{color:var(--fg);background:#ffffff0a;box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 #ffffff0a}
-.nav-dot{position:absolute;left:-10px;top:50%;width:4px;height:18px;margin-top:-9px;border-radius:2px;background:var(--accent);box-shadow:0 0 10px var(--accent)}
-.sidebar-bottom{width:100%;margin-top:auto}
-body.page .publish{color:var(--soft)}
-body.page .publish .icon{width:22px;height:22px;padding:4px;border-radius:9px;background:var(--fg);color:var(--bg);box-shadow:0 4px 12px -6px #000}
-body.page .publish:hover{color:var(--fg)}
-.main{margin-left:76px;min-height:100vh;background:radial-gradient(80% 36% at 50% -8%,#18140c 0%,transparent 70%)}
-.content{max-width:112rem;padding:24px 28px 96px}
-.grid{display:grid;gap:20px;grid-template-columns:repeat(2,minmax(0,1fr))}
-@media(min-width:48rem){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(min-width:78rem){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-@media(min-width:104rem){.grid{grid-template-columns:repeat(5,minmax(0,1fr))}}
-@media(min-width:130rem){.grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
-body.page a.tile{display:flex;flex-direction:column;min-width:0;padding:6px;border-radius:16px;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 #ffffff0c;outline-offset:4px;transition:transform .3s cubic-bezier(.2,.7,.2,1),background .3s,box-shadow .3s}
-body.page a.tile:hover{transform:translateY(-3px);background:var(--card2);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff14,0 24px 48px -24px #000,0 8px 18px -10px #000c}
-.shot{position:relative;overflow:hidden;aspect-ratio:4/3;border-radius:11px;background:#0e0e10;box-shadow:inset 0 0 0 1px #ffffff0a}
-.cover{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover;transition:transform .7s cubic-bezier(.2,.7,.2,1)}
-body.page a.tile:hover img.cover{transform:scale(1.04)}
-.cover.word{background:repeating-linear-gradient(0deg,hsl(var(--h) 30% 65% / .055) 0 1px,transparent 1px 22px),repeating-linear-gradient(90deg,hsl(var(--h) 30% 65% / .055) 0 1px,transparent 1px 22px),radial-gradient(90% 85% at 12% 0%,hsl(var(--h) 42% 36%),transparent 66%),linear-gradient(160deg,hsl(var(--h) 26% 19%),hsl(var(--h) 22% 9%))}
-.cover.word b{position:absolute;left:14px;bottom:6px;font-size:58px;line-height:1.1;font-weight:700;letter-spacing:-.04em;color:hsl(var(--h) 45% 90% / .9);text-shadow:0 2px 24px hsl(var(--h) 50% 15% / .7)}
-.cover.word i{position:absolute;top:13px;right:12px;font:10px/1 var(--mono);font-style:normal;letter-spacing:.06em;color:hsl(var(--h) 30% 85% / .42)}
-.tag,.verb{position:absolute;z-index:1;display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:999px;font-family:var(--mono);font-size:11px;letter-spacing:.03em;color:var(--fg);background:#0b0b0dbf;box-shadow:inset 0 0 0 1px #ffffff1f;-webkit-backdrop-filter:blur(10px) saturate(1.2);backdrop-filter:blur(10px) saturate(1.2)}
-.tag{top:10px;left:10px;color:var(--accent)}
-.tag::before{content:"";width:6px;height:6px;margin-right:6px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}
-.tag.ad{color:var(--soft)}
-.tag.ad::before{display:none}
-.verb{right:10px;bottom:10px;opacity:0;transform:translateY(4px);transition:opacity .2s,transform .2s}
-.verb u{text-decoration:none;margin-left:5px;color:var(--accent)}
-body.page a.tile:hover .verb,body.page a.tile:focus-visible .verb{opacity:1;transform:none}
-@media(hover:none){.verb{opacity:1;transform:none}}
-.tile-body{display:flex;flex-direction:column;gap:4px;padding:12px 8px 8px}
-.tile-body h2{margin:0;font-size:15px;line-height:1.4;font-weight:600;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.tile .summary{margin:0;min-height:1.5em;font-size:13px;line-height:1.5;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.seek-k{color:var(--soft);font-weight:500;margin-right:2px}
-.tile .meta{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:10px 0 0;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--dim);text-align:left}
-.who{display:inline-flex;align-items:center;gap:7px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--soft)}
-.face{width:18px;height:18px;flex:0 0 auto;border-radius:50%;background:var(--card2);object-fit:cover;box-shadow:0 0 0 1px var(--line)}
-.fact{display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;font-family:var(--mono);font-size:11.5px;font-variant-numeric:tabular-nums;color:var(--dim)}
-.fact i{position:relative;width:28px;height:3px;border-radius:2px;background:#ffffff14;overflow:hidden}
-.fact i::after{content:"";position:absolute;inset:0;width:var(--p);border-radius:2px;background:var(--accent)}
-.empty-plaza{max-width:32rem;padding:12px 0}
-.empty-plaza .lead,.drawer .lead{margin-top:10px;color:var(--dim)}
-.main>.drawer{max-width:34rem;margin:24px 28px 80px;padding:28px;border-radius:16px;background:var(--card);box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 #ffffff0c}
-.drawer h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.015em}
-.drawer .summary{margin:12px 0 0;color:var(--soft)}
-.drawer form.row{display:flex;gap:8px;margin:18px 0 0}
-.drawer form.row input{flex:1;min-width:0;min-height:44px}
-.drawer form.row button,.drawer>form button{display:inline-flex;align-items:center;justify-content:center;width:auto;min-height:44px;margin:0;padding:0 16px;border-radius:10px;background:var(--accent);color:var(--accent-ink);font-size:.95rem;font-weight:650}
-body.page .mine button,body.page .pushed button,body.page .ghost{display:inline-flex;align-items:center;width:auto;min-height:32px;margin:0;padding:0 12px;border:1px solid var(--line2);border-radius:999px;background:none;color:var(--dim);font-size:.8rem;font-weight:500}
-body.page .mine button:hover,body.page .pushed button:hover,body.page .ghost:hover{color:var(--fg);border-color:#ffffff40}
-.drawer footer{margin-top:28px;font-size:.85rem;color:var(--dim)}
-body.page .more>.ghost{justify-self:start}
-.overlay{display:none;position:fixed;inset:0;z-index:40;align-items:center;justify-content:center;padding:24px}
-.overlay:target{display:flex}
-.overlay-back{position:absolute;inset:0;background:#000000b3;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.sheet{position:relative;z-index:1;width:min(32rem,100%);max-height:calc(100dvh - 48px);overflow:auto;padding:24px 24px 22px;border-radius:18px;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff12,0 40px 100px -30px #000}
-.dialog-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
-.dialog-head h2{margin:0;font-size:20px;line-height:1.3;font-weight:650;letter-spacing:-.02em}
-.close{flex:0 0 auto;display:grid;place-items:center;width:32px;height:32px;border-radius:9px;color:var(--dim);box-shadow:inset 0 0 0 1px var(--line);transition:color .15s,background .15s}
-.close .icon{width:14px;height:14px;stroke-width:1.8}
-.close:hover{color:var(--fg);background:#ffffff0a}
-.pub-box{margin:20px 0 0;border-radius:12px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
-.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;margin:0;border-bottom:1px solid var(--line)}
-.tabs input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
-.tabs label{display:flex;align-items:center;justify-content:center;min-height:40px;margin:0 0 -1px;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--dim);cursor:pointer;text-align:center;transition:color .15s,border-color .15s}
-.tabs label:hover{color:var(--fg)}
-.pub-box:has(#tab-static:checked) label[for=tab-static],.pub-box:has(#tab-local:checked) label[for=tab-local],.pub-box:has(#tab-backend:checked) label[for=tab-backend]{color:var(--fg);border-bottom-color:var(--accent)}
-.tabs input:focus-visible+label{outline:2px solid var(--accent);outline-offset:1px}
-.codebox{display:none;align-items:flex-start;gap:10px;margin:0;padding:14px 16px;min-height:52px;border-radius:0;background:transparent;box-shadow:none}
-.pub-box:has(#tab-static:checked) #panel-static,.pub-box:has(#tab-local:checked) #panel-local,.pub-box:has(#tab-backend:checked) #panel-backend{display:flex}
-.codebox b{flex:0 0 auto;font:12.5px/1.8 var(--mono);font-weight:400;color:var(--accent)}
-.codebox code{display:block;padding:0;border:0;background:none;font:12.5px/1.8 var(--mono);color:var(--soft);white-space:pre-wrap;overflow-wrap:anywhere}
-.dialog-foot{margin:16px 0 0;font-size:13px;line-height:1.7;color:var(--dim)}
-body.page .dialog-foot a{color:var(--fg);text-decoration:underline;text-decoration-color:#ffffff3a;text-underline-offset:3px}
-@media(max-width:47.99rem){.sidebar{position:static;width:auto;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:8px;padding:10px 12px;border-right:0;border-bottom:1px solid var(--line)}.mark{width:32px;height:32px;border-radius:9px}.mark-svg{width:15px;height:15px}.wordmark{position:static;width:auto;height:auto;clip:auto;font-size:17px}.nav{flex-direction:row;gap:4px;width:auto;margin:0 0 0 auto}.nav-item{flex-direction:row;gap:6px;width:auto;min-height:36px;padding:0 12px 0 10px;border-radius:999px;font-size:13px;letter-spacing:0}.nav-item .icon{width:16px;height:16px}.nav-item.active{background:#ffffff0d;box-shadow:inset 0 0 0 1px var(--line)}.nav-dot{display:none}.sidebar-bottom{width:auto;margin:0}body.page .publish{flex-direction:row;gap:6px;min-height:36px;padding:0 12px 0 8px;border-radius:999px;font-size:13px}body.page .publish .icon{width:20px;height:20px;padding:3px;border-radius:7px}.main{margin:0;background:none}.content{padding:14px 14px 72px}.grid{gap:12px}body.page a.tile{padding:5px;border-radius:14px}.shot{border-radius:10px}.tile-body{padding:10px 6px 6px}.tile-body h2{font-size:14px}.tile .summary{font-size:12.5px}.tile .meta{margin-top:8px;padding-top:8px}.cover.word b{font-size:46px}.cover.word i{display:none}.main>.drawer{margin:14px;padding:22px 18px 24px}.overlay{align-items:flex-end;padding:0}.sheet{width:100%;max-height:90dvh;padding:22px 20px calc(24px + env(safe-area-inset-bottom));border-radius:18px 18px 0 0}.dialog-head h2{font-size:20px}}
-"#;
 
 #[cfg(test)]
 mod tests {
@@ -631,7 +494,9 @@ mod tests {
         assert!(!html.contains("<span class=\"mark\" aria-hidden=\"true\">p"));
         assert!(!html.contains("class=\"steps\""));
         assert!(!html.contains("--seek"));
-        assert!(html.contains("class=\"dialog-foot\""));
+        assert!(!html.contains("class=\"dialog-foot\""));
+        assert!(html.contains("<details class=\"tip\"><summary"));
+        assert!(html.contains("Releases</a> 下载"));
         assert!(html.contains("for=\"tab-static\">导出目录</label>"));
         assert!(html.contains("playtest ./dist --public -m"));
         assert!(!html.contains("href=\"#about-dialog\""));
@@ -856,32 +721,6 @@ mod tests {
         assert!(html.contains("--public"));
         assert!(!html.contains("来玩点，还没定稿的"));
         assert!(html.contains(DEVELOPER_API_URL));
-    }
-
-    #[test]
-    fn remaining_reads_like_a_person() {
-        let now = datetime!(2026-09-08 04:00:00 UTC);
-        assert_eq!(
-            remaining(datetime!(2026-09-08 04:30:00 UTC), now),
-            "还剩 30 分钟"
-        );
-        assert_eq!(
-            remaining(datetime!(2026-09-08 09:59:00 UTC), now),
-            "还剩 5 小时"
-        );
-        assert_eq!(
-            remaining(datetime!(2026-09-08 03:00:00 UTC), now),
-            "即将下线"
-        );
-    }
-
-    #[test]
-    fn ago_reads_like_a_person() {
-        let now = datetime!(2026-09-08 04:00:00 UTC);
-        assert_eq!(ago(datetime!(2026-09-08 03:59:30 UTC), now), "刚刚发布");
-        assert_eq!(ago(datetime!(2026-09-08 03:20:00 UTC), now), "40 分钟前");
-        assert_eq!(ago(datetime!(2026-09-08 03:00:00 UTC), now), "1 小时前");
-        assert_eq!(ago(datetime!(2026-09-06 04:00:00 UTC), now), "2 天前");
     }
 
     #[tokio::test]

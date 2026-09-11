@@ -28,6 +28,10 @@ pub mod routes {
     pub const ME_VIEW: &str = "/v1/me/view";
     /// `POST` [`super::UnfollowRequest`] → 200 [`super::MeView`]：在「我的」里取消一项
     pub const ME_UNFOLLOW: &str = "/v1/me/unfollow";
+    /// `POST` [`super::MeRequest`] → 200 [`super::MeView`]：关掉这台设备的浏览器通知。
+    /// 只清推送订阅，不动关注——邮箱还在的话，通知改走邮箱；只有推送这一个身份的人，
+    /// 关掉之后就什么都收不到了，页面上要把这句说出来。
+    pub const ME_PUSH_OFF: &str = "/v1/me/push-off";
     /// `POST` [`super::SendLinkRequest`] → 200 [`super::FollowResponse`]：给自己的邮箱再发一条能落到「我的」的链接（换设备用）
     pub const ME_SEND_LINK: &str = "/v1/me/send-link";
 }

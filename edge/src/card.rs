@@ -21,10 +21,11 @@ use base64::Engine as _;
 use bytes::Bytes;
 use playtest_common::live::SiteLive;
 use playtest_common::manifest::Manifest;
+use playtest_common::wording::invite_verb;
+
+use crate::when;
 use playtest_common::{card_qr_url, CARD_HEIGHT, CARD_WIDE_HEIGHT, CARD_WIDE_WIDTH, CARD_WIDTH};
 use qrcode::{Color as QrColor, QrCode};
-use time::format_description::well_known::Rfc3339;
-use time::{OffsetDateTime, UtcOffset};
 
 use crate::html::{esc, hue};
 
@@ -35,9 +36,6 @@ pub const MAX_AGE: u64 = 300;
 /// 内存里最多存几张渲染好的 PNG。一张竖版约 200–600 KB，256 张是百兆量级的上限；
 /// 满了整个清掉而不是逐个淘汰——淘汰算法要维护顺序，而这里重渲一次只是几十毫秒。
 const CACHE_CAP: usize = 256;
-
-/// 卡上的时间按这个时区显示。边缘在香港、玩家多数也在这个时区（和门禁页同一个选择）。
-const OFFSET_HOURS: i8 = 8;
 
 // 一套记号和门禁页、广场共用（`html.rs` 的 CSS）：同一张封面、同一句话、同一个版本号。
 const BG: &str = "#0a0b0e";
@@ -350,12 +348,7 @@ font-weight=\"700\" fill=\"#ffffff\" fill-opacity=\"0.13\">{mark}</text>\n",
     }
 
     fn verb(&self) -> &'static str {
-        // 用 AI 写小东西的人做的多数不是游戏，对着一个数据看板说「邀请你试玩」是把话说错了。
-        if self.manifest.is_game() {
-            "邀请你试玩"
-        } else {
-            "邀请你体验"
-        }
+        invite_verb(self.manifest.is_game())
     }
 
     fn title(&self) -> String {
@@ -385,19 +378,14 @@ font-weight=\"700\" fill=\"#ffffff\" fill-opacity=\"0.13\">{mark}</text>\n",
 
     /// `v7 · 9 月 9 日`；匿名链接换成到期时间——那才是拿到这张卡的人需要知道的事。
     fn stamp(&self) -> String {
-        if let Some(until) = self
-            .manifest
-            .expires_at
-            .as_deref()
-            .and_then(|raw| readable(raw, true))
-        {
+        if let Some(until) = self.manifest.expires_at.as_deref().and_then(when::day_time) {
             return format!("这张邀请到 {until}");
         }
         let version = match self.version_label {
             Some(label) => label.to_string(),
             None => format!("v{}", self.manifest.version),
         };
-        match readable(&self.manifest.created_at, false) {
+        match when::day(&self.manifest.created_at) {
             Some(day) => format!("{version} · {day}"),
             None => version,
         }
@@ -547,23 +535,6 @@ fn hsl_hex(h: u32, s: f32, l: f32) -> String {
 /// 这是不做真正排版的前提下最省事又不会差太多的近似。
 fn cells(width: f32, font_size: f32) -> usize {
     (width / (font_size * 0.5)).floor().max(1.0) as usize
-}
-
-/// RFC 3339 → 「9 月 9 日」，或带上时刻的「9 月 10 日 20:59」（到期时间用）。
-fn readable(raw: &str, with_time: bool) -> Option<String> {
-    let at = OffsetDateTime::parse(raw, &Rfc3339).ok()?;
-    let local = at.to_offset(UtcOffset::from_hms(OFFSET_HOURS, 0, 0).ok()?);
-    Some(if with_time {
-        format!(
-            "{} 月 {} 日 {:02}:{:02}",
-            local.month() as u8,
-            local.day(),
-            local.hour(),
-            local.minute()
-        )
-    } else {
-        format!("{} 月 {} 日", local.month() as u8, local.day())
-    })
 }
 
 // ------------------------------------------------------------------ 折行

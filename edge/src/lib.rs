@@ -44,6 +44,7 @@ pub mod ship;
 pub mod sites;
 pub mod tunnel;
 pub mod upstream;
+pub mod when;
 
 pub use app::{router, App};
 pub use config::Config;

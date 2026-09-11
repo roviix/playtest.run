@@ -90,13 +90,6 @@ pub fn over_quota() -> String {
     shell("这一小时的流量用完了", "", body)
 }
 
-/// 第二周才实现的分支落在这里。v0.1 走不到，写出来是为了不让它悄悄变成 500。
-pub fn not_implemented() -> String {
-    let body = "<h1>这条链接现在打不开</h1>\n\
-<p class=\"lead\">这种连接方式边缘还没实现。找发链接给你的人确认一下。</p>\n";
-    shell("暂时打不开", "", body)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,7 +105,6 @@ mod tests {
             report_form(),
             report_done(),
             over_quota(),
-            not_implemented(),
         ] {
             assert!(
                 !page.contains(playtest_common::DEVELOPER_HOST),

@@ -37,6 +37,7 @@ pub mod results;
 pub mod slug;
 pub mod store;
 pub mod tunnel;
+pub mod wording;
 
 /// 开发者这一侧的域名：控制面、控制台、登录、文档都在这里（DESIGN §4.1，AGENTS 第 7 条）。
 /// 玩家路径上唯一允许出现它的地方是根域介绍页的「开发者从这里开始」。

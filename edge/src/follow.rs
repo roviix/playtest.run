@@ -178,6 +178,14 @@ pub async fn unfollow(api_base: Option<&str>, me_token: &str, target: FollowTarg
     into_mine(post(api_base, routes::ME_UNFOLLOW, &request).await)
 }
 
+/// 关掉这台设备的浏览器通知。关注不动。
+pub async fn push_off(api_base: Option<&str>, me_token: &str) -> Mine {
+    let request = MeRequest {
+        me_token: me_token.to_string(),
+    };
+    into_mine(post(api_base, routes::ME_PUSH_OFF, &request).await)
+}
+
 fn into_mine(call: Call<MeView>) -> Mine {
     match call {
         Call::Ok(view) => Mine::View(view),

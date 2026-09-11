@@ -70,6 +70,7 @@ pub fn app(state: AppState) -> Router {
         .route(follow_paths::UNSUBSCRIBE, post(follow::unsubscribe))
         .route(follow_paths::ME_VIEW, post(follow::me_view))
         .route(follow_paths::ME_UNFOLLOW, post(follow::unfollow))
+        .route(follow_paths::ME_PUSH_OFF, post(follow::push_off))
         .route(follow_paths::ME_SEND_LINK, post(follow::send_link))
         // 玩家的浏览器直连这三个：不带令牌，只认 Origin 和令牌桶（见 events.rs）。
         .route(

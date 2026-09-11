@@ -246,6 +246,19 @@ pub async fn unfollow(
     Ok(Json(view))
 }
 
+/// `POST /v1/me/push-off`：关掉这台设备的浏览器通知。只清推送订阅，关注留着。
+pub async fn push_off(
+    State(state): State<AppState>,
+    JsonBody(request): JsonBody<MeRequest>,
+) -> ApiResult<Json<MeView>> {
+    let conn = state.db().lock().await;
+    let mut player = player_by_me_token(&conn, &request.me_token)?;
+    db::clear_player_push(&conn, &player.id)?;
+    player.push_subscription = None;
+    player.push_endpoint = None;
+    Ok(Json(view_of(&state, &conn, &player)?))
+}
+
 /// `POST /v1/me/send-link`：换了设备，把能打开「我的」的链接寄给自己。
 ///
 /// 不管这个邮箱在不在库里，回的都是同一句话——否则这个端点就成了一台

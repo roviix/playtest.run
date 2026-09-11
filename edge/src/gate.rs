@@ -14,18 +14,14 @@ use playtest_common::manifest::{GateMode, Manifest};
 use playtest_common::{
     CARD_WIDE_HEIGHT, CARD_WIDE_PATH, CARD_WIDE_WIDTH, RESERVED_PATH_PREFIX, SHARE_PATH,
 };
-use time::format_description::well_known::Rfc3339;
-use time::{OffsetDateTime, UtcOffset};
 
 use crate::follow;
 use crate::html::{esc, shell_hero};
+use crate::when;
+use playtest_common::wording::invite_verb;
 
 /// 封面在作品自己的域上的路径（DESIGN §3.3）。
 pub const COVER_PATH: &str = "/_playtest/cover";
-
-/// 没有 JS 时到期时间按这个时区显示。边缘在香港、玩家多数也在这个时区；
-/// 括号里把时区写出来，读的人不用猜。有 JS 的话下面那段会换成浏览器本地时间。
-const FALLBACK_OFFSET_HOURS: i8 = 8;
 
 /// 要不要拦这一次请求。三条硬线里的两条在这里（DESIGN §3.3）：
 ///
@@ -183,7 +179,7 @@ impl GatePage<'_> {
             Some(label) => esc(label),
             None => format!("v{}", m.version),
         };
-        let invite = invite_verb(m);
+        let invite = invite_verb(m.is_game());
         let summary = m
             .summary
             .as_deref()
@@ -245,7 +241,7 @@ impl GatePage<'_> {
         // 用等宽小字排，和邀请卡票根上那一行是同一句。
         let mut stamp = version.clone();
         if self.version_label.is_none() {
-            if let Some(day) = readable_day(&m.created_at) {
+            if let Some(day) = when::day(&m.created_at) {
                 stamp.push_str(&format!(" · {}", esc(&day)));
             }
         }
@@ -265,7 +261,7 @@ impl GatePage<'_> {
         };
 
         // 那段脚本只为把到期时间换成访客本地时区的写法，没有到期时间就不发。
-        let expires = match m.expires_at.as_deref().and_then(readable_deadline) {
+        let expires = match m.expires_at.as_deref().and_then(when::deadline) {
             Some((machine, human)) => format!(
                 "<p class=\"meta\">这个链接在 <time datetime=\"{}\">{}</time> 后失效</p>\n{LOCAL_TIME_SCRIPT}",
                 esc(&machine),
@@ -467,23 +463,6 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
     }
 }
 
-/// 「试玩」还是「体验」（DESIGN §3.3）。用 AI 写小东西的人做的多数不是游戏——
-/// 抽样里工具、微型 SaaS、生成器占近八成——对着一个数据看板说「邀请你试玩」是把话说错了。
-fn invite_verb(manifest: &Manifest) -> &'static str {
-    if manifest.is_game() {
-        "邀请你试玩"
-    } else {
-        "邀请你体验"
-    }
-}
-
-/// 「9 月 9 日」。版本那一行上的日期，和邀请卡票根上是同一种写法。
-fn readable_day(raw: &str) -> Option<String> {
-    let at = OffsetDateTime::parse(raw, &Rfc3339).ok()?;
-    let local = at.to_offset(UtcOffset::from_hms(FALLBACK_OFFSET_HOURS, 0, 0).ok()?);
-    Some(format!("{} 月 {} 日", local.month() as u8, local.day()))
-}
-
 /// 玩家自愿留的名字（DESIGN §3.3 第 5 条）。服务端这一道做三件事：去掉控制字符
 /// （它们会把点名册那一行拆断）、trim、按字符数截断。**脏词表在控制面**（§4.8），
 /// 边缘不判断内容——它不认识作品的语境，也不该替开发者做这个决定。
@@ -505,23 +484,6 @@ pub fn known_source(raw: Option<&str>) -> Option<&'static str> {
         Some(playtest_common::FROM_NOTICE) => Some(playtest_common::FROM_NOTICE),
         _ => None,
     }
-}
-
-/// 把 UTC 的到期时间换成人能读的。第一个值给 `<time datetime>`，
-/// 第二个是没有 JS 时直接显示的那串。
-fn readable_deadline(raw: &str) -> Option<(String, String)> {
-    let at = OffsetDateTime::parse(raw, &Rfc3339).ok()?;
-    let offset = UtcOffset::from_hms(FALLBACK_OFFSET_HOURS, 0, 0).ok()?;
-    let local = at.to_offset(offset);
-    let human = format!(
-        "{}月{}日 {:02}:{:02}（UTC+{}）",
-        local.month() as u8,
-        local.day(),
-        local.hour(),
-        local.minute(),
-        FALLBACK_OFFSET_HOURS,
-    );
-    Some((at.format(&Rfc3339).ok()?, human))
 }
 
 /// 内联、可有可无：把上面那个绝对时间换成访客自己时区的写法。
@@ -1026,7 +988,7 @@ mod tests {
         m.expires_at = Some("2026-09-08T04:30:00Z".into());
         let html = page(&m, false).render();
         assert!(html.contains("这个链接在 <time datetime=\"2026-09-08T04:30:00Z\">"));
-        assert!(html.contains("9月8日 12:30（UTC+8）"));
+        assert!(html.contains("9 月 8 日 12:30（UTC+8）"));
         assert!(html.contains("后失效"));
 
         // 解析不了就整行不出，不显示一串机器码给玩家看。
