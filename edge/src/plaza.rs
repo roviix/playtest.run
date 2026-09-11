@@ -345,9 +345,9 @@ fn publish_sheet() -> String {
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-backend\">\n\
 <label for=\"tab-backend\">带后端</label>\n\
 </div>\n\
-<div class=\"codebox\" id=\"panel-static\"><b>$</b><code>playtest ./dist --public --seek \"想让人看什么\"</code></div>\n\
-<div class=\"codebox\" id=\"panel-local\"><b>$</b><code>playtest 5173 --public --seek \"想让人看什么\"</code></div>\n\
-<div class=\"codebox\" id=\"panel-backend\"><b>$</b><code>playtest ./dist --backend 3000 --public --seek \"想让人看什么\"</code></div>\n\
+<div class=\"codebox\" id=\"panel-static\"><b>$</b><code>playtest ./dist --public -m \"想让人看什么\"</code></div>\n\
+<div class=\"codebox\" id=\"panel-local\"><b>$</b><code>playtest 5173</code></div>\n\
+<div class=\"codebox\" id=\"panel-backend\"><b>$</b><code>playtest ./dist --backend 3000 --public -m \"想让人看什么\"</code></div>\n\
 </li>\n\
 <li><span class=\"n\">3</span><h3>之后</h3>\
 <p>链接、二维码、邀请卡一起出来。谁来玩过，在 \

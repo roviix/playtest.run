@@ -109,8 +109,8 @@ function Start({ me }: { me: Me | null }) {
           <span>把本机端口开给别人</span>
         </li>
         <li>
-          <code>playtest ./dist --public --seek "想让人看什么"</code>
-          <span>放到广场上找人测</span>
+          <code>playtest ./dist --public --seats 10</code>
+          <span>放到广场上，找 10 位试玩</span>
         </li>
       </ol>
       {anonymous ? <p class="muted">现在是 24 小时匿名身份。用 GitHub 登录后作品不再到期。</p> : null}
