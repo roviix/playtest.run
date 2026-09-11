@@ -25,6 +25,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use tokio::sync::oneshot;
+
 use anyhow::{anyhow, Context, Result};
 use playtest_common::tunnel::{TunnelGrant, TunnelRequest};
 use tokio::sync::watch;
@@ -63,7 +65,26 @@ pub struct Backend {
 
 /// `playtest 5173`：整个作品都走隧道。
 pub async fn run(cli_args: &UploadArgs, port: u16) -> Result<()> {
-    run_with(cli_args, port, None).await
+    run_with(cli_args, port, None, None).await
+}
+
+/// 第一次连上时报出来的那几样。
+///
+/// 隧道是一条**一直跑着**的命令，可它的第一个结果（链接）在几秒内就有了。终端里这不成问题
+/// （边跑边打），但 MCP 那一侧要在工具调用里立刻回答一次，隧道本身留在后台继续跑——
+/// 所以「连上了」这件事要能被等到，而不是只能打印出来。
+#[derive(Debug, Clone)]
+pub struct Online {
+    pub slug: String,
+    pub url: String,
+    pub expires_at: Option<String>,
+}
+
+/// 把一个端口接出去，连上之后从 `ready` 报一次，然后一直跑到进程结束或被挤掉。
+///
+/// 给 MCP 用（`playtest_share`）：调用方拿到 [`Online`] 就可以回答用户，隧道在后台活着。
+pub async fn serve(cli_args: &UploadArgs, port: u16, ready: oneshot::Sender<Online>) -> Result<()> {
+    run_with(cli_args, port, None, Some(ready)).await
 }
 
 /// `playtest ./dist --backend 3000`：目录照常上传，再把目录里没有的路径接到本地端口。
@@ -88,11 +109,17 @@ pub async fn run_hybrid(cli_args: &UploadArgs, shown: &str, port: u16) -> Result
             title: report.title,
             port,
         }),
+        None,
     )
     .await
 }
 
-async fn run_with(cli_args: &UploadArgs, port: u16, backend: Option<Backend>) -> Result<()> {
+async fn run_with(
+    cli_args: &UploadArgs,
+    port: u16,
+    backend: Option<Backend>,
+    mut ready: Option<oneshot::Sender<Online>>,
+) -> Result<()> {
     let stop = Stop::install();
     let hybrid = backend.is_some();
     if !hybrid {
@@ -158,6 +185,14 @@ async fn run_with(cli_args: &UploadArgs, port: u16, backend: Option<Backend>) ->
                     &control.title,
                 )
                 .await;
+                // 连上了：等在工具调用那一侧的人现在可以拿到链接，隧道继续跑。
+                if let Some(tx) = ready.take() {
+                    let _ = tx.send(Online {
+                        slug: grant.slug.clone(),
+                        url: grant.url.clone(),
+                        expires_at: grant.site_expires_at.clone(),
+                    });
+                }
 
                 match session::serve(wire, port, &stop, Arc::clone(&tally)).await {
                     Ended::ByUser => break Ok(()),
@@ -239,8 +274,8 @@ async fn announce(
                 &grant.url,
                 title,
                 &grant.slug,
-                cli_args.card_out.as_deref(),
-                cli_args.no_card,
+                cli_args.card_path().flatten().as_deref(),
+                !cli_args.wants_card(),
             )
             .await,
         );
@@ -275,8 +310,8 @@ fn say_ignored(cli_args: &UploadArgs) {
     if cli_args.spa {
         ignored.push("--spa");
     }
-    if cli_args.no_isolated {
-        ignored.push("--no-isolated");
+    if cli_args.isolated != crate::args::Isolation::Auto {
+        ignored.push("--isolated");
     }
     if cli_args.summary.is_some() {
         ignored.push("--summary");
@@ -295,7 +330,7 @@ fn say_ignored(cli_args: &UploadArgs) {
     }
     // 广场上的卡片必须随时点得开，而隧道随你的电脑一起下线；所以广场只收上传的版本。
     // 名额是广场那一套里的（门禁页上写「还差几位」的前提是这个作品一直在），一起忽略。
-    if cli_args.public || cli_args.seek.is_some() || cli_args.seats.is_some() {
+    if cli_args.public || cli_args.seats.is_some() {
         ui::say("--public / --seek / --seats 先忽略了：广场只放上传的版本，隧道一关卡片就点不开。要上广场，用 playtest ./dist --public。");
     }
 }
@@ -372,7 +407,7 @@ impl<'a> Control<'a> {
         TunnelRequest {
             title: Some(self.title.clone()),
             gate: self.args.gate,
-            isolated: self.args.isolated,
+            isolated: self.args.isolated == crate::args::Isolation::On,
             hybrid: self.backend.is_some(),
         }
     }

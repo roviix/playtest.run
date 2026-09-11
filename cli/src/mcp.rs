@@ -8,6 +8,7 @@
 //!
 //! 工具的说明写英文加中文各一句：模型读英文，人在配置界面里读中文。
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::{Context, Result};
@@ -29,6 +30,9 @@ use crate::upload;
 #[derive(Debug, Clone)]
 pub struct Playtest {
     api: Option<String>,
+    /// 正在跑着的隧道。放在这里不是为了以后查它，是为了**不 drop 它**——
+    /// 落地之后没人持有这个 handle，tokio 会把任务收走，链接当场就断。
+    tunnels: Arc<tokio::sync::Mutex<Vec<tokio::task::JoinHandle<anyhow::Result<()>>>>>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -55,11 +59,7 @@ pub struct UploadParams {
     /// 上传后放到广场（playtest.run 首页）上，路过的人点开就能玩。默认不放。
     #[serde(default)]
     pub public: Option<bool>,
-    /// Mark it "looking for testers" on the plaza and tell them what to look at (≤140 chars); implies public.
-    /// 在广场上标「正在找人测」并告诉来的人重点看什么（最多 140 字）；蕴含 public。
-    #[serde(default)]
-    pub seek: Option<String>,
-    /// How many testers are wanted; shown on the gate page and the invite card. Implies looking-for-testers.
+    /// How many testers are wanted; marks it "looking for testers" on the plaza, shown on the gate page and the invite card. Implies public.
     /// 想找几位试玩者；门禁页和邀请卡上会写出来。蕴含「正在找人测」。
     #[serde(default)]
     pub seats: Option<u32>,
@@ -85,12 +85,18 @@ pub struct CardParams {
 pub struct PortParams {
     /// Local port the dev server listens on, e.g. 5173. 本地开发服务器的端口，例如 5173。
     pub port: u16,
+    /// Title players see before they start. 玩家开始前看到的作品名。
+    #[serde(default)]
+    pub name: Option<String>,
 }
 
 #[tool_router]
 impl Playtest {
     pub fn new(api: Option<String>) -> Self {
-        Self { api }
+        Self {
+            api,
+            tunnels: Arc::default(),
+        }
     }
 
     /// 上传目录（DESIGN §3.2 五个工具之一）。
@@ -113,10 +119,13 @@ impl Playtest {
             summary: params.summary,
             cover: params.cover.map(std::path::PathBuf::from),
             public: params.public.unwrap_or(false),
-            seek: params.seek,
             seats: params.seats,
             community: params.community,
-            isolated: params.isolated.unwrap_or(false),
+            isolated: match params.isolated {
+                Some(true) => crate::args::Isolation::On,
+                Some(false) => crate::args::Isolation::Off,
+                None => crate::args::Isolation::Auto,
+            },
             api: self.api.clone(),
             ..UploadArgs::default()
         };
@@ -186,7 +195,7 @@ impl Playtest {
         Parameters(params): Parameters<CardParams>,
     ) -> Result<CallToolResult, McpError> {
         let started = Instant::now();
-        let site = match crate::sites::look_up(&params.site, self.api.as_deref()).await {
+        let site = match crate::commands::look_up(&params.site, self.api.as_deref()).await {
             Ok(site) => site,
             Err(e) => return Ok(refuse(&e, started)),
         };
@@ -207,27 +216,80 @@ impl Playtest {
         Ok(answer_with_card(&answered, Some(png), &card_url))
     }
 
-    /// 分享端口。这条路还没上线，如实说（AGENTS 第 4 条）。
+    /// 把本地端口接出去。隧道留在这个进程里活着，所以工具本身立刻回答。
     #[tool(
-        description = "Share a locally running dev server through a tunnel. NOT AVAILABLE YET — \
-                       this call always fails; upload a built directory instead. \
-                       把本地开着的开发服务器接出去。这条路还没上线，调了一定失败，先用上传。"
+        description = "Share a locally running dev server (e.g. vite on 5173) through a tunnel and \
+                       get a public link. The tunnel stays up for as long as this MCP server runs; \
+                       the link stops working when it exits. Use this when the user has something \
+                       running but no built directory; use playtest_upload when they have a build. \
+                       把本地开着的开发服务器接出去，拿到一条公网链接和二维码。\
+                       隧道在这个 MCP server 活着的时候一直开着，退出就断。"
     )]
-    async fn playtest_share_port(
+    async fn playtest_share(
         &self,
         Parameters(params): Parameters<PortParams>,
     ) -> Result<CallToolResult, McpError> {
         let started = Instant::now();
         let port = params.port;
-        Ok(refuse(
-            &output::not_implemented(format!(
-                "隧道路径还没上线，接不了本地端口 {port}。\
-                 现在能做的是把构建好的目录发出去：先跑一次构建，再调 playtest_upload。"
-            )),
-            started,
-        ))
+        let args = UploadArgs {
+            target: Some(port.to_string()),
+            name: params.name.clone(),
+            api: self.api.clone(),
+            ..UploadArgs::default()
+        };
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        // 隧道要一直跑着，工具调用不能一直不返回：把它放进后台，等「连上了」那一声。
+        // handle 存在 server 状态里，不 detach——落地之后没人持有它，隧道会被 drop 掉。
+        let task = tokio::spawn(async move { crate::tunnel::serve(&args, port, tx).await });
+
+        let online = match tokio::time::timeout(SHARE_READY_TIMEOUT, rx).await {
+            Ok(Ok(online)) => online,
+            // 隧道自己先结束了（端口没人听、被挤掉、控制面拒绝）——它的错才是要说的那个。
+            Ok(Err(_)) => {
+                let said = match task.await {
+                    Ok(Err(e)) => e,
+                    Ok(Ok(())) => anyhow::anyhow!("隧道还没连上就结束了。"),
+                    Err(e) => anyhow::anyhow!("后台任务没跑起来：{e}"),
+                };
+                return Ok(refuse(&said, started));
+            }
+            Err(_) => {
+                task.abort();
+                return Ok(refuse(
+                    &output::bad_input(format!(
+                        "等了 {} 秒还没连上，先放弃了。确认 {port} 端口上有东西在监听，网络能出去。",
+                        SHARE_READY_TIMEOUT.as_secs()
+                    )),
+                    started,
+                ));
+            }
+        };
+
+        let card_url = playtest_common::card_url(&online.url);
+        // 拿不到卡不算失败：链接已经能用了，卡是锦上添花（`card::take` 同一条规矩）。
+        let png = card::fetch(&card_url).await.ok();
+        let answered = serde_json::json!({
+            "ok": true,
+            "action": "share",
+            "slug": online.slug,
+            "url": online.url,
+            "port": port,
+            "qr_text": crate::ui::qr_text(&online.url),
+            "card_url": card_url,
+            "expires_at": online.expires_at,
+            // 说清楚它什么时候会断——不然助手会把它当成一条永久链接转述出去。
+            "lasts": "while this MCP server is running",
+            "elapsed_ms": output::ms_since(started),
+        });
+        self.tunnels.lock().await.push(task);
+        Ok(answer_with_card(&answered, png, &card_url))
     }
 }
+
+/// 等隧道连上最多等这么久。超过多半是端口上没东西，或者网络出不去——
+/// 那两件事都该当场说，不该让对话卡在这里。
+const SHARE_READY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
 // `version` 只收字面量，所以这里抄了一份 `Cargo.toml` 的版本号。抄岔了，tests/mcp.rs 里那条
 // 握手测试会挂——它比对的是握手时真发出去的那个值。
@@ -322,5 +384,5 @@ fn print_setup(api: Option<&str>) {
     println!("{}", output::to_json_pretty(&config));
     eprintln!();
     eprintln!("装好之后在对话里说「把 ./dist 发出去」，助手会调 playtest_upload，把链接、二维码和邀请卡贴回来。");
-    eprintln!("一共五件事：分享端口（还没上线）、上传目录、列出作品、看这一版的结果、拿邀请卡。");
+    eprintln!("一共五件事：上传目录、接出本地端口、列出作品、看一个作品此刻怎么样、拿邀请卡。");
 }

@@ -7,12 +7,12 @@
 import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
-import { api, coverUrl, type FeedbackItem, type Site, type SiteResults, type VersionResults } from "../api";
-import { hue } from "../hue";
+import { api, type FeedbackItem, type Site, type SiteResults, type VersionResults } from "../api";
 import { useLoad } from "../load";
 import { href, type Tab } from "../router";
 import { ago, left, moment } from "../words";
 import { CardTab } from "./card";
+import { Cover } from "./cover";
 import { FeedbackTab } from "./feedback";
 import { ResultsTab } from "./results";
 import { RosterTab } from "./roster";
@@ -115,10 +115,6 @@ function TabLink({
 function Identity({ site }: { site: Site }) {
   const [copied, setCopied] = useState<string | null>(null);
   const listing = site.listing;
-  const cover =
-    listing?.has_cover && site.current_version !== undefined
-      ? coverUrl(site.url, site.current_version)
-      : null;
 
   async function copy() {
     try {
@@ -145,15 +141,7 @@ function Identity({ site }: { site: Site }) {
 
   return (
     <header class="identity">
-      <div class="shot small" style={`--h:${hue(site.slug)}`}>
-        {cover ? (
-          <img class="cover" src={cover} alt="" />
-        ) : (
-          <div class="cover word">
-            <span>{site.title}</span>
-          </div>
-        )}
-      </div>
+      <Cover site={site} small />
       <div class="identity-body">
         <h1>{site.title}</h1>
         <p class="link-row">

@@ -116,35 +116,41 @@ pub fn wrap(title: &str, head: &str, here: Here, main: &str) -> String {
     )
 }
 
-/// 左边那条栏：字标、两间房、栏底几行字。手机上收成顶上一条（样式里做）。
+/// 左边那条窄栏：标记、两间房、栏底一个「发布」（DESIGN §3.9）。手机上收成顶上一条（样式里做）。
 ///
-/// 栏上只有字，没有图标——图标是后台的记号，这里是一面墙。
-/// 发布只走栏底那几行。说明里那条控制台链接，才是去开发者域的那一扇门。
+/// 每一项是一个图标加一个两字标签。图标是画在页面里的几笔线（`icon`），不引图标字体；
+/// 「发布」打开的是本页的命令说明，不是一间房——上传在终端里，登录在另一张域上。
 fn rail(here: Here) -> String {
     let plaza = match here {
-        Here::Plaza => {
-            "<a class=\"nav-item active\" href=\"/\" aria-current=\"page\">广场<span class=\"nav-dot\"></span></a>"
-        }
-        Here::Mine => "<a class=\"nav-item\" href=\"/\">广场</a>",
+        Here::Plaza => format!(
+            "<a class=\"nav-item active\" href=\"/\" aria-current=\"page\">{}广场<span class=\"nav-dot\"></span></a>",
+            icon("grid")
+        ),
+        Here::Mine => format!("<a class=\"nav-item\" href=\"/\">{}广场</a>", icon("grid")),
     };
     let mine = match here {
-        Here::Plaza => format!("<a class=\"nav-item\" href=\"{}\">我的</a>", root_paths::ME),
+        Here::Plaza => format!(
+            "<a class=\"nav-item\" href=\"{}\">{}我的</a>",
+            root_paths::ME,
+            icon("me")
+        ),
         Here::Mine => format!(
-            "<a class=\"nav-item active\" href=\"{}\" aria-current=\"page\">我的<span class=\"nav-dot\"></span></a>",
-            root_paths::ME
+            "<a class=\"nav-item active\" href=\"{}\" aria-current=\"page\">{}我的<span class=\"nav-dot\"></span></a>",
+            root_paths::ME,
+            icon("me")
         ),
     };
     format!(
         "<aside class=\"sidebar\">\n\
 <a class=\"brand\" href=\"/\" aria-label=\"playtest.run 首页\">\
+<span class=\"mark\" aria-hidden=\"true\">p<i></i></span>\
 <span class=\"wordmark\">playtest<span>.run</span></span></a>\n\
 <nav class=\"nav\" aria-label=\"页面\">{plaza}{mine}</nav>\n\
 <div class=\"sidebar-bottom\">\n\
-<div class=\"publish-note\"><h3>不必等到「做完」。</h3>\
-<p>把手上能玩的版本发出来，让真实的玩家试试看。</p>\
-<a href=\"#publish-dialog\">从一条命令开始<u>\u{2197}</u></a></div>\n\
+<a class=\"nav-item publish\" href=\"#publish-dialog\">{plus}发布</a>\n\
 </div>\n\
-</aside>\n"
+</aside>\n",
+        plus = icon("plus"),
     )
 }
 
@@ -324,10 +330,14 @@ fn publish_sheet() -> String {
         "<div id=\"publish-dialog\" class=\"overlay\">\n\
 <a class=\"overlay-back\" href=\"#\" aria-label=\"关闭\"></a>\n\
 <div class=\"sheet\" role=\"dialog\" aria-labelledby=\"publish-title\">\n\
-<div class=\"dialog-head\"><h2 id=\"publish-title\">把这个版本，放到别人面前。</h2>\
+<div class=\"dialog-head\"><div><p class=\"eyebrow\">从一条命令开始</p>\
+<h2 id=\"publish-title\">把这个版本，放到别人面前。</h2></div>\
 <a class=\"close\" href=\"#\" aria-label=\"关闭\">{close}</a></div>\n\
-<p class=\"dialog-desc\">安装 CLI 后，在终端运行一条命令。加上你想测的内容，让路过的人知道怎么帮你。</p>\n\
-<div class=\"pub-box\">\n\
+<p class=\"dialog-desc\">不必等到「做完」。把手上能玩的版本发出来，让真实的玩家试试看——三步，都在终端里。</p>\n\
+<ol class=\"steps\">\n\
+<li><span class=\"n\">1</span><div class=\"step\"><h3>装好 playtest</h3>\
+<p>从 <a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">Releases</a> 下载单文件，放进 PATH。macOS、Linux、Windows 都有。</p></div></li>\n\
+<li><span class=\"n\">2</span><div class=\"step pub-box\"><h3>在作品目录里跑一条</h3>\
 <div class=\"tabs\" role=\"tablist\" aria-label=\"发布方式\">\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-static\" checked>\n\
 <label for=\"tab-static\">导出目录</label>\n\
@@ -339,15 +349,21 @@ fn publish_sheet() -> String {
 <div class=\"codebox\" id=\"panel-static\"><b>$</b><code>playtest ./dist --public --seek \"想请你试试，第一次玩顺不顺畅\"</code></div>\n\
 <div class=\"codebox\" id=\"panel-local\"><b>$</b><code>playtest 5173 --public --seek \"帮我看看，本地这个版本跑得怎么样\"</code></div>\n\
 <div class=\"codebox\" id=\"panel-backend\"><b>$</b><code>playtest ./dist --backend 3000 --public --seek \"想测一下联机是否顺畅\"</code></div>\n\
-</div>\n\
-<p class=\"copy-hint\">公开展示由你决定，也可以随时 unlist。选中命令即可复制。</p>\n\
-<p class=\"dialog-hint\">发布后，前往 <a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">开发者控制台</a> 查看加载、报错与玩家反馈。</p>\n\
+<p class=\"copy-hint\"><code>--public</code> 放到广场上，<code>--seek</code> 是你想让路过的人看什么。选中命令即可复制。</p></div></li>\n\
+<li><span class=\"n\">3</span><div class=\"step\"><h3>发出去之后</h3>\
+<p>链接、二维码和邀请卡一起出来。谁打开了、玩到哪、说了什么，在 \
+<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">开发者控制台</a> 里看得见。公开展示由你决定，随时 unlist。</p></div></li>\n\
+</ol>\n\
 </div>\n\
 </div>\n",
         close = icon("close"),
+        releases = RELEASES_URL,
         dev = DEVELOPER_API_URL,
     )
 }
+
+/// CLI 的下载处。它不是开发者域（AGENTS 第 7 条管的是登录、令牌、控制台），是公开的发布页。
+const RELEASES_URL: &str = "https://github.com/roviix/playtest.run/releases";
 
 /// 「还剩 5 小时」。到期时间是匿名作品才有的，广场页缓存 30 秒，误差一分钟以内。
 fn remaining(expires: OffsetDateTime, now: OffsetDateTime) -> String {
@@ -376,12 +392,21 @@ fn ago(updated: OffsetDateTime, now: OffsetDateTime) -> String {
     }
 }
 
-/// 发布说明右上角那个 ×。画在页面里，不靠外部字体、也不靠 `<use href>`
-/// （CSP `default-src 'none'` 会把同页 fragment 的引用挡掉）。整页只有这一个图标。
+/// 页面上的几个图标，画在页面里：不靠外部字体、也不靠 `<use href>`
+/// （CSP `default-src 'none'` 会把同页 fragment 的引用挡掉）。都是 24 格里的几笔线。
 fn icon(name: &str) -> &'static str {
     match name {
         "close" => {
             r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg>"#
+        }
+        "grid" => {
+            r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>"#
+        }
+        "me" => {
+            r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h12a1 1 0 0 1 1 1V20l-7-4-7 4V5.5a1 1 0 0 1 1-1Z"/></svg>"#
+        }
+        "plus" => {
+            r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>"#
         }
         _ => "",
     }
@@ -389,7 +414,7 @@ fn icon(name: &str) -> &'static str {
 
 /// 广场自己的那段样式，接在共用样式后面。
 ///
-/// 版式（DESIGN §3.9）：桌面上左边一条栏贴着屏幕不动，右边一面网格。
+/// 版式（DESIGN §3.9）：桌面上左边一条 76px 的窄栏贴着屏幕不动，右边一面网格。
 /// 三级面：墙、栏、卡，各差一两档，靠发丝线和上沿一道高光分层。卡是一件物件：
 /// 一块面、一圈发丝线、嵌在里面的 4:3 插画窗、窗下的字、底下一条发丝线分出「谁 · 一件事实」。
 /// 颜色只有共用样式里那一套：暖炭、象牙、一支琥珀。
@@ -402,6 +427,8 @@ fn icon(name: &str) -> &'static str {
 /// - `.tag::before` 是「正在找人测」前面那个发光的点；推广标没有点。
 /// - `.fact i` 是名额那一件事实旁边 28px 的进度线，`--p` 是百分比。
 /// - `.verb` 能悬停才出来；触屏（`hover:none`）上一直在；键盘焦点落到卡上也出来。
+/// - `.mark` 是栏顶的标记：一个 p 和一个琥珀点；`.wordmark` 在桌面上只留给读屏，手机顶条上才显示。
+/// - `.nav-dot` 是当前那间房旁边的一竖琥珀，贴在栏的左边沿。
 /// - 发布说明桌面居中、手机从底部升起，都是 `:target`，没有脚本；`.codebox b` 是提示符。
 const PLAZA_CSS: &str = r#"
 body.page{display:block;min-height:100vh;padding:0;margin:0;background:var(--bg);color:var(--fg)}
@@ -411,29 +438,31 @@ body.page button,body.page input{font:inherit}
 body.page button{display:inline-flex;width:auto;min-height:0;margin:0;padding:0;border:0;border-radius:0;background:none;color:inherit;font-size:inherit;font-weight:inherit;letter-spacing:inherit;filter:none;transform:none;cursor:pointer}
 body.page p{margin:0}
 body.page footer{display:block;margin:0;padding:0;border:0;font-size:inherit;color:inherit}
-.icon{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
-.sidebar{position:fixed;inset:0 auto 0 0;width:15.5rem;display:flex;flex-direction:column;padding:26px 18px 20px;border-right:1px solid var(--line);background:var(--rail);z-index:10}
-.brand{display:inline-block;width:fit-content;margin:0 6px;padding:6px 0;border-radius:6px}
-.wordmark{font-size:21px;font-weight:700;letter-spacing:-.035em;line-height:1;color:var(--fg)}
+.icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.sidebar{position:fixed;inset:0 auto 0 0;width:76px;display:flex;flex-direction:column;align-items:center;padding:18px 10px 14px;border-right:1px solid var(--line);background:var(--rail);z-index:10}
+.brand{display:flex;align-items:center;gap:10px;border-radius:10px}
+.mark{position:relative;display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:linear-gradient(160deg,#202024,#141417);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff14,0 6px 14px -8px #000;color:var(--fg);font-size:20px;font-weight:750;letter-spacing:-.04em;line-height:1;padding-bottom:3px}
+.mark i{position:absolute;right:9px;bottom:9px;width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent)}
+.wordmark{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);font-size:19px;font-weight:700;letter-spacing:-.035em;line-height:1;color:var(--fg);white-space:nowrap}
 .wordmark span{color:var(--dim);font-weight:400}
-.nav{display:flex;flex-direction:column;gap:3px;margin:38px 0 0}
-.nav-item{display:flex;align-items:center;min-height:42px;padding:0 12px;border-radius:10px;color:var(--dim);font-size:14px;font-weight:500;transition:color .15s,background .15s,box-shadow .15s}
+.nav{display:flex;flex-direction:column;gap:6px;width:100%;margin:26px 0 0}
+.nav-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;padding:10px 0 9px;border-radius:12px;color:var(--dim);font-size:11px;font-weight:500;letter-spacing:.02em;line-height:1;transition:color .15s,background .15s}
+.nav-item .icon{transition:transform .2s cubic-bezier(.2,.7,.2,1)}
 .nav-item:hover{color:var(--fg);background:#ffffff08}
+.nav-item:hover .icon{transform:translateY(-1px)}
 .nav-item.active{color:var(--fg);background:#ffffff0a;box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 #ffffff0a}
-.nav-dot{width:6px;height:6px;margin-left:auto;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),0 0 10px var(--accent)}
-.sidebar-bottom{margin-top:auto}
-.publish-note{padding:18px 18px 16px;border-radius:14px;background:linear-gradient(165deg,#18181c,#101013);box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 #ffffff0d}
-.publish-note h3{margin:0;font-size:13.5px;font-weight:600;color:var(--fg)}
-.publish-note p{margin:6px 0 0;font-size:12.5px;line-height:1.65;color:var(--dim)}
-body.page .publish-note a{display:inline-flex;align-items:center;gap:7px;min-height:36px;margin-top:16px;padding:0 14px;border-radius:999px;background:var(--fg);color:var(--bg);font-size:12.5px;font-weight:600;transition:transform .15s,filter .15s}
-body.page .publish-note a:hover{filter:brightness(1.05);transform:translateY(-1px)}
-.publish-note a u{text-decoration:none;opacity:.55}
-.main{margin-left:15.5rem;min-height:100vh;background:radial-gradient(80% 36% at 50% -8%,#18140c 0%,transparent 70%)}
-.content{max-width:112rem;padding:28px 32px 96px}
+.nav-dot{position:absolute;left:-10px;top:50%;width:4px;height:18px;margin-top:-9px;border-radius:2px;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.sidebar-bottom{width:100%;margin-top:auto}
+body.page .publish{color:var(--soft)}
+body.page .publish .icon{width:22px;height:22px;padding:4px;border-radius:9px;background:var(--fg);color:var(--bg);box-shadow:0 4px 12px -6px #000}
+body.page .publish:hover{color:var(--fg)}
+.main{margin-left:76px;min-height:100vh;background:radial-gradient(80% 36% at 50% -8%,#18140c 0%,transparent 70%)}
+.content{max-width:112rem;padding:24px 28px 96px}
 .grid{display:grid;gap:20px;grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(min-width:48rem){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(min-width:80rem){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-@media(min-width:112rem){.grid{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media(min-width:78rem){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(min-width:104rem){.grid{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media(min-width:130rem){.grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
 body.page a.tile{display:flex;flex-direction:column;min-width:0;padding:6px;border-radius:16px;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 #ffffff0c;outline-offset:4px;transition:transform .3s cubic-bezier(.2,.7,.2,1),background .3s,box-shadow .3s}
 body.page a.tile:hover{transform:translateY(-3px);background:var(--card2);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff14,0 24px 48px -24px #000,0 8px 18px -10px #000c}
 .shot{position:relative;overflow:hidden;aspect-ratio:4/3;border-radius:11px;background:#0e0e10;box-shadow:inset 0 0 0 1px #ffffff0a}
@@ -463,7 +492,7 @@ body.page a.tile:hover .verb,body.page a.tile:focus-visible .verb{opacity:1;tran
 .fact i::after{content:"";position:absolute;inset:0;width:var(--p);border-radius:2px;background:var(--accent)}
 .empty-plaza{max-width:32rem;padding:12px 0}
 .empty-plaza .lead,.drawer .lead{margin-top:10px;color:var(--dim)}
-.main>.drawer{max-width:34rem;margin:28px 32px 80px;padding:28px;border-radius:16px;background:var(--card);box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 #ffffff0c}
+.main>.drawer{max-width:34rem;margin:24px 28px 80px;padding:28px;border-radius:16px;background:var(--card);box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 #ffffff0c}
 .drawer h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.015em}
 .drawer .summary{margin:12px 0 0;color:var(--soft)}
 .drawer form.row{display:flex;gap:8px;margin:18px 0 0}
@@ -476,13 +505,24 @@ body.page .more>.ghost{justify-self:start}
 .overlay{display:none;position:fixed;inset:0;z-index:40;align-items:center;justify-content:center;padding:24px}
 .overlay:target{display:flex}
 .overlay-back{position:absolute;inset:0;background:#000000b3;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.sheet{position:relative;z-index:1;width:min(31rem,100%);max-height:calc(100dvh - 48px);overflow:auto;padding:28px;border-radius:18px;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff12,0 40px 100px -30px #000}
+.sheet{position:relative;z-index:1;width:min(34rem,100%);max-height:calc(100dvh - 48px);overflow:auto;padding:28px 28px 26px;border-radius:18px;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff12,0 40px 100px -30px #000}
 .dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
-.dialog-head h2{margin:0;font-size:20px;line-height:1.35;font-weight:600;letter-spacing:-.015em}
+.eyebrow{margin:0 0 8px;font:11px/1 var(--mono);letter-spacing:.08em;color:var(--accent)}
+.dialog-head h2{margin:0;font-size:21px;line-height:1.3;font-weight:600;letter-spacing:-.015em}
 .close{flex:0 0 auto;display:grid;place-items:center;width:32px;height:32px;border-radius:9px;color:var(--dim);box-shadow:inset 0 0 0 1px var(--line);transition:color .15s,background .15s}
+.close .icon{width:14px;height:14px;stroke-width:1.8}
 .close:hover{color:var(--fg);background:#ffffff0a}
-.dialog-desc{margin:14px 0 22px;font-size:14px;line-height:1.7;color:var(--dim)}
-.tabs{position:relative;display:inline-flex;gap:2px;margin-bottom:12px;padding:3px;border-radius:10px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line)}
+.dialog-desc{margin:12px 0 0;font-size:14px;line-height:1.7;color:var(--dim)}
+.steps{list-style:none;margin:22px 0 0;padding:0}
+.steps li{position:relative;display:flex;gap:16px;padding:18px 0 0}
+.steps li+li{margin-top:18px;border-top:1px solid var(--line)}
+.steps .n{flex:0 0 auto;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;font:12px/1 var(--mono);color:var(--soft);background:var(--card2);box-shadow:inset 0 0 0 1px var(--line2)}
+.step{flex:1;min-width:0}
+.step h3{margin:3px 0 0;font-size:14px;font-weight:600;letter-spacing:-.005em}
+.step p{margin:6px 0 0;font-size:13px;line-height:1.7;color:var(--dim)}
+.step p code{padding:1px 6px;border-radius:5px;background:var(--bg);border:1px solid var(--line);font-size:.92em;color:var(--soft)}
+body.page .step p a{color:var(--fg);text-decoration:underline;text-decoration-color:#ffffff3a;text-underline-offset:3px}
+.tabs{position:relative;display:inline-flex;gap:2px;margin:12px 0 10px;padding:3px;border-radius:10px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line)}
 .tabs input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
 .tabs label{padding:6px 12px;border-radius:7px;font-size:12.5px;font-weight:500;color:var(--dim);cursor:pointer;transition:color .15s,background .15s}
 .tabs label:hover{color:var(--fg)}
@@ -492,11 +532,9 @@ body.page .more>.ghost{justify-self:start}
 .pub-box:has(#tab-static:checked) #panel-static,.pub-box:has(#tab-local:checked) #panel-local,.pub-box:has(#tab-backend:checked) #panel-backend{display:flex}
 .codebox b{flex:0 0 auto;font:12.5px/1.8 var(--mono);font-weight:400;color:var(--accent)}
 .codebox code{display:block;padding:0;border:0;background:none;font:12.5px/1.8 var(--mono);color:var(--soft);white-space:pre-wrap;overflow-wrap:anywhere}
-.copy-hint{margin:12px 0 0;font-size:12px;color:#5f5d59}
-.dialog-hint{margin:22px 0 0;padding-top:18px;border-top:1px solid var(--line);font-size:13px;line-height:1.7;color:var(--dim)}
-body.page .dialog-hint a{color:var(--fg);text-decoration:underline;text-decoration-color:#ffffff3a;text-underline-offset:3px}
-@media(min-width:48rem) and (max-width:64rem){.sidebar{width:13rem;padding-left:14px;padding-right:14px}.main{margin-left:13rem}.content{padding-left:24px;padding-right:24px}.main>.drawer{margin-left:24px;margin-right:24px}}
-@media(max-width:47.99rem){.sidebar{position:static;width:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:12px 14px;border-right:0;border-bottom:1px solid var(--line)}.brand{margin:0}.wordmark{font-size:19px}.nav{flex-direction:row;gap:4px;margin:0 0 0 auto}.nav-item{min-height:36px;padding:0 12px;border-radius:999px;font-size:13.5px}.nav-item.active{background:#ffffff0d;box-shadow:inset 0 0 0 1px var(--line)}.nav-dot{display:none}.sidebar-bottom{flex-basis:100%;margin:0}.publish-note{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 8px 8px 14px;border-radius:12px}.publish-note p{display:none}.publish-note h3{font-size:12.5px;font-weight:500;color:var(--dim)}body.page .publish-note a{min-height:30px;margin:0;padding:0 12px;font-size:12px}.main{margin:0;background:none}.content{padding:14px 14px 72px}.grid{gap:12px}body.page a.tile{padding:5px;border-radius:14px}.shot{border-radius:10px}.tile-body{padding:10px 6px 6px}.tile-body h2{font-size:14px}.tile .summary{font-size:12.5px}.tile .meta{margin-top:8px;padding-top:8px}.cover.word b{font-size:46px}.cover.word i{display:none}.main>.drawer{margin:14px;padding:22px 18px 24px}.overlay{align-items:flex-end;padding:0}.sheet{width:100%;max-height:88dvh;padding:24px 20px calc(24px + env(safe-area-inset-bottom));border-radius:18px 18px 0 0}}
+.copy-hint{margin:10px 0 0;font-size:12px;line-height:1.7;color:#6b6862}
+.copy-hint code{padding:1px 5px;border-radius:4px;background:var(--bg);border:1px solid var(--line);font-size:.92em;color:var(--dim)}
+@media(max-width:47.99rem){.sidebar{position:static;width:auto;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:8px;padding:10px 12px;border-right:0;border-bottom:1px solid var(--line)}.mark{width:32px;height:32px;border-radius:9px;font-size:17px}.mark i{right:7px;bottom:7px;width:4px;height:4px}.wordmark{position:static;width:auto;height:auto;clip:auto;font-size:17px}.nav{flex-direction:row;gap:4px;width:auto;margin:0 0 0 auto}.nav-item{flex-direction:row;gap:6px;width:auto;min-height:36px;padding:0 12px 0 10px;border-radius:999px;font-size:13px;letter-spacing:0}.nav-item .icon{width:16px;height:16px}.nav-item.active{background:#ffffff0d;box-shadow:inset 0 0 0 1px var(--line)}.nav-dot{display:none}.sidebar-bottom{width:auto;margin:0}body.page .publish{flex-direction:row;gap:6px;min-height:36px;padding:0 12px 0 8px;border-radius:999px;font-size:13px}body.page .publish .icon{width:20px;height:20px;padding:3px;border-radius:7px}.main{margin:0;background:none}.content{padding:14px 14px 72px}.grid{gap:12px}body.page a.tile{padding:5px;border-radius:14px}.shot{border-radius:10px}.tile-body{padding:10px 6px 6px}.tile-body h2{font-size:14px}.tile .summary{font-size:12.5px}.tile .meta{margin-top:8px;padding-top:8px}.cover.word b{font-size:46px}.cover.word i{display:none}.main>.drawer{margin:14px;padding:22px 18px 24px}.overlay{align-items:flex-end;padding:0}.sheet{width:100%;max-height:90dvh;padding:22px 20px calc(24px + env(safe-area-inset-bottom));border-radius:18px 18px 0 0}.dialog-head h2{font-size:19px}}
 "#;
 
 #[cfg(test)]

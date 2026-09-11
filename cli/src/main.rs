@@ -6,12 +6,15 @@ mod args;
 mod card;
 mod client;
 mod clock;
+mod commands;
 mod config;
 mod inspect;
 mod login;
 mod mcp;
 mod output;
+mod report;
 mod scan;
+mod session;
 mod sites;
 mod tunnel;
 mod ui;
@@ -96,43 +99,40 @@ async fn dispatch(cli: Cli) -> Result<()> {
     let machine = output::is_json();
     if cli.command.is_some() && cli.upload.any_set() {
         return Err(output::usage(
-            "子命令（ls / rm / open / unlist / card / followers / mcp）不和要发出去的目录一起用。要发目录就只写 playtest ./dist；\
+            "子命令（ls / rm / open / unlist / versions / rollback / card / mcp）不和要发出去的目录一起用。要发目录就只写 playtest ./dist；\
              要用子命令就把目录和 --name 这类参数去掉。",
         ));
     }
-    match cli.command {
-        Some(Command::Login { api }) => login::run(api.as_deref()).await,
-        Some(Command::Ls { api }) if machine => output::ls(api.as_deref()).await,
-        Some(Command::Ls { api }) => sites::ls(api.as_deref()).await,
-        Some(Command::Rm { slug, yes, api }) if machine => {
-            output::rm(&slug, yes, api.as_deref()).await
+    // 这几条都产出一个 Report，说出来只有一处（`output::say`）——人话和 `--json`
+    // 不可能只做到一半（REWRITE §3.1）。
+    let report = match cli.command {
+        Some(Command::Login { api }) => return login::run(api.as_deref()).await,
+        Some(Command::Mcp { setup, api }) => return mcp::run(setup, api).await,
+        None => return run_default(cli).await,
+
+        Some(Command::Ls { api }) => commands::ls(api.as_deref()).await?,
+        Some(Command::Open { target, api }) => {
+            // `--json` 下不弹浏览器：跑在 agent 或 CI 里多半没有浏览器，也不该抢焦点。
+            commands::open(&target, api.as_deref(), !machine).await?
         }
-        Some(Command::Rm { slug, yes, api }) => sites::rm(&slug, yes, api.as_deref()).await,
-        Some(Command::Open { target, api }) if machine => {
-            output::open(&target, api.as_deref()).await
+        Some(Command::Rm { slug, yes, api }) => {
+            commands::rm(&slug, yes, api.as_deref(), !machine).await?
         }
-        Some(Command::Open { target, api }) => sites::open(&target, api.as_deref()).await,
-        Some(Command::Card { target, out, api }) if machine => {
-            output::card(&target, out.as_deref(), api.as_deref()).await
+        Some(Command::Versions { target, api }) => {
+            commands::versions(&target, api.as_deref()).await?
         }
-        Some(Command::Card { target, out, api }) => {
-            sites::card(&target, out.as_deref(), api.as_deref()).await
-        }
-        Some(Command::Followers { target, api }) if machine => {
-            output::followers(&target, api.as_deref()).await
-        }
-        Some(Command::Followers { target, api }) => sites::followers(&target, api.as_deref()).await,
-        // 机器模式下也走同一条：它只打一行话，`--json` 的调用方看退出码就够了。
-        Some(Command::Unlist { slug, api }) => sites::unlist(&slug, api.as_deref()).await,
-        Some(Command::Versions { target, api }) => sites::versions(&target, api.as_deref()).await,
         Some(Command::Rollback {
             target,
             version,
             api,
-        }) => sites::rollback(&target, &version, api.as_deref()).await,
-        Some(Command::Mcp { setup, api }) => mcp::run(setup, api).await,
-        None => run_default(cli).await,
-    }
+        }) => commands::rollback(&target, &version, api.as_deref()).await?,
+        Some(Command::Unlist { slug, api }) => commands::unlist(&slug, api.as_deref()).await?,
+        Some(Command::Card { target, out, api }) => {
+            commands::card(&target, out.as_deref(), api.as_deref()).await?
+        }
+    };
+    output::say(&report);
+    Ok(())
 }
 
 async fn run_default(cli: Cli) -> Result<()> {

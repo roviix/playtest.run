@@ -6,11 +6,11 @@
 
 import { useEffect, useRef } from "preact/hooks";
 
-import { coverUrl, type Me, type Site } from "../api";
-import { hue } from "../hue";
+import type { Me, Site } from "../api";
 import type { Loaded } from "../load";
 import { go, href } from "../router";
 import { left, moment } from "../words";
+import { Cover } from "./cover";
 import { Failed, Loading } from "./status";
 
 /** 单作品直进只在这一次页面加载里做一次：之后点「作品」回到墙上要停得住。 */
@@ -51,25 +51,11 @@ export function HomePage({ sites, me }: { sites: Loaded<Site[]>; me: Me | null }
 }
 
 function Tile({ site }: { site: Site }) {
-  const listing = site.listing;
-  const cover =
-    listing?.has_cover && site.current_version !== undefined
-      ? coverUrl(site.url, site.current_version)
-      : null;
   const tag = tagOf(site);
 
   return (
     <a class="tile" href={href({ name: "site", slug: site.slug, tab: "results" })}>
-      <div class="shot" style={`--h:${hue(site.slug)}`}>
-        {cover ? (
-          <img class="cover" src={cover} alt="" loading="lazy" />
-        ) : (
-          <div class="cover word">
-            <span>{site.title}</span>
-          </div>
-        )}
-        {tag ? <span class={`tag ${tag.tone}`}>{tag.text}</span> : null}
-      </div>
+      <Cover site={site}>{tag ? <span class={`tag ${tag.tone}`}>{tag.text}</span> : null}</Cover>
       <div class="tile-body">
         <h2>{site.title}</h2>
         <p class="tile-slug mono">{site.slug}</p>

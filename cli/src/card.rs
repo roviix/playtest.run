@@ -131,7 +131,7 @@ pub async fn fetch_or_explain(site: &Site) -> Result<Vec<u8>> {
 }
 
 /// 按地址取一张卡。重试是为了等边缘读到新清单，所以间隔短、次数少。
-async fn fetch(url: &str) -> std::result::Result<Vec<u8>, Unavailable> {
+pub(crate) async fn fetch(url: &str) -> std::result::Result<Vec<u8>, Unavailable> {
     let http = match client::new_http(CONNECT_TIMEOUT, REQUEST_TIMEOUT) {
         Ok(http) => http,
         Err(e) => return Err(Unavailable::Unreachable(e.to_string())),

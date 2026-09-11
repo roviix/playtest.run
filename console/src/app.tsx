@@ -1,6 +1,7 @@
 // 控制台的外壳：左边一条栏，右边一张台面（DESIGN §3.13）。
 //
-// 和广场（edge/src/plaza.rs）是同一个壳：同样的栏、同样的夜色、同一支绿。
+// 和广场（edge/src/plaza.rs）是同一套记号：同一个标记、同样的夜色、同一支琥珀。
+// 栏比广场的宽：它要放作品清单，广场的栏只放两间房。
 // 开发者是这个产品里唯一同时进两间房的人，两套皮会让他觉得是两个产品。
 //
 // 栏上只有三样：作品清单、去广场、账号；栏底一张便条说「发下一版」的命令。
@@ -126,10 +127,15 @@ function Rail({
   return (
     <aside class="rail">
       <a class="brand" href={href({ name: "sites" })}>
-        <span class="wordmark">
-          playtest<span>.run</span>
+        <span class="mark" aria-hidden="true">
+          p<i />
         </span>
-        <span class="brand-sub">控制台</span>
+        <span class="brand-text">
+          <span class="wordmark">
+            playtest<span>.run</span>
+          </span>
+          <span class="brand-sub">控制台</span>
+        </span>
       </a>
 
       <nav class="rail-nav">
@@ -188,7 +194,9 @@ function PublishNote() {
       <p>
         在作品目录里再跑一次，链接不变，关注的人会收到通知。
       </p>
-      <code>playtest ./dist --note "这版改了什么"</code>
+      <div class="codebox">
+        <code>playtest ./dist --note "这版改了什么"</code>
+      </div>
     </div>
   );
 }

@@ -388,13 +388,13 @@ fn a_threaded_godot_export_turns_isolation_on_by_itself_and_says_so() {
     looked.silent_about("没有 .pck");
 }
 
-/// `--no-isolated` 是明确拒绝：照办，但要说清楚玩家那边会怎样。
+/// `--isolated=off` 是明确拒绝：照办，但要说清楚玩家那边会怎样。
 #[test]
 fn saying_no_to_isolation_is_obeyed_and_the_consequence_is_spelled_out() {
     let work = tempfile::tempdir().unwrap();
-    let looked = look_at(&godot_threaded(work.path()), &["--no-isolated"]);
+    let looked = look_at(&godot_threaded(work.path()), &["--isolated=off"]);
 
-    let refused = looked.about("--no-isolated");
+    let refused = looked.about("--isolated=off");
     assert_eq!(refused["level"], "warn", "{refused}");
     assert!(
         refused["hint"].as_str().is_some_and(|h| h.contains("报错")),
@@ -407,7 +407,7 @@ fn saying_no_to_isolation_is_obeyed_and_the_consequence_is_spelled_out() {
 #[test]
 fn an_export_that_already_asked_for_isolation_is_just_acknowledged() {
     let work = tempfile::tempdir().unwrap();
-    let looked = look_at(&godot_threaded(work.path()), &["--isolated"]);
+    let looked = look_at(&godot_threaded(work.path()), &["--isolated=on"]);
 
     assert_eq!(looked.levels_of("--isolated 已经开着"), "note");
     assert_eq!(looked.request["isolated"], true, "{}", looked.request);
@@ -471,7 +471,7 @@ fn an_index_html_one_level_down_is_a_blocker_that_names_the_right_directory() {
     );
     let hint = value["hint"].as_str().unwrap();
     assert!(
-        hint.contains("/web") && hint.contains("--force"),
+        hint.contains("/web") && hint.contains("-y"),
         "得告诉人家该传哪一层、怎么放行：{value}"
     );
     assert!(
@@ -480,7 +480,7 @@ fn an_index_html_one_level_down_is_a_blocker_that_names_the_right_directory() {
     );
 
     // --force 照传，且那条发现仍然在 findings 里让人看见。
-    let looked = look_at(&dir, &["--force"]);
+    let looked = look_at(&dir, &["-y"]);
     let found = looked.about("最外层没有 index.html");
     assert_eq!(found["level"], "blocker", "{found}");
     assert!(looked.request["files"].as_array().unwrap().len() == 3);

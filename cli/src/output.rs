@@ -62,9 +62,9 @@ use anyhow::Result;
 use playtest_common::api::{ErrorCode, Site};
 use serde::{Serialize, Serializer};
 
-use crate::client::{self, Client};
-use crate::config::{self, Config};
-use crate::{args, card, clock, sites, ui};
+use crate::client;
+use crate::session::Session;
+use crate::{card, clock, ui};
 
 // ---------------------------------------------------------------- 模式与秒表
 
@@ -121,7 +121,7 @@ pub struct Timings {
 /// |---|---|
 /// | 0 | 做成了 |
 /// | 1 | 没预料到的错误 |
-/// | 2 | 命令写错了，或者要的功能还没做好 |
+/// | 2 | 命令写错了 |
 /// | 3 | 需要登录，或者身份失效了 |
 /// | 4 | 网络不通 |
 /// | 5 | 服务端出错 |
@@ -131,9 +131,6 @@ pub struct Timings {
 pub enum Code {
     /// 命令写错了。
     Usage,
-    /// 这个功能还没做好。和 [`Code::Usage`] 共用退出码 2——两者都是「换个命令」，
-    /// 要分辨就看 JSON 里的 `code`。
-    NotImplemented,
     NeedsLogin,
     Network,
     ServerError,
@@ -147,7 +144,7 @@ impl Code {
     pub fn exit(self) -> u8 {
         match self {
             Code::Unexpected => 1,
-            Code::Usage | Code::NotImplemented => 2,
+            Code::Usage => 2,
             Code::NeedsLogin => 3,
             Code::Network => 4,
             Code::ServerError => 5,
@@ -160,7 +157,6 @@ impl Code {
     pub fn as_str(self) -> &'static str {
         match self {
             Code::Usage => "usage",
-            Code::NotImplemented => "not_implemented",
             Code::NeedsLogin => "needs_login",
             Code::Network => "network",
             Code::ServerError => "server_error",
@@ -207,11 +203,6 @@ fn fail(code: Code, message: impl Into<String>, hint: Option<String>) -> anyhow:
 /// 命令写错了。
 pub fn usage(message: impl Into<String>) -> anyhow::Error {
     fail(Code::Usage, message, None)
-}
-
-/// 这个功能还没做好。说清楚现在能做什么，不要只说「不支持」。
-pub fn not_implemented(message: impl Into<String>) -> anyhow::Error {
-    fail(Code::NotImplemented, message, None)
 }
 
 /// 给的东西有问题：目录不在、超限、不像导出物。
@@ -682,14 +673,6 @@ fn seconds(ms: u64) -> String {
 
 // ---------------------------------------------------------------- ls / rm / open
 
-#[derive(Debug, Serialize)]
-struct ListReport {
-    ok: bool,
-    action: &'static str,
-    elapsed_ms: u64,
-    sites: Vec<SiteOut>,
-}
-
 /// 一个作品在 JSON 里的样子。字段名和 `common` 里的 [`Site`] 对齐，只把
 /// `current_version` 缩成 `version`——脚本里不需要「当前」这个限定。
 #[derive(Debug, Serialize)]
@@ -720,147 +703,11 @@ impl From<Site> for SiteOut {
 }
 
 #[derive(Debug, Serialize)]
-struct RemoveReport {
-    ok: bool,
-    action: &'static str,
-    slug: String,
-    elapsed_ms: u64,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenReport {
-    ok: bool,
-    action: &'static str,
-    slug: String,
-    url: String,
-    /// JSON 模式下不弹浏览器：跑在 agent 或 CI 里多半没有浏览器，也不该抢焦点。
-    opened: bool,
-    elapsed_ms: u64,
-}
-
-#[derive(Debug, Serialize)]
 struct HelpReport {
     ok: bool,
     action: &'static str,
     text: String,
     elapsed_ms: u64,
-}
-
-/// `playtest ls --json`。
-pub async fn ls(api_flag: Option<&str>) -> Result<()> {
-    let sites = fetch_sites(api_flag).await?;
-    emit(&ListReport {
-        ok: true,
-        action: "list",
-        elapsed_ms: elapsed_ms(),
-        sites,
-    });
-    Ok(())
-}
-
-/// `playtest rm <slug> --json`。
-pub async fn rm(slug: &str, yes: bool, api_flag: Option<&str>) -> Result<()> {
-    if !yes {
-        return Err(usage(format!(
-            "--json 模式不会停下来问你。确定要删就加 -y：playtest rm {slug} -y --json"
-        )));
-    }
-    let api = args::api_base(api_flag);
-    let config_path = config::default_path()?;
-    let mut config = config::load(&config_path)?;
-    let Some(client) = saved_client(&api, &config)? else {
-        return Err(bad_input(format!(
-            "这台机器上还没发过东西，没有 {slug} 可以删。"
-        )));
-    };
-    client.delete_site(slug).await?;
-    config.forget_slug(slug);
-    config::save(&config_path, &config)?;
-    emit(&RemoveReport {
-        ok: true,
-        action: "remove",
-        slug: slug.to_string(),
-        elapsed_ms: elapsed_ms(),
-    });
-    Ok(())
-}
-
-/// `playtest open <slug 或目录> --json`：只回链接，不弹浏览器。
-pub async fn open(target: &str, api_flag: Option<&str>) -> Result<()> {
-    let api = args::api_base(api_flag);
-    let config = config::load(&config::default_path()?)?;
-    let slug = slug_of(target, &config)?;
-    let Some(client) = saved_client(&api, &config)? else {
-        return Err(bad_input("这台机器上还没发过东西，没有链接可以打开。"));
-    };
-    let site = client.get_site(&slug).await?;
-    emit(&OpenReport {
-        ok: true,
-        action: "open",
-        slug: site.slug,
-        url: site.url,
-        opened: false,
-        elapsed_ms: elapsed_ms(),
-    });
-    Ok(())
-}
-
-#[derive(Debug, Serialize)]
-struct CardReport {
-    ok: bool,
-    action: &'static str,
-    slug: String,
-    title: String,
-    card_url: String,
-    card_path: String,
-    elapsed_ms: u64,
-}
-
-#[derive(Debug, Serialize)]
-struct FollowersReport {
-    ok: bool,
-    action: &'static str,
-    slug: String,
-    title: String,
-    followers: u32,
-    elapsed_ms: u64,
-}
-
-/// `playtest card <slug 或目录> --json`。图不进 JSON——一个几百 KB 的 base64 塞进一行 stdout，
-/// 对着管道读的脚本会很难受；这里给的是文件路径，图在文件里。
-pub async fn card(
-    target: &str,
-    out: Option<&std::path::Path>,
-    api_flag: Option<&str>,
-) -> Result<()> {
-    let site = sites::look_up(target, api_flag).await?;
-    let png = card::fetch_or_explain(&site).await?;
-    let path = card::place(&site, out);
-    card::save(&path, &png).map_err(as_bad_input)?;
-    emit(&CardReport {
-        ok: true,
-        action: "card",
-        card_url: playtest_common::card_url(&site.url),
-        card_path: card::shown(&path),
-        slug: site.slug,
-        title: site.title,
-        elapsed_ms: elapsed_ms(),
-    });
-    Ok(())
-}
-
-/// `playtest followers <slug 或目录> --json`。
-pub async fn followers(target: &str, api_flag: Option<&str>) -> Result<()> {
-    let site = sites::look_up(target, api_flag).await?;
-    emit(&FollowersReport {
-        ok: true,
-        action: "followers",
-        slug: site.slug,
-        title: site.title,
-        followers: site.listing.followers,
-        elapsed_ms: elapsed_ms(),
-    });
-    Ok(())
 }
 
 /// `playtest --help --json`：帮助本身就是这次命令的回答，装进对象里给出去。
@@ -874,10 +721,10 @@ pub fn help(text: String) {
 }
 
 /// 这台机器发过的作品。没有令牌就是还没发过，回空表而不是报错——问「我有什么」的答案是「没有」。
+/// MCP 那一侧用它（`playtest_list`）。
 pub async fn fetch_sites(api_flag: Option<&str>) -> Result<Vec<SiteOut>> {
-    let api = args::api_base(api_flag);
-    let config = config::load(&config::default_path()?)?;
-    let Some(client) = saved_client(&api, &config)? else {
+    let session = Session::open(api_flag)?;
+    let Some(client) = session.client()? else {
         return Ok(Vec::new());
     };
     Ok(client
@@ -888,44 +735,11 @@ pub async fn fetch_sites(api_flag: Option<&str>) -> Result<Vec<SiteOut>> {
         .collect())
 }
 
-/// 一个作品现在什么样。
+/// 一个作品现在什么样。MCP 那一侧用它（`playtest_get`）。
 pub async fn fetch_site(slug: &str, api_flag: Option<&str>) -> Result<SiteOut> {
-    let api = args::api_base(api_flag);
-    let config = config::load(&config::default_path()?)?;
-    let Some(client) = saved_client(&api, &config)? else {
-        return Err(bad_input(
-            "这台机器上还没发过东西，先发一个：playtest ./dist",
-        ));
-    };
+    let session = Session::open(api_flag)?;
+    let client = session.client_or_say("先发一个")?;
     Ok(client.get_site(slug).await?.into())
-}
-
-/// 参数可以是 slug，也可以是一个发过的目录。
-fn slug_of(target: &str, config: &Config) -> Result<String> {
-    let path = std::path::Path::new(target);
-    if !path.is_dir() {
-        return Ok(target.to_string());
-    }
-    let key = std::fs::canonicalize(path)
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| target.to_string());
-    match config.remembered_slug(&key) {
-        Some(slug) => Ok(slug.to_string()),
-        None => Err(bad_input(format!(
-            "{target} 这个目录还没发过。先运行 playtest {target} 把它发出去。"
-        ))),
-    }
-}
-
-/// 用已经存下来的令牌建客户端。没有就是 `None`——看和删都是看已有的东西，
-/// 为此凭空要一个新的匿名令牌只会看到空列表。
-fn saved_client(api: &str, config: &Config) -> Result<Option<Client>> {
-    let Some(token) = config.usable_token(api, clock::now()) else {
-        return Ok(None);
-    };
-    let mut client = Client::new(api)?;
-    client.set_token(Some(token.to_string()));
-    Ok(Some(client))
 }
 
 // ---------------------------------------------------------------- 隧道的结果
@@ -1156,6 +970,23 @@ pub fn emit_login<T: Serialize>(value: &T) {
     emit(value);
 }
 
+/// 一条命令做完了，说出来。**唯一**的渲染入口（REWRITE §3.1）。
+///
+/// 人话走 [`Report::human`]（叙述到 stderr、要拿走的东西到 stdout），`--json` 走
+/// [`Report::json`] 再盖上 `ok` / `action` / `elapsed_ms`。两条路只可能同时存在。
+pub fn say(report: &crate::report::Report) {
+    if is_json() {
+        emit(&crate::report::Envelope {
+            ok: true,
+            action: report.action(),
+            body: report.json(),
+            elapsed_ms: elapsed_ms(),
+        });
+    } else {
+        report.human();
+    }
+}
+
 fn emit<T: Serialize>(value: &T) {
     let line = serde_json::to_string(value).unwrap_or_else(|e| unprintable(&e));
     let _ = std::io::stderr().flush();
@@ -1192,11 +1023,10 @@ mod tests {
     }
 
     #[test]
-    fn every_code_has_its_own_exit_number_except_the_two_that_share_one() {
+    fn every_code_has_its_own_exit_number() {
         for (code, exit) in [
             (Code::Unexpected, 1),
             (Code::Usage, 2),
-            (Code::NotImplemented, 2),
             (Code::NeedsLogin, 3),
             (Code::Network, 4),
             (Code::ServerError, 5),

@@ -151,6 +151,33 @@ async fn patch_site(
     }))
 }
 
+async fn list_versions(UrlPath(slug): UrlPath<String>) -> Json<Value> {
+    Json(json!({
+        "slug": slug,
+        "current_version": 7,
+        "versions": [
+            { "version": 7, "created_at": "2026-09-09T00:00:00Z", "note": "改了新手引导",
+              "file_count": 53, "total_bytes": 2_200_000, "current": true },
+            { "version": 3, "created_at": "2026-09-08T00:00:00Z", "note": null,
+              "file_count": 50, "total_bytes": 2_000_000, "current": false },
+        ],
+    }))
+}
+
+async fn activate_version(
+    State(fake): State<Arc<Fake>>,
+    UrlPath((slug, version)): UrlPath<(String, u32)>,
+) -> Json<Value> {
+    Json(json!({
+        "slug": slug,
+        "url": site_url(&fake),
+        "title": "小球试玩",
+        "current_version": version,
+        "created_at": "2026-09-07T00:00:00Z",
+        "listing": { "has_cover": false, "followers": 12 },
+    }))
+}
+
 /// 边缘那一侧：门禁页上那张邀请卡。
 async fn card_png() -> Response {
     (
@@ -231,6 +258,8 @@ fn start_with(fake: Arc<Fake>, as_edge: bool) -> String {
                 .route(routes::LOGIN_WEB_START, get(login_unavailable))
                 .route(routes::SITES, post(create_site).get(list_sites))
                 .route(routes::SITE, get(get_site).patch(patch_site))
+                .route(routes::SITE_VERSIONS, get(list_versions))
+                .route(routes::SITE_VERSION_ACTIVATE, post(activate_version))
                 .route(routes::SITE_UPLOADS, post(prepare_upload))
                 .route(routes::BLOB, put(put_blob))
                 .route(routes::SITE_UPLOAD_COMMIT, post(commit_upload))
@@ -432,7 +461,7 @@ fn no_card_means_no_file_and_no_path() {
         work.path(),
         home.path(),
         &api_of(&fake),
-        &["--json", "--no-qr", "--no-card", dist.to_str().unwrap()],
+        &["--json", "--no-qr", "--card", "-", dist.to_str().unwrap()],
     );
     assert!(output.status.success(), "{}", stderr_of(&output));
     let value = only_object(&output);
@@ -458,7 +487,8 @@ fn seats_and_a_group_link_go_up_with_the_version() {
         &[
             "--json",
             "--no-qr",
-            "--no-card",
+            "--card",
+            "-",
             dist.to_str().unwrap(),
             "--seats",
             "10",
@@ -540,7 +570,7 @@ fn the_card_command_fetches_one_more_copy() {
         work.path(),
         home.path(),
         &api,
-        &["--json", "--no-qr", "--no-card", dist.to_str().unwrap()],
+        &["--json", "--no-qr", "--card", "-", dist.to_str().unwrap()],
     );
     assert!(first.status.success(), "{}", stderr_of(&first));
 
@@ -573,7 +603,7 @@ fn the_card_command_fetches_one_more_copy() {
 }
 
 #[test]
-fn followers_is_a_number_the_developer_can_act_on() {
+fn how_many_are_waiting_shows_up_in_the_list() {
     let home = tempfile::tempdir().unwrap();
     let work = tempfile::tempdir().unwrap();
     let dist = make_export(work.path());
@@ -583,20 +613,20 @@ fn followers_is_a_number_the_developer_can_act_on() {
         work.path(),
         home.path(),
         &api,
-        &["--json", "--no-qr", "--no-card", dist.to_str().unwrap()],
+        &["--json", "--no-qr", "--card", "-", dist.to_str().unwrap()],
     );
     assert!(first.status.success(), "{}", stderr_of(&first));
 
-    let output = run_cli(home.path(), &api, &["--json", "followers", SLUG]);
-    assert!(output.status.success(), "{}", stderr_of(&output));
-    let value = only_object(&output);
-    assert_eq!(value["action"], "followers");
-    assert_eq!(value["followers"], 12);
-    assert_eq!(value["title"], "小球试玩");
-
-    // 列表里也有这个数，不用为了它单跑一条命令。
+    // 关注数在 ls 里，不再单开一条命令（REWRITE §3.1）。
     let listed = run_cli(home.path(), &api, &["ls", "--json"]);
-    assert_eq!(only_object(&listed)["sites"][0]["followers"], 12);
+    assert!(listed.status.success(), "{}", stderr_of(&listed));
+    let one = &only_object(&listed)["sites"][0];
+    assert_eq!(one["followers"], 12);
+    assert_eq!(one["title"], "小球试玩");
+
+    // 那条命令真的没了，而不是悄悄留着。
+    let gone = run_cli(home.path(), &api, &["--json", "followers", SLUG]);
+    assert!(!gone.status.success(), "followers 已经并进 ls");
 }
 
 #[test]
@@ -625,6 +655,53 @@ fn listing_after_an_upload_names_the_work() {
     assert_eq!(value["sites"][0]["slug"], SLUG);
     assert_eq!(value["sites"][0]["title"], "小球试玩");
     assert_eq!(value["sites"][0]["version"], 3);
+}
+
+/// `versions / rollback / unlist` 以前只有人话那一半：`rollback --json` 往 stdout 写
+/// 一条裸链接，`versions --json` 什么都不写。三条现在都产出同一种对象（REWRITE §3.1）。
+#[test]
+fn every_command_answers_in_one_object_in_machine_mode() {
+    let home = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let dist = make_export(work.path());
+    let api = start_fake(None);
+    let first = run_cli(home.path(), &api, &["--json", dist.to_str().unwrap()]);
+    assert!(first.status.success(), "{}", stderr_of(&first));
+
+    let output = run_cli(home.path(), &api, &["versions", SLUG, "--json"]);
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    let value = only_object(&output);
+    assert_eq!(value["action"], "versions");
+    assert_eq!(value["current_version"], 7);
+    assert_eq!(value["versions"][0]["version"], 7);
+    assert_eq!(value["versions"][0]["note"], "改了新手引导");
+    assert!(value["versions"][1]["note"].is_null(), "没写就是 null");
+
+    let output = run_cli(home.path(), &api, &["rollback", SLUG, "v3", "--json"]);
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    let value = only_object(&output);
+    assert_eq!(value["action"], "rollback");
+    assert_eq!(value["version"], 3);
+    assert_eq!(value["slug"], SLUG);
+
+    let output = run_cli(home.path(), &api, &["unlist", SLUG, "--json"]);
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    let value = only_object(&output);
+    assert_eq!(value["action"], "unlist");
+    assert_eq!(value["listed"], false);
+}
+
+/// 版本号写错的时候说清楚，不去猜一个。
+#[test]
+fn rolling_back_to_something_that_is_not_a_version_says_so() {
+    let home = tempfile::tempdir().unwrap();
+    let api = start_fake(None);
+    let output = run_cli(home.path(), &api, &["rollback", SLUG, "最新", "--json"]);
+    let value = expect_failure(&output, 6, "bad_input");
+    assert!(
+        value["message"].as_str().unwrap().contains("v3"),
+        "要告诉他该怎么写：{value}"
+    );
 }
 
 #[test]

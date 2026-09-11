@@ -15,7 +15,7 @@ use playtest_common::manifest::{self, validate_files, Cover, FileEntry};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
-use crate::args::{self, UploadArgs};
+use crate::args::{self, Isolation, UploadArgs};
 use crate::client::{Client, OnBytes};
 use crate::config::{self, Config};
 use crate::output::{self, Finding, PlazaOut, Timings, UploadReport};
@@ -74,8 +74,8 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         .filter(|_| !cli_args.force)
     {
         let hint = match &blocker.hint {
-            Some(h) => format!("{h}。确定要照传就加 --force。"),
-            None => "确定要照传就加 --force。".to_string(),
+            Some(h) => format!("{h}。确定要照传就加 -y。"),
+            None => "确定要照传就加 -y。".to_string(),
         };
         return Err(output::bad_input_with_hint(blocker.message.clone(), hint));
     }
@@ -178,7 +178,8 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
                     &UpdateSiteRequest {
                         public: wants_plaza.then_some(true),
                         seeking: wants_plaza.then_some(cli_args.seeking()),
-                        seek_note: cli_args.seek.clone(),
+                        // 「想让人看什么」就是这一版的话（REWRITE §9.6）。
+                        seek_note: cli_args.note.clone(),
                         seats: cli_args.seats,
                         community_url: cli_args.community.clone(),
                         // 「让玩家看到彼此的反馈」这一轮只在控制台里改（DESIGN §3.5）。
@@ -232,8 +233,8 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
             &report.url,
             &report.title,
             &report.slug,
-            cli_args.card_out.as_deref(),
-            cli_args.no_card,
+            cli_args.card_path().flatten().as_deref(),
+            !cli_args.wants_card(),
         )
         .await,
     );
@@ -340,15 +341,12 @@ pub(crate) fn check_plaza_inputs(cli_args: &UploadArgs) -> Result<()> {
             );
         }
     }
-    if let Some(seek) = &cli_args.seek {
-        if seek.trim().is_empty() {
-            bail!("--seek 后面要跟一句话，告诉来的人你想让他们重点看什么。");
+    if let Some(note) = &cli_args.note {
+        if note.trim().is_empty() {
+            bail!("-m 后面要跟一句话：这版改了什么，或者你想让来的人重点看什么。");
         }
-        if seek.chars().count() > limits::MAX_SEEK_NOTE_CHARS {
-            bail!(
-                "「想让你看什么」太长了，最多 {} 个字。",
-                limits::MAX_SEEK_NOTE_CHARS
-            );
+        if note.chars().count() > limits::MAX_NOTE_CHARS {
+            bail!("这一版的话太长了，最多 {} 个字。", limits::MAX_NOTE_CHARS);
         }
     }
     if let Some(seats) = cli_args.seats {
@@ -452,7 +450,7 @@ fn inspect_dir(
 /// 因为那时候没有人能回答问题；`--no-isolated` 是明确拒绝，照办，但要说清楚后果。
 fn choose_isolated(checked: &mut inspect::Report, cli_args: &UploadArgs) -> bool {
     let Some(threads) = checked.threads.clone() else {
-        return cli_args.isolated;
+        return cli_args.isolated == Isolation::On;
     };
     let head = if threads.is_certain() {
         format!("这个构建用了多线程（{}）", threads.because())
@@ -460,15 +458,15 @@ fn choose_isolated(checked: &mut inspect::Report, cli_args: &UploadArgs) -> bool
         format!("这个构建可能用了多线程（{}）", threads.because())
     };
 
-    if cli_args.no_isolated {
+    if cli_args.isolated == Isolation::Off {
         return decided(
             checked,
             false,
-            Finding::warn(format!("{head}；你加了 --no-isolated，那就不开"))
-                .hint("玩家打开时多半会报错，去掉 --no-isolated 就能跑"),
+            Finding::warn(format!("{head}；你写了 --isolated=off，那就不开"))
+                .hint("玩家打开时多半会报错，去掉 --isolated=off 就能跑"),
         );
     }
-    if cli_args.isolated {
+    if cli_args.isolated == Isolation::On {
         return decided(
             checked,
             true,
@@ -640,12 +638,14 @@ pub(crate) async fn choose_site(
     dir_key: &str,
     title: &str,
 ) -> Result<(String, SlugSource)> {
-    if let Some(slug) = &cli_args.site {
-        return Ok((slug.clone(), SlugSource::Explicit));
-    }
-    if !cli_args.new {
-        if let Some(slug) = config.remembered_slug(dir_key) {
-            return Ok((slug.to_string(), SlugSource::Remembered));
+    match cli_args.to.as_deref() {
+        // `--to new` 是「不要发到上次那个，给我一个新链接」。
+        Some("new") => {}
+        Some(slug) => return Ok((slug.to_string(), SlugSource::Explicit)),
+        None => {
+            if let Some(slug) = config.remembered_slug(dir_key) {
+                return Ok((slug.to_string(), SlugSource::Remembered));
+            }
         }
     }
     let slug = match create_site(client, title).await {

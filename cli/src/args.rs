@@ -19,7 +19,7 @@ playtest 5173              把本地开发服务器接出去，一直开着直�
 const EXIT_CODES: &str = "退出码：
   0  做成了
   1  没预料到的错误
-  2  命令写错了，或者要的功能还没做好
+  2  命令写错了
   3  需要登录，或者身份失效了
   4  网络不通
   5  服务端出错
@@ -59,7 +59,11 @@ pub struct UploadArgs {
     #[arg(short = 'n', long = "name", value_name = "作品名")]
     pub name: Option<String>,
 
-    /// 这版改了什么，玩家点开链接时看到
+    /// 这版改了什么、想让人重点看什么；门禁页、关注通知、广场卡上都是这一句（最多 280 字）
+    ///
+    /// 以前这件事有两个参数（`--note` 和 `--seek`）。对开发者「这版改了什么」和
+    /// 「想让你看什么」是同一句话，对玩家在门禁页、在通知正文、在广场卡上看到的也是
+    /// 同一句话——两个参数只是逼人分辨一个不存在的区别（REWRITE §9.6）。
     #[arg(short = 'm', long = "note", value_name = "一句话")]
     pub note: Option<String>,
 
@@ -75,11 +79,7 @@ pub struct UploadArgs {
     #[arg(long)]
     pub public: bool,
 
-    /// 在广场上标「正在找人测」，并告诉来的人你想让他们重点看什么（最多 140 字）；蕴含 --public
-    #[arg(long, value_name = "想让人看什么")]
-    pub seek: Option<String>,
-
-    /// 想找几位试玩者；门禁页和邀请卡上会写出来，留了名字的人算加入；蕴含 --seek
+    /// 想找几位试玩者；在广场上标「正在找人测」，门禁页和邀请卡上会写出来，留了名字的人算加入；蕴含 --public
     #[arg(long, value_name = "人数")]
     pub seats: Option<u32>,
 
@@ -87,21 +87,13 @@ pub struct UploadArgs {
     #[arg(long, value_name = "链接")]
     pub community: Option<String>,
 
-    /// 邀请卡存到哪（默认存到当前目录，叫「<作品名>-邀请卡.png」）
-    #[arg(long = "card-out", value_name = "路径")]
-    pub card_out: Option<PathBuf>,
+    /// 邀请卡存到哪（默认存到当前目录，叫「<作品名>-邀请卡.png」）；写 - 就不存
+    #[arg(long = "card", value_name = "路径")]
+    pub card: Option<String>,
 
-    /// 不存邀请卡
-    #[arg(long = "no-card", conflicts_with = "card_out")]
-    pub no_card: bool,
-
-    /// 让页面跑在隔离环境里；Godot 4 的线程导出需要这个才能运行
-    #[arg(long)]
-    pub isolated: bool,
-
-    /// 就算看出这个构建要多线程也不开隔离（不加这个的话，没终端时会自动开）
-    #[arg(long = "no-isolated", conflicts_with = "isolated")]
-    pub no_isolated: bool,
+    /// 让页面跑在隔离环境里。auto（默认，看出要多线程就开）、on、off
+    #[arg(long, value_name = "开关", default_value = "auto", value_parser = parse_isolation)]
+    pub isolated: Isolation,
 
     /// 找不到的路径都回到 index.html（前端路由用）
     #[arg(long)]
@@ -111,16 +103,12 @@ pub struct UploadArgs {
     #[arg(long, value_name = "策略", default_value = "once", value_parser = parse_gate)]
     pub gate: GateMode,
 
-    /// 发到指定的作品，而不是这个目录上次用的那个
-    #[arg(long, value_name = "slug")]
-    pub site: Option<String>,
-
-    /// 新建一个作品，拿一个新链接
-    #[arg(long)]
-    pub new: bool,
+    /// 发到哪个作品：一个 slug，或者 new 表示新建一个拿新链接（默认发到这个目录上次用的那个）
+    #[arg(long, value_name = "slug 或 new")]
+    pub to: Option<String>,
 
     /// 检查说「传上去一定打不开」时也照传（比如你知道 index.html 不在最外层是故意的）
-    #[arg(long)]
+    #[arg(short = 'y', long = "yes")]
     pub force: bool,
 
     /// 目录照常上传，目录里没有的路径（/api/…、WebSocket）走隧道到你电脑的这个端口（带后端的小应用用这个）
@@ -145,17 +133,13 @@ impl UploadArgs {
             || self.summary.is_some()
             || self.cover.is_some()
             || self.public
-            || self.seek.is_some()
             || self.seats.is_some()
             || self.community.is_some()
-            || self.card_out.is_some()
-            || self.no_card
-            || self.isolated
-            || self.no_isolated
+            || self.card.is_some()
+            || self.isolated != Isolation::Auto
             || self.spa
             || self.gate != GateMode::Once
-            || self.site.is_some()
-            || self.new
+            || self.to.is_some()
             || self.force
             || self.backend.is_some()
             || self.api.is_some()
@@ -164,10 +148,24 @@ impl UploadArgs {
 
     /// 要不要标「正在找人测」。
     ///
-    /// `--seats` 蕴含它：说了想找 10 位试玩者，却不在广场上标出来，那 10 个人不会自己出现。
-    /// 没写 `--seek` 的文案就只标一下，不编一句「想让你看什么」。
+    /// `--seats` 就是它：说了想找 10 位试玩者，却不在广场上标出来，那 10 个人不会自己出现。
+    /// 想让人重点看什么写在 `--note` 里，和「这版改了什么」是同一句话。
     pub fn seeking(&self) -> bool {
-        self.seek.is_some() || self.seats.is_some()
+        self.seats.is_some()
+    }
+
+    /// 邀请卡存到哪。`None` 是默认位置，`Some(None)` 是「不要存」（`--card -`）。
+    pub fn card_path(&self) -> Option<Option<PathBuf>> {
+        match self.card.as_deref() {
+            None => None,
+            Some("-") => Some(None),
+            Some(path) => Some(Some(PathBuf::from(path))),
+        }
+    }
+
+    /// 要不要存邀请卡。
+    pub fn wants_card(&self) -> bool {
+        self.card.as_deref() != Some("-")
     }
 
     /// 要不要放到广场上。求测必须先在广场上，否则没人看得到这个标。
@@ -249,15 +247,6 @@ pub enum Command {
         api: Option<String>,
     },
 
-    /// 有多少人关注着这个作品；下一版发出去，他们会收到通知
-    Followers {
-        #[arg(value_name = "slug 或目录")]
-        target: String,
-
-        #[arg(long, value_name = "网址")]
-        api: Option<String>,
-    },
-
     /// 把一个作品从广场上拿下来；它的链接照常能开
     Unlist {
         #[arg(value_name = "slug")]
@@ -281,6 +270,31 @@ pub enum Command {
 
 fn parse_gate(s: &str) -> Result<GateMode, String> {
     s.parse()
+}
+
+/// 跨源隔离（COOP / COEP）开不开。
+///
+/// 三态而不是 `--isolated` / `--no-isolated` 两个互斥布尔：它本来就是一个三选一的问题，
+/// 两个布尔要靠 `conflicts_with` 才能表达「不能同时说」，而且读命令的人得先知道
+/// 「都不写」是第三种情况（REWRITE §3.1）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Isolation {
+    /// 看出这个构建要多线程（`.wasm` 里有共享内存）就开。
+    #[default]
+    Auto,
+    On,
+    Off,
+}
+
+fn parse_isolation(s: &str) -> Result<Isolation, String> {
+    match s {
+        "auto" => Ok(Isolation::Auto),
+        "on" | "true" | "yes" => Ok(Isolation::On),
+        "off" | "false" | "no" => Ok(Isolation::Off),
+        other => Err(format!(
+            "只认 auto、on、off 三个词，不认识「{other}」。不写就是 auto：看出要多线程才开。"
+        )),
+    }
 }
 
 /// 第一个位置参数是什么。
@@ -357,10 +371,11 @@ mod tests {
 
     #[test]
     fn cli_parses_upload_and_subcommands() {
-        let cli = Cli::try_parse_from(["playtest", "./dist", "-n", "小球", "--isolated"]).unwrap();
+        let cli =
+            Cli::try_parse_from(["playtest", "./dist", "-n", "小球", "--isolated=on"]).unwrap();
         assert_eq!(cli.upload.target.as_deref(), Some("./dist"));
         assert_eq!(cli.upload.name.as_deref(), Some("小球"));
-        assert!(cli.upload.isolated);
+        assert_eq!(cli.upload.isolated, Isolation::On);
         assert_eq!(cli.upload.gate, GateMode::Once);
         assert!(cli.command.is_none());
 
@@ -383,7 +398,7 @@ mod tests {
             "playtest",
             "./dist",
             "--public",
-            "--seek",
+            "-m",
             "新手引导看得懂吗",
             "--summary",
             "三关五分钟",
@@ -392,7 +407,7 @@ mod tests {
         ])
         .unwrap();
         assert!(cli.upload.public);
-        assert_eq!(cli.upload.seek.as_deref(), Some("新手引导看得懂吗"));
+        assert_eq!(cli.upload.note.as_deref(), Some("新手引导看得懂吗"));
         assert_eq!(cli.upload.summary.as_deref(), Some("三关五分钟"));
         assert_eq!(cli.upload.cover, Some(PathBuf::from("cover.png")));
         assert!(cli.upload.any_set());
@@ -420,11 +435,11 @@ mod tests {
         assert!(!plain.upload.seeking());
         assert!(!plain.upload.wants_plaza());
 
-        // --seek 也蕴含上广场；--public 单独给不算找人测。
-        let sought = Cli::try_parse_from(["playtest", "./dist", "--seek", "看新手引导"]).unwrap();
-        assert!(sought.upload.seeking() && sought.upload.wants_plaza());
+        // --public 单独给不算找人测；-m 只是这一版的话，不把作品挂上广场。
         let opened = Cli::try_parse_from(["playtest", "./dist", "--public"]).unwrap();
         assert!(!opened.upload.seeking() && opened.upload.wants_plaza());
+        let noted = Cli::try_parse_from(["playtest", "./dist", "-m", "看新手引导"]).unwrap();
+        assert!(!noted.upload.seeking() && !noted.upload.wants_plaza());
     }
 
     #[test]
@@ -447,28 +462,65 @@ mod tests {
         );
     }
 
+    /// 一个参数管「存到哪」和「不要存」两件事：`-` 是 shell 里「不要文件」的老约定，
+    /// 比 `--card-out` 加一个 `--no-card` 少一个参数，也不可能自相矛盾（REWRITE §3.1）。
     #[test]
     fn the_card_can_go_somewhere_else_or_nowhere() {
         let cli =
-            Cli::try_parse_from(["playtest", "./dist", "--card-out", "~/Desktop/卡.png"]).unwrap();
-        assert_eq!(cli.upload.card_out, Some(PathBuf::from("~/Desktop/卡.png")));
-        assert!(!cli.upload.no_card);
-        assert!(cli.upload.any_set());
-
-        let cli = Cli::try_parse_from(["playtest", "./dist", "--no-card"]).unwrap();
-        assert!(cli.upload.no_card);
-        assert!(cli.upload.card_out.is_none());
-        assert!(cli.upload.any_set());
-
-        // 「存到这里」和「不要存」一起说，是自相矛盾，当场拦下。
-        assert!(
-            Cli::try_parse_from(["playtest", "./dist", "--no-card", "--card-out", "a.png"])
-                .is_err()
+            Cli::try_parse_from(["playtest", "./dist", "--card", "~/Desktop/卡.png"]).unwrap();
+        assert_eq!(
+            cli.upload.card_path(),
+            Some(Some(PathBuf::from("~/Desktop/卡.png")))
         );
+        assert!(cli.upload.wants_card());
+        assert!(cli.upload.any_set());
+
+        let cli = Cli::try_parse_from(["playtest", "./dist", "--card", "-"]).unwrap();
+        assert_eq!(cli.upload.card_path(), Some(None));
+        assert!(!cli.upload.wants_card());
+        assert!(cli.upload.any_set());
+
+        // 不写就是默认位置。
+        let plain = Cli::try_parse_from(["playtest", "./dist"]).unwrap();
+        assert_eq!(plain.upload.card_path(), None);
+        assert!(plain.upload.wants_card());
     }
 
     #[test]
-    fn card_and_followers_take_a_slug_or_a_directory() {
+    fn isolation_is_one_three_way_switch_not_two_booleans() {
+        let auto = Cli::try_parse_from(["playtest", "./dist"]).unwrap();
+        assert_eq!(auto.upload.isolated, Isolation::Auto);
+        assert!(!auto.upload.any_set() || auto.upload.target.is_some());
+
+        for (word, want) in [
+            ("auto", Isolation::Auto),
+            ("on", Isolation::On),
+            ("off", Isolation::Off),
+        ] {
+            let cli =
+                Cli::try_parse_from(["playtest", "./dist", &format!("--isolated={word}")]).unwrap();
+            assert_eq!(cli.upload.isolated, want, "{word}");
+        }
+        assert!(Cli::try_parse_from(["playtest", "./dist", "--isolated=maybe"]).is_err());
+        // 两个互斥布尔没了，也就不存在「同时说」这件事。
+        assert!(Cli::try_parse_from(["playtest", "./dist", "--no-isolated"]).is_err());
+    }
+
+    /// 发到哪个作品是一个问题，不是两个（原来的 `--site` 与 `--new` 能同时给）。
+    #[test]
+    fn where_to_publish_is_one_question() {
+        let cli = Cli::try_parse_from(["playtest", "./dist", "--to", "keen-yak-7"]).unwrap();
+        assert_eq!(cli.upload.to.as_deref(), Some("keen-yak-7"));
+
+        let fresh = Cli::try_parse_from(["playtest", "./dist", "--to", "new"]).unwrap();
+        assert_eq!(fresh.upload.to.as_deref(), Some("new"));
+
+        assert!(Cli::try_parse_from(["playtest", "./dist", "--new"]).is_err());
+        assert!(Cli::try_parse_from(["playtest", "./dist", "--site", "a"]).is_err());
+    }
+
+    #[test]
+    fn card_takes_a_slug_or_a_directory() {
         let cli = Cli::try_parse_from(["playtest", "card", "brisk-otter-41"]).unwrap();
         match cli.command {
             Some(Command::Card { target, out, .. }) => {
@@ -488,14 +540,11 @@ mod tests {
             other => panic!("解析成了 {other:?}"),
         }
 
-        let cli = Cli::try_parse_from(["playtest", "followers", "brisk-otter-41"]).unwrap();
-        assert!(
-            matches!(cli.command, Some(Command::Followers { target, .. }) if target == "brisk-otter-41")
-        );
-
         // 不给作品就不知道要哪一张卡。
         assert!(Cli::try_parse_from(["playtest", "card"]).is_err());
-        assert!(Cli::try_parse_from(["playtest", "followers"]).is_err());
+
+        // 关注数并进了 ls：单开一条命令只为看一个数字，不值一个命令名（REWRITE §3.1）。
+        assert!(Cli::try_parse_from(["playtest", "followers", "brisk-otter-41"]).is_err());
     }
 
     #[test]

@@ -155,7 +155,7 @@ fn a_handwritten_client_can_shake_hands_list_tools_and_call_one() {
         [
             "playtest_card",
             "playtest_list",
-            "playtest_share_port",
+            "playtest_share",
             "playtest_site",
             "playtest_upload"
         ]
@@ -204,13 +204,18 @@ fn a_handwritten_client_can_shake_hands_list_tools_and_call_one() {
     assert!(body["elapsed_ms"].is_u64(), "{body}");
 }
 
+/// 端口上没东西在监听时，说的是这件事本身——而不是「这条路还没上线」。
+///
+/// 这条测试以前把「隧道还没做好」钉死了，而隧道其实早就能用：MCP 那一侧对着助手
+/// 低报了自己的能力，方向和「不虚报」是反的，一样要修（AGENTS 第 4 条）。
 #[test]
-fn the_tunnel_tool_says_it_is_not_built_yet_instead_of_pretending() {
+fn sharing_a_port_with_nothing_on_it_says_exactly_that() {
     let home = tempfile::tempdir().unwrap();
     let mut server = Server::start(home.path());
     handshake(&mut server);
 
-    let reply = server.call(2, "playtest_share_port", json!({ "port": 5173 }));
+    // 一个几乎不可能有人在听的端口。
+    let reply = server.call(2, "playtest_share", json!({ "port": 1 }));
     assert_eq!(
         reply["result"]["isError"],
         json!(true),
@@ -218,14 +223,51 @@ fn the_tunnel_tool_says_it_is_not_built_yet_instead_of_pretending() {
     );
     let body = payload(&reply);
     assert_eq!(body["ok"], false, "{body}");
-    assert_eq!(body["code"], "not_implemented");
     let message = body["message"].as_str().unwrap();
-    assert!(message.contains("还没上线"), "{message}");
-    assert!(message.contains("5173"), "要说清是哪个端口：{message}");
     assert!(
-        message.contains("playtest_upload"),
-        "得告诉它现在能做什么：{message}"
+        message.contains("监听") || message.contains("端口"),
+        "要说清是端口的事：{message}"
     );
+    assert!(
+        !message.contains("还没上线"),
+        "隧道早就能用了，不许低报：{message}"
+    );
+}
+
+/// 工具表就是命令表：助手看到的能力和 `playtest --help` 说的是同一套（REWRITE §3.2）。
+#[test]
+fn the_tool_list_matches_what_the_cli_can_do() {
+    let home = tempfile::tempdir().unwrap();
+    let mut server = Server::start(home.path());
+    handshake(&mut server);
+
+    server.send(json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {} }));
+    let reply = server.reply_to(2);
+    let tools = reply["result"]["tools"]
+        .as_array()
+        .unwrap_or_else(|| panic!("要有工具表：{reply}"));
+    let names: Vec<&str> = tools
+        .iter()
+        .map(|t| t["name"].as_str().unwrap_or_default())
+        .collect();
+    for want in [
+        "playtest_upload",
+        "playtest_share",
+        "playtest_list",
+        "playtest_site",
+        "playtest_card",
+    ] {
+        assert!(names.contains(&want), "少了 {want}：{names:?}");
+    }
+    assert!(
+        !names.contains(&"playtest_share_port"),
+        "改名之后旧名字不该还在：{names:?}"
+    );
+
+    // 描述里不许再有「还没上线」这种话——它是给助手读的，说错了它就不会用。
+    let text = serde_json::to_string(tools).unwrap();
+    assert!(!text.contains("NOT AVAILABLE"), "{text}");
+    assert!(!text.contains("还没上线"), "{text}");
 }
 
 #[test]
