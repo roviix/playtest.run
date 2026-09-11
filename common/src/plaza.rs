@@ -9,6 +9,10 @@
 
 use serde::{Deserialize, Serialize};
 
+/// 墙上那一张卡。形状搬到了 [`crate::project`]（REWRITE §2.1）：广场和控制台作品墙
+/// 用同一个类型，同一个作品在两个地方才会说同一句话。
+pub use crate::project::ProjectCard as PlazaItem;
+
 /// 当前格式版本号。不兼容的改动才加一；2026-09-09 的字段全是加法，仍是 1。
 pub const SCHEMA: u32 = 1;
 
@@ -35,52 +39,6 @@ pub struct Plaza {
     pub club_followers: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PlazaItem {
-    pub slug: String,
-    /// 玩家点开的完整链接。
-    pub url: String,
-    pub title: String,
-    pub developer: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
-    /// 上传时认出来的引擎，小写标识符；认不出来就没有。
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub engine: Option<String>,
-    /// 说「试玩」还是「体验」（DESIGN §3.3）。控制面按 [`crate::manifest::GAME_ENGINES`] 算好，边缘不再判。
-    pub is_game: bool,
-    pub version: u32,
-    /// 最近一次提交版本的时间，RFC 3339。默认顺序的依据。
-    pub updated_at: String,
-    /// 匿名作品的到期时间，RFC 3339；登录用户的作品没有。
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expires_at: Option<String>,
-    /// 封面的完整地址（作品自己的域下的 `/_playtest/cover`）。没有封面就没有。
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cover_url: Option<String>,
-    /// [`PLAYERS_WINDOW_DAYS`] 天内点了「开始」的去重人数。
-    pub players: u32,
-    /// 「正在找人测」。
-    #[serde(default)]
-    pub seeking: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub seek_note: Option<String>,
-    /// 开发者想找几位试玩者（`--seats`）；`joined` 是留了名字的人数（DESIGN §3.3）。
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub seats: Option<u32>,
-    #[serde(default)]
-    pub joined: u32,
-    /// 关注这个作品的人数。0 就不说。
-    #[serde(default)]
-    pub followers: u32,
-    /// 开发者头像（GitHub 登录的开发者才有）。
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub avatar_url: Option<String>,
-    /// 在推广位上（DESIGN §3.11）。边缘渲染时永远标「推广」。
-    #[serde(default)]
-    pub boosted: bool,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,15 +51,15 @@ mod tests {
             title: "小球".into(),
             developer: "匿名开发者".into(),
             summary: None,
+            note: None,
             engine: None,
             is_game: false,
             version: 1,
             updated_at: "2026-09-08T00:00:00Z".into(),
             expires_at: None,
-            cover_url: None,
+            cover_hash: None,
             players: 0,
             seeking: false,
-            seek_note: None,
             seats: None,
             joined: 0,
             followers: 0,
@@ -113,8 +71,8 @@ mod tests {
             "summary",
             "engine",
             "expires_at",
-            "cover_url",
-            "seek_note",
+            "cover_hash",
+            "note",
             "seats",
             "avatar_url",
         ] {

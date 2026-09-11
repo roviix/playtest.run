@@ -8,15 +8,14 @@
 //! 「库里已经撤下、广场上还挂着」的窗口——每次重写之前先判一遍。
 
 use playtest_common::boost::MAX_SLOTS;
-use playtest_common::manifest::GAME_ENGINES;
 use playtest_common::plaza::{
     Plaza, PlazaItem, PLAYERS_WINDOW_DAYS, REPORTS_TO_HIDE, REPORTS_WINDOW_HOURS, SCHEMA,
 };
-use playtest_common::RESERVED_PATH_PREFIX;
 use time::Duration;
 
 use crate::clock;
 use crate::db;
+use crate::project;
 use crate::state::AppState;
 
 /// 多久主动重写一次（人数会变，别的都由事件触发）。
@@ -136,49 +135,30 @@ struct Counts {
 }
 
 fn to_item(state: &AppState, candidate: db::PlazaCandidate, counts: Counts) -> Option<PlazaItem> {
-    let site = candidate.site;
-    let version = site.current_version?;
-    let listing = site.listing;
-    let url = state.site_url(&site.slug);
-    // 地址带上哈希的前几位：换了封面地址就变，边缘那边可以放心让浏览器缓存一天。
-    let cover_url = listing.cover_hash.as_ref().map(|hash| {
-        format!(
-            "{}{}cover?v={}",
-            url.trim_end_matches('/'),
-            RESERVED_PATH_PREFIX,
-            &hash[..hash.len().min(8)]
-        )
-    });
-    let is_game = listing
-        .engine
-        .as_deref()
-        .is_some_and(|e| GAME_ENGINES.contains(&e));
-    Some(PlazaItem {
-        players: counts.players,
-        slug: site.slug,
-        url,
-        title: site.title,
-        developer: candidate.developer,
-        summary: listing.summary,
-        engine: listing.engine,
-        is_game,
-        version,
-        // 老作品（迁移 003 之前提交的）没有 updated_at，拿建档时间顶上，别让它排到最前面去。
-        updated_at: listing.updated_at.unwrap_or(site.created_at),
-        expires_at: site.expires_at,
-        cover_url,
-        seeking: listing.seeking,
-        seek_note: if listing.seeking {
-            listing.seek_note
-        } else {
-            None
-        },
-        seats: listing.seats.filter(|n| *n > 0),
-        joined: counts.joined,
-        followers: counts.followers,
+    // 没发过版本的作品不上墙：卡上没有封面、没有版本、点开是一页「还没有内容」。
+    candidate.site.current_version?;
+    let url = state.site_url(&candidate.site.slug);
+    let owner = db::SiteOwner {
+        user_id: String::new(),
+        kind: String::new(),
+        display_name: candidate.developer,
         avatar_url: candidate.avatar_url,
-        boosted: counts.boosted,
-    })
+    };
+    let mut card = project::compose(
+        candidate.site,
+        Some(owner),
+        url,
+        project::Extras {
+            players: counts.players,
+            joined: counts.joined,
+            followers: counts.followers,
+            ..Default::default()
+        },
+    )
+    .card();
+    // 在位与否由这一轮现算的推广名单说了算，不从作品那一行读。
+    card.boosted = counts.boosted;
+    Some(card)
 }
 
 /// 每 [`REFRESH_INTERVAL`] 重写一次。
@@ -203,15 +183,15 @@ mod tests {
             title: slug.into(),
             developer: "某某".into(),
             summary: None,
+            note: None,
             engine: None,
             is_game: false,
             version: 1,
             updated_at: updated_at.into(),
             expires_at: None,
-            cover_url: None,
+            cover_hash: None,
             players: 0,
             seeking,
-            seek_note: None,
             seats: None,
             joined: 0,
             followers: 0,

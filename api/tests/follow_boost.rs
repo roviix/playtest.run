@@ -181,7 +181,7 @@ impl Harness {
     }
 
     /// 边缘替玩家转过来的一条。带上玩家的 IP，限速的两把桶要用它。
-    async fn from_edge<T: Serialize>(&self, path: &str, ip: &str, value: &T) -> Reply {
+    async fn edge_sends<T: Serialize>(&self, path: &str, ip: &str, value: &T) -> Reply {
         self.send(
             Request::builder()
                 .method("POST")
@@ -343,7 +343,7 @@ impl Harness {
     }
 
     async fn follow_email(&self, target: FollowTarget, email: &str, ip: &str) -> Reply {
-        self.from_edge(
+        self.edge_sends(
             follow_paths::FOLLOW,
             ip,
             &FollowRequest {
@@ -363,7 +363,7 @@ impl Harness {
         assert_eq!(sent, FollowResponse::ConfirmSent);
         let token = self.confirm_token().await;
         let confirmed: ConfirmResponse = self
-            .from_edge(follow_paths::CONFIRM, ip, &ConfirmRequest { token })
+            .edge_sends(follow_paths::CONFIRM, ip, &ConfirmRequest { token })
             .await
             .json();
         confirmed.me_token
@@ -416,14 +416,17 @@ async fn an_email_only_counts_after_the_link_is_clicked() {
     }
     let (kind, subject, body, status) = h.last_notice().await.expect("该有一封确认信");
     assert_eq!(kind, notify::KIND_CONFIRM);
-    assert!(subject.contains("确认关注") && subject.contains("小球"), "{subject}");
+    assert!(
+        subject.contains("确认关注") && subject.contains("小球"),
+        "{subject}"
+    );
     assert!(body.contains("忽略这封信"), "{body}");
     assert_eq!(status, "pending");
 
     // 点了才算。
     let confirm_token = h.confirm_token().await;
     let confirmed: ConfirmResponse = h
-        .from_edge(
+        .edge_sends(
             follow_paths::CONFIRM,
             "203.0.113.7",
             &ConfirmRequest {
@@ -450,13 +453,19 @@ async fn an_email_only_counts_after_the_link_is_clicked() {
         assert_eq!(db::followers_count(&conn, &slug).unwrap(), 1);
     }
     assert_eq!(
-        h.state.store().get_live(&slug).await.unwrap().unwrap().followers,
+        h.state
+            .store()
+            .get_live(&slug)
+            .await
+            .unwrap()
+            .unwrap()
+            .followers,
         1,
         "门禁页上的关注数当场就该变"
     );
 
     // 同一个令牌用第二次不行。
-    h.from_edge(
+    h.edge_sends(
         follow_paths::CONFIRM,
         "203.0.113.7",
         &ConfirmRequest {
@@ -482,7 +491,7 @@ async fn the_me_page_lists_unfollows_and_unsubscribes() {
 
     // 有了 me_token 之后，再关注别的东西是一下点击。
     let added: FollowResponse = h
-        .from_edge(
+        .edge_sends(
             follow_paths::FOLLOW,
             "203.0.113.7",
             &FollowRequest {
@@ -497,7 +506,7 @@ async fn the_me_page_lists_unfollows_and_unsubscribes() {
         .json();
     assert_eq!(added, FollowResponse::Subscribed);
     let again: FollowResponse = h
-        .from_edge(
+        .edge_sends(
             follow_paths::FOLLOW,
             "203.0.113.7",
             &FollowRequest {
@@ -513,7 +522,7 @@ async fn the_me_page_lists_unfollows_and_unsubscribes() {
     assert_eq!(again, FollowResponse::AlreadyFollowing);
 
     let view: MeView = h
-        .from_edge(
+        .edge_sends(
             follow_paths::ME_VIEW,
             "203.0.113.7",
             &MeRequest {
@@ -527,7 +536,7 @@ async fn the_me_page_lists_unfollows_and_unsubscribes() {
 
     // 取消一项。
     let after: MeView = h
-        .from_edge(
+        .edge_sends(
             follow_paths::ME_UNFOLLOW,
             "203.0.113.7",
             &UnfollowRequest {
@@ -540,7 +549,13 @@ async fn the_me_page_lists_unfollows_and_unsubscribes() {
     assert_eq!(after.follows.len(), 1);
     assert_eq!(after.follows[0].target, FollowTarget::Plaza);
     assert_eq!(
-        h.state.store().get_live(&slug).await.unwrap().unwrap().followers,
+        h.state
+            .store()
+            .get_live(&slug)
+            .await
+            .unwrap()
+            .unwrap()
+            .followers,
         0
     );
 
@@ -553,7 +568,7 @@ async fn the_me_page_lists_unfollows_and_unsubscribes() {
         .unwrap()
     };
     let empty: MeView = h
-        .from_edge(
+        .edge_sends(
             follow_paths::UNSUBSCRIBE,
             "203.0.113.7",
             &UnsubscribeRequest {
@@ -563,7 +578,7 @@ async fn the_me_page_lists_unfollows_and_unsubscribes() {
         .await
         .json();
     assert!(empty.follows.is_empty());
-    h.from_edge(
+    h.edge_sends(
         follow_paths::ME_VIEW,
         "203.0.113.7",
         &MeRequest { me_token },
@@ -572,7 +587,7 @@ async fn the_me_page_lists_unfollows_and_unsubscribes() {
     .error(StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized);
 
     // 点第二次也不报错——多半就是点了两下。
-    h.from_edge(
+    h.edge_sends(
         follow_paths::UNSUBSCRIBE,
         "203.0.113.7",
         &UnsubscribeRequest {
@@ -590,7 +605,7 @@ async fn a_browser_subscription_takes_effect_at_once() {
     let slug = h.site(&token).await;
 
     let subscribed: FollowResponse = h
-        .from_edge(
+        .edge_sends(
             follow_paths::FOLLOW,
             "203.0.113.8",
             &FollowRequest {
@@ -610,12 +625,18 @@ async fn a_browser_subscription_takes_effect_at_once() {
     );
     assert_eq!(h.queued(notify::KIND_CONFIRM).await, 0);
     assert_eq!(
-        h.state.store().get_live(&slug).await.unwrap().unwrap().followers,
+        h.state
+            .store()
+            .get_live(&slug)
+            .await
+            .unwrap()
+            .unwrap()
+            .followers,
         1
     );
 
     let again: FollowResponse = h
-        .from_edge(
+        .edge_sends(
             follow_paths::FOLLOW,
             "203.0.113.8",
             &FollowRequest {
@@ -677,7 +698,7 @@ async fn send_link_never_says_whether_the_email_is_known() {
     .await;
 
     let known: FollowResponse = h
-        .from_edge(
+        .edge_sends(
             follow_paths::ME_SEND_LINK,
             "198.51.100.4",
             &SendLinkRequest {
@@ -687,7 +708,7 @@ async fn send_link_never_says_whether_the_email_is_known() {
         .await
         .json();
     let unknown: FollowResponse = h
-        .from_edge(
+        .edge_sends(
             follow_paths::ME_SEND_LINK,
             "198.51.100.5",
             &SendLinkRequest {
@@ -705,7 +726,7 @@ async fn send_link_never_says_whether_the_email_is_known() {
 
     // 写歪的邮箱当场就说。
     let body = h
-        .from_edge(
+        .edge_sends(
             follow_paths::ME_SEND_LINK,
             "198.51.100.6",
             &SendLinkRequest {
@@ -754,7 +775,7 @@ async fn following_something_that_is_not_there_is_a_404() {
     .error(StatusCode::NOT_FOUND, ErrorCode::NotFound);
 
     // 边缘据 401 把 pt_me 那个 cookie 清掉。
-    h.from_edge(
+    h.edge_sends(
         follow_paths::ME_VIEW,
         "203.0.113.7",
         &MeRequest {
@@ -782,7 +803,10 @@ async fn a_new_version_tells_the_followers_once_a_day() {
     h.publish(&token, &slug, Some("改了第三关的跳跃判定")).await;
     assert_eq!(h.queued(notify::KIND_SITE_VERSION).await, 1);
     let (_, subject, body, _) = h.last_notice().await.unwrap();
-    assert!(subject.contains("小球") && subject.contains("v2"), "{subject}");
+    assert!(
+        subject.contains("小球") && subject.contains("v2"),
+        "{subject}"
+    );
     assert!(body.contains("改了第三关的跳跃判定"), "{body}");
     let url = h.last_notice_url().await.expect("信里要有去处");
     assert!(url.contains("from=notice"), "链接要带来源：{url}");
@@ -797,7 +821,10 @@ async fn a_new_version_tells_the_followers_once_a_day() {
     );
     let (_, subject, body, _) = h.last_notice().await.unwrap();
     assert!(subject.contains("v4"), "合并后是最新那一版：{subject}");
-    assert!(body.contains("开发者发了新版本"), "没写 note 就用这句：{body}");
+    assert!(
+        body.contains("开发者发了新版本"),
+        "没写 note 就用这句：{body}"
+    );
 }
 
 #[tokio::test]
@@ -962,7 +989,10 @@ async fn a_granted_boost_goes_live_and_lands_on_top_of_the_plaza() {
         .call::<()>("GET", &paths::site(&promoted), Some(&token), None)
         .await
         .json();
-    assert_eq!(site.listing.boost.map(|b| b.status), Some(BoostStatus::Live));
+    assert_eq!(
+        site.listing.boost.map(|b| b.status),
+        Some(BoostStatus::Live)
+    );
 
     // 提前结束：推广位上就没有它了。
     let ended = h
@@ -1187,7 +1217,10 @@ async fn the_queue_view_says_how_much_is_waiting() {
         .json();
     assert_eq!(queue.pending, 1);
     assert_eq!(queue.sent_24h, 0);
-    assert!(queue.next_digest_at.is_some(), "下一期周报什么时候发要看得到");
+    assert!(
+        queue.next_digest_at.is_some(),
+        "下一期周报什么时候发要看得到"
+    );
 
     notify::worker::run_once(&h.state).await;
     let queue: NotificationQueue = h
@@ -1206,7 +1239,10 @@ async fn the_avatar_follows_the_login_all_the_way_to_the_gate() {
     let token = h.login().await;
     let slug = h.site(&token).await;
 
-    let me: Me = h.call::<()>("GET", paths::ME, Some(&token), None).await.json();
+    let me: Me = h
+        .call::<()>("GET", paths::ME, Some(&token), None)
+        .await
+        .json();
     assert_eq!(me.avatar_url.as_deref(), Some(AVATAR));
 
     live::publish(&h.state, &slug).await;

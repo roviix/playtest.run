@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 
 use playtest_common::follow::root_paths;
 use playtest_common::plaza::{Plaza, PlazaItem, PLAYERS_WINDOW_DAYS};
+use playtest_common::project::{Blurb, Fact};
 use playtest_common::store::FsStore;
 use playtest_common::DEVELOPER_API_URL;
 use time::format_description::well_known::Rfc3339;
@@ -204,7 +205,7 @@ fn tile(item: &PlazaItem, on_slot: bool, now: OffsetDateTime) -> String {
     let title = esc(&item.title);
     let verb = if item.is_game { "试玩" } else { "体验" };
 
-    let art = match &item.cover_url {
+    let art = match &item.cover_url() {
         Some(cover) => format!(
             "<img class=\"cover\" src=\"{}\" alt=\"\" loading=\"lazy\" decoding=\"async\">",
             esc(cover)
@@ -258,7 +259,7 @@ fn fact_html(item: &PlazaItem, now: OffsetDateTime) -> String {
             return format!("<span class=\"fact seats\" style=\"--p:{pct}%\"><i></i>{text}</span>");
         }
     }
-    format!("<span class=\"fact\"{}>{text}</span>", fact_hint(item, now))
+    format!("<span class=\"fact\"{}>{text}</span>", fact_hint(item))
 }
 
 fn who(item: &PlazaItem) -> String {
@@ -277,57 +278,41 @@ loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\">",
     format!("{face}{}", esc(&item.developer))
 }
 
-/// 正在找人测且有求测的话：先写「这次想测」，和那句话挤在一行。其余用简介。
+/// 作品名下面那一行。说哪一句由 [`PlazaItem::blurb`] 决定（控制台那一侧读的是同一个判断），
+/// 这里只负责把它排成 HTML。
 fn blurb(item: &PlazaItem) -> String {
-    if item.seeking {
-        if let Some(note) = item
-            .seek_note
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            return format!(
-                "<p class=\"summary\"><span class=\"seek-k\">这次想测</span> {}</p>",
-                esc(note)
-            );
-        }
-    }
-    let line = item
-        .summary
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(esc)
-        .unwrap_or_default();
+    let line = match item.blurb() {
+        Some(Blurb::Seeking(note)) => format!(
+            "<span class=\"seek-k\">这次想测</span> {}",
+            esc(note.trim())
+        ),
+        Some(Blurb::Summary(summary)) => esc(summary.trim()),
+        None => String::new(),
+    };
     format!("<p class=\"summary\">{line}</p>")
 }
 
-/// 卡底右边那一件事实。按这个顺序取第一个成立的，一张卡上不并排放两个数字：
-/// 名额进度 → 还剩多久 → 近 [`PLAYERS_WINDOW_DAYS`] 天人玩过 → 多久以前 → 版本号。
+/// 卡底右边那一件事实。**是哪一件**由 [`PlazaItem::fact`] 一处判定（控制台读同一个判断），
+/// 这里只把它说成中文；时间那两种要拿「现在」去算，所以留在渲染这一侧。
+///
+/// 时间解析不出来就退到版本号——那也是一句真话，好过在卡上留一块空白。
 fn fact(item: &PlazaItem, now: OffsetDateTime) -> String {
-    if item.seeking {
-        if let Some(seats) = item.seats.filter(|s| *s > 0) {
-            return format!("{} / {seats} 位", item.joined);
-        }
+    match item.fact() {
+        Fact::Seats { joined, seats } => format!("{joined} / {seats} 位"),
+        Fact::Expires { at } => match OffsetDateTime::parse(&at, &Rfc3339) {
+            Ok(at) => remaining(at, now),
+            Err(_) => format!("v{}", item.version),
+        },
+        Fact::Players { count } => format!("{count} 人玩过"),
+        Fact::Updated { at } => match OffsetDateTime::parse(&at, &Rfc3339) {
+            Ok(updated) => ago(updated, now),
+            Err(_) => format!("v{}", item.version),
+        },
     }
-    if let Some(at) = item
-        .expires_at
-        .as_deref()
-        .and_then(|raw| OffsetDateTime::parse(raw, &Rfc3339).ok())
-    {
-        return remaining(at, now);
-    }
-    if item.players > 0 {
-        return format!("{} 人玩过", item.players);
-    }
-    if let Ok(updated) = OffsetDateTime::parse(&item.updated_at, &Rfc3339) {
-        return ago(updated, now);
-    }
-    format!("v{}", item.version)
 }
 
-fn fact_hint(item: &PlazaItem, now: OffsetDateTime) -> String {
-    if fact(item, now).ends_with("人玩过") {
+fn fact_hint(item: &PlazaItem) -> String {
+    if matches!(item.fact(), Fact::Players { .. }) {
         format!(" title=\"近 {PLAYERS_WINDOW_DAYS} 天\"")
     } else {
         String::new()
@@ -531,10 +516,10 @@ mod tests {
             version: 7,
             updated_at: "2026-09-08T03:00:00Z".into(),
             expires_at: Some("2026-09-08T20:30:00Z".into()),
-            cover_url: None,
+            cover_hash: None,
             players: 12,
             seeking: true,
-            seek_note: Some("新手引导看得懂吗".into()),
+            note: Some("新手引导看得懂吗".into()),
             seats: Some(10),
             joined: 6,
             followers: 24,
@@ -659,7 +644,7 @@ mod tests {
         ad.boosted = true;
         let mut plain = item("quiet-one");
         plain.seeking = false;
-        plain.seek_note = None;
+        plain.note = None;
         let plaza = wall_of(vec![plain, ad, item("seeking-one")]);
         let html = render(&view(&plaza));
 
@@ -723,11 +708,11 @@ mod tests {
 
         it.expires_at = None;
         assert_eq!(fact(&it, now), "12 人玩过");
-        assert!(fact_hint(&it, now).contains(&PLAYERS_WINDOW_DAYS.to_string()));
+        assert!(fact_hint(&it).contains(&PLAYERS_WINDOW_DAYS.to_string()));
 
         it.players = 0;
         assert_eq!(fact(&it, now), "1 小时前");
-        assert!(fact_hint(&it, now).is_empty());
+        assert!(fact_hint(&it).is_empty());
 
         it.updated_at = "not-a-date".into();
         assert_eq!(fact(&it, now), "v7");
@@ -784,7 +769,7 @@ mod tests {
     #[test]
     fn a_cover_is_an_image_and_a_non_game_says_experience() {
         let mut it = item("wise-mink-28");
-        it.cover_url = Some("http://wise-mink-28.localhost:8443/_playtest/cover?v=abcd1234".into());
+        it.cover_hash = Some("abcd1234ef".into());
         it.is_game = false;
         it.seeking = false;
         it.players = 0;
@@ -834,7 +819,7 @@ mod tests {
         it.title = "<img src=x onerror=alert(1)>".into();
         it.developer = "\"><script>alert(2)</script>".into();
         it.summary = Some("</p><script>alert(3)</script>".into());
-        it.seek_note = Some("</p><script>alert(5)</script>".into());
+        it.note = Some("</p><script>alert(5)</script>".into());
         it.url = "javascript:alert(4)\" onmouseover=\"".into();
         it.avatar_url = Some("https://avatars.githubusercontent.com/u/1?a=\"><b>".into());
         let plaza = wall_of(vec![it]);

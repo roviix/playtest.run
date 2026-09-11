@@ -7,6 +7,8 @@
 //! - [`api`]：CLI 与控制面之间的请求 / 响应体。
 //! - [`ingest`]：玩家浏览器写进来的东西——SDK 的事件与反馈、边缘补送的第一层事件。
 //! - [`results`]：控制台读出来的东西——作品时间线、会话点名册、反馈流。
+//! - [`project`]：**一个原语**——作品的六组属性，以及它的两个投影（卡、`live.json`）。REWRITE §2.1。
+//! - [`plan`]：档位与它带来的上限；卖的就是这张表里的行。REWRITE §4.1。
 //! - [`plaza`]：广场那一份 `plaza.json` 的形状——控制面写、边缘渲染（DESIGN §3.9）。
 //! - [`live`]：一个作品会变的那些（名额、关注数、群、公开反馈）——`sites/<slug>/live.json`（DESIGN §4.5）。
 //! - [`capabilities`]：控制面现在能做什么（邮件、Web Push）——`capabilities.json`（DESIGN §4.5）。
@@ -28,7 +30,9 @@ pub mod ingest;
 pub mod limits;
 pub mod live;
 pub mod manifest;
+pub mod plan;
 pub mod plaza;
+pub mod project;
 pub mod results;
 pub mod slug;
 pub mod store;
@@ -69,6 +73,10 @@ pub const CARD_WIDE_PATH: &str = "/_playtest/card-wide.png";
 /// 分享页：只放那张卡、「保存图片」和「复制链接」。只有公开的作品有。
 pub const SHARE_PATH: &str = "/_playtest/share";
 
+/// 封面。在作品自己的域下，走那个 slug 的每小时熔断——一屏十几张封面也是流量。
+/// 没有封面时是裸 404，不出 HTML（它是子资源，门禁页的硬线管着这件事）。
+pub const COVER_PATH: &str = "/_playtest/cover";
+
 pub const CARD_WIDTH: u32 = 1080;
 pub const CARD_HEIGHT: u32 = 1350;
 pub const CARD_WIDE_WIDTH: u32 = 1200;
@@ -87,6 +95,8 @@ pub const FROM_PARAM: &str = "from";
 pub const FROM_CARD: &str = "card";
 /// 从关注通知或周报里点进来的。
 pub const FROM_NOTICE: &str = "notice";
+/// 从广场那面墙上点进来的。三个环各带来了几个人，开发者据此知道（REWRITE §3.4「结果」）。
+pub const FROM_PLAZA: &str = "plaza";
 
 /// 邀请卡二维码里的地址：作品链接加 `?from=card`。
 pub fn card_qr_url(site_url: &str) -> String {

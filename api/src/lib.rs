@@ -20,6 +20,7 @@ pub mod error;
 pub mod live;
 pub mod notify;
 pub mod plaza;
+pub mod project;
 pub mod routes;
 pub mod state;
 pub mod sweeper;

@@ -302,7 +302,11 @@ async fn going_public_rewrites_the_plaza_at_once() {
     assert!(item.is_game);
     assert_eq!(item.version, 1);
     assert!(item.seeking);
-    assert_eq!(item.seek_note.as_deref(), Some("新手引导看得懂吗"));
+    assert_eq!(
+        item.blurb(),
+        Some(playtest_common::project::Blurb::Seeking("新手引导看得懂吗")),
+        "在找人测时卡上写这一版的话，不写一句话介绍"
+    );
     assert!(
         item.expires_at.is_some(),
         "匿名作品带到期时间，广场上要显示还剩多久"
@@ -312,7 +316,7 @@ async fn going_public_rewrites_the_plaza_at_once() {
         site.slug,
         &hash::hash_bytes(COVER_PNG)[..8]
     );
-    assert_eq!(item.cover_url.as_deref(), Some(expected_cover.as_str()));
+    assert_eq!(item.cover_url().as_deref(), Some(expected_cover.as_str()));
     assert_eq!(item.players, 0);
 
     // 再发一版：公开着的作品，广场上的版本号立刻跟上，封面和介绍这版没给就沿用。
@@ -321,7 +325,7 @@ async fn going_public_rewrites_the_plaza_at_once() {
     let plaza = h.plaza().await;
     assert_eq!(plaza.items[0].version, 2);
     assert_eq!(plaza.items[0].summary.as_deref(), Some("三关五分钟"));
-    assert!(plaza.items[0].cover_url.is_some());
+    assert!(plaza.items[0].cover_url().is_some());
     let manifest = h.store.get_manifest(&site.slug, 2).await.unwrap().unwrap();
     assert_eq!(manifest.cover, Some(cover()));
     assert_eq!(manifest.summary.as_deref(), Some("三关五分钟"));

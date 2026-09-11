@@ -30,7 +30,8 @@ use tower::ServiceExt;
 
 const INDEX_HTML: &[u8] = b"<!doctype html><meta charset=utf-8><canvas id=game></canvas>";
 /// 微信里打开的那种 UA：拿来验证 `from=card` 压得过它。
-const WECHAT_UA: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 \
+const WECHAT_UA: &str =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 \
      (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49(0x18003128)";
 
 struct Harness {
@@ -188,7 +189,7 @@ impl Harness {
     }
 
     /// 边缘补送一批。服务器对服务器，没有 Origin。
-    async fn from_edge(&self, events: Vec<EdgeEvent>) -> Reply {
+    async fn edge_sends(&self, events: Vec<EdgeEvent>) -> Reply {
         self.send(
             Request::builder()
                 .method("POST")
@@ -325,7 +326,10 @@ async fn settings_say_what_is_wrong_in_plain_words() {
         .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
     assert!(body.message.contains("http"), "{}", body.message);
 
-    let too_long = format!("https://example.com/{}", "群".repeat(limits::MAX_COMMUNITY_URL_CHARS));
+    let too_long = format!(
+        "https://example.com/{}",
+        "群".repeat(limits::MAX_COMMUNITY_URL_CHARS)
+    );
     h.patch(
         &token,
         &slug,
@@ -390,7 +394,10 @@ async fn asking_for_seats_means_looking_for_players() {
         .json();
     assert_eq!(site.listing.seats, None);
     assert_eq!(site.listing.community_url, None);
-    assert!(site.listing.seeking, "清名额不等于不找人了，那是 --seek 的事");
+    assert!(
+        site.listing.seeking,
+        "清名额不等于不找人了，那是 --seek 的事"
+    );
 
     let live = h.live(&slug).await;
     assert_eq!(live.seats, None);
@@ -417,7 +424,7 @@ async fn a_name_at_the_start_counts_as_one_who_joined() {
     let named = session_id('a');
     let dirty = session_id('b');
     let quiet = session_id('c');
-    h.from_edge(vec![
+    h.edge_sends(vec![
         start_with_name(&slug, &named, "  小王\n  "),
         start_with_name(&slug, &dirty, "傻逼玩家"),
         edge_event(edge_kind::START, &slug, &quiet),
@@ -430,7 +437,11 @@ async fn a_name_at_the_start_counts_as_one_who_joined() {
         Some("小王"),
         "两头的空白和换行要去掉"
     );
-    assert_eq!(h.session_name(&dirty).await, None, "脏词当没留名，但人照样进得去");
+    assert_eq!(
+        h.session_name(&dirty).await,
+        None,
+        "脏词当没留名，但人照样进得去"
+    );
     assert_eq!(h.session_name(&quiet).await, None);
 
     // 「已加入」只数留了名的那些。
@@ -446,7 +457,7 @@ async fn a_name_at_the_start_counts_as_one_who_joined() {
     assert_eq!(site.listing.joined, 1);
 
     // 同一个人再点一次开始，改不了已经留下的名字。
-    h.from_edge(vec![start_with_name(&slug, &named, "另一个名字")])
+    h.edge_sends(vec![start_with_name(&slug, &named, "另一个名字")])
         .await
         .json::<ingest::Accepted>();
     assert_eq!(h.session_name(&named).await.as_deref(), Some("小王"));
@@ -460,7 +471,7 @@ async fn an_overlong_name_is_cut_by_characters_not_bytes() {
     let sid = session_id('d');
     // 汉字一个字三个字节：按字节截会把最后一个字切成乱码。
     let long = "汉".repeat(limits::MAX_PLAYER_NAME_CHARS + 10);
-    h.from_edge(vec![start_with_name(&slug, &sid, &long)])
+    h.edge_sends(vec![start_with_name(&slug, &sid, &long)])
         .await
         .json::<ingest::Accepted>();
     let name = h.session_name(&sid).await.unwrap();
@@ -475,7 +486,7 @@ async fn the_card_beats_the_wechat_ua() {
 
     let from_card = session_id('e');
     let just_wechat = session_id('f');
-    h.from_edge(vec![
+    h.edge_sends(vec![
         EdgeEvent {
             from: Some(ingest::source::CARD.to_string()),
             wechat: true,
@@ -512,7 +523,10 @@ async fn the_card_beats_the_wechat_ua() {
         Some(ingest::source::CARD),
         "扫卡的人多半也在微信里，开发者想知道的是那张卡"
     );
-    assert_eq!(kind_of(&just_wechat).as_deref(), Some(ingest::source::WECHAT));
+    assert_eq!(
+        kind_of(&just_wechat).as_deref(),
+        Some(ingest::source::WECHAT)
+    );
 }
 
 // ---------------------------------------------------------------- 结果
@@ -525,7 +539,7 @@ async fn the_timeline_counts_sources_and_names() {
     let one = session_id('1');
     let two = session_id('2');
     let three = session_id('3');
-    h.from_edge(vec![
+    h.edge_sends(vec![
         EdgeEvent {
             from: Some(ingest::source::CARD.to_string()),
             ..edge_event(edge_kind::GATE_VIEW, &slug, &one)
@@ -545,7 +559,12 @@ async fn the_timeline_counts_sources_and_names() {
     .json::<ingest::Accepted>();
 
     let results: SiteResults = h
-        .call::<()>("GET", &result_paths::site_results(&slug), Some(&token), None)
+        .call::<()>(
+            "GET",
+            &result_paths::site_results(&slug),
+            Some(&token),
+            None,
+        )
         .await
         .json();
     let v1 = results
@@ -576,7 +595,11 @@ async fn the_timeline_counts_sources_and_names() {
         )
         .await
         .json();
-    let mut names: Vec<String> = roster.sessions.iter().filter_map(|s| s.name.clone()).collect();
+    let mut names: Vec<String> = roster
+        .sessions
+        .iter()
+        .filter_map(|s| s.name.clone())
+        .collect();
     names.sort();
     assert_eq!(names, vec!["小李".to_string(), "小王".to_string()]);
 }
@@ -589,14 +612,19 @@ async fn public_feedback_reaches_the_gate_and_can_be_taken_back() {
     let (token, slug) = h.live_site().await;
     let sid = session_id('g');
 
-    h.from_edge(vec![start_with_name(&slug, &sid, "小王")])
+    h.edge_sends(vec![start_with_name(&slug, &sid, "小王")])
         .await
         .json::<ingest::Accepted>();
     h.say(&slug, &sid, "第三关的跳跃判定有点飘").await;
 
     // 还没打开开关：反馈在开发者那儿看得到，但不是公开的。
     let list: FeedbackList = h
-        .call::<()>("GET", &result_paths::site_feedback(&slug), Some(&token), None)
+        .call::<()>(
+            "GET",
+            &result_paths::site_feedback(&slug),
+            Some(&token),
+            None,
+        )
         .await
         .json();
     let item = &list.items[0];
@@ -706,7 +734,12 @@ async fn setting_a_cover_from_a_note_says_there_is_no_screenshot_yet() {
     let sid = session_id('l');
     h.say(&slug, &sid, "这里有个洞").await;
     let list: FeedbackList = h
-        .call::<()>("GET", &result_paths::site_feedback(&slug), Some(&token), None)
+        .call::<()>(
+            "GET",
+            &result_paths::site_feedback(&slug),
+            Some(&token),
+            None,
+        )
         .await
         .json();
 

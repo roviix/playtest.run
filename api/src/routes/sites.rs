@@ -3,7 +3,7 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
-use playtest_common::api::{CreateSiteRequest, Listing, Site, UpdateSiteRequest};
+use playtest_common::api::{CreateSiteRequest, Site, UpdateSiteRequest};
 use playtest_common::limits;
 use playtest_common::slug::{self, ADJECTIVES, ANIMALS};
 use rand::Rng;
@@ -288,30 +288,23 @@ pub async fn load_site(state: &AppState, row: SiteRow) -> ApiResult<Site> {
     Ok(to_site(state, row, club))
 }
 
+/// 控制台与 CLI 看到的那一份。
+///
+/// 它不再自己从数据库那一行挑字段——先拼成 [`playtest_common::project::Project`]
+/// （控制面唯一的拼装点，`crate::project`），再投影。门禁页的 `live.json` 和广场卡
+/// 走的是同一个 `Project`，所以三处不会各自漂（REWRITE §2.1）。
+///
+/// 这里不查库：`club` 已经由调用方取好，列表页才不会变成 N 次查询。
 pub fn to_site(state: &AppState, row: SiteRow, club: Club) -> Site {
-    let l = row.listing;
-    Site {
-        url: state.site_url(&row.slug),
-        slug: row.slug,
-        title: row.title,
-        current_version: row.current_version,
-        created_at: row.created_at,
-        expires_at: row.expires_at,
-        listing: Listing {
-            public: l.public,
-            seeking: l.seeking,
-            seek_note: l.seek_note,
-            summary: l.summary,
-            hidden: l.hidden_at.is_some(),
-            has_cover: l.cover_hash.is_some(),
-            seats: l.seats.filter(|n| *n > 0),
-            joined: club.joined,
-            followers: club.followers,
-            community_url: l.community_url,
-            feedback_public: l.feedback_public,
-            boost: club.boost,
-        },
-    }
+    let url = state.site_url(&row.slug);
+    let extras = crate::project::Extras {
+        joined: club.joined,
+        followers: club.followers,
+        boost: club.boost,
+        ..Default::default()
+    };
+    // 作品是谁的，这条路上已经鉴过权（调用方拿的就是自己的作品），头像与名字这一页用不上。
+    crate::project::site_view(&crate::project::compose(row, None, url, extras))
 }
 
 /// `形容词-动物-两位数`，撞了重抽（DESIGN §3.1）。

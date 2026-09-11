@@ -10,10 +10,11 @@
 
 use std::time::Duration;
 
-use playtest_common::live::{PublicFeedbackItem, SiteLive, PUBLIC_FEEDBACK_ON_GATE, SCHEMA};
+use playtest_common::live::{PublicFeedbackItem, SiteLive, PUBLIC_FEEDBACK_ON_GATE};
 
 use crate::clock;
 use crate::db;
+use crate::project;
 use crate::state::AppState;
 
 /// 多久给最近有动静的作品刷一遍（DESIGN §4.5 表里那个「每 5 分钟」）。
@@ -55,9 +56,8 @@ async fn compose(state: &AppState, slug: &str) -> anyhow::Result<Option<SiteLive
     let Some(site) = db::find_site(&conn, slug)? else {
         return Ok(None);
     };
-    let listing = site.listing;
-    let feedback_public = listing.feedback_public;
-    let public_feedback = if feedback_public {
+    // 反馈墙关着的时候一条都不查——不是查完再丢掉。
+    let public_feedback = if site.listing.feedback_public {
         db::recent_public_feedback(&conn, slug, PUBLIC_FEEDBACK_ON_GATE)?
             .into_iter()
             .map(|row| PublicFeedbackItem {
@@ -70,21 +70,17 @@ async fn compose(state: &AppState, slug: &str) -> anyhow::Result<Option<SiteLive
     } else {
         Vec::new()
     };
-    Ok(Some(SiteLive {
-        schema: SCHEMA,
-        slug: slug.to_string(),
-        generated_at: clock::now_string(),
-        seats: listing.seats.filter(|n| *n > 0),
+    let extras = project::Extras {
         joined: db::joined_count(&conn, slug)?,
         followers: db::followers_count(&conn, slug)?,
-        community_url: listing.community_url,
-        feedback_public,
         public_feedback,
-        avatar_url: db::site_owner(&conn, slug)?.and_then(|owner| owner.avatar_url),
-        // 「在广场上」是开发者的意愿加上我们没有撤下它；门禁页的「分享」按这个判（DESIGN §3.4）。
-        listed: listing.public && listing.hidden_at.is_none(),
-        seeking: listing.seeking,
-    }))
+        ..Default::default()
+    };
+    let owner = db::site_owner(&conn, slug)?;
+    let url = state.site_url(slug);
+    Ok(Some(project::live_view(&project::compose(
+        site, owner, url, extras,
+    ))))
 }
 
 /// 每 [`REFRESH_INTERVAL`] 给最近有动静的作品刷一遍。返回刷了几个。
