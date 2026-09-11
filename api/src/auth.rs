@@ -80,7 +80,7 @@ impl FromRequestParts<AppState> for Caller {
         let token_hash = hash::hash_bytes(token.as_bytes());
 
         let owner = {
-            let conn = state.db().lock().await;
+            let conn = state.db().read().await;
             db::find_token_owner(&conn, &token_hash)?
         };
         let owner = owner.ok_or_else(|| ApiError::unauthorized(BAD_TOKEN))?;

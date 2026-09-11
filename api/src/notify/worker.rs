@@ -32,7 +32,7 @@ pub fn spawn(state: AppState) {
 pub async fn run_once(state: &AppState) -> usize {
     let now = clock::now();
     let due = {
-        let conn = state.db().lock().await;
+        let conn = state.db().read().await;
         match db::due_notifications(&conn, &clock::format(now), BATCH) {
             Ok(rows) => rows,
             Err(e) => {

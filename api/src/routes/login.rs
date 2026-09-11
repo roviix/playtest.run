@@ -384,7 +384,7 @@ async fn anon_caller(state: &AppState, headers: &HeaderMap) -> Option<String> {
         return None;
     }
     let token_hash = hash::hash_bytes(value.trim().as_bytes());
-    let conn = state.db().lock().await;
+    let conn = state.db().read().await;
     let owner = db::find_token_owner(&conn, &token_hash).ok().flatten()?;
     if owner.kind != "anon" {
         return None;

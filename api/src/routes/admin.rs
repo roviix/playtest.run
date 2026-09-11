@@ -61,7 +61,7 @@ impl FromRequestParts<AppState> for Admin {
 
 /// `GET /admin/boosts`
 pub async fn list(State(state): State<AppState>, _: Admin) -> ApiResult<Json<Vec<Boost>>> {
-    let conn = state.db().lock().await;
+    let conn = state.db().read().await;
     Ok(Json(
         db::list_boosts(&conn)?
             .into_iter()
@@ -227,7 +227,7 @@ pub async fn notifications(
     let now = clock::now();
     let since = clock::format(now - time::Duration::hours(24));
     let counts = {
-        let conn = state.db().lock().await;
+        let conn = state.db().read().await;
         db::queue_counts(&conn, &since)?
     };
     Ok(Json(NotificationQueue {

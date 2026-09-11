@@ -90,7 +90,7 @@ pub async fn create(
 
 pub async fn list(State(state): State<AppState>, caller: Caller) -> ApiResult<Json<Vec<Site>>> {
     let sites = {
-        let conn = state.db().lock().await;
+        let conn = state.db().read().await;
         db::list_live_sites(&conn, &caller.user_id)?
             .into_iter()
             .map(|row| {
@@ -108,7 +108,7 @@ pub async fn show(
     Path(slug): Path<String>,
 ) -> ApiResult<Json<Site>> {
     let row = {
-        let conn = state.db().lock().await;
+        let conn = state.db().read().await;
         db::find_live_site(&conn, &slug, &caller.user_id)?
     };
     let row = row.ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?;
@@ -282,7 +282,7 @@ pub fn club_of(conn: &Connection, slug: &str) -> ApiResult<Club> {
 /// 查一次库把 [`Club`] 补齐再拼响应。
 pub async fn load_site(state: &AppState, row: SiteRow) -> ApiResult<Site> {
     let club = {
-        let conn = state.db().lock().await;
+        let conn = state.db().read().await;
         club_of(&conn, &row.slug)?
     };
     Ok(to_site(state, row, club))

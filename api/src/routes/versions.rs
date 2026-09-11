@@ -21,7 +21,7 @@ pub async fn list(
     caller: Caller,
     Path(slug): Path<String>,
 ) -> ApiResult<Json<VersionList>> {
-    let conn = state.db().lock().await;
+    let conn = state.db().read().await;
     let site = db::find_live_site(&conn, &slug, &caller.user_id)?
         .ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?;
     let versions = db::list_versions(&conn, &site.slug)?
@@ -55,7 +55,7 @@ pub async fn files(
     Path((slug, version)): Path<(String, u32)>,
 ) -> ApiResult<Json<VersionFiles>> {
     let site = {
-        let conn = state.db().lock().await;
+        let conn = state.db().read().await;
         db::find_live_site(&conn, &slug, &caller.user_id)?
             .ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?
     };

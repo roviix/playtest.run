@@ -52,7 +52,7 @@ pub async fn rewrite(state: &AppState, slug: &str) -> anyhow::Result<()> {
 }
 
 async fn compose(state: &AppState, slug: &str) -> anyhow::Result<Option<SiteLive>> {
-    let conn = state.db().lock().await;
+    let conn = state.db().read().await;
     let Some(site) = db::find_site(&conn, slug)? else {
         return Ok(None);
     };
@@ -87,7 +87,7 @@ async fn compose(state: &AppState, slug: &str) -> anyhow::Result<Option<SiteLive
 pub async fn refresh_active(state: &AppState) -> anyhow::Result<usize> {
     let since = clock::format(clock::now() - time::Duration::hours(ACTIVE_WINDOW_HOURS));
     let slugs = {
-        let conn = state.db().lock().await;
+        let conn = state.db().read().await;
         db::active_slugs_since(&conn, &since)?
     };
     for slug in &slugs {

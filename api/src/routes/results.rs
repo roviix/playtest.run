@@ -53,7 +53,7 @@ pub async fn timeline(
     caller: Caller,
     Path(slug): Path<String>,
 ) -> ApiResult<Json<SiteResults>> {
-    let conn = state.db().lock().await;
+    let conn = state.db().read().await;
     let site = owned_site(&conn, &slug, &caller)?;
 
     let notes = version_notes(&conn, &slug)?;
@@ -132,7 +132,7 @@ pub async fn sessions(
         Some(value) => value.parse().map_err(ApiError::invalid)?,
     };
 
-    let conn = state.db().lock().await;
+    let conn = state.db().read().await;
     owned_site(&conn, &slug, &caller)?;
 
     let facts = session_facts(&conn, &slug, Some(version))?;
@@ -222,7 +222,7 @@ pub async fn feedback(
         Some(value) => Some(value.parse::<FeedbackStatus>().map_err(ApiError::invalid)?),
     };
 
-    let conn = state.db().lock().await;
+    let conn = state.db().read().await;
     let site = owned_site(&conn, &slug, &caller)?;
     let feedback_public = site.listing.feedback_public;
 

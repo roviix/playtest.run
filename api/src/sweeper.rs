@@ -102,7 +102,7 @@ pub async fn collect_blobs(state: &AppState) -> anyhow::Result<(usize, u64)> {
 pub async fn sweep_once(state: &AppState) -> anyhow::Result<usize> {
     let now = clock::now_string();
     let slugs = {
-        let conn = state.db().lock().await;
+        let conn = state.db().read().await;
         db::expired_site_slugs(&conn, &now)?
     };
 

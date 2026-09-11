@@ -1,13 +1,18 @@
 //! SQLite：账号、令牌、作品、版本、上传、blob 索引。
 //!
-//! 一个连接配一把 [`tokio::sync::Mutex`]。v0.1 是单机、单进程、私测 20 个开发者的规模
-//! （DESIGN §4.5），查询都是主键或单列索引上的一两行，串行化的代价看不见；
-//! 换 Postgres 时换掉的是这一层，不是这些 SQL。
+//! **一把写锁、一池读连接。** SQLite 在 WAL 下是「一个写者、任意多读者、读不挡写」：
+//! 写走 [`Db::lock`]，一个连接配一把 [`tokio::sync::Mutex`]——所有「先查再写」的序列
+//! （找不到就建、余额够就扣）都在这把锁里做，不会被另一个请求插进来；读走 [`Db::read`]，
+//! 从几个 `query_only` 的连接里拿一个，互不排队，也不排在写者后面。
+//! 原来只有一把锁，一次 `live.json` 重算或一页结果查询会让同一时刻的上传排队；
+//! 现在读者之间、读者与写者之间都不等。规模仍是单机（REWRITE §9.5：暂不换 Postgres），
+//! 换库时换掉的是这一层，不是这些 SQL。
 
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::Context;
-use rusqlite::{params, Connection, OptionalExtension, Row};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Row};
 use tokio::sync::{Mutex, MutexGuard};
 
 /// 迁移按顺序编号，下标 + 1 就是版本号。只增不改：已经跑过的那条永远不动。
@@ -19,8 +24,25 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/005_club.sql"),
 ];
 
+/// 读连接的个数。控制面同一时刻在读的东西：几个请求、一次 `live.json` 重算、一次广场重算；
+/// 四个够，多了只是多几个文件句柄。
+const READERS: usize = 4;
+
 pub struct Db {
-    conn: Mutex<Connection>,
+    writer: Mutex<Connection>,
+    /// 空的话（内存库）读也走写锁：`:memory:` 的每个连接是各自一个库。
+    readers: Vec<Mutex<Connection>>,
+    next: AtomicUsize,
+}
+
+/// [`Db::read`] 拿到的连接。只能读：连接开着 `query_only`，写会在 SQLite 那一层被拒。
+pub struct ReadGuard<'a>(MutexGuard<'a, Connection>);
+
+impl std::ops::Deref for ReadGuard<'_> {
+    type Target = Connection;
+    fn deref(&self) -> &Connection {
+        &self.0
+    }
 }
 
 impl Db {
@@ -31,12 +53,25 @@ impl Db {
         // WAL：读不挡写。busy_timeout 给同一台机器上另一个进程（比如手工用 sqlite3 看一眼）留出让路的时间。
         conn.pragma_update(None, "journal_mode", "WAL")
             .context("开 WAL 模式失败")?;
-        conn.pragma_update(None, "synchronous", "NORMAL")?;
-        conn.pragma_update(None, "foreign_keys", "ON")?;
-        conn.busy_timeout(std::time::Duration::from_secs(5))?;
+        tune(&conn)?;
         migrate(&mut conn)?;
+
+        let mut readers = Vec::with_capacity(READERS);
+        for _ in 0..READERS {
+            let reader = Connection::open_with_flags(
+                path,
+                OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+            )
+            .with_context(|| format!("开不了第二个连接 {}", path.display()))?;
+            tune(&reader)?;
+            // 读连接只读：谁不小心拿它写，SQLite 当场报错，而不是悄悄绕过写锁。
+            reader.pragma_update(None, "query_only", "ON")?;
+            readers.push(Mutex::new(reader));
+        }
         Ok(Self {
-            conn: Mutex::new(conn),
+            writer: Mutex::new(conn),
+            readers,
+            next: AtomicUsize::new(0),
         })
     }
 
@@ -46,13 +81,37 @@ impl Db {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         migrate(&mut conn)?;
         Ok(Self {
-            conn: Mutex::new(conn),
+            writer: Mutex::new(conn),
+            readers: Vec::new(),
+            next: AtomicUsize::new(0),
         })
     }
 
+    /// 写连接。「先查再写」的一整段都握着它做。
     pub async fn lock(&self) -> MutexGuard<'_, Connection> {
-        self.conn.lock().await
+        self.writer.lock().await
     }
+
+    /// 一个只读连接。先看有没有空着的；都忙就轮着排一个，不排在写者后面。
+    pub async fn read(&self) -> ReadGuard<'_> {
+        if self.readers.is_empty() {
+            return ReadGuard(self.writer.lock().await);
+        }
+        for reader in &self.readers {
+            if let Ok(guard) = reader.try_lock() {
+                return ReadGuard(guard);
+            }
+        }
+        let i = self.next.fetch_add(1, Ordering::Relaxed) % self.readers.len();
+        ReadGuard(self.readers[i].lock().await)
+    }
+}
+
+fn tune(conn: &Connection) -> anyhow::Result<()> {
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
+    conn.pragma_update(None, "foreign_keys", "ON")?;
+    conn.busy_timeout(std::time::Duration::from_secs(5))?;
+    Ok(())
 }
 
 fn migrate(conn: &mut Connection) -> anyhow::Result<()> {
@@ -1679,10 +1738,50 @@ mod tests {
         Db::open(&path).unwrap();
     }
 
+    #[tokio::test]
+    async fn readers_see_what_the_writer_wrote_and_refuse_to_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Db::open(&dir.path().join("api.sqlite")).unwrap();
+        {
+            let conn = db.lock().await;
+            insert_user(
+                &conn,
+                &NewUser {
+                    id: "u1",
+                    kind: "anon",
+                    display_name: "匿名开发者",
+                    created_at: "2026-09-07T00:00:00Z",
+                    expires_at: None,
+                },
+            )
+            .unwrap();
+        }
+        // 写锁握着的时候读照样进行：这就是分开的意义。
+        let _writing = db.lock().await;
+        let reader = db.read().await;
+        assert_eq!(count_live_sites(&reader, "u1").unwrap(), 0);
+        let n: i64 = reader
+            .query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 1);
+        // 拿读连接写：SQLite 那一层拒绝，而不是绕过写锁。
+        let err = reader
+            .execute("DELETE FROM users", [])
+            .expect_err("query_only 的连接不能写");
+        assert!(err.to_string().contains("readonly"), "{err}");
+        // 四个读者都被占着，第五个排队而不是死锁。
+        let a = db.read().await;
+        let b = db.read().await;
+        let c = db.read().await;
+        drop(reader);
+        let d = db.read().await;
+        drop((a, b, c, d));
+    }
+
     #[test]
     fn deleted_slug_stays_taken() {
         let db = Db::open_in_memory().unwrap();
-        let conn = db.conn.blocking_lock();
+        let conn = db.writer.blocking_lock();
         insert_user(
             &conn,
             &NewUser {

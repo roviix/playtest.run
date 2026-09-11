@@ -287,7 +287,7 @@ fn dedup_by_hash(files: &[FileEntry]) -> Vec<FileEntry> {
 async fn present_hashes(state: &AppState, files: &[FileEntry]) -> ApiResult<HashSet<String>> {
     let hashes: Vec<String> = files.iter().map(|file| file.hash.clone()).collect();
     let indexed = {
-        let conn = state.db().lock().await;
+        let conn = state.db().read().await;
         db::known_blob_hashes(&conn, &hashes)?
     };
 

@@ -223,7 +223,7 @@ pub async fn me_view(
     State(state): State<AppState>,
     JsonBody(request): JsonBody<MeRequest>,
 ) -> ApiResult<Json<MeView>> {
-    let conn = state.db().lock().await;
+    let conn = state.db().read().await;
     let player = player_by_me_token(&conn, &request.me_token)?;
     Ok(Json(view_of(&state, &conn, &player)?))
 }
