@@ -225,29 +225,47 @@ a.tile:hover .verb,a.tile:focus-visible .verb{opacity:1;transform:none}
 .overlay{display:none;position:fixed;inset:0;z-index:40;align-items:center;justify-content:center;padding:24px}
 .overlay:target{display:flex}
 .overlay-back{position:absolute;inset:0;background:#000000b3;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.sheet{position:relative;z-index:1;width:min(30rem,100%);max-height:calc(100dvh - 48px);overflow:auto;padding:24px;border-radius:20px;background:radial-gradient(70% 40% at 0% 0%,#ffb2240d,transparent 70%),var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff14,0 40px 100px -30px #000}
-.dialog-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
-.dialog-head h2{margin:0;font-size:20px;line-height:1.3;font-weight:650;letter-spacing:-.02em}
-.close,.tip summary{flex:0 0 auto;display:grid;place-items:center;width:32px;height:32px;border-radius:9px;color:var(--dim);box-shadow:inset 0 0 0 1px var(--line);transition:color .15s,background .15s}
+.sheet{position:relative;z-index:1;width:min(28rem,100%);max-height:calc(100dvh - 48px);overflow:auto;padding:22px 26px 26px;border-radius:18px;background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line2),0 40px 100px -30px #000}
+.dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.dialog-head h2{margin:0;font-size:17px;line-height:1.4;font-weight:600;letter-spacing:-.01em}
+.close,.tip summary{flex:0 0 auto;display:grid;place-items:center;width:28px;height:28px;border-radius:8px;color:var(--dim)}
 .close .icon,.tip summary .icon{width:15px;height:15px;stroke-width:1.8}
-.close:hover,.tip summary:hover,.tip[open] summary{color:var(--fg);background:#ffffff0a}
-.pub-box{margin:22px 0 0;border-radius:14px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
-.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin:0;padding:5px;border-bottom:1px solid var(--line)}
+.close:hover,.tip summary:hover,.tip[open] summary{color:var(--fg)}
+.pub-box{margin:26px 0 0}
+.tabs{display:flex;gap:18px;margin:0}
 .tabs input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
-.tabs label{display:flex;align-items:center;justify-content:center;min-height:34px;margin:0;border-radius:9px;font-size:13px;font-weight:500;color:var(--dim);cursor:pointer}
-.tabs label:hover{color:var(--fg)}
-.tabs input:checked+label{color:var(--fg);background:var(--card2);box-shadow:inset 0 0 0 1px var(--line2),inset 0 1px 0 #ffffff10}
-.tabs input:focus-visible+label{outline:2px solid var(--accent);outline-offset:-2px}
-.codebox{display:none;align-items:flex-start;gap:12px;margin:0;padding:20px 18px 22px}
+.tabs label{margin:0;font-size:13px;color:var(--dim);cursor:pointer}
+.tabs label:hover,.tabs input:checked+label{color:var(--fg)}
+.tabs input:focus-visible+label{outline:2px solid var(--accent);outline-offset:4px}
+.codebox{display:none;align-items:flex-start;gap:10px;margin:12px 0 0}
 .pub-box:has(#tab-static:checked) #panel-static,.pub-box:has(#tab-local:checked) #panel-local,.pub-box:has(#tab-backend:checked) #panel-backend{display:flex}
-.codebox b{flex:0 0 auto;font:13.5px/1.7 var(--mono);font-weight:400;color:var(--accent)}
-.codebox code{display:block;padding:0;border:0;background:none;font:13.5px/1.7 var(--mono);color:var(--fg);white-space:pre-wrap;overflow-wrap:anywhere;user-select:all;-webkit-user-select:all}
-.tip summary{position:absolute;top:24px;right:64px;cursor:pointer;list-style:none}
+.codebox b{flex:0 0 auto;font:14px/1.7 var(--mono);font-weight:400;color:var(--accent)}
+.codebox code{display:block;padding:0;border:0;background:none;font:14px/1.7 var(--mono);color:var(--fg);white-space:pre-wrap;overflow-wrap:anywhere;user-select:all;-webkit-user-select:all}
+.tip summary{position:absolute;top:22px;right:54px;cursor:pointer;list-style:none}
 .tip summary::-webkit-details-marker{display:none}
-.tip-body{margin:12px 0 0;padding:12px 14px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--line);font-size:13px;line-height:1.7;color:var(--dim)}
+.tip-body{margin:18px 0 0;font-size:13px;line-height:1.7;color:var(--dim)}
 .tip-body a{color:var(--fg);text-decoration:underline;text-decoration-color:#ffffff3a;text-underline-offset:3px}
-@media(max-width:47.99rem){.sidebar{position:static;width:auto;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:8px;padding:10px 12px;border-right:0;border-bottom:1px solid var(--line)}.mark{width:32px;height:32px;border-radius:9px}.mark-svg{width:15px;height:15px}.wordmark{position:static;width:auto;height:auto;clip:auto;font-size:17px}.nav{flex-direction:row;gap:4px;width:auto;margin:0 0 0 auto}.nav-item{flex-direction:row;gap:6px;width:auto;min-height:36px;padding:0 12px 0 10px;border-radius:999px;font-size:13px;letter-spacing:0}.nav-item .icon{width:16px;height:16px}.nav-item.active{background:#ffffff0d;box-shadow:inset 0 0 0 1px var(--line)}.nav-dot{display:none}.sidebar-bottom{width:auto;margin:0}.publish{flex-direction:row;gap:6px;min-height:36px;padding:0 12px 0 8px;border-radius:999px;font-size:13px}.publish .icon{width:20px;height:20px;padding:3px;border-radius:7px}.main{margin:0;background:none}.content{padding:14px 14px 72px}.grid{gap:12px}a.tile{padding:5px;border-radius:14px}.shot{border-radius:10px}.tile-body{padding:10px 6px 6px}.tile-body h2{font-size:14px}.tile .summary{font-size:12.5px}.tile .meta{margin-top:8px;padding-top:8px}.cover.word b{font-size:46px}.cover.word i{display:none}.main>.drawer{margin:14px;padding:22px 18px 24px}.overlay{align-items:flex-end;padding:0}.sheet{width:100%;max-height:90dvh;padding:22px 20px calc(24px + env(safe-area-inset-bottom));border-radius:20px 20px 0 0}.dialog-head h2{font-size:20px}.tip summary{top:22px;right:60px}}
+@media(max-width:47.99rem){.sidebar{position:static;width:auto;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:8px;padding:10px 12px;border-right:0;border-bottom:1px solid var(--line)}.mark{width:32px;height:32px;border-radius:9px}.mark-svg{width:15px;height:15px}.wordmark{position:static;width:auto;height:auto;clip:auto;font-size:17px}.nav{flex-direction:row;gap:4px;width:auto;margin:0 0 0 auto}.nav-item{flex-direction:row;gap:6px;width:auto;min-height:36px;padding:0 12px 0 10px;border-radius:999px;font-size:13px;letter-spacing:0}.nav-item .icon{width:16px;height:16px}.nav-item.active{background:#ffffff0d;box-shadow:inset 0 0 0 1px var(--line)}.nav-dot{display:none}.sidebar-bottom{width:auto;margin:0}.publish{flex-direction:row;gap:6px;min-height:36px;padding:0 12px 0 8px;border-radius:999px;font-size:13px}.publish .icon{width:20px;height:20px;padding:3px;border-radius:7px}.main{margin:0;background:none}.content{padding:14px 14px 72px}.grid{gap:12px}a.tile{padding:5px;border-radius:14px}.shot{border-radius:10px}.tile-body{padding:10px 6px 6px}.tile-body h2{font-size:14px}.tile .summary{font-size:12.5px}.tile .meta{margin-top:8px;padding-top:8px}.cover.word b{font-size:46px}.cover.word i{display:none}.main>.drawer{margin:14px;padding:22px 18px 24px}.overlay{align-items:flex-end;padding:0}.sheet{width:100%;max-height:90dvh;padding:20px 20px calc(26px + env(safe-area-inset-bottom));border-radius:18px 18px 0 0}.tip summary{top:20px;right:48px}}
 "#;
+
+/// 「复制链接」那一下。分享页和门禁页上「复制到系统浏览器里打开」都用它，
+/// 原来各写了一遍、一字不差。写成 ES5、每一步都能失败：没有 JS 时那个只读输入框自己就是
+/// 「复制链接」的办法。`i` 是只读输入框，`b` 是按钮；成功了按钮上的字换成「已复制」。
+pub const COPY_JS: &str = "function ptCopy(i,b){b.onclick=function(){i.focus();i.select();i.setSelectionRange(0,i.value.length);\
+var ok=function(){b.textContent='已复制'};\
+var old=function(){try{document.execCommand('copy');ok()}catch(e){}};\
+if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(i.value).then(ok,old)}else{old()}}}";
+
+/// 只读输入框加一个「复制链接」按钮。`url` 由调用方转义。
+pub fn copy_row(url_escaped: &str, aria_label: Option<&str>) -> String {
+    let label = aria_label
+        .map(|l| format!(" aria-label=\"{}\"", esc(l)))
+        .unwrap_or_default();
+    format!(
+        "<p class=\"row\"><input id=\"pt-url\" readonly value=\"{url_escaped}\"{label}>\
+<button type=\"button\" id=\"pt-copy\">复制链接</button></p>\n"
+    )
+}
 
 /// 页面外壳。`head` 放 OG 之类的额外元信息，`body` 放卡片里面的内容。
 pub fn shell(title: &str, head: &str, body: &str) -> String {

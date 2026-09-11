@@ -1,7 +1,7 @@
 //! 边缘的全部请求处理：按 Host 分流、保留路径、门禁页、按清单出文件。
 //!
-//! 只有一个 fallback 处理函数，没有路由表——路径要先经过清单才知道意味着什么，
-//! 交给 matchit 反而要把同一段逻辑拆成两处。
+//! 只有一个 fallback 处理函数，不交给 matchit——作品子域上兜底的那条要先查清单才知道
+//! 路径意味着什么。固定的那几条路径在 `router.rs` 那张表里，这里只写每一条落地后做什么。
 
 use std::io::SeekFrom;
 use std::sync::Arc;
@@ -16,7 +16,7 @@ use playtest_common::api::ErrorCode;
 use playtest_common::follow::{root_paths, FollowTarget};
 use playtest_common::manifest::{GateMode, Manifest};
 use playtest_common::store::FsStore;
-use playtest_common::{GATE_COOKIE, ME_COOKIE, RESERVED_PATH_PREFIX, SESSION_COOKIE};
+use playtest_common::{GATE_COOKIE, ME_COOKIE, SESSION_COOKIE};
 use rand::RngCore;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio_util::io::ReaderStream;
@@ -35,6 +35,7 @@ use crate::live::LiveCache;
 use crate::paths::{self, AcceptEncoding, Resolved, Served};
 use crate::plaza::{self, PlazaCache};
 use crate::range::{self, Range};
+use crate::router::{self, reserved_tail, Reserved, Root};
 use crate::share::SharePage;
 use crate::tunnel::{self, Tunnels};
 use crate::{breaker, pages, sites::SiteState, sites::SiteStore};
@@ -53,13 +54,6 @@ const ME_MAX_AGE: u64 = 365 * 24 * 60 * 60;
 /// 封面超过这么大就不往邀请卡上嵌了——base64 之后还要涨三分之一，
 /// 而卡上那一块只有 1080 像素宽，一张 8 MB 的原图在上面看不出区别。
 const CARD_COVER_MAX_BYTES: u64 = 8 * 1024 * 1024;
-
-// `/_playtest/` 后面那一段。契约里给的是完整路径（`playtest_common`），
-// 这里只留尾巴——下面那个 `match` 是按尾巴分的。两者一致由测试守着。
-const CARD_TAIL: &str = "card.png";
-const CARD_WIDE_TAIL: &str = "card-wide.png";
-const SHARE_TAIL: &str = "share";
-const FOLLOW_TAIL: &str = "follow";
 
 pub struct App {
     pub config: Config,
@@ -112,14 +106,15 @@ async fn handle(State(app): State<Arc<App>>, req: Request) -> Response {
     let (parts, body) = req.into_parts();
 
     // 健康检查在 Host 分流之前：探针带的 Host 通常是 IP，分流会把它判成不存在。
-    if reserved_tail(parts.uri.path()) == Some("healthz") {
-        return if parts.method == Method::GET || parts.method == Method::HEAD {
-            let mut headers = base_headers();
-            put(&mut headers, "content-type", "text/plain; charset=utf-8");
-            (StatusCode::OK, headers, "ok\n").into_response()
-        } else {
-            method_not_allowed("GET, HEAD")
-        };
+    if let Some((Reserved::Healthz, allow)) =
+        reserved_tail(parts.uri.path()).and_then(router::reserved)
+    {
+        if !allow.permits(&parts.method) {
+            return method_not_allowed(allow.header());
+        }
+        let mut headers = base_headers();
+        put(&mut headers, "content-type", "text/plain; charset=utf-8");
+        return (StatusCode::OK, headers, "ok\n").into_response();
     }
 
     let authority = authority_of(&parts);
@@ -138,70 +133,25 @@ async fn root(
     parts: axum::http::request::Parts,
     body: Body,
 ) -> Response {
-    let path = parts.uri.path();
-    let method = &parts.method;
-    let read = *method == Method::GET || *method == Method::HEAD;
     let me = cookie_value(&parts.headers, ME_COOKIE)
         .filter(|v| is_me_token(v))
         .map(str::to_string);
-
-    if path == "/" {
-        return if read {
-            plaza_page(app, authority).await
-        } else {
-            method_not_allowed("GET, HEAD")
-        };
+    let Some((door, allow)) = router::root(parts.uri.path()) else {
+        return page(StatusCode::NOT_FOUND, pages::not_found(), None);
+    };
+    if !allow.permits(&parts.method) {
+        return method_not_allowed(allow.header());
     }
-    if path == root_paths::FOLLOW {
-        return if *method == Method::POST {
-            root_follow(app, authority, me.as_deref(), body).await
-        } else {
-            method_not_allowed("POST")
-        };
+    match door {
+        Root::Plaza => plaza_page(app, authority).await,
+        Root::Follow => root_follow(app, authority, me.as_deref(), body).await,
+        Root::Me => mine(app, authority, me.as_deref()).await,
+        Root::MeAction => me_action(app, authority, me.as_deref(), body).await,
+        Root::Confirm(token) => confirm(app, authority, token).await,
+        Root::Unsubscribe(token) => unsubscribe(app, authority, token).await,
+        Root::ServiceWorker => service_worker(parts.method == Method::HEAD),
+        Root::Llms => llms_pointer(),
     }
-    if path == root_paths::ME {
-        return if read {
-            mine(app, authority, me.as_deref()).await
-        } else {
-            method_not_allowed("GET, HEAD")
-        };
-    }
-    if path == root_paths::ME_ACTION {
-        return if *method == Method::POST {
-            me_action(app, authority, me.as_deref(), body).await
-        } else {
-            method_not_allowed("POST")
-        };
-    }
-    if let Some(token) = path.strip_prefix(root_paths::ME_CONFIRM) {
-        return if read {
-            confirm(app, authority, token).await
-        } else {
-            method_not_allowed("GET")
-        };
-    }
-    if let Some(token) = path.strip_prefix(root_paths::ME_UNSUBSCRIBE) {
-        return if read {
-            unsubscribe(app, authority, token).await
-        } else {
-            method_not_allowed("GET")
-        };
-    }
-    if path == follow::SW_PATH {
-        return if read {
-            service_worker(*method == Method::HEAD)
-        } else {
-            method_not_allowed("GET, HEAD")
-        };
-    }
-    if path == playtest_common::api::routes::LLMS_TXT {
-        return if read {
-            llms_pointer()
-        } else {
-            method_not_allowed("GET, HEAD")
-        };
-    }
-    page(StatusCode::NOT_FOUND, pages::not_found(), None)
 }
 
 /// 根域上给助手的一张字条：这里是玩家那一侧，开发者那几个文件在另一个域。
@@ -474,7 +424,12 @@ async fn site(
     let tail = reserved_tail(parts.uri.path()).map(str::to_string);
 
     // 握手不看作品状态：开发者要连上来的那一刻，这个 slug 多半还什么都没有。
-    if tail.as_deref() == Some(tunnel::HANDSHAKE_TAIL) {
+    if tail
+        .as_deref()
+        .and_then(router::reserved)
+        .map(|(door, _)| door)
+        == Some(Reserved::Handshake)
+    {
         return tunnel::handshake::respond(&app.tunnels, slug, &mut parts).await;
     }
 
@@ -666,14 +621,6 @@ impl Ctx {
 
 // ---------------------------------------------------------------- 保留路径
 
-/// `/_playtest/...` 后面那一段。作品目录里就算有同名文件也永远取不到这里。
-fn reserved_tail(path: &str) -> Option<&str> {
-    if path == RESERVED_PATH_PREFIX.trim_end_matches('/') {
-        return Some("");
-    }
-    path.strip_prefix(RESERVED_PATH_PREFIX)
-}
-
 async fn reserved(
     app: &App,
     manifest: &Manifest,
@@ -683,13 +630,19 @@ async fn reserved(
     body: Body,
 ) -> Response {
     let isolated = Some((manifest.isolated, false));
-    match tail {
-        "start" if parts.method == Method::POST => start(app, manifest, ctx, parts, body).await,
-        "start" => method_not_allowed("POST"),
-        "report" if parts.method == Method::GET || parts.method == Method::HEAD => {
-            page(StatusCode::OK, pages::report_form(), isolated)
+    let Some((door, allow)) = router::reserved(tail) else {
+        return page(StatusCode::NOT_FOUND, pages::file_not_found(), isolated);
+    };
+    if !allow.permits(&parts.method) {
+        return method_not_allowed(allow.header());
+    }
+    match door {
+        // 这两条在 Host 分流之前、查清单之前就接走了；走到这里说明有人拿它们当作品路径。
+        Reserved::Healthz | Reserved::Handshake => {
+            page(StatusCode::NOT_FOUND, pages::file_not_found(), isolated)
         }
-        "report" if parts.method == Method::POST => {
+        Reserved::Start => start(app, manifest, ctx, parts, body).await,
+        Reserved::Report if parts.method == Method::POST => {
             let form = read_form(body).await;
             let reason = field(&form, "reason").unwrap_or_default();
             let detail = field(&form, "detail").unwrap_or_default();
@@ -705,21 +658,14 @@ async fn reserved(
                 .await;
             page(StatusCode::OK, pages::report_done(), isolated)
         }
-        "report" => method_not_allowed("GET, POST"),
-        "me" => crate::me::respond(&app.config, manifest, ctx.sid.as_deref(), &parts.method),
-        "sdk.js" => crate::sdk::respond(&parts.method, &parts.headers),
-        "cover" if parts.method == Method::GET || parts.method == Method::HEAD => {
-            cover(app, manifest, &parts).await
+        Reserved::Report => page(StatusCode::OK, pages::report_form(), isolated),
+        Reserved::Me => {
+            crate::me::respond(&app.config, manifest, ctx.sid.as_deref(), &parts.method)
         }
-        "cover" => method_not_allowed("GET, HEAD"),
-        CARD_TAIL if parts.method == Method::GET || parts.method == Method::HEAD => {
-            card_png(app, manifest, ctx, &parts, Shape::Portrait).await
-        }
-        CARD_WIDE_TAIL if parts.method == Method::GET || parts.method == Method::HEAD => {
-            card_png(app, manifest, ctx, &parts, Shape::Wide).await
-        }
-        CARD_TAIL | CARD_WIDE_TAIL => method_not_allowed("GET, HEAD"),
-        SHARE_TAIL if parts.method == Method::GET || parts.method == Method::HEAD => {
+        Reserved::Sdk => crate::sdk::respond(&parts.method, &parts.headers),
+        Reserved::Cover => cover(app, manifest, &parts).await,
+        Reserved::Card(shape) => card_png(app, manifest, ctx, &parts, shape).await,
+        Reserved::Share => {
             let live = app.live.get(&manifest.slug).await;
             match (SharePage {
                 manifest,
@@ -733,10 +679,7 @@ async fn reserved(
                 None => page(StatusCode::NOT_FOUND, pages::not_found(), isolated),
             }
         }
-        SHARE_TAIL => method_not_allowed("GET, HEAD"),
-        FOLLOW_TAIL if parts.method == Method::POST => site_follow(app, manifest, ctx, body).await,
-        FOLLOW_TAIL => method_not_allowed("POST"),
-        _ => page(StatusCode::NOT_FOUND, pages::file_not_found(), isolated),
+        Reserved::Follow => site_follow(app, manifest, ctx, body).await,
     }
 }
 
@@ -1447,30 +1390,6 @@ mod tests {
     use super::*;
 
     /// 这里按尾巴分派，契约里给的是整条路径。两边写岔了，卡和分享页就会 404 得莫名其妙。
-    #[test]
-    fn tails_match_the_contract_paths() {
-        for (tail, full) in [
-            (CARD_TAIL, playtest_common::CARD_PATH),
-            (CARD_WIDE_TAIL, playtest_common::CARD_WIDE_PATH),
-            (SHARE_TAIL, playtest_common::SHARE_PATH),
-            (FOLLOW_TAIL, playtest_common::follow::edge_paths::FOLLOW),
-        ] {
-            assert_eq!(format!("{RESERVED_PATH_PREFIX}{tail}"), full);
-        }
-        // Service Worker 是我们自己的，契约里没有它，但它也得躲在保留前缀后面：
-        // 作品目录里有个同名文件也不能把它顶掉。
-        assert!(follow::SW_PATH.starts_with(RESERVED_PATH_PREFIX));
-    }
-
-    #[test]
-    fn reserved_prefix_is_never_a_site_file() {
-        assert_eq!(reserved_tail("/_playtest/start"), Some("start"));
-        assert_eq!(reserved_tail("/_playtest/"), Some(""));
-        assert_eq!(reserved_tail("/_playtest"), Some(""));
-        assert_eq!(reserved_tail("/_playtest/deep/thing"), Some("deep/thing"));
-        assert_eq!(reserved_tail("/index.html"), None);
-        assert_eq!(reserved_tail("/_playtestx/start"), None);
-    }
 
     #[test]
     fn redirect_targets_must_be_same_origin() {

@@ -38,6 +38,7 @@ pub mod pages;
 pub mod paths;
 pub mod plaza;
 pub mod range;
+pub mod router;
 pub mod sdk;
 pub mod share;
 pub mod ship;

@@ -16,7 +16,7 @@ use playtest_common::{
 };
 
 use crate::follow;
-use crate::html::{esc, shell_hero};
+use crate::html::{copy_row, esc, shell_hero, COPY_JS};
 use crate::when;
 use playtest_common::wording::invite_verb;
 
@@ -456,9 +456,8 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
             "<section class=\"tip\" id=\"pt-cap\" hidden>\n\
 <p>这个作品需要系统浏览器才跑得起来（它要用到当前浏览器没开放的能力）。\
 上面的「开始」照样可以点；打不开的话，复制链接到 Safari、Chrome 里粘贴打开。</p>\n\
-<p class=\"row\"><input id=\"pt-url\" readonly value=\"{url}\"><button type=\"button\" id=\"pt-copy\">复制链接</button></p>\n\
-</section>\n{CAPABILITY_SCRIPT}",
-            url = esc(self.page_url),
+{row}</section>\n<script>{COPY_JS}{CAPABILITY_SCRIPT}</script>\n",
+            row = copy_row(&esc(self.page_url), None),
         )
     }
 }
@@ -496,16 +495,11 @@ if(!isNaN(d))t.textContent=d.toLocaleString(undefined,{dateStyle:'long',timeStyl
 
 /// 能力检测。写成 ES5、不用可选链，因为要跑的正是那些老 WebView。
 /// 检测通过（或这段没跑）时那一节始终是 `hidden`，玩家什么都不会看到。
-const CAPABILITY_SCRIPT: &str = "<script>\
+const CAPABILITY_SCRIPT: &str = "\
 (function(){var n=document.getElementById('pt-cap');\
 if(self.crossOriginIsolated&&typeof SharedArrayBuffer==='function')return;\
 n.hidden=false;\
-var i=document.getElementById('pt-url'),b=document.getElementById('pt-copy');\
-b.onclick=function(){i.focus();i.select();i.setSelectionRange(0,i.value.length);\
-var ok=function(){b.textContent='已复制'};\
-var old=function(){try{document.execCommand('copy');ok()}catch(e){}};\
-if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(i.value).then(ok,old)}else{old()}};})();\
-</script>\n";
+ptCopy(document.getElementById('pt-url'),document.getElementById('pt-copy'))})();";
 
 #[cfg(test)]
 mod tests {

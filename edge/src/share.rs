@@ -10,7 +10,7 @@ use playtest_common::live::SiteLive;
 use playtest_common::manifest::Manifest;
 use playtest_common::{CARD_PATH, RESERVED_PATH_PREFIX};
 
-use crate::html::{esc, shell_hero};
+use crate::html::{copy_row, esc, shell_hero, COPY_JS};
 
 pub struct SharePage<'a> {
     pub manifest: &'a Manifest,
@@ -40,14 +40,13 @@ border-bottom:1px solid var(--line)}</style>\n";
         let body = format!(
             "<h1>把这张卡发出去</h1>\n\
 <p class=\"lead\">长按图片保存，或者直接发到群里。卡上的二维码就是这条链接。</p>\n\
-<p class=\"row\"><input id=\"pt-url\" readonly value=\"{link}\" aria-label=\"作品链接\">\
-<button type=\"button\" id=\"pt-copy\">复制链接</button></p>\n\
-<button type=\"button\" id=\"pt-share\" data-title=\"{title}\" hidden>分享</button>\n\
+{row}<button type=\"button\" id=\"pt-share\" data-title=\"{title}\" hidden>分享</button>\n\
 <div class=\"more\"><a href=\"{CARD_PATH}\" download=\"playtest-{slug}.png\">保存图片</a>\
 <a href=\"/\">回到作品</a></div>\n\
 <footer><a href=\"{RESERVED_PATH_PREFIX}report\">有问题？举报</a></footer>\n\
-{SCRIPT}",
+<script>{COPY_JS}{SCRIPT}</script>\n",
             slug = esc(&m.slug),
+            row = copy_row(&link, Some("作品链接")),
         );
         Some(shell_hero(
             &format!("《{}》的邀请卡", m.title),
@@ -60,13 +59,9 @@ border-bottom:1px solid var(--line)}</style>\n";
 
 /// 两件事：复制链接、有系统分享就用系统分享（连图一起给它，微信在分享面板里就是一张图）。
 /// 写成 ES5、每一步都能失败：没有 JS 时那个只读输入框自己就是「复制链接」的办法。
-const SCRIPT: &str = "<script>\
-(function(){var i=document.getElementById('pt-url'),c=document.getElementById('pt-copy'),\
-s=document.getElementById('pt-share');\
-c.onclick=function(){i.focus();i.select();i.setSelectionRange(0,i.value.length);\
-var ok=function(){c.textContent='已复制'};\
-var old=function(){try{document.execCommand('copy');ok()}catch(e){}};\
-if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(i.value).then(ok,old)}else{old()}};\
+const SCRIPT: &str = "\
+(function(){var i=document.getElementById('pt-url'),s=document.getElementById('pt-share');\
+ptCopy(i,document.getElementById('pt-copy'));\
 if(!navigator.share){return}\
 s.hidden=false;\
 s.onclick=function(){var d={title:s.getAttribute('data-title'),url:i.value};\
@@ -74,8 +69,7 @@ if(!navigator.canShare||!window.File){navigator.share(d);return}\
 fetch('/_playtest/card.png').then(function(r){return r.blob()}).then(function(b){\
 var f=new File([b],'playtest.png',{type:'image/png'});\
 if(navigator.canShare({files:[f]})){d.files=[f]}return navigator.share(d)})\
-.catch(function(){navigator.share(d).catch(function(){})})};})();\
-</script>\n";
+.catch(function(){navigator.share(d).catch(function(){})})};})();";
 
 #[cfg(test)]
 mod tests {
