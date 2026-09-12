@@ -19,29 +19,21 @@ async fn main() -> anyhow::Result<()> {
 
     let config = Config::from_env()?;
     let listen = config.listen;
-    let store_root = config.store_root();
     let events_path = config.events_path();
     let suffix = config.host_suffix.clone();
     let scheme = config.public_scheme.clone();
 
-    let app = Arc::new(App::new(config));
+    let app = Arc::new(App::try_new(config)?);
+    // S3 凭据、桶或网络不对时，边缘必须明确起不来，不能把所有作品伪装成 404。
+    app.sites.store().probe_read().await?;
     let listener = tokio::net::TcpListener::bind(listen)
         .await
         .with_context(|| format!("绑不上 {listen}，端口可能被占了"))?;
 
     tracing::info!("边缘在 http://{listen} 上（明文，没有 TLS）");
-    tracing::info!(
-        "作品从 {} 读，事件写到 {}",
-        store_root.display(),
-        events_path.display()
-    );
+    tracing::info!("作品从 {} 读", app.sites.store().description());
+    tracing::info!("事件写到 {}", events_path.display());
     tracing::info!("一个作品就是一个 {scheme}://<slug>.{suffix}");
-    if !store_root.is_dir() {
-        tracing::warn!(
-            "{} 还不存在——api 往里写过东西之后作品才打得开",
-            store_root.display()
-        );
-    }
     match Config::api_internal_url() {
         Some(api) => {
             tracing::info!(

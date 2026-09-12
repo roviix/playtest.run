@@ -64,7 +64,6 @@ pub async fn respond(
     // 公钥可能在边缘启动之后才出现（同一台机器上 api 后起），所以每次握手都问一次。
     let Some(key) = tunnels.keys().current().await else {
         tracing::warn!(
-            path = %tunnels.keys().path().display(),
             "没有隧道验签公钥：环境变量 {} 没设，对象存储里那份也读不到，所有握手都会被拒",
             keys::ENV
         );

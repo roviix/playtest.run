@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use playtest_common::store::FsStore;
+use playtest_common::store::Store;
 use playtest_common::tunnel::SigningKey;
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -25,7 +25,7 @@ pub struct AppState {
 
 struct Inner {
     db: Db,
-    store: FsStore,
+    store: Store,
     site_url_template: String,
     tunnel_key: SigningKey,
     commit_lock: Mutex<()>,
@@ -43,7 +43,7 @@ struct Inner {
 impl AppState {
     pub fn new(
         db: Db,
-        store: FsStore,
+        store: Store,
         tunnel_key: SigningKey,
         config: &Config,
     ) -> anyhow::Result<Self> {
@@ -77,23 +77,28 @@ impl AppState {
 
     /// 按配置建数据目录、开库、备好对象存储。目录不存在就建。
     pub async fn from_config(config: &Config) -> anyhow::Result<Self> {
-        let store_root = config.store_root();
-        tokio::fs::create_dir_all(&store_root).await?;
+        tokio::fs::create_dir_all(&config.data_dir).await?;
         let db = Db::open(&config.sqlite_path())?;
+        let store = Store::from_config(&config.store_config()?)?;
+        // 后端写不进、读不回或删不掉时直接拒绝启动；尤其不能在 S3 坏时落回本地盘。
+        store.probe_write().await?;
         // 顺带把隧道公钥发布到对象存储：边缘要能在控制面之后、之外单独起来。
         let tunnel_key = tunnel_keys::load_or_create(
             &config.data_dir,
-            &store_root,
+            &store,
             tunnel_keys::key_from_env().as_deref(),
-        )?;
-        Self::new(db, FsStore::new(store_root), tunnel_key, config)
+        )
+        .await?;
+        let state = Self::new(db, store, tunnel_key, config)?;
+        crate::quota::reconcile(&state).await?;
+        Ok(state)
     }
 
     pub fn db(&self) -> &Db {
         &self.inner.db
     }
 
-    pub fn store(&self) -> &FsStore {
+    pub fn store(&self) -> &Store {
         &self.inner.store
     }
 

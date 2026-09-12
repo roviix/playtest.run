@@ -7,7 +7,9 @@
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use axum::extract::{Path as UrlPath, State};
 use axum::http::StatusCode;
@@ -30,6 +32,10 @@ struct Refusal {
 
 #[derive(Default)]
 struct Fake {
+    card_requests: AtomicUsize,
+    site_requests: AtomicUsize,
+    card_delay_ms: Mutex<u64>,
+    manifests: Mutex<Vec<Value>>,
     refuse_prepare: Mutex<Option<Refusal>>,
     login_polls: Mutex<u32>,
     /// 作品链接。默认长得像玩家域上的一条链接（那台服务器不存在，取邀请卡会连不上，
@@ -116,6 +122,7 @@ async fn list_sites(State(fake): State<Arc<Fake>>) -> Json<Value> {
 
 /// 一个作品此刻的样子。没有封面——`--cover` 那一句提醒要有东西可依据。
 async fn get_site(State(fake): State<Arc<Fake>>, UrlPath(slug): UrlPath<String>) -> Json<Value> {
+    fake.site_requests.fetch_add(1, Ordering::SeqCst);
     Json(json!({
         "slug": slug,
         "url": site_url(&fake),
@@ -179,7 +186,10 @@ async fn activate_version(
 }
 
 /// 边缘那一侧：门禁页上那张邀请卡。
-async fn card_png() -> Response {
+async fn card_png(State(fake): State<Arc<Fake>>) -> Response {
+    fake.card_requests.fetch_add(1, Ordering::SeqCst);
+    let delay = *fake.card_delay_ms.lock().unwrap();
+    tokio::time::sleep(Duration::from_millis(delay)).await;
     (
         StatusCode::OK,
         [(axum::http::header::CONTENT_TYPE, "image/png")],
@@ -193,6 +203,7 @@ async fn prepare_upload(
     UrlPath(_slug): UrlPath<String>,
     Json(request): Json<Value>,
 ) -> Response {
+    fake.manifests.lock().unwrap().push(request.clone());
     if let Some(refusal) = *fake.refuse_prepare.lock().unwrap() {
         return error_body(refusal);
     }
@@ -265,6 +276,10 @@ fn start_with(fake: Arc<Fake>, as_edge: bool) -> String {
                 .route(routes::SITE_UPLOAD_COMMIT, post(commit_upload))
                 .route(playtest_common::CARD_PATH, get(card_png))
                 .route(routes::HEALTH, get(|| async { "ok" }))
+                .route(
+                    routes::ME_TOKEN,
+                    axum::routing::delete(|| async { StatusCode::NO_CONTENT }),
+                )
                 .with_state(state);
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             tx.send(listener.local_addr().unwrap()).unwrap();
@@ -305,6 +320,107 @@ fn run_cli_in(cwd: &Path, home: &Path, api: &str, args: &[&str]) -> Output {
 
 fn stdout_of(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+#[test]
+fn quick_start_is_short_and_full_help_remains_discoverable() {
+    let home = tempfile::tempdir().unwrap();
+    for args in [vec![], vec!["-h"]] {
+        let output = run_cli(home.path(), "http://127.0.0.1:1", &args);
+        assert!(output.status.success());
+        let text = stdout_of(&output);
+        assert!(text.contains("playtest ./dist"), "{text}");
+        assert!(text.contains("playtest --help"), "{text}");
+        assert!(!text.contains("--isolated"), "{text}");
+        assert!(text.lines().count() <= 20, "{text}");
+    }
+    let output = run_cli(home.path(), "http://127.0.0.1:1", &["--help"]);
+    assert!(output.status.success());
+    assert!(stdout_of(&output).contains("--isolated"));
+    assert!(stdout_of(&output).contains("rollback"));
+}
+
+#[test]
+fn invalid_publish_options_fail_before_connecting() {
+    let home = tempfile::tempdir().unwrap();
+    for args in [
+        vec!["--name", "未给目录"],
+        vec!["--isolated", "auto"],
+        vec!["--gate", "once"],
+        vec!["--gate", "once", "ls"],
+        vec!["./dist", "--backend", "0"],
+        vec!["./dist", "--seats", "0"],
+        vec!["5173", "--public"],
+        vec!["5173", "--summary", "不会生效"],
+        vec!["5173", "--yes"],
+    ] {
+        let output = run_cli(home.path(), "http://127.0.0.1:1", &args);
+        assert_eq!(output.status.code(), Some(2), "{}", stderr_of(&output));
+        let mut machine = args.clone();
+        machine.push("--json");
+        let output = run_cli(home.path(), "http://127.0.0.1:1", &machine);
+        expect_failure(&output, 2, "usage");
+    }
+}
+
+#[test]
+fn global_api_works_on_either_side_of_a_command() {
+    let home = tempfile::tempdir().unwrap();
+    let api = start_fake(None);
+    let dist = make_export(home.path());
+    let published = run_cli(
+        home.path(),
+        &api,
+        &[dist.to_str().unwrap(), "--card", "-", "--json"],
+    );
+    assert!(published.status.success(), "{}", stderr_of(&published));
+    for args in [
+        vec!["--api", api.as_str(), "ls", "--json"],
+        vec!["ls", "--api", api.as_str(), "--json"],
+    ] {
+        let output = run_cli(home.path(), "http://127.0.0.1:1", &args);
+        assert!(output.status.success(), "{}", stderr_of(&output));
+        assert_eq!(only_object(&output)["ok"], true);
+        assert_eq!(only_object(&output)["sites"][0]["slug"], SLUG);
+    }
+}
+
+#[test]
+fn current_directory_is_used_without_guessing_a_recent_site() {
+    let home = tempfile::tempdir().unwrap();
+    for name in ["open", "card", "files", "versions"] {
+        let output = run_cli(home.path(), "http://127.0.0.1:1", &[name, "--json"]);
+        let value = expect_failure(&output, 6, "bad_input");
+        assert!(value["message"]
+            .as_str()
+            .unwrap()
+            .contains("这个目录还没发过"));
+    }
+}
+
+#[test]
+fn remembered_directory_works_for_reading_and_explicit_mutations() {
+    let home = tempfile::tempdir().unwrap();
+    let dist = make_export(home.path());
+    let fake = start_fake_as_edge();
+    let api = api_of(&fake);
+    let published = run_cli(
+        home.path(),
+        &api,
+        &[dist.to_str().unwrap(), "--card", "-", "--json"],
+    );
+    assert!(published.status.success(), "{}", stderr_of(&published));
+    for args in [
+        vec!["open", "--json"],
+        vec!["card", "--json"],
+        vec!["versions", "--json"],
+        vec!["unlist", ".", "--json"],
+        vec!["rollback", ".", "3", "--json"],
+    ] {
+        let output = run_cli_in(&dist, home.path(), &api, &args);
+        assert!(output.status.success(), "{}", stderr_of(&output));
+        assert_eq!(only_object(&output)["slug"], SLUG);
+    }
 }
 
 fn stderr_of(output: &Output) -> String {
@@ -366,7 +482,7 @@ fn an_upload_answers_with_one_object_and_keeps_the_talking_on_stderr() {
     assert_eq!(value["ok"], true);
     assert_eq!(value["action"], "upload");
     assert_eq!(value["slug"], SLUG);
-    assert_eq!(value["url"], format!("http://{SLUG}.localhost:8443"));
+    assert_eq!(value["url"], format!("http://localhost:8443/p/{SLUG}"));
     assert_eq!(value["version"], 7);
     assert_eq!(value["expires_at"], "2026-09-08T03:30:00Z");
     assert!(value["elapsed_ms"].is_u64(), "{value}");
@@ -402,7 +518,7 @@ fn no_qr_means_the_field_is_simply_absent() {
 }
 
 #[test]
-fn an_upload_saves_the_invite_card_next_to_you_and_says_so_in_the_object() {
+fn an_explicit_card_download_saves_the_file_and_reports_its_path() {
     let home = tempfile::tempdir().unwrap();
     let work = tempfile::tempdir().unwrap();
     let dist = make_export(work.path());
@@ -413,7 +529,13 @@ fn an_upload_saves_the_invite_card_next_to_you_and_says_so_in_the_object() {
         work.path(),
         home.path(),
         &api,
-        &["--json", "--no-qr", dist.to_str().unwrap()],
+        &[
+            "--json",
+            "--no-qr",
+            "--card",
+            "dist-邀请卡.png",
+            dist.to_str().unwrap(),
+        ],
     );
     assert!(output.status.success(), "{}", stderr_of(&output));
     let value = only_object(&output);
@@ -439,15 +561,14 @@ fn an_upload_saves_the_invite_card_next_to_you_and_says_so_in_the_object() {
         "控制台在开发者域上：{console}"
     );
 
-    // 这一版没有封面，提醒一句，但不拦。
-    assert!(
-        value["findings"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|f| f["message"].as_str().unwrap_or("").contains("没有封面")),
-        "{value}"
-    );
+    assert!(!value["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|finding| finding["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("没有封面")));
 }
 
 #[test]
@@ -471,6 +592,117 @@ fn no_card_means_no_file_and_no_path() {
         !work.path().join("dist-邀请卡.png").exists(),
         "说了不要就一个文件都不该留下"
     );
+}
+
+#[test]
+fn default_publish_never_downloads_a_card_or_adds_it_to_the_next_version() {
+    for machine in [false, true] {
+        let home = tempfile::tempdir().unwrap();
+        let dist = make_export(home.path());
+        let fake = start_fake_as_edge();
+        let api = api_of(&fake);
+        *fake.card_delay_ms.lock().unwrap() = 1000;
+        for version in 0..2 {
+            let mut args = vec![".", "--no-qr"];
+            if machine {
+                args.push("--json");
+            }
+            let output = run_cli_in(&dist, home.path(), &api, &args);
+            assert!(output.status.success(), "{}", stderr_of(&output));
+            if machine {
+                assert!(only_object(&output).get("card_path").is_none());
+            }
+            assert_eq!(fake.card_requests.load(Ordering::SeqCst), 0);
+            if version == 0 {
+                assert_eq!(fake.site_requests.load(Ordering::SeqCst), 0);
+            }
+            assert!(!std::fs::read_dir(&dist).unwrap().any(|entry| entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .ends_with("邀请卡.png")));
+        }
+        let manifests = fake.manifests.lock().unwrap();
+        assert_eq!(manifests.len(), 2);
+        assert_eq!(manifests[0]["files"], manifests[1]["files"]);
+    }
+}
+
+#[test]
+fn requested_card_download_time_is_included_in_the_json_elapsed_time() {
+    let home = tempfile::tempdir().unwrap();
+    let dist = make_export(home.path());
+    let fake = start_fake_as_edge();
+    *fake.card_delay_ms.lock().unwrap() = 350;
+    let started = Instant::now();
+    let output = run_cli(
+        home.path(),
+        &api_of(&fake),
+        &[dist.to_str().unwrap(), "--card", "invite.png", "--json"],
+    );
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    let value = only_object(&output);
+    let elapsed = value["elapsed_ms"].as_u64().unwrap();
+    assert!(elapsed >= 350, "{value}");
+    assert!(elapsed <= started.elapsed().as_millis() as u64, "{value}");
+    assert_eq!(fake.card_requests.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        std::fs::read(home.path().join("invite.png")).unwrap(),
+        CARD_BYTES
+    );
+}
+
+#[test]
+fn a_failed_explicit_card_save_does_not_hide_a_successful_publish() {
+    let home = tempfile::tempdir().unwrap();
+    let dist = make_export(home.path());
+    let fake = start_fake_as_edge();
+    let obstacle = home.path().join("not-a-directory");
+    std::fs::write(&obstacle, "keep me").unwrap();
+    let destination = obstacle.join("invite.png");
+    let output = run_cli(
+        home.path(),
+        &api_of(&fake),
+        &[
+            dist.to_str().unwrap(),
+            "--card",
+            destination.to_str().unwrap(),
+            "--json",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    let value = only_object(&output);
+    assert!(value.get("card_path").is_none(), "{value}");
+    assert!(
+        value["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|finding| finding["message"]
+                .as_str()
+                .unwrap_or("")
+                .contains("作品已发布，但邀请卡未能保存")),
+        "{value}"
+    );
+    assert_eq!(std::fs::read_to_string(obstacle).unwrap(), "keep me");
+}
+
+#[test]
+fn retired_gate_is_hidden_and_fails_with_migration_advice() {
+    let home = tempfile::tempdir().unwrap();
+    let help = run_cli(home.path(), "http://127.0.0.1:1", &["--help"]);
+    assert!(!stdout_of(&help).contains("--gate"));
+    for mode in ["once", "always", "never"] {
+        for target in ["./dist", "5173", "ls"] {
+            let output = run_cli(
+                home.path(),
+                "http://127.0.0.1:1",
+                &[target, "--gate", mode, "--json"],
+            );
+            let value = expect_failure(&output, 2, "usage");
+            assert!(value["message"].as_str().unwrap().contains("--gate 已撤出"));
+        }
+    }
 }
 
 #[test]
@@ -846,6 +1078,46 @@ fn removing_without_confirmation_is_refused_not_guessed() {
     assert!(value["message"].as_str().unwrap().contains("-y"), "{value}");
 }
 
+#[test]
+fn logout_revokes_then_clears_only_credentials_and_keeps_directory_records() {
+    let home = tempfile::tempdir().unwrap();
+    let api = start_fake(None);
+    let config_path = home.path().join(".config/playtest/config.json");
+    std::fs::create_dir_all(config_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &config_path,
+        json!({"api":api,"token":"secret","login":"author","sites":{"/work":"brisk-otter-41"}})
+            .to_string(),
+    )
+    .unwrap();
+    let denied = run_cli(home.path(), &api, &["logout", "--json"]);
+    expect_failure(&denied, 2, "usage");
+    assert!(std::fs::read_to_string(&config_path)
+        .unwrap()
+        .contains("secret"));
+    let output = run_cli(home.path(), &api, &["logout", "-y", "--json"]);
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    assert_eq!(only_object(&output)["action"], "logout");
+    let saved: Value = serde_json::from_slice(&std::fs::read(config_path).unwrap()).unwrap();
+    assert!(saved.get("token").is_none());
+    assert!(saved.get("login").is_none());
+    assert_eq!(saved["sites"]["/work"], "brisk-otter-41");
+    assert!(!stdout_of(&output).contains("secret"));
+}
+
+#[test]
+fn logout_network_failure_keeps_the_token_available_for_retry() {
+    let home = tempfile::tempdir().unwrap();
+    let api = "http://127.0.0.1:1";
+    let config_path = home.path().join(".config/playtest/config.json");
+    std::fs::create_dir_all(config_path.parent().unwrap()).unwrap();
+    let original = json!({"api":api,"token":"secret","sites":{}}).to_string();
+    std::fs::write(&config_path, &original).unwrap();
+    let output = run_cli(home.path(), api, &["logout", "-y", "--json"]);
+    assert!(!output.status.success());
+    assert_eq!(std::fs::read_to_string(config_path).unwrap(), original);
+}
+
 // ---------------------------------------------------------------- 人类模式没被弄坏
 
 #[test]
@@ -859,14 +1131,13 @@ fn without_the_flag_stdout_is_still_just_the_link() {
     assert!(output.status.success(), "{}", stderr_of(&output));
     assert_eq!(
         stdout_of(&output),
-        format!("http://{SLUG}.localhost:8443\n"),
+        format!("http://localhost:8443/p/{SLUG}\n"),
         "`playtest ./dist | pbcopy` 拿到的必须就是链接"
     );
 
-    // 「几秒」是数字：结尾那行给总数。对着本机假服务器一下就完，分段不打（那是慢的时候才有用的）。
     let stderr = stderr_of(&output);
-    assert!(stderr.contains("本次 "), "{stderr}");
-    assert!(stderr.contains(" 秒"), "{stderr}");
+    assert!(!stderr.contains("本次 "), "{stderr}");
+    assert!(!stderr.contains("没有封面"), "{stderr}");
     assert!(!stderr.contains("（哈希 0.0"), "四个 0.0 是噪声：{stderr}");
 }
 
@@ -902,14 +1173,11 @@ fn what_a_first_timer_sees_after_publishing_comes_in_one_useful_order() {
     let said: Vec<&str> = stderr.lines().filter(|l| !l.trim().is_empty()).collect();
     let order = [
         "已发布",
-        "邀请卡已存到",
         "已放到广场上",
         "想找 10 位试玩者",
         // 快到期时这一句会换成提醒，两种说法里都有「匿名链接」这四个字。
         "匿名链接",
         "来的人玩成什么样",
-        "没有封面",
-        "本次 ",
     ];
     let mut at = 0usize;
     for head in order {
@@ -920,5 +1188,8 @@ fn what_a_first_timer_sees_after_publishing_comes_in_one_useful_order() {
             .unwrap_or_else(|| panic!("「{head}」没按顺序出现：\n{stderr}"));
     }
     // 链接只在 stdout 上，方便 `| pbcopy`。
-    assert_eq!(stdout_of(&output).trim(), api_of(&fake));
+    assert_eq!(
+        stdout_of(&output).trim(),
+        format!("{}/p/{SLUG}", api_of(&fake))
+    );
 }

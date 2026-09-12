@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 
 use playtest_common::manifest::{GateMode, Manifest, SCHEMA};
 use playtest_common::slug;
+use playtest_common::store::Store;
 use playtest_common::tunnel::io::{ActivityClock, Mux, WsControl};
 use playtest_common::tunnel::{close, Claims, IDLE_TIMEOUT_SECS};
 use serde::{Deserialize, Serialize};
@@ -195,11 +196,11 @@ pub struct Tunnels {
 }
 
 impl Tunnels {
-    pub fn new(config: &Config) -> Arc<Self> {
+    pub fn new(config: &Config, store: Store) -> Arc<Self> {
         Arc::new(Self {
             inner: Mutex::new(Inner::default()),
             dir: config.tunnels_dir(),
-            keys: Keys::new(config.tunnel_key_path()),
+            keys: Keys::new(store),
             watchdog: AtomicBool::new(false),
         })
     }
@@ -465,13 +466,14 @@ mod tests {
     }
 
     fn tunnels(dir: &std::path::Path) -> Arc<Tunnels> {
-        Tunnels::new(&Config {
+        let config = Config {
             listen: "127.0.0.1:0".parse().unwrap(),
             data_dir: dir.to_path_buf(),
             host_suffix: "localhost".into(),
             public_scheme: "http".into(),
             api_internal_url: None,
-        })
+        };
+        Tunnels::new(&config, Store::new(config.store_root()))
     }
 
     #[tokio::test]

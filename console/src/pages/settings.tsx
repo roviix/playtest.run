@@ -207,8 +207,8 @@ function Seats({ listing, busy, onChange }: { listing: Listing; busy: boolean; o
       title="名额"
       lead={
         listing.seats
-          ? `在找 ${listing.seats} 位，已有 ${listing.joined} 位加入。`
-          : listing.joined > 0
+          ? `在找 ${listing.seats} 位，已有 ${listing.joined ?? 0} 位加入。`
+          : (listing.joined ?? 0) > 0
             ? `没设名额。已有 ${listing.joined} 位留名。`
             : "没设名额。"
       }

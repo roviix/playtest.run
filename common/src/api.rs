@@ -10,6 +10,7 @@
 //! 3. `PUT /v1/blobs/{hash}` 只传缺的（可并行、可重试，服务端校验哈希）；
 //! 4. `POST /v1/projects/{slug}/uploads/{upload_id}/commit` 提交，拿到 `vN` 与链接。
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::manifest::{Cover, FileEntry, GateMode};
@@ -64,6 +65,7 @@ pub mod routes {
     pub const LOGIN_WEB_EXCHANGE: &str = "/v1/login/github/exchange";
     /// `GET` → 200 [`super::Me`]：这个令牌是谁。
     pub const ME: &str = "/v1/me";
+    pub const ME_TOKEN: &str = "/v1/me/token";
 
     pub fn site_version_files(slug: &str, version: u32) -> String {
         SITE_VERSION_FILES
@@ -105,13 +107,13 @@ pub mod routes {
 }
 
 /// 所有非 2xx 响应的体。`code` 给程序判断，`message` 给人看（中文，第一次用的人看得懂）。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ErrorBody {
     pub code: ErrorCode,
     pub message: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
     Unauthorized,
@@ -142,7 +144,7 @@ pub enum ErrorCode {
     Internal,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct AnonSessionResponse {
     pub token: String,
     /// RFC 3339。到期后令牌与它创建的作品一起失效。
@@ -150,7 +152,7 @@ pub struct AnonSessionResponse {
 }
 
 /// GitHub 设备码流程的第一步：CLI 把 `user_code` 和 `verification_uri` 打给人看，然后拿 `device_code` 轮询。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct DeviceLoginStart {
     pub device_code: String,
     /// 给人在浏览器里输入的那串，形如 `WDJB-MJHT`。
@@ -163,13 +165,13 @@ pub struct DeviceLoginStart {
     pub interval: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct DeviceLoginPoll {
     pub device_code: String,
 }
 
 /// 轮询的结果。`pending` 继续等；`ok` 里就是登录结果。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum LoginPollResponse {
     /// 人还没在浏览器里输完码。`interval` 是下一次至少隔几秒。
@@ -180,7 +182,7 @@ pub enum LoginPollResponse {
 }
 
 /// 登录成功。`token` 长期有效，之后所有请求都带它。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct LoginResponse {
     pub token: String,
     /// GitHub 用户名（不带 @）。
@@ -192,14 +194,14 @@ pub struct LoginResponse {
 }
 
 /// 网页授权码流程的最后一步：控制台把 GitHub 回传的 `code` 与 `state` 交给控制面换令牌。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct WebLoginExchange {
     pub code: String,
     pub state: String,
 }
 
 /// `GET /v1/me`。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Me {
     /// `anon` 或 `github`。
     pub kind: String,
@@ -215,7 +217,7 @@ pub struct Me {
     pub avatar_url: Option<String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct CreateSiteRequest {
     /// 想要的 slug；匿名用户忽略此项，随机分配。
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -225,7 +227,7 @@ pub struct CreateSiteRequest {
     pub title: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Site {
     pub slug: String,
     /// 玩家点开的完整链接，例如 `https://brisk-otter-41.playtest.run`。
@@ -244,7 +246,7 @@ pub struct Site {
 }
 
 /// 一个作品在广场（DESIGN §3.8）上的状态。
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Listing {
     /// 开发者勾了「放到广场上」。默认不公开。
     #[serde(default)]
@@ -286,7 +288,7 @@ pub struct Listing {
 
 /// `PATCH /v1/projects/{slug}`：只改带了的字段。
 /// `seek_note` / `community_url` 传空字符串表示清掉；`seats` 传 0 表示清掉。
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct UpdateSiteRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub public: Option<bool>,
@@ -303,7 +305,7 @@ pub struct UpdateSiteRequest {
 }
 
 /// 一个已发布的版本。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct VersionInfo {
     pub version: u32,
     pub created_at: String,
@@ -315,9 +317,10 @@ pub struct VersionInfo {
     pub current: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct VersionList {
     pub slug: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_version: Option<u32>,
     /// 新的在前。
     pub versions: Vec<VersionInfo>,
@@ -326,7 +329,7 @@ pub struct VersionList {
 /// 一个版本里的文件清单（`GET /v1/projects/{slug}/versions/{version}/files`）。
 ///
 /// 只有清单和哈希，没有字节：文件本身在作品自己的域上按路径取就行。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct VersionFiles {
     pub slug: String,
     pub version: u32,
@@ -337,7 +340,7 @@ pub struct VersionFiles {
     pub files: Vec<VersionFile>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct VersionFile {
     pub path: String,
     pub size: u64,
@@ -347,7 +350,7 @@ pub struct VersionFile {
     pub url: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct PrepareUploadRequest {
     pub files: Vec<FileEntry>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -372,7 +375,7 @@ pub struct PrepareUploadRequest {
     pub engine: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct PrepareUploadResponse {
     pub upload_id: String,
     /// 服务端没有的哈希，CLI 只传这些。去重后、按清单顺序。
@@ -381,7 +384,7 @@ pub struct PrepareUploadResponse {
     pub missing_bytes: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct CommitUploadResponse {
     pub slug: String,
     pub version: u32,
@@ -396,7 +399,10 @@ mod tests {
 
     #[test]
     fn route_helpers_fill_placeholders() {
-        assert_eq!(routes::site("brisk-otter-41"), "/v1/projects/brisk-otter-41");
+        assert_eq!(
+            routes::site("brisk-otter-41"),
+            "/v1/projects/brisk-otter-41"
+        );
         assert_eq!(
             routes::site_upload_commit("a", "u1"),
             "/v1/projects/a/uploads/u1/commit"

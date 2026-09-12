@@ -46,13 +46,37 @@ pub async fn run_once(state: &AppState) -> usize {
         }
     };
 
-    let runtime = state.notify();
     let mut sent = 0;
-    for row in due {
+    for mut row in due {
+        if row.kind == "collection_digest" {
+            let conn = state.db().lock().await;
+            match crate::collections::refresh_digest(
+                &conn,
+                &mut row,
+                state.notify().root_url(),
+                now,
+            ) {
+                Ok(true) => {}
+                Ok(false) => {
+                    let _ = db::mark_notification_failed(
+                        &conn,
+                        row.id,
+                        "dead",
+                        &clock::format(now),
+                        "合集、投稿或订阅已失效，未发送",
+                    );
+                    continue;
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "合集摘要重新核对失败，稍后再试");
+                    continue;
+                }
+            }
+        }
         let outcome = match row.channel.as_str() {
             super::CHANNEL_PUSH => send_push(state, &row).await,
             // 退订那一行只加在邮件里：推送弹窗放不下，而浏览器自己就有「关闭此站点通知」。
-            _ => send_email(state, &row, &super::render(runtime, &row)).await,
+            _ => send_email(state, &row).await,
         };
 
         let conn = state.db().lock().await;
@@ -95,11 +119,7 @@ pub async fn run_once(state: &AppState) -> usize {
     sent
 }
 
-async fn send_email(
-    state: &AppState,
-    row: &db::NotificationRow,
-    body: &str,
-) -> super::mailer::SendResult {
+async fn send_email(state: &AppState, row: &db::NotificationRow) -> super::mailer::SendResult {
     let Some(to) = row.email.clone() else {
         // 人把邮箱去掉了（或者从来就是推送那条路），这封信没有收件人。
         return Err(super::mailer::SendError::Permanent(
@@ -107,6 +127,7 @@ async fn send_email(
         ));
     };
     let runtime = state.notify();
+    let content = super::email::render(runtime, row);
     runtime
         .mailer
         .send(
@@ -114,7 +135,8 @@ async fn send_email(
             &super::mailer::Letter {
                 to,
                 subject: row.subject.clone(),
-                body: body.to_string(),
+                body: content.text,
+                html: content.html,
             },
         )
         .await

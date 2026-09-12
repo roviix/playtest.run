@@ -132,8 +132,8 @@ impl Playtest {
         match upload::run(&args, &dir).await {
             Ok(mut report) => {
                 // 进程从早上就开着，这次调用花了多久才是要报的数。
+                let card = card::fetch(&report.card_url).await.ok();
                 report.elapsed_ms = output::ms_since(started);
-                let card = report.take_card_png();
                 Ok(answer_with_card(&report, card, &report.card_url))
             }
             Err(e) => Ok(refuse(&e, started)),
@@ -209,7 +209,7 @@ impl Playtest {
             "action": "card",
             "slug": site.slug,
             "title": site.title,
-            "url": site.url,
+            "url": playtest_common::door_url(&site.url, &site.slug),
             "card_url": card_url,
             "elapsed_ms": output::ms_since(started),
         });

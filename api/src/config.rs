@@ -106,6 +106,42 @@ impl EmailProvider {
     }
 }
 
+impl Notify {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        if matches!(self.email, EmailProvider::Log | EmailProvider::Off) {
+            return Ok(());
+        }
+        let root = reqwest::Url::parse(&self.root_url).ok();
+        let valid = root.as_ref().is_some_and(|url| {
+            url.scheme() == "https"
+                && url.username().is_empty()
+                && url.password().is_none()
+                && url.path() == "/"
+                && url.query().is_none()
+                && url.fragment().is_none()
+                && url.host_str().is_some_and(|host| {
+                    host != "localhost"
+                        && !host.ends_with(".localhost")
+                        && host != "playtest.roviix.com"
+                        && !host.ends_with(".playtest.roviix.com")
+                        && !host
+                            .trim_matches(['[', ']'])
+                            .parse::<std::net::IpAddr>()
+                            .is_ok_and(|address| address.is_loopback() || address.is_unspecified())
+                })
+        });
+        anyhow::ensure!(
+            valid,
+            "真实发信前，请把 {PUBLIC_ROOT_URL_ENV} 配成玩家可访问的 HTTPS 根地址；不能使用 localhost、回环地址、开发者控制台域或带路径的地址"
+        );
+        anyhow::ensure!(
+            self.from.parse::<lettre::message::Mailbox>().is_ok(),
+            "{EMAIL_FROM_ENV} 必须是合法的发件人邮箱，例如 playtest.run <notice@playtest.run>"
+        );
+        Ok(())
+    }
+}
+
 /// GitHub OAuth App。`client_id` 是公开的；`client_secret` 只有网页授权码流程（控制台）要，
 /// 终端的设备码流程不用它。两样都只从环境变量来，不进仓库（AGENTS 第 9 条）。
 #[derive(Debug, Clone)]
@@ -144,9 +180,16 @@ impl Config {
         })
     }
 
-    /// 对象存储的根。edge 读同一个目录（KICKOFF §3）。
+    /// 本机文件系统后端的根；S3 后端不把作品持久化到这里。
     pub fn store_root(&self) -> PathBuf {
         self.data_dir.join("store")
+    }
+
+    pub fn store_config(&self) -> anyhow::Result<playtest_common::store::StoreConfig> {
+        playtest_common::store::StoreConfig::from_env(
+            self.store_root(),
+            self.data_dir.join("upload-tmp"),
+        )
     }
 
     pub fn sqlite_path(&self) -> PathBuf {

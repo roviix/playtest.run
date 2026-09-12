@@ -7,6 +7,7 @@
 //! 控制台里「推广」一节如实写「尚未开放」。所以这里先有数据模型和管理接口，没有下单接口——
 //! 下单接口等 Stripe 接上再加，形状会是「创建订单 → 支付回调 → 一条 `Pending` 的 [`Boost`]」。
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// 广场同一屏上最多几张推广位。两张：看得见、又不至于把免费流推到第二屏。
@@ -44,7 +45,7 @@ pub mod routes {
 }
 
 /// 两个 SKU 加一个附加项（DESIGN §6）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum BoostKind {
     /// 推广 3 天。
@@ -75,7 +76,7 @@ impl BoostKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum BoostStatus {
     /// 付了钱（或被赠送），等人工看一眼。
@@ -88,7 +89,7 @@ pub enum BoostStatus {
     Rejected,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Boost {
     pub id: i64,
     pub slug: String,
@@ -105,9 +106,12 @@ pub struct Boost {
     /// 支付订单号；赠送的没有。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub order_id: Option<String>,
+    /// 人工没放行时给开发者看的理由；只在 `Rejected` 时有。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct GrantBoostRequest {
     pub slug: String,
     pub kind: BoostKind,
@@ -119,7 +123,7 @@ pub struct GrantBoostRequest {
     pub review: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ReviewBoostRequest {
     pub approve: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -127,7 +131,7 @@ pub struct ReviewBoostRequest {
 }
 
 /// 控制面一件后台活的现状（清过期作品、回收 blob、周报、发通知、重写广场与 `live.json`）。
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct JobStatus {
     pub name: String,
     pub every_secs: u64,
@@ -144,7 +148,7 @@ pub struct JobStatus {
     pub failures: u64,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct NotificationQueue {
     pub pending: u32,
     pub sent_24h: u32,

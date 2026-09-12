@@ -1,7 +1,7 @@
 //! 收文件内容。上传路径里唯一一个搬字节的端点。
 //!
-//! 请求体从头到尾不进内存：边收边写临时文件、边算 SHA-256，算完对得上才原子改名进
-//! 对象存储。一个 200 MB 的 Unity `.data` 文件在这里只占几十 KB 的缓冲区。
+//! 请求体从头到尾不进内存：边收边写临时文件、边算 SHA-256，算完对得上才以分段上传
+//! 原子提交进对象存储。一个 200 MB 的 Unity `.data` 文件内存有明确上限。
 
 use std::path::Path as FsPath;
 
@@ -55,6 +55,9 @@ pub async fn upload(
     } else if let Err(err) = state.store().put_blob_from_path(&hash, &tmp).await {
         discard(&tmp).await;
         return Err(err.into());
+    } else {
+        // S3 的最终提交不会像旧文件系统实现那样把这份本机临时文件 rename 掉。
+        discard(&tmp).await;
     }
 
     {

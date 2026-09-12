@@ -136,11 +136,11 @@ pub fn compose(
 }
 
 pub fn subject(now: OffsetDateTime) -> String {
-    format!("playtest.run 本周新作品（{}）", &clock::format(now)[..10])
+    format!("本周新作品 · {}", &clock::format(now)[..10])
 }
 
 pub fn body(items: &[Item]) -> String {
-    let mut text = String::from("这周有这些新版本可以试：\n");
+    let mut text = String::from("这周有这些新作品可以试：\n");
     for item in items.iter().filter(|i| !i.boosted) {
         text.push_str(&format!("\n《{}》 {}\n", item.title, item.developer));
         if let Some(summary) = &item.summary {
@@ -293,7 +293,9 @@ impl Job for WeeklyDigest {
             }
             let queued = {
                 let conn = state.db().lock().await;
-                enqueue(&conn, now, |slug| state.site_url(slug))?
+                enqueue(&conn, now, |slug| {
+                    playtest_common::door_url(&state.site_url(slug), slug)
+                })? + crate::collections::enqueue_digests(&conn, now, state.notify().root_url())?
             };
             // 这一周没有新作品就不发，但「这一期过去了」照样记下——
             // 否则下一分钟会再试一次，一直试到下周一。

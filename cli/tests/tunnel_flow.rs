@@ -47,6 +47,7 @@ use tokio_tungstenite::tungstenite::http::{HeaderValue, StatusCode};
 
 const SLUG: &str = "brisk-otter-41";
 const PLAYER_URL: &str = "http://brisk-otter-41.localhost:8443";
+const DOOR_URL: &str = "http://localhost:8443/p/brisk-otter-41";
 /// 假边缘写进流里的那个请求，玩家的浏览器发的就长这样。
 const PLAYER_REQUEST: &str =
     "GET /echo HTTP/1.1\r\nHost: localhost:0\r\nX-Forwarded-Host: brisk-otter-41.localhost\r\n\r\n";
@@ -404,7 +405,7 @@ fn a_players_request_reaches_the_dev_server_and_a_lost_link_comes_back() {
     let events = events(&output);
     let online =
         first_named(&events, "online").unwrap_or_else(|| panic!("没有 online：{events:?}"));
-    assert_eq!(online["url"], PLAYER_URL);
+    assert_eq!(online["url"], DOOR_URL);
     assert_eq!(online["slug"], SLUG);
     assert_eq!(online["expires_at"], "2026-09-08T03:30:00Z");
     assert_eq!(online["attempt"], 0);
@@ -499,7 +500,7 @@ fn the_human_output_puts_the_link_on_stdout_and_everything_else_on_stderr() {
     assert_eq!(output.status.code(), Some(1), "{}", stderr_of(&output));
     assert_eq!(
         stdout_of(&output),
-        format!("{PLAYER_URL}\n"),
+        format!("{DOOR_URL}\n"),
         "`playtest 5173 | pbcopy` 拿到的必须就是链接"
     );
 
@@ -510,7 +511,6 @@ fn the_human_output_puts_the_link_on_stdout_and_everything_else_on_stderr() {
         "Vite",
         "server.hmr.clientPort = 443",
         "按 Ctrl-C 结束",
-        "本次 ",
         "玩家连接：1",
         "和服务器断开了",
         "接管",

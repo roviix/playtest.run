@@ -59,9 +59,11 @@ impl Allow {
 pub enum Root<'a> {
     /// `/`：广场。
     Plaza,
-    /// `POST /follow`：「我的」里留邮箱就是关注广场。
+    Collections,
+    Collection(&'a str),
+    /// `POST /follow`：关注页里留邮箱就是关注广场。
     Follow,
-    /// `/me`：「我的」。
+    /// `/me`：关注页。
     Me,
     /// `POST /me/action`：取消关注、给自己发链接、关掉浏览器通知。
     MeAction,
@@ -73,11 +75,16 @@ pub enum Root<'a> {
     ServiceWorker,
     /// `/llms.txt`：给搜到玩家域的助手指路（AGENTS 第 7 条的第二个例外）。
     Llms,
+    /// `/p/{slug}`：主域作品邀请函（DESIGN §3.1、§3.3）。
+    Project(&'a str),
 }
 
-/// 根域的表：路径与允许的方法。带令牌的两条按前缀匹配，其余精确匹配。
+/// 根域的表：路径与允许的方法。带令牌与 slug 的按前缀匹配，其余精确匹配。
 pub const ROOT: &[(&str, Allow)] = &[
     ("/", Allow::Read),
+    (playtest_common::collection::INDEX, Allow::Read),
+    (playtest_common::collection::PREFIX, Allow::Read),
+    (root_paths::PROJECT_PREFIX, Allow::ReadOrPost),
     (root_paths::FOLLOW, Allow::Post),
     (root_paths::ME, Allow::Read),
     (root_paths::ME_ACTION, Allow::Post),
@@ -91,13 +98,23 @@ pub const ROOT: &[(&str, Allow)] = &[
 pub fn root(path: &str) -> Option<(Root<'_>, Allow)> {
     let hit = match path {
         "/" => Root::Plaza,
+        playtest_common::collection::INDEX => Root::Collections,
         p if p == root_paths::FOLLOW => Root::Follow,
         p if p == root_paths::ME => Root::Me,
         p if p == root_paths::ME_ACTION => Root::MeAction,
         p if p == SW_PATH => Root::ServiceWorker,
         p if p == LLMS_TXT => Root::Llms,
         p => {
-            if let Some(token) = p.strip_prefix(root_paths::ME_CONFIRM) {
+            if let Some(slug) = p.strip_prefix(playtest_common::collection::PREFIX) {
+                playtest_common::slug::validate(slug).ok()?;
+                return Some((Root::Collection(slug), Allow::Read));
+            }
+            if let Some(slug) = p.strip_prefix(root_paths::PROJECT_PREFIX) {
+                if slug.is_empty() || slug.contains('/') {
+                    return None;
+                }
+                Root::Project(slug)
+            } else if let Some(token) = p.strip_prefix(root_paths::ME_CONFIRM) {
                 Root::Confirm(token)
             } else if let Some(token) = p.strip_prefix(root_paths::ME_UNSUBSCRIBE) {
                 Root::Unsubscribe(token)
@@ -107,7 +124,13 @@ pub fn root(path: &str) -> Option<(Root<'_>, Allow)> {
         }
     };
     let allow = match hit {
-        Root::Plaza | Root::Me | Root::ServiceWorker | Root::Llms => Allow::Read,
+        Root::Plaza
+        | Root::Collections
+        | Root::Collection(_)
+        | Root::Me
+        | Root::ServiceWorker
+        | Root::Llms => Allow::Read,
+        Root::Project(_) => Allow::ReadOrPost,
         Root::Follow | Root::MeAction => Allow::Post,
         Root::Confirm(_) | Root::Unsubscribe(_) => Allow::Read,
     };
@@ -147,6 +170,8 @@ pub enum Reserved {
     Share,
     /// `POST /_playtest/follow`：门禁页与玩后落点的「有新版本时告诉我」。
     Follow,
+    /// `GET /_playtest/invite`：随时调出作品邀请函。
+    Invite,
 }
 
 /// 保留前缀下的表。第一列是 `/_playtest/` 之后的尾巴。
@@ -162,6 +187,7 @@ pub const RESERVED: &[(&str, Allow)] = &[
     (tail_of(CARD_WIDE_PATH), Allow::Read),
     (tail_of(SHARE_PATH), Allow::Read),
     (tail_of(edge_paths::FOLLOW), Allow::Post),
+    ("invite", Allow::Read),
 ];
 
 /// 契约里给的是完整路径；这张表按尾巴分。编译期就把前缀剥掉，两者一致不用靠人记。
@@ -194,10 +220,15 @@ pub fn reserved(tail: &str) -> Option<(Reserved, Allow)> {
         t if t == tail_of(CARD_WIDE_PATH) => Reserved::Card(Shape::Wide),
         t if t == tail_of(SHARE_PATH) => Reserved::Share,
         t if t == tail_of(edge_paths::FOLLOW) => Reserved::Follow,
+        "invite" => Reserved::Invite,
         _ => return None,
     };
     let allow = match hit {
-        Reserved::Healthz | Reserved::Cover | Reserved::Card(_) | Reserved::Share => Allow::Read,
+        Reserved::Healthz
+        | Reserved::Cover
+        | Reserved::Card(_)
+        | Reserved::Share
+        | Reserved::Invite => Allow::Read,
         Reserved::Start | Reserved::Follow => Allow::Post,
         Reserved::Report => Allow::ReadOrPost,
         Reserved::Handshake | Reserved::Me | Reserved::Sdk => Allow::Any,
@@ -210,8 +241,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_root_host_has_exactly_eight_doors() {
-        assert_eq!(ROOT.len(), 8, "根域多一条路径要先改 DESIGN §3.9");
+    fn the_root_host_has_exactly_nine_doors() {
+        assert_eq!(ROOT.len(), 11, "根域多一条路径要先改 DESIGN §3.9");
         for (path, allow) in ROOT {
             let probe = if path.ends_with('/') && *path != "/" {
                 format!("{path}tok")
@@ -225,6 +256,12 @@ mod tests {
         assert!(root("/me/").is_none());
         assert!(root("/index.html").is_none());
         assert_eq!(
+            root("/p/scarlet-tiger-35"),
+            Some((Root::Project("scarlet-tiger-35"), Allow::ReadOrPost))
+        );
+        assert!(root("/p/").is_none());
+        assert!(root("/p/a/b").is_none());
+        assert_eq!(
             root("/me/confirm/abc"),
             Some((Root::Confirm("abc"), Allow::Read))
         );
@@ -235,8 +272,8 @@ mod tests {
     }
 
     #[test]
-    fn the_reserved_prefix_has_exactly_eleven_doors() {
-        assert_eq!(RESERVED.len(), 11);
+    fn the_reserved_prefix_has_exactly_twelve_doors() {
+        assert_eq!(RESERVED.len(), 12);
         for (tail, allow) in RESERVED {
             let (_, got) = reserved(tail).unwrap_or_else(|| panic!("{tail} 不在表里"));
             assert_eq!(got, *allow, "{tail}");

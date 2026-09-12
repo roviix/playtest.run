@@ -22,6 +22,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/003_plaza.sql"),
     include_str!("migrations/004_github_login.sql"),
     include_str!("migrations/005_club.sql"),
+    include_str!("migrations/006_collections.sql"),
 ];
 
 /// 读连接的个数。控制面同一时刻在读的东西：几个请求、一次 `live.json` 重算、一次广场重算；

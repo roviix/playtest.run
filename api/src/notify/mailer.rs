@@ -5,13 +5,43 @@
 
 use crate::config::EmailProvider;
 
-/// 一封信。纯文本，没有 HTML——DESIGN §4.8 说发信信誉要养，纯文本进垃圾箱的概率更低，
-/// 而我们要说的话本来也就三行。
 #[derive(Debug, Clone)]
 pub struct Letter {
     pub to: String,
     pub subject: String,
     pub body: String,
+    pub html: String,
+}
+
+impl Letter {
+    fn resend_payload(&self, from: &str) -> serde_json::Value {
+        serde_json::json!({
+            "from": from,
+            "to": [self.to],
+            "subject": self.subject,
+            "text": self.body,
+            "html": self.html,
+        })
+    }
+
+    pub fn smtp_message(&self, from: &str) -> Result<lettre::Message, SendError> {
+        let from = from
+            .parse::<lettre::message::Mailbox>()
+            .map_err(|error| SendError::Permanent(format!("发件人不是合法的邮箱：{error}")))?;
+        let to = self
+            .to
+            .parse::<lettre::message::Mailbox>()
+            .map_err(|error| SendError::Permanent(format!("收件人不是合法的邮箱：{error}")))?;
+        lettre::Message::builder()
+            .from(from)
+            .to(to)
+            .subject(&self.subject)
+            .multipart(lettre::message::MultiPart::alternative_plain_html(
+                self.body.clone(),
+                self.html.clone(),
+            ))
+            .map_err(|error| SendError::Permanent(format!("这封信拼不出来：{error}")))
+    }
 }
 
 #[derive(Debug)]
@@ -72,12 +102,7 @@ impl ResendMailer {
 #[async_trait::async_trait]
 impl Mailer for ResendMailer {
     async fn send(&self, from: &str, letter: &Letter) -> SendResult {
-        let body = serde_json::json!({
-            "from": from,
-            "to": [letter.to],
-            "subject": letter.subject,
-            "text": letter.body,
-        });
+        let body = letter.resend_payload(from);
         let response = self
             .http
             .post("https://api.resend.com/emails")
@@ -121,20 +146,7 @@ impl Mailer for SmtpMailer {
     async fn send(&self, from: &str, letter: &Letter) -> SendResult {
         use lettre::AsyncTransport;
 
-        let from = from
-            .parse::<lettre::message::Mailbox>()
-            .map_err(|e| SendError::Permanent(format!("发件人「{from}」不是合法的邮箱：{e}")))?;
-        let to = letter
-            .to
-            .parse::<lettre::message::Mailbox>()
-            .map_err(|e| SendError::Permanent(format!("收件人不是合法的邮箱：{e}")))?;
-        let message = lettre::Message::builder()
-            .from(from)
-            .to(to)
-            .subject(&letter.subject)
-            .header(lettre::message::header::ContentType::TEXT_PLAIN)
-            .body(letter.body.clone())
-            .map_err(|e| SendError::Permanent(format!("这封信拼不出来：{e}")))?;
+        let message = letter.smtp_message(from)?;
         self.transport
             .send(message)
             .await
@@ -165,4 +177,50 @@ pub fn from_config(
         EmailProvider::Resend { api_key } => Box::new(ResendMailer::new(http, api_key.clone())),
         EmailProvider::Smtp { url } => Box::new(SmtpMailer::new(url)?),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Letter;
+
+    fn letter() -> Letter {
+        Letter {
+            to: "preview@example.com".to_string(),
+            subject: "A new version".to_string(),
+            body: "Plain text fallback".to_string(),
+            html: "<p>HTML alternative</p>".to_string(),
+        }
+    }
+
+    #[test]
+    fn resend_receives_both_versions() {
+        let letter = letter();
+        let payload = letter.resend_payload("playtest.run <notice@playtest.run>");
+        assert_eq!(payload["text"], letter.body);
+        assert_eq!(payload["html"], letter.html);
+        assert_eq!(payload["subject"], letter.subject);
+        assert_eq!(payload["to"][0], letter.to);
+    }
+
+    #[test]
+    fn smtp_is_multipart_with_plain_text_first() {
+        let message = letter()
+            .smtp_message("playtest.run <notice@playtest.run>")
+            .unwrap();
+        let wire = String::from_utf8(message.formatted()).unwrap();
+        assert!(wire.contains("multipart/alternative"));
+        let plain = wire.find("text/plain").unwrap();
+        let html = wire.find("text/html").unwrap();
+        assert!(plain < html);
+        assert!(wire.contains("Plain text fallback"));
+        assert!(wire.contains("<p>HTML alternative</p>"));
+    }
+
+    #[test]
+    fn smtp_rejects_invalid_addresses_before_sending() {
+        let mut letter = letter();
+        letter.to = "not a mailbox".to_string();
+        assert!(letter.smtp_message("notice@playtest.run").is_err());
+        assert!(letter.smtp_message("not a mailbox").is_err());
+    }
 }

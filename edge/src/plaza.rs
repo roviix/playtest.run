@@ -5,7 +5,7 @@
 //!
 //! 整页服务端直出，**一行脚本都没有**：左边一条栏，右边一面网格。
 //! 发布是本页 `:target` 说明，不是扔去控制台。
-//! 栏上「我的」仍是试玩者的抽屉。每张卡是一个链接；正在找人测时先说这次想测。
+//! 栏上「关注」仍是试玩者的抽屉。每张卡是一个链接；正在找人测时先说这次想测。
 //!
 //! 这一页是我们自己的，没有用户脚本，所以能带严格的 CSP（`app.rs`）；封面来自各作品自己的子域，
 //! 头像来自 GitHub——CSP 的 `img-src` 里只多这一个来源。
@@ -83,9 +83,10 @@ pub fn render(view: &View<'_>) -> String {
 pub enum Here {
     Plaza,
     Mine,
+    Collections,
 }
 
-/// 广场和「我的」共用的外壳：左边那条栏，右边是调用方的内容。
+/// 广场和关注页共用的外壳：顶上 54px 磨砂通栏，下部是调用方的内容（100% 全宽作品墙）。
 pub fn wrap(title: &str, head: &str, here: Here, main: &str) -> String {
     page(
         title,
@@ -93,43 +94,69 @@ pub fn wrap(title: &str, head: &str, here: Here, main: &str) -> String {
         &format!(
             "{rail}<main class=\"main\">\n{main}</main>\n{publish}",
             rail = rail(here),
-            publish = publish_sheet(),
+            publish = if matches!(here, Here::Collections) {
+                String::new()
+            } else {
+                publish_sheet()
+            },
         ),
     )
 }
 
-/// 左边那条窄栏：标记、两间房、栏底一个「发布」（DESIGN §3.9）。手机上收成顶上一条（样式里做）。
-///
-/// 每一项是一个图标加一个两字标签。图标是画在页面里的几笔线（`icon`），不引图标字体；
-/// 「发布」打开的是本页的命令说明，不是一间房——上传在终端里，登录在另一张域上。
+/// 左侧 208px 现代精致侧栏：测试准星、单行小写字标、两间房与发布说明（DESIGN §3.9）。
+/// 手机上自适应为顶部紧凑条。
 fn rail(here: Here) -> String {
     let plaza = match here {
         Here::Plaza => format!(
-            "<a class=\"nav-item active\" href=\"/\" aria-current=\"page\">{}广场<span class=\"nav-dot\"></span></a>",
-            icon("grid")
+            "<a class=\"nav-item active\" href=\"/\" aria-current=\"page\">{icon}广场<span class=\"nav-dot\"></span></a>",
+            icon = icon("grid")
         ),
-        Here::Mine => format!("<a class=\"nav-item\" href=\"/\">{}广场</a>", icon("grid")),
+        Here::Mine | Here::Collections => format!(
+            "<a class=\"nav-item\" href=\"/\">{icon}广场</a>",
+            icon = icon("grid")
+        ),
     };
     let mine = match here {
-        Here::Plaza => format!(
-            "<a class=\"nav-item\" href=\"{}\">{}我的</a>",
+        Here::Plaza | Here::Collections => format!(
+            "<a class=\"nav-item\" href=\"{}\">{icon}关注</a>",
             root_paths::ME,
-            icon("me")
+            icon = icon("bell")
         ),
         Here::Mine => format!(
-            "<a class=\"nav-item active\" href=\"{}\" aria-current=\"page\">{}我的<span class=\"nav-dot\"></span></a>",
+            "<a class=\"nav-item active\" href=\"{}\" aria-current=\"page\">{icon}关注<span class=\"nav-dot\"></span></a>",
             root_paths::ME,
-            icon("me")
+            icon = icon("bell")
         ),
+    };
+    let collections = format!(
+        "<a class=\"nav-item{}\" href=\"/collections\"{}>{}合集</a>",
+        if matches!(here, Here::Collections) {
+            " active"
+        } else {
+            ""
+        },
+        if matches!(here, Here::Collections) {
+            " aria-current=\"page\""
+        } else {
+            ""
+        },
+        icon("grid")
+    );
+    let publish_link = if matches!(here, Here::Collections) {
+        "/#publish-dialog"
+    } else {
+        "#publish-dialog"
     };
     format!(
         "<aside class=\"sidebar\">\n\
+<div>\
 <a class=\"brand\" href=\"/\" aria-label=\"playtest.run 首页\">\
 <span class=\"mark\" aria-hidden=\"true\">{mark}</span>\
-<span class=\"wordmark\">playtest<span>.run</span></span></a>\n\
-<nav class=\"nav\" aria-label=\"页面\">{plaza}{mine}</nav>\n\
-<div class=\"sidebar-bottom\">\n\
-<a class=\"nav-item publish\" href=\"#publish-dialog\">{plus}发布</a>\n\
+<span class=\"wordmark\">playtest<span class=\"tld\">.run</span></span></a>\n\
+<nav class=\"nav\" aria-label=\"页面\">{plaza}{collections}{mine}</nav>\
+</div>\n\
+<div class=\"sidebar-footer\">\
+<a class=\"publish\" href=\"{publish_link}\">{plus}发布作品</a>\
 </div>\n\
 </aside>\n",
         mark = icon("mark"),
@@ -137,11 +164,11 @@ fn rail(here: Here) -> String {
     )
 }
 
-/// 右边那面墙：直接一面网格。
+/// 下部作品网格：100% 全宽响应式排布。
 /// 顺序是推广位（最多几张、永远带标）、正在找人测的、其余按时间。
 /// 一个作品只出现一次；推广位有限，多出来的按普通作品排——广场不因为付了钱就变长。
 fn wall(view: &View<'_>) -> String {
-    let mut out = String::from("<div class=\"content\">\n");
+    let mut out = String::from("<div class=\"content\">\n<header class=\"workspace-head\"><div><h1>广场</h1></div></header>\n");
     if view.plaza.items.is_empty() {
         out.push_str(&empty_body());
         out.push_str("</div>\n");
@@ -185,12 +212,10 @@ fn empty_body() -> String {
 ///
 /// 没封面时的字卡：色田上一个花押（作品名的第一个字）和角上的 slug。
 /// 两样都是作品本来就有的事实，不是编出来的图；花押只有一个字，作品名在卡上仍只出现一次。
-fn tile(item: &PlazaItem, on_slot: bool, now: OffsetDateTime) -> String {
-    let url = if item.url.starts_with("https://") || item.url.starts_with("http://") {
-        esc(&item.url)
-    } else {
-        "#".to_string()
-    };
+pub(crate) fn tile(item: &PlazaItem, on_slot: bool, now: OffsetDateTime) -> String {
+    let url = esc(&playtest_common::follow::root_paths::project_path(
+        &item.slug,
+    ));
     let title = esc(&item.title);
     let verb = if item.is_game { "试玩" } else { "体验" };
 
@@ -216,11 +241,12 @@ fn tile(item: &PlazaItem, on_slot: bool, now: OffsetDateTime) -> String {
 
     format!(
         "<a class=\"tile\" href=\"{url}\" data-slug=\"{slug}\">\n\
-<div class=\"shot\">{art}{tag}<span class=\"verb\">{verb}<u>\u{2197}</u></span></div>\n\
+<div class=\"shot\" style=\"view-transition-name:{transition}\">{art}{tag}<span class=\"verb\">{verb}<u>\u{2197}</u></span></div>\n\
 <div class=\"tile-body\"><h2>{title}</h2>{blurb}\
 <p class=\"meta\"><span class=\"who\">{who}</span>{fact}</p></div>\n\
 </a>\n",
         slug = esc(&item.slug),
+        transition = crate::html::transition_name(&item.slug),
         who = who(item),
         blurb = blurb(item),
         fact = fact_html(item, now),
@@ -258,11 +284,11 @@ fn who(item: &PlazaItem) -> String {
         .filter(|u| u.starts_with("https://"))
     {
         Some(url) => format!(
-            "<img class=\"face\" src=\"{}\" alt=\"\" width=\"16\" height=\"16\" \
+            "<img class=\"face\" src=\"{}\" alt=\"\" width=\"24\" height=\"24\" \
 loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\">",
             esc(url)
         ),
-        None => String::new(),
+        None => playtest_common::avatar::svg_for_creator(&item.developer, &item.slug, 24),
     };
     format!("{face}{}", esc(&item.developer))
 }
@@ -292,7 +318,7 @@ fn fact(item: &PlazaItem, now: OffsetDateTime) -> String {
             Ok(at) => when::remaining(at, now),
             Err(_) => format!("v{}", item.version),
         },
-        Fact::Players { count } => format!("{count} 人玩过"),
+        Fact::Players { count } => format!("{count} 次开始"),
         Fact::Updated { at } => match OffsetDateTime::parse(&at, &Rfc3339) {
             Ok(updated) => when::ago(updated, now),
             Err(_) => format!("v{}", item.version),
@@ -302,7 +328,7 @@ fn fact(item: &PlazaItem, now: OffsetDateTime) -> String {
 
 fn fact_hint(item: &PlazaItem) -> String {
     if matches!(item.fact(), Fact::Players { .. }) {
-        format!(" title=\"近 {PLAYERS_WINDOW_DAYS} 天\"")
+        format!(" title=\"近 {PLAYERS_WINDOW_DAYS} 天点击开始的去重会话\"")
     } else {
         String::new()
     }
@@ -310,32 +336,42 @@ fn fact_hint(item: &PlazaItem) -> String {
 
 fn publish_sheet() -> String {
     format!(
-        "<div id=\"publish-dialog\" class=\"overlay\">\n\
-<a class=\"overlay-back\" href=\"#\" aria-label=\"关闭\"></a>\n\
-<div class=\"sheet\" role=\"dialog\" aria-labelledby=\"publish-title\">\n\
-<div class=\"dialog-head\"><h2 id=\"publish-title\">从一条命令开始</h2>\
-<a class=\"close\" href=\"#\" aria-label=\"关闭\">{close}</a></div>\n\
-<div class=\"pub-box\">\n\
-<div class=\"tabs\" role=\"tablist\" aria-label=\"发布方式\">\n\
+        "<dialog id=\"publish-dialog\" class=\"overlay\" aria-labelledby=\"publish-title\">\n\
+<a class=\"overlay-back\" href=\"#\" tabindex=\"-1\" aria-label=\"关闭\"></a>\n\
+<div class=\"sheet publish-sheet\">\n\
+<div class=\"dialog-head\"><h2 id=\"publish-title\">发布作品</h2>\
+<a class=\"close\" href=\"#\" autofocus aria-label=\"关闭\">{close}</a></div>\n\
+<div class=\"pub\">\n\
+<div class=\"cli\">\n\
+<div class=\"cli-bar\"><div class=\"publish-tabs\" role=\"group\" aria-label=\"发布方式\">\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-static\" checked>\n\
 <label for=\"tab-static\">导出目录</label>\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-local\">\n\
 <label for=\"tab-local\">本地端口</label>\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-backend\">\n\
 <label for=\"tab-backend\">带后端</label>\n\
+</div><button class=\"copy-command\" type=\"button\" aria-label=\"复制命令\" title=\"复制命令\" data-copy-command hidden>\
+<svg class=\"icon copy-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"8\" y=\"8\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3\"/></svg>\
+<svg class=\"icon copied-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg></button></div>\n\
+<div class=\"codebox\" id=\"panel-static\" tabindex=\"0\" role=\"region\" aria-label=\"发布命令\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span> <span class=\"f\">--public</span> <span class=\"f\">-m</span> <span class=\"s\">\"想让人看什么\"</span></code></div>\n\
+<div class=\"codebox\" id=\"panel-local\" tabindex=\"0\" role=\"region\" aria-label=\"发布命令\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">5173</span></code></div>\n\
+<div class=\"codebox\" id=\"panel-backend\" tabindex=\"0\" role=\"region\" aria-label=\"发布命令\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span> <span class=\"f\">--backend</span> <span class=\"a\">3000</span> <span class=\"f\">--public</span> <span class=\"f\">-m</span> <span class=\"s\">\"想让人看什么\"</span></code></div>\n\
+<p class=\"leg\" id=\"leg-static\">先构建项目，将 ./dist 换成导出目录。</p>\n\
+<p class=\"leg\" id=\"leg-local\">先启动本地服务，并保持终端运行。</p>\n\
+<p class=\"leg\" id=\"leg-backend\">先启动后端，发布期间保持终端运行。</p>\n\
 </div>\n\
-<div class=\"codebox\" id=\"panel-static\"><b>$</b><code>playtest ./dist --public -m \"想让人看什么\"</code></div>\n\
-<div class=\"codebox\" id=\"panel-local\"><b>$</b><code>playtest 5173</code></div>\n\
-<div class=\"codebox\" id=\"panel-backend\"><b>$</b><code>playtest ./dist --backend 3000 --public -m \"想让人看什么\"</code></div>\n\
+<p class=\"pub-status\" role=\"status\"></p>\n\
+<details class=\"pub-details\" id=\"detail-static\"><summary>参数说明{chevron}</summary><dl><div><dt><code>./dist</code></dt><dd>项目构建后的导出目录。</dd></div><div><dt><code>--public</code></dt><dd>将作品放到广场。</dd></div><div><dt><code>-m</code></dt><dd>写下想听的反馈。</dd></div><div><dt>再次发布</dt><dd>原作品有效时，同一目录更新沿用链接。</dd></div></dl></details>\n\
+<details class=\"pub-details\" id=\"detail-local\"><summary>参数说明{chevron}</summary><dl><div><dt><code>5173</code></dt><dd>本地服务的端口。</dd></div><div><dt>临时链接</dt><dd>关闭终端后就不能访问。</dd></div></dl></details>\n\
+<details class=\"pub-details\" id=\"detail-backend\"><summary>参数说明{chevron}</summary><dl><div><dt><code>./dist</code></dt><dd>项目构建后的导出目录。</dd></div><div><dt><code>--backend 3000</code></dt><dd>后端端口，发布期间保持服务运行。</dd></div><div><dt>请求转发</dt><dd>静态文件直接发布，未匹配的请求转到后端；SPA 导航回退优先。</dd></div><div><dt><code>--public</code></dt><dd>将作品放到广场。</dd></div><div><dt><code>-m</code></dt><dd>写下想听的反馈。</dd></div></dl></details>\n\
 </div>\n\
-<details class=\"tip\"><summary aria-label=\"还没装，或者发出去之后呢\">{help}</summary>\n\
-<div class=\"tip-body\"><p>还没装：从 <a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">Releases</a> 下载一个文件，放进 PATH。</p>\
-<p>发出去之后，谁来玩过在 <a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">开发者控制台</a> 看。</p></div>\n\
-</details>\n\
+<div class=\"pub-foot\"><a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">下载 playtest{out}</a>\
+<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">打开控制台{out}</a></div>\n\
 </div>\n\
-</div>\n",
+</dialog>\n",
         close = icon("close"),
-        help = icon("help"),
+        chevron = r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>"#,
+        out = icon("out"),
         releases = RELEASES_URL,
         dev = DEVELOPER_API_URL,
     )
@@ -346,25 +382,25 @@ const RELEASES_URL: &str = "https://github.com/roviix/playtest.run/releases";
 
 /// 页面上的几个图标，画在页面里：不靠外部字体、也不靠 `<use href>`
 /// （CSP `default-src 'none'` 会把同页 fragment 的引用挡掉）。都是 24 格里的几笔线。
-fn icon(name: &str) -> &'static str {
+pub(crate) fn icon(name: &str) -> &'static str {
     match name {
         "close" => {
             r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg>"#
         }
-        "help" => {
-            r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.9a2.4 2.4 0 1 1 3.4 2.2c-.7.4-1.1.9-1.1 1.7M12 16.7h.01"/></svg>"#
+        "out" => {
+            r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 16.2 7.8M17 17V8H8"/></svg>"#
         }
         "grid" => {
             r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>"#
         }
-        "me" => {
-            r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h12a1 1 0 0 1 1 1V20l-7-4-7 4V5.5a1 1 0 0 1 1-1Z"/></svg>"#
+        "bell" => {
+            r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2a5.3 5.3 0 0 0-5.3 5.3c0 4-1.7 5.4-1.7 5.4h14s-1.7-1.4-1.7-5.4A5.3 5.3 0 0 0 12 4.2Z"/><path d="M10.3 18.2a2 2 0 0 0 3.4 0"/></svg>"#
         }
         "plus" => {
             r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>"#
         }
         "mark" => {
-            r#"<svg class="mark-svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3.5" width="12" height="17" rx="2.2"/><path d="M8.6 8h6.8M8.6 11.2h4.6"/><circle class="dot" cx="14.8" cy="16.4" r="1.55"/></svg>"#
+            r#"<svg class="mark-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M4 16v3a1 1 0 0 0 1 1h3M16 20h3a1 1 0 0 0 1-1v-3"/><circle class="dot" cx="12" cy="12" r="2.2"/></svg>"#
         }
         _ => "",
     }
@@ -411,6 +447,7 @@ mod tests {
             schema: 1,
             generated_at: "2026-09-08T03:57:00Z".into(),
             club_followers: 0,
+            collections: vec![],
             items,
         }
     }
@@ -421,7 +458,7 @@ mod tests {
         let html = render(&view(&plaza));
         assert!(html.starts_with("<!doctype html>\n<html lang=\"zh-CN\">"));
         assert!(html.contains(
-            "<a class=\"tile\" href=\"http://brisk-otter-41.localhost:8443\" data-slug=\"brisk-otter-41\">"
+            "<a class=\"tile\" href=\"/p/brisk-otter-41\" data-slug=\"brisk-otter-41\">"
         ));
         assert!(html.contains("新手引导看得懂吗"));
         assert!(html.contains("这次想测"));
@@ -471,7 +508,7 @@ mod tests {
         assert!(html.contains("aria-current=\"page\""));
         assert!(html.contains("广场<span class=\"nav-dot\"></span>"));
         assert!(html.contains(&format!("href=\"{}\"", root_paths::ME)));
-        assert!(html.contains("我的</a>"));
+        assert!(html.contains("关注</a>"));
         assert!(!html.contains("<i>01</i>"));
         assert!(!html.contains("class=\"hero\""));
         assert!(!html.contains("来玩点，还没定稿的"));
@@ -483,22 +520,45 @@ mod tests {
         assert!(!html.contains("LESS LAUNCH"));
         assert!(!html.contains("brand-icon"));
         assert!(!html.contains("发布我的作品"));
-        assert!(!html.contains(">发布作品<"));
+        assert!(html.contains(">发布作品</a>"));
         assert!(!html.contains("class=\"toolbar\""));
         assert!(!html.contains("class=\"topbar\""));
         assert!(!html.contains("class=\"breadcrumb\""));
         assert!(!html.contains("点开就玩，不用注册"));
         assert!(html.contains("href=\"#publish-dialog\""));
-        assert!(html.contains("从一条命令开始"));
+        assert!(html.contains("id=\"publish-title\">发布作品</h2>"));
+        assert!(!html.contains("把作品递给第一位玩家"));
+        assert!(!html.contains("链接可以直接分享，玩家不用注册。"));
         assert!(html.contains("class=\"mark-svg\""));
+        assert!(html.contains("class=\"sidebar\""));
+        assert!(html.contains("playtest<span class=\"tld\">.run</span>"));
         assert!(!html.contains("<span class=\"mark\" aria-hidden=\"true\">p"));
         assert!(!html.contains("class=\"steps\""));
         assert!(!html.contains("--seek"));
         assert!(!html.contains("class=\"dialog-foot\""));
-        assert!(html.contains("<details class=\"tip\"><summary"));
-        assert!(html.contains("Releases</a> 下载"));
+        assert!(html.contains("class=\"pub-details\" id=\"detail-static\""));
+        assert!(html.contains("class=\"cli-bar\""));
+        assert!(
+            html.find("class=\"cli\"").unwrap() < html.find("class=\"publish-tabs\"").unwrap(),
+            "三个词在终端舱顶栏里"
+        );
+        assert!(html.contains("class=\"pub-foot\""));
+        assert!(html.contains(">下载 playtest"));
         assert!(html.contains("for=\"tab-static\">导出目录</label>"));
-        assert!(html.contains("playtest ./dist --public -m"));
+        assert!(html.contains(
+            "<span class=\"k\">playtest</span> <span class=\"a\">./dist</span> <span class=\"f\">--public</span> <span class=\"f\">-m</span>"
+        ));
+        assert!(
+            html.contains("<span class=\"k\">playtest</span> <span class=\"a\">5173</span></code>")
+        );
+        assert!(html.contains("<dt><code>--public</code></dt><dd>将作品放到广场。</dd>"));
+        assert!(
+            html.contains("aria-label=\"复制命令\" title=\"复制命令\" data-copy-command hidden>")
+        );
+        assert!(
+            html.find("data-copy-command").unwrap() < html.find("id=\"panel-static\"").unwrap()
+        );
+        assert!(!html.contains("brew install"));
         assert!(!html.contains("href=\"#about-dialog\""));
         assert!(html.contains(&format!(
             "href=\"{DEVELOPER_API_URL}/console/\" target=\"_blank\" rel=\"noopener\">"
@@ -587,7 +647,7 @@ mod tests {
         assert_eq!(fact(&it, now), "还剩 16 小时");
 
         it.expires_at = None;
-        assert_eq!(fact(&it, now), "12 人玩过");
+        assert_eq!(fact(&it, now), "12 次开始");
         assert!(fact_hint(&it).contains(&PLAYERS_WINDOW_DAYS.to_string()));
 
         it.players = 0;
@@ -605,7 +665,7 @@ mod tests {
         assert_eq!(fact(&it, now), "1 小时前");
     }
 
-    /// 关注广场只在「我的」里办。栏上、卡上都不放第二扇门。
+    /// 关注广场只在关注页里办。栏上、卡上都不放第二扇门。
     #[test]
     fn following_the_plaza_is_not_on_the_wall() {
         let plaza = wall_of(vec![item("brisk-otter-41")]);
@@ -615,7 +675,7 @@ mod tests {
         assert!(!html.contains(&format!("action=\"{}\"", root_paths::FOLLOW)));
         assert!(!html.contains("value=\"site:brisk-otter-41\""));
         assert!(html.contains(&format!("href=\"{}\"", root_paths::ME)));
-        assert!(html.contains("我的</a>"));
+        assert!(html.contains("关注</a>"));
     }
 
     #[test]
@@ -642,8 +702,10 @@ mod tests {
         it.avatar_url = Some("http://evil.example/a.png".into());
         let plaza = wall_of(vec![it]);
         let html = render(&view(&plaza));
-        assert!(!html.contains("class=\"face\""));
+        // 不认非 https 的外部地址，退到确定性算法头像，绝不把流量引去非法的图床
         assert!(!html.contains("evil.example"));
+        assert!(html.contains("<svg"));
+        assert!(html.contains("class=\"face\""));
     }
 
     #[test]

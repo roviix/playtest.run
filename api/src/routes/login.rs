@@ -347,6 +347,9 @@ async fn finish(
     };
 
     for (slug, versions) in &adopted {
+        crate::quota::publish(state, slug)
+            .await
+            .map_err(ApiError::from)?;
         for version in versions {
             if let Some(mut m) = state.store().get_manifest(slug, *version).await? {
                 m.expires_at = None;

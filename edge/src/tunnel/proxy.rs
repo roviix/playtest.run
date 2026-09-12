@@ -56,6 +56,7 @@ pub struct Player<'a> {
     /// 这是一次顶层文档导航。决定要不要给 CORP（顶层文档不给）。
     pub navigation: bool,
     pub isolated: bool,
+    pub ledger: Option<&'a Arc<crate::quota::Ledger>>,
 }
 
 pub async fn forward(
@@ -64,6 +65,13 @@ pub async fn forward(
     mut parts: Parts,
     body: Body,
 ) -> Response {
+    let meter = match player.ledger {
+        Some(ledger) => match ledger.meter(session.slug()).await {
+            Ok(meter) => meter,
+            Err(denied) => return denied.response(),
+        },
+        None => return crate::quota::Denied::Unavailable.response(),
+    };
     let Some(guard) = Guard::acquire(session) else {
         tracing::info!(
             slug = %session.slug(),
@@ -132,12 +140,20 @@ pub async fn forward(
             tracing::warn!(slug = %session.slug(), "上游回了 101，但玩家这一侧没有可升级的连接");
             return unreachable(&player);
         };
-        return switch_protocols(session, guard, player_upgrade, upstream);
+        return switch_protocols(
+            session,
+            guard,
+            player_upgrade,
+            upstream,
+            player.authority,
+            meter,
+        );
     }
 
     let path = parts.uri.path().to_string();
     let (mut head, incoming) = upstream.into_parts();
     strip_hop_by_hop(&mut head.headers);
+    crate::identity::strip_response(&mut head.headers, player.authority);
     // 上游是开发者的 dev server，它多半什么都没配。补的只有「不补就跑不起来」的那几个，
     // 别的（包括 `Content-Encoding`）一律它说了算——猜错一个头比少补一个头难查得多。
     game_headers::apply(
@@ -166,10 +182,13 @@ fn switch_protocols(
     guard: Guard,
     player_upgrade: hyper::upgrade::OnUpgrade,
     mut upstream: hyper::Response<Incoming>,
+    authority: &str,
+    meter: Arc<crate::quota::Meter>,
 ) -> Response {
     // 101 的头一个字都不改：`Sec-WebSocket-Accept` 是上游按玩家的 key 算出来的，
     // `Sec-WebSocket-Protocol` / `Sec-WebSocket-Extensions` 是两端刚谈好的结果。
-    let headers = std::mem::take(upstream.headers_mut());
+    let mut headers = std::mem::take(upstream.headers_mut());
+    crate::identity::strip_response(&mut headers, authority);
     let upstream_upgrade = hyper::upgrade::on(&mut upstream);
     let session = session.clone();
 
@@ -182,7 +201,7 @@ fn switch_protocols(
                 return;
             }
         };
-        let (mut player, mut upstream) = (TokioIo::new(player), TokioIo::new(upstream));
+        let (mut player, mut upstream) = (meter.io(TokioIo::new(player)), TokioIo::new(upstream));
         match tokio::io::copy_bidirectional(&mut player, &mut upstream).await {
             Ok((to_upstream, to_player)) => {
                 session.bytes_in.fetch_add(to_upstream, Ordering::Relaxed);
@@ -230,6 +249,7 @@ fn build_request(
             headers.append(name.clone(), value.clone());
         }
     }
+    crate::identity::strip_request(headers);
     if upgrade {
         // `Connection` 本身是逐跳头，但只留下 `Upgrade` 而不说 `Connection: upgrade`，
         // 上游就不会把这当成升级请求——socket.io 和 Vite 的 HMR 都会卡在这里。
@@ -418,6 +438,7 @@ mod tests {
 
     fn player<'a>() -> Player<'a> {
         Player {
+            ledger: None,
             authority: "brisk-otter-41.localhost:8443",
             public_scheme: "http",
             navigation: true,
@@ -431,8 +452,8 @@ mod tests {
         let incoming = Request::builder()
             .uri("/level/3?hard=1")
             .header("host", "brisk-otter-41.localhost:8443")
-            .header("cookie", "pt_gate=1")
-            .header("cookie", "pt_sid=abc")
+            .header("cookie", "pt_gate=1; game=2; pt_me=old")
+            .header("cookie", "pt_sid=abc; theme=dark; __Host-pt_me=secret")
             .header("accept-encoding", "br, gzip")
             .header("connection", "keep-alive")
             .header("keep-alive", "timeout=5")
@@ -471,6 +492,8 @@ mod tests {
         assert_eq!(out.headers()["accept-encoding"], "br, gzip");
         let cookies: Vec<_> = out.headers().get_all("cookie").iter().collect();
         assert_eq!(cookies.len(), 2);
+        assert_eq!(cookies[0], "game=2");
+        assert_eq!(cookies[1], "theme=dark");
 
         // 方法和 path+query 原样。
         assert_eq!(out.method(), axum::http::Method::GET);

@@ -60,21 +60,30 @@ playtest .            # 几秒后：链接 + 二维码；第一次运行自动�
 playtest 5173         # 或者把正在跑的本地开发服务器接出去
 ```
 
+不用记住全部命令：`playtest` 或 `playtest -h` 看快速开始，`playtest --help` 看完整用法。
+控制台的「使用文档」提供免登录阅读入口（`#/docs/start`），按首次发布、更新、分享、管理、自动化和排查六个任务组织。文档示例一致性检查：先构建 CLI，再运行 `node scripts/check-console-docs.mjs`；也可用 `PLAYTEST_CLI` 指定已有二进制。该检查只解析帮助，不发布作品。
+在发过的目录里运行 `playtest open` 打开链接，`playtest card` 再存邀请卡；
+`playtest versions` / `playtest files` 查看版本和线上文件。换个目录时，显式指定已发布目录或作品标识。
+删除、下架、回滚始终需要显式目标，例如 `playtest rm ./dist`，删除前会确认。
+更新内容后再次运行 `playtest ./dist`，默认更新同一个链接；CLI 不自动构建，也暂不提供 `--watch`。
+普通发布不下载邀请卡、不写图片；需要时运行 `playtest card --out invite.png`，或发布时加 `--card invite.png`。
+`--card -` 仍表示不下载。MCP 可以直接返回邀请卡图片，但不在本地保存。
+`--gate` 已撤出：主域展示邀请函，作品子域直接运行，旧脚本需要移除此参数。
+找试玩者只写 `playtest ./dist --seats 10`，不必重复 `--public`。
+本地端口分享不能带封面、发布说明、上广场等仅用于目录发布的选项；CLI 会报错而不是忽略它们。
+
 结果在 [`playtest.roviix.com/console/`](https://playtest.roviix.com/console/)，令牌在 `~/.config/playtest/config.json` 里。
 
 ## 本机跑一遍
 
+完整步骤（三个进程、广场 / 门禁 / 关注 / 控制台、本机和线上差在哪）见 [`docs/LOCAL.md`](docs/LOCAL.md)。最短命令：
+
 ```
-cargo build --workspace
-PLAYTEST_DATA_DIR=.data ./target/debug/playtest-api     # 127.0.0.1:8787
-PLAYTEST_DATA_DIR=.data PLAYTEST_API_INTERNAL_URL=http://127.0.0.1:8787 ./target/debug/playtest-edge   # 127.0.0.1:8443，明文
-PLAYTEST_API=http://127.0.0.1:8787 ./target/debug/playtest ./fixtures/phaser-jump/export   # 上传
-PLAYTEST_API=http://127.0.0.1:8787 ./target/debug/playtest 5174                             # 隧道（先在 fixtures/ws-rooms 里 node server.mjs 5174）
+cargo build -p playtest-api -p playtest-edge -p playtest
+# 控制面、边缘、控制台的环境变量和验收顺序都在那篇里。
 ```
 
-拿到的 `http://<slug>.localhost:8443` 用 Chrome 或 Firefox 打开（Safari 不认 `*.localhost`）。
-控制台：`cd console && pnpm install && pnpm dev`，令牌用 `~/.config/playtest/config.json` 里的那个。
-上线部署见 [`deploy/README.md`](deploy/README.md)。
+拿到的 `http://<slug>.localhost:8443` 用 Chrome 或 Firefox 打开（Safari 不认 `*.localhost`）。上线部署见 [`deploy/README.md`](deploy/README.md)。
 
 ## 参与
 

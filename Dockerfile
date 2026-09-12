@@ -12,6 +12,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY common common
 COPY api api
 COPY edge edge
+COPY ui ui
 COPY cli cli
 # 边缘把 SDK 编进二进制（edge/src/sdk.rs 的 include_bytes!），产物随源码进仓库。
 COPY sdk/dist sdk/dist

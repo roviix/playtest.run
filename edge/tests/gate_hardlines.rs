@@ -33,7 +33,18 @@ const UNITYWEB: &[u8] = b"<pretend brotli inside a .unityweb>";
 
 /// 门禁页上一定有、作品自己的文件上一定没有的那几个记号。
 fn is_gate_page(body: &str) -> bool {
-    body.contains("/_playtest/start") || body.contains(">开始</button>")
+    body.contains("/_playtest/start")
+        || body.contains("开始试玩")
+        || body.contains("开始体验")
+        || body.contains(">开始</button>")
+}
+
+fn root_nav(path: &str) -> axum::http::request::Builder {
+    Request::builder()
+        .uri(path)
+        .header("host", "localhost:8443")
+        .header("accept", "text/html,application/xhtml+xml,*/*;q=0.8")
+        .header("sec-fetch-dest", "document")
 }
 
 struct Site {
@@ -84,6 +95,17 @@ impl Site {
         shape(&mut manifest);
 
         store.put_manifest(&manifest).await.unwrap();
+        store
+            .put_policy(
+                &manifest.slug,
+                &playtest_common::quota::Policy {
+                    owner: manifest.slug.clone(),
+                    plan: playtest_common::plan::Plan::Free,
+                    expires_at: manifest.expires_at.clone(),
+                },
+            )
+            .await
+            .unwrap();
         store
             .set_current(
                 SLUG,
@@ -259,9 +281,17 @@ async fn spa_fallback_never_turns_a_missing_asset_into_the_gate_page() {
         );
     }
 
-    // 同一个作品上，真的导航照常出门禁页——上面那道不是把门禁关掉了。
+    // 开了 SPA 的作品，子域上真正的导航拿到的是 SPA 入口（INDEX_HTML），而不是门禁页。
     let reply = site
         .send(nav("/level/3").body(Body::empty()).unwrap())
+        .await;
+    assert_eq!(reply.status, StatusCode::OK);
+    assert_eq!(reply.text(), INDEX_HTML);
+    assert!(!is_gate_page(&reply.text()));
+
+    // 而作品邀请函在主域 `/p/{slug}`，访问它拿到的是门禁页。
+    let reply = site
+        .send(root_nav(&format!("/p/{SLUG}")).body(Body::empty()).unwrap())
         .await;
     assert_eq!(reply.status, StatusCode::OK);
     assert!(is_gate_page(&reply.text()));
@@ -334,19 +364,16 @@ async fn accept_html_does_not_override_a_non_document_fetch_dest() {
         }
     }
 
-    // 只有 document 才是导航。
+    // 子域上的导航直接拿到作品自己的 HTML
     let reply = site.send(nav("/").body(Body::empty()).unwrap()).await;
-    assert!(is_gate_page(&reply.text()));
+    assert_eq!(reply.text(), INDEX_HTML);
+    assert!(!is_gate_page(&reply.text()));
 
-    // 不发 Sec-Fetch-Dest 的老客户端仍然靠 Accept 兜住（Safari 16.4 之前）。
+    // 主域上的导航拿到的是作品邀请函（门禁页）
     let reply = site
-        .send(
-            base("/")
-                .header("accept", "text/html")
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .send(root_nav(&format!("/p/{SLUG}")).body(Body::empty()).unwrap())
         .await;
+    assert_eq!(reply.status, StatusCode::OK);
     assert!(is_gate_page(&reply.text()));
 }
 
@@ -354,9 +381,8 @@ async fn accept_html_does_not_override_a_non_document_fetch_dest() {
 
 #[tokio::test]
 async fn no_request_header_can_skip_the_gate() {
-    // 判据只有请求语义和门禁自己种的 cookie。要是需要一个 `X-Playtest-No-Gate`，
-    // 说明门禁站错了位置（DESIGN §3.3）。这里把能想到的都试一遍：我们自己可能加的、
-    // 代理会加的、爬虫和预取会加的。
+    // 门禁页就是作品邀请函（DESIGN §3.3），位于主域 `/p/{slug}`。
+    // 它是信任凭证、告示牌和会话起点。没有任何请求头能跳过它。
     let site = Site::plain().await;
 
     let suspects: &[(&str, &str)] = &[
@@ -394,7 +420,12 @@ async fn no_request_header_can_skip_the_gate() {
 
     for (name, value) in suspects {
         let reply = site
-            .send(nav("/").header(*name, *value).body(Body::empty()).unwrap())
+            .send(
+                root_nav(&format!("/p/{SLUG}"))
+                    .header(*name, *value)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await;
         assert_eq!(reply.status, StatusCode::OK, "{name}: {value}");
         assert!(
@@ -403,18 +434,19 @@ async fn no_request_header_can_skip_the_gate() {
         );
     }
 
-    // 唯一一条走得通的路是门禁自己种的 cookie——它就是「这个浏览器点过开始了」的意思。
-    // 这条 cookie 没有签名，谁都能自己带一个：门禁页不是访问控制
-    // （那是 DESIGN §3.6 的口令与邀请名单，不在 v0.1），它是信任凭证、用户手势和会话起点。
-    let passed = site
-        .send(
-            nav("/")
-                .header("cookie", "pt_gate=1")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await;
+    // 作品子域是彻底纯净的游戏沙盒：直接导航无需任何 cookie 即可直接拿到 index.html
+    let passed = site.send(nav("/").body(Body::empty()).unwrap()).await;
     assert_eq!(passed.text(), INDEX_HTML);
+
+    // 带有 ?from= 来源参数的访问会被 303 重定向到主域门禁页
+    let redirected = site
+        .send(nav("/?from=card").body(Body::empty()).unwrap())
+        .await;
+    assert_eq!(redirected.status, StatusCode::SEE_OTHER);
+    assert_eq!(
+        redirected.header("location"),
+        Some("http://localhost:8443/p/brisk-otter-41")
+    );
 }
 
 // ------------------------------------------------------- 同一类的一条：头别配反

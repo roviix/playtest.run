@@ -123,7 +123,7 @@ async fn run_with(
     let stop = Stop::install();
     let hybrid = backend.is_some();
     if !hybrid {
-        say_ignored(cli_args);
+        validate_options(cli_args)?;
     }
 
     // 1. 本地端口上得先有东西在听。没有的话拿到链接的人只会看到一片 502。
@@ -189,7 +189,7 @@ async fn run_with(
                 if let Some(tx) = ready.take() {
                     let _ = tx.send(Online {
                         slug: grant.slug.clone(),
-                        url: grant.url.clone(),
+                        url: playtest_common::door_url(&grant.url, &grant.slug),
                         expires_at: grant.site_expires_at.clone(),
                     });
                 }
@@ -253,9 +253,10 @@ async fn announce(
     backend: Option<BackendOut>,
     title: &str,
 ) {
+    let door = playtest_common::door_url(&grant.url, &grant.slug);
     let mut report = OnlineReport::new(
         grant.slug.clone(),
-        grant.url.clone(),
+        door.clone(),
         grant.site_expires_at.clone(),
         None,
         Vec::new(),
@@ -265,7 +266,7 @@ async fn announce(
     report.backend = backend;
     if attempt == 0 && !hybrid {
         if !cli_args.no_qr {
-            report.qr_text = ui::qr_text(&grant.url);
+            report.qr_text = ui::qr_text(&door);
         }
         report.findings = findings_for(page, weighing).await;
         // 隧道的链接一样有门禁页，门禁页一样有那张卡（DESIGN §3.4）——发到群里的是同一张图。
@@ -280,6 +281,7 @@ async fn announce(
             .await,
         );
     }
+    report.elapsed_ms = output::elapsed_ms();
     output::report_online(&report);
 }
 
@@ -301,8 +303,7 @@ async fn findings_for(
     findings
 }
 
-/// 用不上的参数说一句就过去，不报错——脚本里带着一串通用参数调过来是常事。
-fn say_ignored(cli_args: &UploadArgs) {
+fn validate_options(cli_args: &UploadArgs) -> Result<()> {
     let mut ignored: Vec<&str> = Vec::new();
     if cli_args.note.is_some() {
         ignored.push("--note");
@@ -322,17 +323,23 @@ fn say_ignored(cli_args: &UploadArgs) {
     if cli_args.community.is_some() {
         ignored.push("--community");
     }
-    if !ignored.is_empty() {
-        ui::say(&format!(
-            "{} 只在上传目录时有用，这次是隧道模式，先忽略了。",
-            ignored.join("、")
-        ));
+    if cli_args.force {
+        ignored.push("--yes");
     }
     // 广场上的卡片必须随时点得开，而隧道随你的电脑一起下线；所以广场只收上传的版本。
-    // 名额是广场那一套里的（门禁页上写「还差几位」的前提是这个作品一直在），一起忽略。
-    if cli_args.public || cli_args.seats.is_some() {
-        ui::say("--public / --seek / --seats 先忽略了：广场只放上传的版本，隧道一关卡片就点不开。要上广场，用 playtest ./dist --public。");
+    if cli_args.public {
+        ignored.push("--public");
     }
+    if cli_args.seats.is_some() {
+        ignored.push("--seats");
+    }
+    if !ignored.is_empty() {
+        return Err(output::usage(format!(
+            "{} 不能用于本地端口分享。去掉这些选项后重试；要设置发布信息或放到广场，请先构建，再运行 playtest ./dist 加上这些选项。",
+            ignored.join("、")
+        )));
+    }
+    Ok(())
 }
 
 /// 令牌快到期了吗。看不懂服务器给的时间就当没到期——宁可让边缘拒一次，也不要没事就换。
@@ -406,7 +413,7 @@ impl<'a> Control<'a> {
     fn request(&self) -> TunnelRequest {
         TunnelRequest {
             title: Some(self.title.clone()),
-            gate: self.args.gate,
+            gate: playtest_common::manifest::GateMode::Once,
             isolated: self.args.isolated == crate::args::Isolation::On,
             hybrid: self.backend.is_some(),
         }

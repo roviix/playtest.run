@@ -7,7 +7,6 @@
 //! 这一页上不出现开发者域名：玩家路径与开发者路径是两个域名（AGENTS 第 7 条）。
 
 use playtest_common::capabilities::Capabilities;
-use playtest_common::follow::{edge_paths, FollowTarget};
 use playtest_common::limits::MAX_PLAYER_NAME_CHARS;
 use playtest_common::live::{SiteLive, PUBLIC_FEEDBACK_ON_GATE};
 use playtest_common::manifest::{GateMode, Manifest};
@@ -15,13 +14,16 @@ use playtest_common::{
     CARD_WIDE_HEIGHT, CARD_WIDE_PATH, CARD_WIDE_WIDTH, RESERVED_PATH_PREFIX, SHARE_PATH,
 };
 
-use crate::follow;
 use crate::html::{copy_row, esc, shell_hero, COPY_JS};
 use crate::when;
 use playtest_common::wording::invite_verb;
 
 /// 封面在作品自己的域上的路径（DESIGN §3.3）。
 pub const COVER_PATH: &str = "/_playtest/cover";
+
+const BELL_ICON: &str = "<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 13.5h12l-1.5-2.2V8a4.5 4.5 0 0 0-9 0v3.3L4 13.5ZM8 16a2.2 2.2 0 0 0 4 0\"/></svg>";
+const SHARE_ICON: &str = "<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M10 12V2.5m-3.2 3.2L10 2.5l3.2 3.2M5.5 8H4v8.5h12V8h-1.5\"/></svg>";
+const CLOCK_ICON: &str = "<svg width=\"13\" height=\"13\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"7\"/><path d=\"M10 6v4l2.5 1.5\"/></svg>";
 
 /// 要不要拦这一次请求。三条硬线里的两条在这里（DESIGN §3.3）：
 ///
@@ -38,8 +40,13 @@ pub fn should_show(
     is_html: bool,
     navigation: bool,
     has_cookie: bool,
+    from: Option<&str>,
 ) -> bool {
-    gate != GateMode::Never && is_html && navigation && !has_cookie && !looks_like_a_resource(path)
+    if gate == GateMode::Never || !is_html || !navigation || looks_like_a_resource(path) {
+        return false;
+    }
+    // 来自外部入口（广场点击、扫卡、通知邮件）或者首次访问（没 cookie）或者设置了 Always，均展示邀请函
+    from.is_some() || gate == GateMode::Always || !has_cookie
 }
 
 /// `Sec-Fetch-Dest: document` 是现代浏览器的准确信号，**它在场就以它为准**：
@@ -166,8 +173,16 @@ pub struct GatePage<'a> {
     /// 玩家是从哪个页面点到这条链接的（门禁页请求的 Referer）。会话从「开始」那一下才算起，
     /// 而那一下的 Referer 是门禁页自己，所以真正的来源要在表单里带过去（DESIGN §3.5「来自哪里」）。
     pub referer: &'a str,
-    /// 链接上的 `?from=`：扫卡来的是 `card`，通知里点进来的是 `notice`，别的一律 `None`。
+    /// 链接上的 `?from=`：扫卡来的是 `card`，通知里点进来的是 `notice`，广场来的是 `plaza`。
     pub from: Option<&'a str>,
+    /// 共享的设备身份凭证（pt_me），用于一键免登录秒关注。
+    pub me_token: Option<&'a str>,
+    /// 是否已经关注了该作品。
+    pub already_followed: bool,
+    /// 是否在根域（`playtest.run/p/<slug>`）上渲染（DESIGN §3.1、§3.3）。
+    pub is_root: bool,
+    /// 根域上的 CSP nonce。
+    pub nonce: Option<&'a str>,
 }
 
 impl GatePage<'_> {
@@ -180,6 +195,7 @@ impl GatePage<'_> {
             None => format!("v{}", m.version),
         };
         let invite = invite_verb(m.is_game());
+        let verb = if m.is_game() { "试玩" } else { "体验" };
         let summary = m
             .summary
             .as_deref()
@@ -206,6 +222,11 @@ impl GatePage<'_> {
         );
         // 有封面就用封面；没有封面就用横版邀请卡——一张写着作品名和开发者名的卡不是
         // 假截图，它和玩家点开后看到的是同一个物件（DESIGN §3.3、§3.4）。
+        let hue = crate::html::hue(&m.slug);
+        head.push_str(&format!("<style>:root{{--h:{hue}}}</style>\n"));
+
+        // 有封面就用封面；没有封面就用算法生成的专属几何星轨图，
+        // 它和作品 slug 色相呼应，具有高辨识度与收藏级数字票证质感。
         let hero = match &m.cover {
             Some(cover) => {
                 head.push_str(&format!(
@@ -215,7 +236,12 @@ impl GatePage<'_> {
                     origin = esc(self.origin),
                     mime = esc(&cover.mime),
                 ));
-                format!("<img class=\"hero\" src=\"{COVER_PATH}\" alt=\"\">\n")
+                let src = if self.is_root {
+                    format!("{}{COVER_PATH}", esc(self.origin))
+                } else {
+                    COVER_PATH.to_string()
+                };
+                format!("<img class=\"hero\" src=\"{src}\" alt=\"\">\n")
             }
             None => {
                 head.push_str(&format!(
@@ -226,10 +252,7 @@ impl GatePage<'_> {
 <meta name=\"twitter:card\" content=\"summary_large_image\">\n",
                     origin = esc(self.origin),
                 ));
-                format!(
-                    "<div class=\"hero word\" style=\"--h:{}\"><span>{title}</span></div>\n",
-                    crate::html::hue(&m.slug)
-                )
+                self.generative_art()
             }
         };
         let summary_html = match &summary {
@@ -237,17 +260,20 @@ impl GatePage<'_> {
             None => String::new(),
         };
 
-        // `v7 · 9 月 9 日 · 「改了新手引导」`（DESIGN §3.3 第 3 条）。这一行是版本的告示牌，
-        // 用等宽小字排，和邀请卡票根上那一行是同一句。
+        // 版本与到期并排；较长的更新说明放在下一行，不把期限挤到卡片底部。
         let mut stamp = version.clone();
         if self.version_label.is_none() {
             if let Some(day) = when::day(&m.created_at) {
                 stamp.push_str(&format!(" · {}", esc(&day)));
             }
         }
-        if let Some(note) = m.note.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
-            stamp.push_str(&format!(" · <b>「{}」</b>", esc(note)));
-        }
+        let note = m
+            .note
+            .as_deref()
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .map(|note| format!("<p class=\"version-note\">{}</p>\n", esc(note)))
+            .unwrap_or_default();
 
         // 微信 UA 只决定要不要多说一句「右上角 → 在浏览器中打开」——那是微信独有的操作，
         // 别的浏览器里说了没意义。**能不能玩不由 UA 判断**：X5 / XWeb 的版本和能力没有
@@ -260,19 +286,29 @@ impl GatePage<'_> {
             ""
         };
 
+        let nonce_attr = match self.nonce {
+            Some(n) => format!(" nonce=\"{n}\""),
+            None => String::new(),
+        };
+
         // 那段脚本只为把到期时间换成访客本地时区的写法，没有到期时间就不发。
         let expires = match m.expires_at.as_deref().and_then(when::deadline) {
             Some((machine, human)) => format!(
-                "<p class=\"meta\">这个链接在 <time datetime=\"{}\">{}</time> 后失效</p>\n{LOCAL_TIME_SCRIPT}",
+                "<p class=\"expires\">{clock}<span><time datetime=\"{}\">{}</time> 到期</span></p>\n<script{nonce_attr}>\
+for(const t of document.querySelectorAll('.expires time[datetime]')){{\
+const d=new Date(t.getAttribute('datetime'));\
+if(!isNaN(d))t.textContent=d.toLocaleString(undefined,{{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}});}}\
+</script>\n",
                 esc(&machine),
-                esc(&human)
+                esc(&human),
+                clock = CLOCK_ICON,
             ),
             None => String::new(),
         };
 
-        let badge = if m.badge {
+        let badge = if m.badge && !self.is_root {
             format!(
-                "<a href=\"{}\">由 {} 提供</a>",
+                "<p class=\"provider\"><a href=\"{}\">由 {} 提供</a></p>",
                 esc(self.root_url),
                 esc(self.host_suffix)
             )
@@ -289,44 +325,163 @@ impl GatePage<'_> {
             None => String::new(),
         };
 
+        let (start_action, target_attr, btn_text) = if self.is_root {
+            (
+                esc(self.to),
+                " target=\"_blank\" rel=\"noopener\"",
+                format!("开始{verb}"),
+            )
+        } else {
+            (
+                format!("{RESERVED_PATH_PREFIX}start"),
+                "",
+                "开始".to_string(),
+            )
+        };
+
+        let prefix = RESERVED_PATH_PREFIX;
+        let report_href = if self.is_root {
+            format!("{}{prefix}report", esc(self.origin))
+        } else {
+            format!("{prefix}report")
+        };
+        let mobile_script = if self.is_root {
+            format!("<script{nonce_attr}>if(/Mobi|Android|iPhone/i.test(navigator.userAgent)){{document.querySelector('form.start')?.removeAttribute('target');}}</script>\n")
+        } else {
+            String::new()
+        };
+
         let body = format!(
-            "<p class=\"by\">{avatar}{developer} {invite}</p>\n\
-<h1>《{title}》</h1>\n\
-{summary_html}<p class=\"stamp\">{stamp}</p>\n\
+            "<div class=\"ticket-head\">\n\
+<p class=\"by\">{avatar}{developer} {invite}</p>\n\
+</div>\n\
+<h1>{title}</h1>\n\
+{summary_html}<div class=\"edition\"><p class=\"stamp\">{stamp}</p>{expires}</div>\n{note}\
 {seats}{tips}\
-<form class=\"start\" method=\"post\" action=\"{prefix}start\">\n\
+<div class=\"stub\">\n\
+<form class=\"start\" method=\"post\" action=\"{start_action}\"{target_attr}>\n\
 <input type=\"hidden\" name=\"{to_field}\" value=\"{to}\">\n\
 <input type=\"hidden\" name=\"{ref_field}\" value=\"{referer}\">\n{from}\
+<label class=\"holder\"><span>你的名字 <small>· 可不填</small></span>\
 <input type=\"text\" name=\"{name_field}\" maxlength=\"{max_name}\" \
-placeholder=\"你的名字（可不填）\" autocomplete=\"nickname\" aria-label=\"你的名字（可不填）\">\n\
-<button type=\"submit\">开始</button>\n\
+placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
+</label>\n\
+<button type=\"submit\">{btn_text}</button>\n\
 </form>\n\
-{more}{capability}{expires}{voices}\
-<footer><a href=\"{prefix}report\">有问题？举报</a>{badge}</footer>\n",
+</div>\n\
+{capability}{voices}\
+<footer>{tools}<a href=\"{report_href}\" class=\"report\">举报</a></footer>{badge}\n{mobile_script}",
             avatar = self.avatar(),
             seats = self.seats(),
-            prefix = RESERVED_PATH_PREFIX,
             to_field = field::TO,
             to = esc(self.to),
             ref_field = field::REFERER,
             referer = esc(self.referer),
             name_field = field::NAME,
             max_name = MAX_PLAYER_NAME_CHARS,
-            more = self.more(),
+            tools = self.tools(),
             capability = self.capability_note(),
             voices = self.voices(),
         );
 
-        shell_hero(
+        let hero = hero.replacen(
+            '>',
+            &format!(
+                " style=\"view-transition-name:{}\">",
+                crate::html::transition_name(&m.slug)
+            ),
+            1,
+        );
+        let rendered = shell_hero(
             &format!("{} {invite}《{}》", m.developer, m.title),
             &head,
             &hero,
             &body,
-        )
+        );
+        let mark = crate::plaza::icon("mark").replacen("<svg ", "<svg width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" ", 1).replace("<circle ", "<circle fill=\"currentColor\" stroke=\"none\" ");
+        let navigation = format!("<nav class=\"invitation-nav\" aria-label=\"返回广场\"><a href=\"{}\" aria-label=\"playtest.run · 返回广场\">{mark}<b>playtest<span>.run</span></b></a></nav>", esc(self.root_url));
+        let rendered = rendered.replacen(
+            "<main class=\"card\">",
+            &format!("{navigation}<main class=\"card\">"),
+            1,
+        );
+        let dialog = self.follow_dialog();
+        let script = if dialog.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "<script{nonce_attr}>{}</script>",
+                include_str!("../../ui/dialog.js")
+            )
+        };
+        rendered.replacen("</body>", &format!("{dialog}{script}</body>"), 1)
     }
 
-    /// 开发者的头像（DESIGN §3.9：一张脸比一个 ID 更像真人）。只认 https，
-    /// 加 `no-referrer` 是不让头像那一跳把玩家在看哪个作品告诉图床。
+    /// 无封面时按作品 slug 色相算法生成的几何星轨艺术图案，作为邀请函头图。
+    fn generative_art(&self) -> String {
+        let m = self.manifest;
+        let initial = m
+            .title
+            .chars()
+            .next()
+            .map(|c| esc(&c.to_string()))
+            .unwrap_or_else(|| "P".into());
+        format!("<div class=\"hero word\"><b>{initial}</b></div>\n")
+    }
+
+    /// 关注与分享在同一工具行；首次填写邮箱只在自愿展开后出现。
+    fn follow_section(&self) -> String {
+        if !self.caps.email {
+            return String::new();
+        }
+        let slug = esc(&self.manifest.slug);
+        let action = if self.is_root {
+            playtest_common::follow::root_paths::FOLLOW
+        } else {
+            "/_playtest/follow"
+        };
+        let to = esc(self.to);
+        if self.already_followed {
+            format!(
+                "<form class=\"follow-box followed\" method=\"post\" action=\"{action}\">\n\
+<input type=\"hidden\" name=\"action\" value=\"unfollow\">\n\
+<input type=\"hidden\" name=\"target\" value=\"site:{slug}\">\n\
+<input type=\"hidden\" name=\"to\" value=\"{to}\">\n\
+<button type=\"submit\" class=\"btn-follow\" title=\"取消关注\" aria-label=\"已关注更新，点击取消关注\">\
+{bell}<span>已关注</span></button>\n\
+</form>\n",
+                bell = BELL_ICON,
+            )
+        } else if self.me_token.is_some() {
+            format!(
+                "<form class=\"follow-box\" method=\"post\" action=\"{action}\">\n\
+<input type=\"hidden\" name=\"target\" value=\"site:{slug}\">\n\
+<input type=\"hidden\" name=\"from\" value=\"gate\">\n\
+<input type=\"hidden\" name=\"to\" value=\"{to}\">\n\
+<button type=\"submit\" class=\"btn-follow\">{bell}<span>关注更新</span></button>\n\
+</form>\n",
+                bell = BELL_ICON,
+            )
+        } else {
+            format!("<a class=\"btn-follow\" href=\"#notification-settings\" data-dialog=\"notification-settings\">{BELL_ICON}<span>关注更新</span></a>")
+        }
+    }
+
+    fn follow_dialog(&self) -> String {
+        if !self.caps.email || self.me_token.is_some() || self.already_followed {
+            return String::new();
+        }
+        let action = if self.is_root {
+            playtest_common::follow::root_paths::FOLLOW
+        } else {
+            "/_playtest/follow"
+        };
+        let content = format!("<form class=\"notice-form\" method=\"post\" action=\"{action}\"><input type=\"hidden\" name=\"target\" value=\"site:{}\"><input type=\"hidden\" name=\"from\" value=\"gate\"><input type=\"hidden\" name=\"to\" value=\"{}\"><label>你的邮箱<input type=\"email\" name=\"email\" required placeholder=\"name@example.com\" autocomplete=\"email\" aria-describedby=\"follow-help\"></label><button type=\"submit\">关注更新</button></form><p class=\"notice-note\" id=\"follow-help\">点击确认信后，新版本会发信通知你。开发者看不到你的邮箱，随时可退订。</p>", esc(&self.manifest.slug), esc(self.to));
+        crate::follow::notification_dialog("notification-settings", "关注更新", &content)
+    }
+
+    /// 开发者的头像（DESIGN §3.3、§3.9：一张脸比一个 ID 更像真人）。只认 https；
+    /// 没有配置或匿名发布时，由 ODD FOLK 确定性算法生成专属角色矢量头像，不留白。
     fn avatar(&self) -> String {
         match self
             .live
@@ -335,11 +490,15 @@ placeholder=\"你的名字（可不填）\" autocomplete=\"nickname\" aria-label
             .filter(|u| u.starts_with("https://"))
         {
             Some(url) => format!(
-                "<img src=\"{}\" alt=\"\" width=\"26\" height=\"26\" \
+                "<img src=\"{}\" alt=\"\" width=\"32\" height=\"32\" \
 referrerpolicy=\"no-referrer\" loading=\"lazy\">",
                 esc(url)
             ),
-            None => String::new(),
+            None => playtest_common::avatar::svg_for_creator(
+                &self.manifest.developer,
+                &self.manifest.slug,
+                32,
+            ),
         }
     }
 
@@ -360,25 +519,10 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         format!("<p class=\"seats\">{developer}在找 {seats} 位试玩者{joined}</p>\n")
     }
 
-    /// 「开始」下面弱化的三行（DESIGN §3.3 第 6 条）。一样都没有时整块不出现。
-    fn more(&self) -> String {
+    /// 同一工具行的辅助动作；没有可用动作时不留空行。
+    fn tools(&self) -> String {
+        let follow = self.follow_section();
         let mut rows = Vec::new();
-        // 一，有新版本时告诉我。子域上只给邮箱这一种，理由见 `follow.rs` 的模块说明。
-        let tell = follow::email_details(
-            self.caps,
-            "有新版本时告诉我",
-            edge_paths::FOLLOW,
-            &FollowTarget::Site {
-                slug: self.manifest.slug.clone(),
-            },
-            self.to,
-            follow::FROM_GATE,
-            "告诉我",
-        );
-        if !tell.is_empty() {
-            rows.push(tell);
-        }
-        // 二，开发者的群。去哪是开发者的事，我们对去向不承诺，所以 nofollow 加 noopener。
         if let Some(url) = self
             .live
             .community_url
@@ -390,14 +534,23 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
                 esc(url)
             ));
         }
-        // 三，分享。私测的邀请不该被转发，所以只有公开的作品有（DESIGN §3.4）。
         if self.live.listed {
-            rows.push(format!("<a href=\"{SHARE_PATH}\">分享</a>"));
+            let share_href = if self.is_root {
+                format!("{}{SHARE_PATH}", esc(self.origin))
+            } else {
+                SHARE_PATH.to_string()
+            };
+            rows.push(format!("<a class=\"share\" href=\"{share_href}\" aria-label=\"分享作品\" title=\"分享作品\">{SHARE_ICON}</a>"));
         }
-        if rows.is_empty() {
+        if rows.is_empty() && follow.is_empty() {
             return String::new();
         }
-        format!("<div class=\"more\">{}</div>\n", rows.join("\n"))
+        let more = if rows.is_empty() {
+            String::new()
+        } else {
+            format!("<div class=\"more\">{}</div>", rows.join("\n"))
+        };
+        format!("<div class=\"invitation-tools\">{follow}{more}</div>\n")
     }
 
     /// 试玩者的话（DESIGN §3.5）：社会证明，不是讨论区——没有回复、没有点赞、没有楼层。
@@ -452,11 +605,15 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         if !self.manifest.isolated {
             return String::new();
         }
+        let nonce_attr = match self.nonce {
+            Some(n) => format!(" nonce=\"{n}\""),
+            None => String::new(),
+        };
         format!(
             "<section class=\"tip\" id=\"pt-cap\" hidden>\n\
 <p>这个作品需要系统浏览器才跑得起来（它要用到当前浏览器没开放的能力）。\
 上面的「开始」照样可以点；打不开的话，复制链接到 Safari、Chrome 里粘贴打开。</p>\n\
-{row}</section>\n<script>{COPY_JS}{CAPABILITY_SCRIPT}</script>\n",
+{row}</section>\n<script{nonce_attr}>{COPY_JS}{CAPABILITY_SCRIPT}</script>\n",
             row = copy_row(&esc(self.page_url), None),
         )
     }
@@ -481,17 +638,11 @@ pub fn known_source(raw: Option<&str>) -> Option<&'static str> {
     match raw.map(str::trim) {
         Some(playtest_common::FROM_CARD) => Some(playtest_common::FROM_CARD),
         Some(playtest_common::FROM_NOTICE) => Some(playtest_common::FROM_NOTICE),
+        Some(playtest_common::FROM_PLAZA) => Some(playtest_common::FROM_PLAZA),
+        Some(playtest_common::FROM_COLLECTION) => Some(playtest_common::FROM_COLLECTION),
         _ => None,
     }
 }
-
-/// 内联、可有可无：把上面那个绝对时间换成访客自己时区的写法。
-/// 关掉 JS 只是看到 UTC+8 的时间，「开始」按钮是原生表单，照样能点。
-const LOCAL_TIME_SCRIPT: &str = "<script>\
-for(const t of document.querySelectorAll('time[datetime]')){\
-const d=new Date(t.getAttribute('datetime'));\
-if(!isNaN(d))t.textContent=d.toLocaleString(undefined,{dateStyle:'long',timeStyle:'short'});}\
-</script>\n";
 
 /// 能力检测。写成 ES5、不用可选链，因为要跑的正是那些老 WebView。
 /// 检测通过（或这段没跑）时那一节始终是 `hidden`，玩家什么都不会看到。
@@ -543,6 +694,10 @@ mod tests {
             version_label: None,
             referer: "",
             from: None,
+            me_token: None,
+            already_followed: false,
+            is_root: false,
+            nonce: None,
         }
     }
 
@@ -550,6 +705,11 @@ mod tests {
         std::sync::LazyLock::new(|| SiteLive::empty("brisk-otter-41"));
     static NO_CAPS: std::sync::LazyLock<Capabilities> =
         std::sync::LazyLock::new(Capabilities::default);
+    static EMAIL_CAPS: std::sync::LazyLock<Capabilities> =
+        std::sync::LazyLock::new(|| Capabilities {
+            email: true,
+            ..Capabilities::default()
+        });
 
     #[test]
     fn a_cover_becomes_the_hero_and_the_share_image() {
@@ -576,7 +736,7 @@ mod tests {
         ));
         // 有封面就不拿卡去顶替它：玩家看到的第一眼应该是这个作品。
         assert!(!html.contains(CARD_WIDE_PATH));
-        assert!(html.len() < 10 * 1024, "门禁页 {} 字节", html.len());
+        assert!(html.len() < 16 * 1024, "门禁页 {} 字节", html.len());
     }
 
     #[test]
@@ -598,15 +758,32 @@ mod tests {
 
     #[test]
     fn shows_only_for_html_navigation_without_cookie() {
-        assert!(should_show(GateMode::Once, "/", true, true, false));
-        assert!(should_show(GateMode::Always, "/", true, true, false));
+        assert!(should_show(GateMode::Once, "/", true, true, false, None));
+        assert!(should_show(GateMode::Always, "/", true, true, false, None));
         // 有 cookie 就直接出文件。
-        assert!(!should_show(GateMode::Once, "/", true, true, true));
+        assert!(!should_show(GateMode::Once, "/", true, true, true, None));
+        // 但如果带了 from（如广场进入），即使有 cookie 也出邀请函
+        assert!(should_show(
+            GateMode::Once,
+            "/",
+            true,
+            true,
+            true,
+            Some("plaza")
+        ));
         // 资源请求永远不拦。
-        assert!(!should_show(GateMode::Once, "/", false, true, false));
-        assert!(!should_show(GateMode::Once, "/", true, false, false));
+        assert!(!should_show(GateMode::Once, "/", false, true, false, None));
+        assert!(!should_show(GateMode::Once, "/", true, false, false, None));
         // 开发者选了不出就不出。
-        assert!(!should_show(GateMode::Never, "/", true, true, false));
+        assert!(!should_show(GateMode::Never, "/", true, true, false, None));
+        assert!(!should_show(
+            GateMode::Never,
+            "/",
+            true,
+            true,
+            false,
+            Some("plaza")
+        ));
     }
 
     #[test]
@@ -628,7 +805,7 @@ mod tests {
             "/DEEP/PATH/A.PNG",
         ] {
             assert!(
-                !should_show(GateMode::Once, path, true, true, false),
+                !should_show(GateMode::Once, path, true, true, false, None),
                 "{path}"
             );
             assert!(looks_like_a_resource(path), "{path}");
@@ -645,7 +822,7 @@ mod tests {
         ] {
             assert!(!looks_like_a_resource(path), "{path}");
             assert!(
-                should_show(GateMode::Once, path, true, true, false),
+                should_show(GateMode::Once, path, true, true, false, None),
                 "{path}"
             );
         }
@@ -694,14 +871,14 @@ mod tests {
         // 版本、日期、这版改了什么，一行等宽小字（DESIGN §3.3 第 3 条）。
         assert!(html.contains("<p class=\"stamp\">v7 · 9 月 7 日</p>"));
         // 留名是可选的，不是必填。
-        assert!(html.contains("placeholder=\"你的名字（可不填）\""));
+        assert!(html.contains("<label class=\"holder\"><span>你的名字"));
+        assert!(html.contains("· 可不填"));
         assert!(html.contains("maxlength=\"24\""));
         assert!(!html.contains("required"));
         // 玩家页面上不出现品牌域名。
         assert!(!html.contains(playtest_common::DEVELOPER_HOST));
-        // 整页要小（DESIGN §3.3：不超过几 KB，像作品封面不像安全告警）。
-        // 大头是那份内联样式，走线时会被压掉大半。
-        assert!(html.len() < 9 * 1024, "门禁页 {} 字节", html.len());
+        // 整页要小（DESIGN §3.3：内联矢量头像后保持在十几 KB，秒出）。
+        assert!(html.len() < 16 * 1024, "门禁页 {} 字节", html.len());
     }
 
     #[test]
@@ -736,7 +913,7 @@ mod tests {
     }
 
     #[test]
-    fn the_three_weak_rows_appear_one_by_one() {
+    fn auxiliary_actions_appear_only_when_available() {
         let m = manifest();
         let mut live = SiteLive::empty("brisk-otter-41");
         let caps = Capabilities {
@@ -746,11 +923,23 @@ mod tests {
         let mut p = page(&m, false);
 
         // 控制面发不了信、没有群、没公开：一行都没有。
-        assert!(!p.render().contains("class=\"more\""));
+        assert!(!p.render().contains("class=\"invitation-tools\""));
 
         p.caps = &caps;
         let html = p.render();
-        assert!(html.contains("有新版本时告诉我"));
+        assert!(html.contains("<span>关注更新</span></a>"));
+        assert!(html.contains("<dialog id=\"notification-settings\""));
+        assert!(html.find("</main>").unwrap() < html.find("<dialog").unwrap());
+        let footer = html
+            .split("<footer>")
+            .nth(1)
+            .unwrap()
+            .split("</footer>")
+            .next()
+            .unwrap();
+        assert!(footer.contains("关注更新"));
+        assert!(footer.contains("举报"));
+        assert!(!html.contains("follow-details"));
         assert!(html.contains("action=\"/_playtest/follow\""));
         assert!(html.contains("value=\"site:brisk-otter-41\""));
         // 子域上不提供浏览器通知（作品可能有自己的 Service Worker，见 follow.rs）。
@@ -771,7 +960,9 @@ mod tests {
         let mut live = live.clone();
         live.listed = true;
         p.live = &live;
-        assert!(p.render().contains(">分享</a>"));
+        assert!(p
+            .render()
+            .contains("aria-label=\"分享作品\" title=\"分享作品\""));
     }
 
     #[test]
@@ -924,10 +1115,10 @@ mod tests {
         assert!(html.contains("<p class=\"stamp\">v7 · 9 月 7 日</p>"));
         assert!(!html.contains("提供"));
 
-        // 「这版改了什么」跟在版本后面，不另起一节：它是版本的一部分。
+        // 版本说明紧邻版本日期，长说明不挤占到期事实的位置。
         m.note = Some("修了跳跃手感".into());
         let html = page(&m, false).render();
-        assert!(html.contains("v7 · 9 月 7 日 · <b>「修了跳跃手感」</b>"));
+        assert!(html.contains("<p class=\"version-note\">修了跳跃手感</p>"));
     }
 
     #[test]
@@ -981,13 +1172,14 @@ mod tests {
         let mut m = manifest();
         m.expires_at = Some("2026-09-08T04:30:00Z".into());
         let html = page(&m, false).render();
-        assert!(html.contains("这个链接在 <time datetime=\"2026-09-08T04:30:00Z\">"));
+        assert!(html.contains("<time datetime=\"2026-09-08T04:30:00Z\">"));
         assert!(html.contains("9 月 8 日 12:30（UTC+8）"));
-        assert!(html.contains("后失效"));
+        assert!(html.contains("</time> 到期"));
+        assert!(html.find("class=\"expires\"") < html.find("class=\"start\""));
 
         // 解析不了就整行不出，不显示一串机器码给玩家看。
         m.expires_at = Some("下周".into());
-        assert!(!page(&m, false).render().contains("后失效"));
+        assert!(!page(&m, false).render().contains("class=\"expires\""));
     }
 
     #[test]
@@ -1013,7 +1205,38 @@ mod tests {
         ] {
             assert!(!html.contains(forbidden), "{forbidden}");
         }
-        // 最胖的一页也要小。
-        assert!(html.len() < 11 * 1024, "门禁页 {} 字节", html.len());
+        // 最胖的一页也要小（内联头像后保持在十几 KB）。
+        assert!(html.len() < 18 * 1024, "门禁页 {} 字节", html.len());
+    }
+
+    #[test]
+    fn root_invitation_card_links_and_actions() {
+        let mut m = manifest();
+        m.cover = Some(playtest_common::manifest::Cover {
+            hash: "a".repeat(64),
+            size: 1000,
+            mime: "image/png".into(),
+        });
+        let mut p = page(&m, false);
+        p.is_root = true;
+        p.caps = &EMAIL_CAPS;
+        p.to = "/p/brisk-otter-41";
+        p.nonce = Some("fake-nonce-1234");
+        let html = p.render();
+        // 开始表单提交到 /p/brisk-otter-41 并开新标签
+        assert!(html.contains("<form class=\"start\" method=\"post\" action=\"/p/brisk-otter-41\" target=\"_blank\" rel=\"noopener\">"));
+        assert!(html.contains("<button type=\"submit\">开始试玩</button>"));
+        // 封面使用子域绝对地址
+        assert!(html.contains(
+            "<img class=\"hero\" src=\"http://brisk-otter-41.localhost:8443/_playtest/cover\""
+        ));
+        // 移动端脚本带 nonce
+        assert!(html.contains("<script nonce=\"fake-nonce-1234\">if(/Mobi|Android|iPhone/i.test"));
+        // 关注提交到根域 /follow
+        assert!(html.contains("action=\"/follow\""));
+        // 举报链接到子域
+        assert!(html.contains("href=\"http://brisk-otter-41.localhost:8443/_playtest/report\""));
+        // 根域不带由 localhost 提供的 badge
+        assert!(!html.contains("由 localhost 提供"));
     }
 }

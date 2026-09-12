@@ -10,7 +10,7 @@ import { ApiError } from "../api";
 import { href } from "../router";
 
 export function Loading() {
-  return <p class="muted loading">…</p>;
+  return <div class="loading" role="status" aria-live="polite"><span class="muted">正在加载…</span><div class="skeleton" aria-hidden="true"><span /><span /><span /></div></div>;
 }
 
 export function Failed({ error, onRetry }: { error: ApiError; onRetry: () => void }) {
@@ -27,12 +27,13 @@ export function Failed({ error, onRetry }: { error: ApiError; onRetry: () => voi
     );
   }
   return (
-    <div class="notice">
+    <div class="notice" role="alert">
       <p>{error.message}</p>
       <p>
         <button class="button small" onClick={onRetry}>
           再试一次
         </button>
+        <a class="docs-context-link" href={href({ name: "docs", section: "troubleshoot" })}>查看连接与身份排查 →</a>
       </p>
     </div>
   );

@@ -51,8 +51,35 @@ pub async fn follow(
     if let Some(slug) = slug {
         // 关注一个不存在的作品没有意义，而且会让「关注数」上出现查不到的行。
         let conn = state.db().lock().await;
-        if db::find_site(&conn, slug)?.is_none() {
+        let exists = if kind == "collection" {
+            crate::collections::public_one(&conn, slug, &clock::format(now))?.is_some()
+        } else {
+            db::find_site(&conn, slug)?.is_some()
+        };
+        if !exists {
             return Err(ApiError::not_found(NO_SUCH_SITE));
+        }
+    }
+    if kind == "collection" {
+        if !state.notify().email_on() {
+            return Err(ApiError::invalid("邮件摘要目前不可用，请稍后再关注。"));
+        }
+        match &request.channel {
+            FollowChannel::Push { .. } => {
+                return Err(ApiError::invalid("合集只发送邮件摘要，请使用邮箱关注。"))
+            }
+            FollowChannel::Me { me_token } => {
+                let conn = state.db().read().await;
+                if player_by_me_token(&conn, me_token)?
+                    .email_verified_at
+                    .is_none()
+                {
+                    return Err(ApiError::invalid(
+                        "合集摘要需要已确认的邮箱，请填写邮箱关注。",
+                    ));
+                }
+            }
+            _ => {}
         }
     }
 
@@ -86,16 +113,30 @@ pub async fn follow(
                     },
                 )?;
                 let title = match slug {
+                    Some(slug) if kind == "collection" => {
+                        crate::collections::public_one(&conn, slug, &clock::format(now))?
+                            .map(|collection| collection.title)
+                    }
                     Some(slug) => db::find_site(&conn, slug)?.map(|s| s.title),
                     None => None,
                 };
-                notify::enqueue_confirm(
-                    &conn,
-                    &player,
-                    title.as_deref(),
-                    &state.notify().confirm_url(&token),
-                    now,
-                )?;
+                if kind == "collection" {
+                    crate::collections::enqueue_confirmation(
+                        &conn,
+                        &player,
+                        title.as_deref().unwrap_or("合集"),
+                        &state.notify().confirm_url(&token),
+                        now,
+                    )?;
+                } else {
+                    notify::enqueue_confirm(
+                        &conn,
+                        &player,
+                        title.as_deref(),
+                        &state.notify().confirm_url(&token),
+                        now,
+                    )?;
+                }
             }
             Ok(Json(FollowResponse::ConfirmSent))
         }
@@ -171,6 +212,16 @@ pub async fn confirm(
         db::confirm_player_email(&conn, &taken.player_id, &clock::format(now))?;
         let mut slug = None;
         if let Some(kind) = taken.target_kind.as_deref() {
+            if kind == "collection"
+                && crate::collections::public_one(
+                    &conn,
+                    taken.target_slug.as_deref().unwrap_or_default(),
+                    &clock::format(now),
+                )?
+                .is_none()
+            {
+                return Err(ApiError::not_found("这个合集已停止公开，没有新增关注。"));
+            }
             db::insert_follow(
                 &conn,
                 &taken.player_id,
@@ -259,7 +310,7 @@ pub async fn push_off(
     Ok(Json(view_of(&state, &conn, &player)?))
 }
 
-/// `POST /v1/me/send-link`：换了设备，把能打开「我的」的链接寄给自己。
+/// `POST /v1/me/send-link`：换了设备，把能打开关注页的链接寄给自己。
 ///
 /// 不管这个邮箱在不在库里，回的都是同一句话——否则这个端点就成了一台
 /// 「这个邮箱注册过没有」的查询机（DESIGN §4.8）。
@@ -315,6 +366,7 @@ pub async fn send_link(
 fn split_target(target: &FollowTarget) -> (&'static str, Option<&str>) {
     match target {
         FollowTarget::Site { slug } => ("site", Some(slug.as_str())),
+        FollowTarget::Collection { slug } => ("collection", Some(slug.as_str())),
         FollowTarget::Plaza => ("plaza", None),
     }
 }
@@ -383,16 +435,27 @@ fn find_or_create_by_push(
 }
 
 fn view_of(state: &AppState, conn: &Connection, player: &db::PlayerRow) -> ApiResult<MeView> {
+    let collections = crate::collections::list(conn, None, &clock::now_string())?;
     let follows = db::follows_of(conn, &player.id)?
         .into_iter()
-        .filter_map(|row| {
+        .filter_map(|mut row| {
             let target = match (row.target_kind.as_str(), row.target_slug) {
                 ("site", Some(slug)) => FollowTarget::Site { slug },
+                ("collection", Some(slug)) => {
+                    let collection = collections
+                        .iter()
+                        .find(|collection| collection.slug == slug)?;
+                    row.title = Some(collection.title.clone());
+                    FollowTarget::Collection { slug }
+                }
                 ("plaza", _) => FollowTarget::Plaza,
                 _ => return None,
             };
             let url = match &target {
                 FollowTarget::Site { slug } => Some(state.site_url(slug)),
+                FollowTarget::Collection { slug } => {
+                    Some(format!("{}/c/{slug}", state.notify().root_url()))
+                }
                 FollowTarget::Plaza => None,
             };
             // 作品已经删掉的那几条查不到标题，也就不显示（`follows_of` 用的是 LEFT JOIN）。

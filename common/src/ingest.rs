@@ -13,6 +13,7 @@
 //! 会话 id 来自门禁页种下的 `pt_sid`（[`crate::SESSION_COOKIE`]）。它是 `HttpOnly` 的，
 //! 页面里的脚本读不到，所以边缘另开一个同源端点 [`ME_PATH`] 把它告诉 SDK。
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub mod routes {
@@ -84,7 +85,7 @@ pub mod edge_kind {
 }
 
 /// 边缘对 SDK 的自我介绍（[`ME_PATH`]）。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Me {
     /// 门禁页种下的会话 id。
     pub sid: String,
@@ -96,7 +97,7 @@ pub struct Me {
     pub api: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct EventBatch {
     /// 会话 id，来自 [`Me::sid`]；SDK 拿不到时是它自己在 localStorage 里生成的匿名 id。
     pub session: String,
@@ -105,7 +106,7 @@ pub struct EventBatch {
     pub events: Vec<Event>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Event {
     /// 客户端的 RFC 3339 时间。客户端的钟不可信，服务端只在它落在合理窗口里时采信。
     pub ts: String,
@@ -120,7 +121,7 @@ pub struct Event {
 /// 边缘 JSONL 里的一行，字段名和 `edge/src/events.rs` 写出来的一致。
 ///
 /// **没有 IP 字段**，和那边一样：DESIGN §3.4 不收集精确位置，IP 是最容易顺手记下的那一样。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct EdgeEvent {
     pub ts: String,
     #[serde(rename = "type")]
@@ -155,6 +156,7 @@ pub mod source {
     pub const NOTICE: &str = "notice";
     /// 从广场点进来。
     pub const PLAZA: &str = "plaza";
+    pub const COLLECTION: &str = "collection";
     pub const WECHAT: &str = "wechat";
     pub const DISCORD: &str = "discord";
     pub const DIRECT: &str = "direct";
@@ -166,6 +168,7 @@ pub mod source {
             CARD => "邀请卡",
             NOTICE => "通知",
             PLAZA => "广场",
+            COLLECTION => "合集",
             WECHAT => "微信",
             DISCORD => "Discord",
             DIRECT => "直接打开",
@@ -187,17 +190,18 @@ pub fn source_kind(
     match from.map(str::trim) {
         Some(source::CARD) => source::CARD,
         Some(source::NOTICE) => source::NOTICE,
+        Some(source::COLLECTION) => source::COLLECTION,
         _ => referrer_kind(referer, wechat, plaza_host),
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct EdgeBatch {
     #[serde(default)]
     pub events: Vec<EdgeEvent>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct FeedbackRequest {
     pub session: String,
     pub slug: String,
@@ -208,12 +212,12 @@ pub struct FeedbackRequest {
 }
 
 /// 收下了几条。被形状挡掉的不算在里面，但整批不会因为一条坏的就全退。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Accepted {
     pub accepted: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct FeedbackAccepted {
     /// 这个会话还能再提几条。
     pub remaining: u32,

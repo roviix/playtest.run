@@ -6,7 +6,6 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
-use playtest_common::manifest::GateMode;
 
 /// 没有 `--api` 也没有环境变量 `PLAYTEST_API` 时用它。
 pub const DEFAULT_API: &str = playtest_common::DEVELOPER_API_URL;
@@ -14,6 +13,23 @@ pub const DEFAULT_API: &str = playtest_common::DEVELOPER_API_URL;
 /// 帮助的头两行。第一次用的人只看这两行就够开始了。
 const EXAMPLES: &str = "playtest ./dist            把这个目录发出去，拿到链接和二维码
 playtest 5173              把本地开发服务器接出去，一直开着直到 Ctrl-C";
+
+pub const QUICK_HELP: &str = "把能玩的版本发给别人，不用先登录。
+
+用法：
+  playtest ./dist                 发布目录，得到链接和二维码
+  playtest 5173                   分享本地服务；关闭终端后链接下线
+  playtest ./dist -m \"改了新手引导\" 更新同一个链接
+  playtest ./dist --seats 10      放到广场，找 10 位试玩者
+
+发布以后：
+  playtest open [目录或作品标识]  打开链接（默认当前目录）
+  playtest card [目录或作品标识]  再存一张邀请卡（默认当前目录）
+  playtest ls                    查看作品
+  playtest login                 用 GitHub 登录，保留作品
+
+更多用法：playtest --help；单条命令：playtest card --help
+不自动构建项目；请发布包含 index.html 的导出目录。";
 
 /// 帮助的最后一段。写脚本的人靠退出码分流，不该去猜错误文案。
 const EXIT_CODES: &str = "退出码：
@@ -44,9 +60,12 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Command>,
 
-    /// 只往 stdout 输出一个 JSON 对象，说明和进度走 stderr（给脚本和 agent 用）
+    /// JSON 输出，说明和进度走 stderr；本地端口分享持续输出事件，其他命令输出一个结果
     #[arg(long, global = true)]
     pub json: bool,
+
+    #[arg(long = "gate", hide = true, global = true)]
+    pub legacy_gate: Option<String>,
 }
 
 #[derive(Debug, Default, Args)]
@@ -57,70 +76,77 @@ pub struct UploadArgs {
 
     /// 作品名，玩家点开链接时看到（默认用目录名）
     #[arg(short = 'n', long = "name", value_name = "作品名")]
+    #[arg(help_heading = "发布信息")]
     pub name: Option<String>,
 
-    /// 这版改了什么、想让人重点看什么；门禁页、关注通知、广场卡上都是这一句（最多 280 字）
-    ///
-    /// 以前这件事有两个参数（`--note` 和 `--seek`）。对开发者「这版改了什么」和
-    /// 「想让你看什么」是同一句话，对玩家在门禁页、在通知正文、在广场卡上看到的也是
-    /// 同一句话——两个参数只是逼人分辨一个不存在的区别（REWRITE §9.6）。
+    /// 这版改了什么、想让人重点看什么；邀请函、关注通知、广场卡上都是这一句（最多 280 字）
     #[arg(short = 'm', long = "note", value_name = "一句话")]
+    #[arg(help_heading = "发布信息")]
     pub note: Option<String>,
 
-    /// 一句话介绍这个作品是什么；门禁页、分享卡片、广场卡片上都用（最多 140 字）
+    /// 作品长期简介，省略时沿用已有内容（最多 140 字）
     #[arg(long, value_name = "一句话")]
+    #[arg(help_heading = "邀请与招募")]
     pub summary: Option<String>,
 
-    /// 封面图（PNG / JPEG / WebP，2 MB 以内）；门禁页的第一眼，分享出去时的卡片图
+    /// 封面图（PNG / JPEG / WebP，2 MB 以内）；邀请函的第一眼，分享出去时的卡片图
     #[arg(long, value_name = "图片文件")]
+    #[arg(help_heading = "邀请与招募")]
     pub cover: Option<PathBuf>,
 
-    /// 上传后放到广场（playtest.run 首页）上，路过的人点开就能玩；默认不放
+    /// 展示在公开广场（默认不展示）；不影响持有链接者访问
     #[arg(long)]
+    #[arg(help_heading = "邀请与招募")]
     pub public: bool,
 
-    /// 想找几位试玩者；在广场上标「正在找人测」，门禁页和邀请卡上会写出来，留了名字的人算加入；蕴含 --public
-    #[arg(long, value_name = "人数")]
+    /// 想找几位试玩者；在广场上标「正在找人测」，邀请函和邀请卡上会写出来，留了名字的人算加入；蕴含 --public
+    #[arg(long, value_name = "人数", value_parser = clap::value_parser!(u32).range(1..))]
+    #[arg(help_heading = "邀请与招募")]
     pub seats: Option<u32>,
 
-    /// 你的群：QQ 群、微信群二维码页、Discord、Telegram 都行；玩家在门禁页和反馈之后看到「开发者的群」
+    /// 你的群：QQ 群、微信群二维码页、Discord、Telegram 都行；玩家在邀请函和反馈之后看到「开发者的群」
     #[arg(long, value_name = "链接")]
+    #[arg(help_heading = "邀请与招募")]
     pub community: Option<String>,
 
-    /// 邀请卡存到哪（默认存到当前目录，叫「<作品名>-邀请卡.png」）；写 - 就不存
+    /// 下载邀请卡到指定路径（默认不下载）；写 - 也不下载
     #[arg(long = "card", value_name = "路径")]
+    #[arg(help_heading = "输出")]
     pub card: Option<String>,
 
     /// 让页面跑在隔离环境里。auto（默认，看出要多线程就开）、on、off
     #[arg(long, value_name = "开关", default_value = "auto", value_parser = parse_isolation)]
+    #[arg(help_heading = "运行设置")]
     pub isolated: Isolation,
 
-    /// 找不到的路径都回到 index.html（前端路由用）
+    /// 导航请求找不到页面时回到 index.html；资源请求不回退（前端路由用）
     #[arg(long)]
+    #[arg(help_heading = "运行设置")]
     pub spa: bool,
 
-    /// 玩家进来前那一页什么时候出：once（默认）、always、never
-    #[arg(long, value_name = "策略", default_value = "once", value_parser = parse_gate)]
-    pub gate: GateMode,
-
-    /// 发到哪个作品：一个 slug，或者 new 表示新建一个拿新链接（默认发到这个目录上次用的那个）
-    #[arg(long, value_name = "slug 或 new")]
+    /// 更新指定作品；写 new 新建链接（默认更新这个目录上次发布的作品）
+    #[arg(long, value_name = "作品标识或 new")]
+    #[arg(help_heading = "发布信息")]
     pub to: Option<String>,
 
     /// 检查说「传上去一定打不开」时也照传（比如你知道 index.html 不在最外层是故意的）
     #[arg(short = 'y', long = "yes")]
+    #[arg(help_heading = "运行设置")]
     pub force: bool,
 
     /// 目录照常上传，目录里没有的路径（/api/…、WebSocket）走隧道到你电脑的这个端口（带后端的小应用用这个）
-    #[arg(long, value_name = "端口")]
+    #[arg(long, value_name = "端口", value_parser = clap::value_parser!(u16).range(1..))]
+    #[arg(help_heading = "运行设置")]
     pub backend: Option<u16>,
 
-    /// 控制面地址（也可以用环境变量 PLAYTEST_API）
-    #[arg(long, value_name = "网址")]
+    /// API 服务地址（自托管使用；也可以设置环境变量 PLAYTEST_API）
+    #[arg(long, global = true, value_name = "网址")]
+    #[arg(help_heading = "脚本与连接")]
     pub api: Option<String>,
 
     /// 不画二维码
     #[arg(long = "no-qr")]
+    #[arg(help_heading = "输出")]
     pub no_qr: bool,
 }
 
@@ -138,11 +164,9 @@ impl UploadArgs {
             || self.card.is_some()
             || self.isolated != Isolation::Auto
             || self.spa
-            || self.gate != GateMode::Once
             || self.to.is_some()
             || self.force
             || self.backend.is_some()
-            || self.api.is_some()
             || self.no_qr
     }
 
@@ -165,7 +189,7 @@ impl UploadArgs {
 
     /// 要不要存邀请卡。
     pub fn wants_card(&self) -> bool {
-        self.card.as_deref() != Some("-")
+        self.card.as_deref().is_some_and(|path| path != "-")
     }
 
     /// 要不要放到广场上。求测必须先在广场上，否则没人看得到这个标。
@@ -177,102 +201,76 @@ impl UploadArgs {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// 用 GitHub 登录一次；之后发的作品留下来，不再 24 小时后失效
-    Login {
-        /// 控制面地址（也可以用环境变量 PLAYTEST_API）
-        #[arg(long, value_name = "网址")]
-        api: Option<String>,
+    Login,
+
+    /// 撤销当前令牌并清除本机凭据，不删除作品；匿名作品请先登录接管
+    Logout {
+        #[arg(short = 'y', long)]
+        yes: bool,
     },
 
     /// 这个令牌是谁、什么档位、这台机器上有几个作品
-    Whoami {
-        #[arg(long, value_name = "网址")]
-        api: Option<String>,
-    },
+    Whoami,
 
     /// 线上这一版里到底有哪些文件：每个路径、多大、内容哈希
     Files {
-        #[arg(value_name = "slug 或目录")]
+        #[arg(value_name = "目录或作品标识", default_value = ".")]
         target: String,
 
         /// 看某一版（默认看玩家现在看到的那一版）
         #[arg(long, value_name = "版本")]
         version: Option<String>,
-
-        #[arg(long, value_name = "网址")]
-        api: Option<String>,
     },
 
     /// 列出这台机器上发过的作品
-    Ls {
-        /// 控制面地址（也可以用环境变量 PLAYTEST_API）
-        #[arg(long, value_name = "网址")]
-        api: Option<String>,
-    },
+    Ls,
 
     /// 删掉一个作品，它的链接立刻打不开
     Rm {
-        #[arg(value_name = "slug")]
+        #[arg(value_name = "目录或作品标识")]
         slug: String,
 
         /// 不问一句，直接删
         #[arg(short = 'y', long = "yes")]
         yes: bool,
-
-        #[arg(long, value_name = "网址")]
-        api: Option<String>,
     },
 
     /// 打印链接，并用系统浏览器打开
     Open {
-        #[arg(value_name = "slug 或目录")]
+        #[arg(value_name = "目录或作品标识", default_value = ".")]
         target: String,
-
-        #[arg(long, value_name = "网址")]
-        api: Option<String>,
     },
 
     /// 列出一个作品发过的每一版，标出玩家现在看到的是哪一版
     Versions {
-        #[arg(value_name = "slug 或目录")]
+        #[arg(value_name = "目录或作品标识", default_value = ".")]
         target: String,
-
-        #[arg(long, value_name = "网址")]
-        api: Option<String>,
     },
 
     /// 让玩家看到的换回某一版；清单都在，一个字节不用重传
     Rollback {
-        #[arg(value_name = "slug 或目录")]
+        #[arg(value_name = "目录或作品标识")]
         target: String,
 
         /// 例如 3 或 v3
         #[arg(value_name = "版本")]
         version: String,
-
-        #[arg(long, value_name = "网址")]
-        api: Option<String>,
     },
 
-    /// 重新拿一张邀请卡，存成 PNG；发到群里，别人长按识别就能玩
+    /// 下载邀请卡，存成 PNG；发到群里，别人长按识别就能玩
     Card {
-        #[arg(value_name = "slug 或目录")]
+        #[arg(value_name = "目录或作品标识", default_value = ".")]
         target: String,
 
         /// 存到哪（默认存到当前目录，叫「<作品名>-邀请卡.png」）
         #[arg(long, value_name = "路径")]
         out: Option<PathBuf>,
-
-        #[arg(long, value_name = "网址")]
-        api: Option<String>,
     },
 
     /// 把一个作品从广场上拿下来；它的链接照常能开
     Unlist {
-        #[arg(value_name = "slug")]
+        #[arg(value_name = "目录或作品标识")]
         slug: String,
-
-        #[arg(long, value_name = "网址")]
-        api: Option<String>,
     },
 
     /// 作为 MCP server 跑起来，让 Cursor / Claude Code 里的助手直接发链接
@@ -280,15 +278,7 @@ pub enum Command {
         /// 不跑服务，只打印一段可以粘进编辑器配置的 JSON
         #[arg(long)]
         setup: bool,
-
-        /// 控制面地址（也可以用环境变量 PLAYTEST_API）
-        #[arg(long, value_name = "网址")]
-        api: Option<String>,
     },
-}
-
-fn parse_gate(s: &str) -> Result<GateMode, String> {
-    s.parse()
 }
 
 /// 跨源隔离（COOP / COEP）开不开。
@@ -398,11 +388,10 @@ mod tests {
         assert_eq!(cli.upload.target.as_deref(), Some("./dist"));
         assert_eq!(cli.upload.name.as_deref(), Some("小球"));
         assert_eq!(cli.upload.isolated, Isolation::On);
-        assert_eq!(cli.upload.gate, GateMode::Once);
         assert!(cli.command.is_none());
 
         let cli = Cli::try_parse_from(["playtest", "ls"]).unwrap();
-        assert!(matches!(cli.command, Some(Command::Ls { .. })));
+        assert!(matches!(cli.command, Some(Command::Ls)));
 
         let cli = Cli::try_parse_from(["playtest", "rm", "brisk-otter-41", "-y"]).unwrap();
         match cli.command {
@@ -468,8 +457,7 @@ mod tests {
     fn seats_takes_a_number() {
         assert!(Cli::try_parse_from(["playtest", "./dist", "--seats", "十"]).is_err());
         assert!(Cli::try_parse_from(["playtest", "./dist", "--seats", "-3"]).is_err());
-        // 范围（1..=MAX_SEATS）在 upload.rs 里查，那里能把话说得更清楚。
-        assert!(Cli::try_parse_from(["playtest", "./dist", "--seats", "0"]).is_ok());
+        assert!(Cli::try_parse_from(["playtest", "./dist", "--seats", "0"]).is_err());
     }
 
     #[test]
@@ -505,7 +493,7 @@ mod tests {
         // 不写就是默认位置。
         let plain = Cli::try_parse_from(["playtest", "./dist"]).unwrap();
         assert_eq!(plain.upload.card_path(), None);
-        assert!(plain.upload.wants_card());
+        assert!(!plain.upload.wants_card());
     }
 
     #[test]
@@ -562,8 +550,8 @@ mod tests {
             other => panic!("解析成了 {other:?}"),
         }
 
-        // 不给作品就不知道要哪一张卡。
-        assert!(Cli::try_parse_from(["playtest", "card"]).is_err());
+        let current = Cli::try_parse_from(["playtest", "card"]).unwrap();
+        assert!(matches!(current.command, Some(Command::Card { target, .. }) if target == "."));
 
         // 关注数并进了 ls：单开一条命令只为看一个数字，不值一个命令名（REWRITE §3.1）。
         assert!(Cli::try_parse_from(["playtest", "followers", "brisk-otter-41"]).is_err());
@@ -576,13 +564,7 @@ mod tests {
         assert!(cli.upload.any_set());
         assert!(Cli::try_parse_from(["playtest", "./dist", "--backend", "70000"]).is_err());
         assert!(Cli::try_parse_from(["playtest", "./dist", "--backend", "api"]).is_err());
-    }
-
-    #[test]
-    fn gate_only_takes_the_three_words() {
-        let cli = Cli::try_parse_from(["playtest", "./dist", "--gate", "always"]).unwrap();
-        assert_eq!(cli.upload.gate, GateMode::Always);
-        assert!(Cli::try_parse_from(["playtest", "./dist", "--gate", "sometimes"]).is_err());
+        assert!(Cli::try_parse_from(["playtest", "./dist", "--backend", "0"]).is_err());
     }
 
     #[test]
@@ -590,6 +572,25 @@ mod tests {
         let cli = Cli::try_parse_from(["playtest"]).unwrap();
         assert!(cli.upload.target.is_none());
         assert!(cli.command.is_none());
+    }
+
+    #[test]
+    fn api_is_global_and_not_a_publish_option() {
+        for words in [
+            vec!["playtest", "--api", "http://localhost:8787", "ls"],
+            vec!["playtest", "ls", "--api", "http://localhost:8787"],
+        ] {
+            let cli = Cli::try_parse_from(words).unwrap();
+            assert_eq!(cli.upload.api.as_deref(), Some("http://localhost:8787"));
+            assert!(!cli.upload.any_set());
+        }
+    }
+
+    #[test]
+    fn mutations_still_require_explicit_targets() {
+        for name in ["rm", "unlist", "rollback"] {
+            assert!(Cli::try_parse_from(["playtest", name]).is_err());
+        }
     }
 
     #[test]

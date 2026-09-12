@@ -38,6 +38,7 @@ jobs:
           cache-dependency-path: |
             console/pnpm-lock.yaml
             sdk/pnpm-lock.yaml
+      - run: node --test common/tests/avatar-preview.cjs
       - run: pnpm install --frozen-lockfile && pnpm build
         working-directory: console
       - run: pnpm install --frozen-lockfile && pnpm check && pnpm build

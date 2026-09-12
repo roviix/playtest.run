@@ -18,25 +18,47 @@ use crate::ui;
 
 /// 一条命令做完之后有什么可说的。
 pub enum Report {
+    LoggedOut,
     /// `ls`
     Sites(Vec<Site>),
     /// `open`：`opened` 说的是「弹了浏览器没有」——`--json` 下不弹，跑在 agent
     /// 或 CI 里多半没有浏览器，也不该抢焦点。
-    Opened { site: Site, opened: bool },
+    Opened {
+        site: Site,
+        opened: bool,
+    },
     /// `rm`
-    Removed { slug: String },
+    Removed {
+        slug: String,
+    },
     /// `rm` 时用户说了不删。
-    KeptAfterAsking { slug: String },
+    KeptAfterAsking {
+        slug: String,
+    },
     /// `versions`
-    Versions { slug: String, list: VersionList },
+    Versions {
+        slug: String,
+        list: VersionList,
+    },
     /// `rollback`
-    RolledBack { site: Site, version: u32 },
+    RolledBack {
+        site: Site,
+        version: u32,
+    },
     /// `unlist`
-    Unlisted { slug: String },
+    Unlisted {
+        slug: String,
+    },
     /// `card`
-    Card { site: Site, path: String },
+    Card {
+        site: Site,
+        path: String,
+    },
     /// `whoami`
-    Whoami { me: Me, projects: Option<u32> },
+    Whoami {
+        me: Me,
+        projects: Option<u32>,
+    },
     /// `whoami`，但这台机器上还没有任何身份。
     Nobody,
     /// `files`
@@ -47,6 +69,7 @@ impl Report {
     /// JSON 里的 `action`。脚本按它分流，所以它是契约的一部分，不跟着命令改名走。
     pub fn action(&self) -> &'static str {
         match self {
+            Self::LoggedOut => "logout",
             Self::Sites(_) => "list",
             Self::Opened { .. } => "open",
             Self::Removed { .. } | Self::KeptAfterAsking { .. } => "remove",
@@ -63,12 +86,13 @@ impl Report {
     /// 由 [`crate::output::emit_report`] 统一盖上，这里只管这条命令自己的字段。
     pub fn json(&self) -> Value {
         match self {
+            Self::LoggedOut => json!({ "local_credentials_cleared": true }),
             Self::Sites(sites) => json!({
                 "sites": sites.iter().map(site_json).collect::<Vec<_>>(),
             }),
             Self::Opened { site, opened } => json!({
                 "slug": site.slug,
-                "url": site.url,
+                "url": playtest_common::door_url(&site.url, &site.slug),
                 "opened": opened,
             }),
             Self::Removed { slug } => json!({ "slug": slug, "removed": true }),
@@ -87,7 +111,7 @@ impl Report {
             }),
             Self::RolledBack { site, version } => json!({
                 "slug": site.slug,
-                "url": site.url,
+                "url": playtest_common::door_url(&site.url, &site.slug),
                 "title": site.title,
                 "version": version,
             }),
@@ -127,6 +151,7 @@ impl Report {
     /// 人话模式。stdout 只放用户要拿走的东西（链接），叙述走 stderr（[`ui`] 管这件事）。
     pub fn human(&self) {
         match self {
+            Self::LoggedOut => ui::say("当前令牌已撤销或失效，本机凭据已清除。作品没有删除。"),
             Self::Sites(sites) if sites.is_empty() => {
                 ui::say("你还没有作品。运行 playtest ./dist 发一个。");
             }
@@ -136,7 +161,7 @@ impl Report {
                 }
             }
             Self::Opened { site, .. } => {
-                ui::out(&site.url);
+                ui::out(&playtest_common::door_url(&site.url, &site.slug));
             }
             Self::Removed { slug } => ui::say(&format!("已删掉 {slug}。")),
             Self::KeptAfterAsking { .. } => ui::say("没有删。"),
@@ -169,7 +194,7 @@ impl Report {
             }
             Self::RolledBack { site, version } => {
                 ui::say(&format!("玩家现在看到的是《{}》v{}。", site.title, version));
-                ui::link(&site.url);
+                ui::link(&playtest_common::door_url(&site.url, &site.slug));
             }
             Self::Unlisted { slug } => {
                 ui::say(&format!("已把 {slug} 从广场上拿下来了，链接照常能开。"));
@@ -240,7 +265,10 @@ fn say_site(site: &Site) {
         None => "还没上传过版本".to_string(),
     };
     ui::out(&format!("{}（{}）", site.title, version));
-    ui::out(&format!("  {}", site.url));
+    ui::out(&format!(
+        "  {}",
+        playtest_common::door_url(&site.url, &site.slug)
+    ));
     ui::out(&format!("  slug：{}", site.slug));
     if let Some(expires_at) = &site.expires_at {
         ui::out(&format!("  {} 后失效", clock::human(expires_at)));
@@ -279,7 +307,7 @@ fn site_json(site: &Site) -> Value {
     let l = &site.listing;
     json!({
         "slug": site.slug,
-        "url": site.url,
+        "url": playtest_common::door_url(&site.url, &site.slug),
         "title": site.title,
         // 叫 version 不叫 current_version：脚本里不需要「当前」这个限定，
         // 而且 MCP 那一侧的 playtest_list 用的就是这个名字，两处对得上。
@@ -425,7 +453,7 @@ mod tests {
         .json();
         assert_eq!(body["version"], 3);
         assert_eq!(body["slug"], "brisk-otter-41");
-        assert_eq!(body["url"], "https://brisk-otter-41.playtest.run");
+        assert_eq!(body["url"], "https://playtest.run/p/brisk-otter-41");
     }
 
     #[test]

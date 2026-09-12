@@ -5,6 +5,7 @@
 //! 因为邮件服务商抽风而失败。队列还顺带给了 24 小时合并和退订后不再发的落脚点。
 
 pub mod digest;
+pub mod email;
 pub mod mailer;
 pub mod push;
 pub mod worker;
@@ -45,6 +46,7 @@ impl Runtime {
         vapid: push::Vapid,
         http: reqwest::Client,
     ) -> anyhow::Result<Arc<Self>> {
+        config.validate()?;
         let mailer = mailer::from_config(&config.email, http)?;
         Ok(Arc::new(Self {
             mailer,
@@ -130,18 +132,16 @@ pub fn enqueue_confirm(
 ) -> rusqlite::Result<()> {
     let subject = match title {
         Some(title) => format!("确认关注《{title}》"),
-        None => "确认关注 playtest.run 的新作品通知".to_string(),
+        None => "确认接收 playtest.run 新作品周报".to_string(),
     };
     let body = match title {
         Some(title) => format!(
-            "你在 playtest.run 上留了邮箱，想在《{title}》出新版本时收到一封信。\n\
-             点下面这个链接就算数：\n\n{confirm_url}\n\n\
-             不是你操作的可以忽略这封信。"
+            "你希望在《{title}》发布新版本时收到通知。\n\n\
+             确认邮箱后，关注才会生效。开发者看不到你的邮箱。\n\n{confirm_url}"
         ),
         None => format!(
-            "你在 playtest.run 上留了邮箱，想每周收到一封新作品的信。\n\
-             点下面这个链接就算数：\n\n{confirm_url}\n\n\
-             不是你操作的可以忽略这封信。"
+            "你希望通过邮件发现 playtest.run 上的新作品。\n\n\
+             确认后，每周最多收到一封周报；没有新作品时不发。开发者看不到你的邮箱。\n\n{confirm_url}"
         ),
     };
     let now = clock::format(now);
@@ -162,7 +162,7 @@ pub fn enqueue_confirm(
     Ok(())
 }
 
-/// 「把『我的』的链接寄给我」那封信（DESIGN §3.10 换设备的路）。
+/// 「把关注页的链接寄给我」那封信（DESIGN §3.10 换设备的路）。
 pub fn enqueue_send_link(
     conn: &Connection,
     player_id: &str,
@@ -170,9 +170,8 @@ pub fn enqueue_send_link(
     now: OffsetDateTime,
 ) -> rusqlite::Result<()> {
     let body = format!(
-        "这是能打开你在 playtest.run 上「我的」那一页的链接：\n\n{link}\n\n\
-         在这台设备上点开一次，以后就不用再找它了。\n\
-         不是你操作的可以忽略这封信。"
+        "在你自己的浏览器中打开这个链接，即可找回已关注的作品。\n\n\
+         打开后，这台设备可以直接管理关注，无需密码。\n\n{link}"
     );
     let now = clock::format(now);
     db::enqueue_notification(
@@ -181,7 +180,7 @@ pub fn enqueue_send_link(
             player_id,
             kind: KIND_SEND_LINK,
             target_slug: None,
-            subject: "打开「我的」的链接",
+            subject: "找回你关注的作品",
             body: &body,
             url: Some(link),
             channel: CHANNEL_EMAIL,
@@ -206,10 +205,10 @@ pub fn enqueue_site_version(
     site_url: &str,
     now: OffsetDateTime,
 ) -> rusqlite::Result<usize> {
-    let subject = format!("《{title}》出了 v{version}");
+    let subject = format!("《{title}》更新至 v{version}");
     let body = match note.map(str::trim).filter(|n| !n.is_empty()) {
         Some(note) => note.to_string(),
-        None => "开发者发了新版本。".to_string(),
+        None => "开发者发了新版本，暂未填写更新说明。".to_string(),
     };
     let url = notice_url(site_url);
     let now_text = clock::format(now);
@@ -249,29 +248,7 @@ pub fn enqueue_site_version(
     Ok(queued)
 }
 
-/// 每封信底下那一行。退订链接必须在每封信里（DESIGN §4.8），不是「登录后到设置里关」。
-fn footer(runtime: &Runtime, unsubscribe_token: &str, with_me: bool) -> String {
-    let mut lines = String::from("\n\n—\n不想再收到？一键退订：");
-    lines.push_str(&runtime.unsubscribe_url(unsubscribe_token));
-    if with_me {
-        lines.push_str("\n管理关注：");
-        lines.push_str(&runtime.me_url());
-    }
-    lines
-}
-
 /// 队列里的一行拼成一封信。
 pub fn render(runtime: &Runtime, row: &db::NotificationRow) -> String {
-    let mut body = row.body.clone();
-    if let Some(url) = &row.url {
-        // 确认信和「我的」链接那两封的正文里已经有链接了，别印两遍。
-        if !body.contains(url.as_str()) {
-            body.push_str("\n\n");
-            body.push_str(url);
-        }
-    }
-    if let Some(token) = &row.unsubscribe_token {
-        body.push_str(&footer(runtime, token, row.kind == KIND_DIGEST));
-    }
-    body
+    email::render(runtime, row).text
 }

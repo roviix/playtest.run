@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ODD FOLK — 原创头像工作室</title>
+<style>
+:root{--paper:#f4f2eb;--card:#fffefa;--ink:#292c27;--muted:#83877d;--line:#dedfd5;--green:#d9f777;--dark:#28372d;--mono:ui-monospace,SFMono-Regular,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,a:focus-visible,select:focus-visible{outline:3px solid #7e9b45;outline-offset:3px}
+button:disabled{opacity:.5;cursor:wait}
+button{transition:background .2s,transform .2s}
+button:hover{filter:brightness(.98)}
+svg{display:block}
+.wrap{width:min(1220px,calc(100% - 64px));margin:auto}
+header{height:88px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:18px}
+.brand{display:flex;align-items:center;gap:11px}
+.logo{width:36px;height:36px;background:var(--ink);color:var(--green);border-radius:12px;display:grid;place-items:center;transform:rotate(-7deg)}
+.logo svg{width:27px;height:27px}
+.wordmark{font-size:20px;font-weight:900;letter-spacing:-1px;line-height:1.1}
+.brand small{display:block;font:8px var(--mono);letter-spacing:2.1px;margin-top:5px;color:var(--muted)}
+nav{display:flex;align-items:center;gap:26px}
+nav a{color:var(--muted);text-decoration:none;font-size:12px}
+.offline{font:10px var(--mono);border:1px solid #cfd4c4;padding:7px 10px;border-radius:30px;display:flex;align-items:center;gap:7px}
+.offline i{width:6px;height:6px;background:#76a24b;border-radius:50%}
+.hero{padding:43px 0 30px;display:flex;justify-content:space-between;align-items:flex-end;gap:25px}
+.eyebrow{font:10px var(--mono);letter-spacing:2px;color:var(--muted);margin-bottom:13px}
+h1{font-size:clamp(30px,4vw,47px);font-weight:750;letter-spacing:-2px;line-height:1.18;margin:0 0 14px}
+h1 em{font-family:Georgia,serif;font-weight:400;letter-spacing:-2px}
+.hero p{margin:0;color:#7b8175;font-size:12px}
+.hero-stamp{border:1px solid #b9c0ad;border-radius:50%;width:84px;height:84px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;transform:rotate(12deg);font:9px var(--mono);color:#728067;line-height:1.8}
+.hero-stamp strong{font-size:24px;font-weight:400;line-height:1}
+.studio{border:1px solid #d8dbd0;border-radius:23px;overflow:hidden;background:var(--card);display:grid;grid-template-columns:1.02fr 1fr;box-shadow:0 15px 45px #3b422a06}
+.preview-panel{padding:28px;background:#e8ebe1;position:relative;display:flex;flex-direction:column;justify-content:center}
+.preview-top{display:flex;justify-content:space-between;align-items:center;margin:0 1px 18px;font:10px var(--mono);color:#727b6a}
+.preview-top span:first-child{display:flex;align-items:center;gap:7px}
+.live-dot{height:6px;width:6px;border-radius:50%;background:#647856}
+.view-controls{display:flex;gap:5px}
+.view-controls button{border:1px solid transparent;background:transparent;width:28px;height:26px;border-radius:5px;display:grid;place-items:center;font-size:15px;color:#828b79}
+.view-controls button.active{background:#fffefa;border-color:#d3d8c9;color:#394b33}
+.art-mat{width:100%;max-width:510px;align-self:center;position:relative}
+#portrait{width:100%;aspect-ratio:1;overflow:hidden;border-radius:13px;box-shadow:0 12px 22px #26352917;transition:border-radius .35s}
+#portrait.round{border-radius:50%}
+#portrait svg{width:100%;height:100%}
+.preview-caption{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:19px}
+.name-block strong{font-size:17px;font-weight:650;letter-spacing:-.4px}
+.name-block small{display:block;font:9px var(--mono);color:#7c8673;margin-top:3px;letter-spacing:1px}
+.original-tag{padding:5px 8px;border:1px solid #c8d0bd;border-radius:5px;font:9px var(--mono);color:#67775c}
+.mini-context{margin-top:21px;padding-top:18px;border-top:1px solid #ccd3c2;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.mini-user{display:flex;align-items:center;gap:9px}
+#miniAvatar{width:34px;height:34px;overflow:hidden;border-radius:50%;border:2px solid #fffefa}
+#miniAvatar svg{width:100%;height:100%}
+.mini-user b{font-size:11px;font-weight:600}
+.mini-user p{margin:0;font-size:9px;color:#8b927e}
+.mini-sizes{display:flex;align-items:center;gap:8px}
+.tiny{overflow:hidden;border-radius:50%}
+.tiny svg{width:100%;height:100%}
+.mini-sizes>span{font:9px var(--mono);color:#8b927e}
+.control-panel{padding:28px 30px;display:flex;flex-direction:column}
+.control-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:19px}
+.control-title h2{margin:0;font-size:18px;font-weight:650;letter-spacing:-.4px}
+.step{font:9px var(--mono);color:var(--muted);border:1px solid var(--line);padding:3px 7px;border-radius:4px}
+.seed-label{font-size:11px;display:flex;justify-content:space-between;margin-bottom:7px}
+.seed-label small{font:9px var(--mono);color:#9a9e93}
+.seed-row{display:flex;gap:7px}
+input[type=text]{width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;background:#f7f7f1;padding:11px 12px;font:11px var(--mono);outline:none}
+input[type=text]:focus{border-color:#98aa76;box-shadow:0 0 0 3px #d9f77735}
+.seed-row button{background:#f0f2e9;border:1px solid var(--line);border-radius:8px;padding:0 14px;font-size:11px;white-space:nowrap}
+.traits-header{display:flex;align-items:center;justify-content:space-between;margin:23px 0 10px}
+.traits-header span{font-size:11px;font-weight:600}
+.text-button{border:0;background:none;color:#8d9482;font-size:10px;padding:0}
+.traits{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.trait{border:1px solid #e2e5d9;background:#fafbf6;border-radius:9px;padding:8px 10px 7px;min-width:0}
+.trait.locked{border-color:#aabd89;background:#f1f6e6}
+.trait-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;height:19px}
+.trait-top label{font-size:9px;color:#8c9382}
+.lock{padding:3px;border:0;background:none;color:#b6bdab;display:grid;place-items:center;border-radius:3px}
+.lock svg{width:11px;height:11px}
+.locked .lock{color:#657a42}
+select{width:100%;border:0;background:transparent;font-size:11px;font-weight:500;outline-offset:2px;cursor:pointer;margin-left:-3px}
+.lock-hint{margin:9px 0 19px;font-size:9px;color:#969d8c}
+.random-button{display:flex;justify-content:center;align-items:center;gap:9px;width:100%;background:var(--dark);color:#eff9e1;border:1px solid var(--dark);border-radius:9px;padding:13px;font-size:12px;font-weight:600}
+.random-button:hover{background:#3a4b30;transform:translateY(-1px)}
+.random-button svg{width:17px;height:17px;color:var(--green)}
+.export-row{display:flex;gap:7px;margin-top:9px}
+.export-row button{flex:1;background:transparent;border:1px solid #dfe3d5;border-radius:8px;padding:9px 5px;font-size:10px;white-space:nowrap}
+.export-row button:hover{background:#f1f4e8}
+.config-row{display:flex;justify-content:space-between;align-items:center;margin-top:13px;gap:10px}
+.config-row span{font:8px var(--mono);color:#9ba18f}
+.config-row button{font-size:9px;background:transparent;border:0;color:#8a927d;padding:0}
+.section-top{display:flex;justify-content:space-between;align-items:flex-end;gap:15px;margin:39px 0 19px}
+.section-top h2{margin:0 0 5px;font-size:23px;letter-spacing:-.9px}
+.section-top p{margin:0;font-size:11px;color:var(--muted)}
+.section-top button{border:1px solid #d1d8c3;border-radius:7px;background:transparent;padding:8px 12px;font-size:10px;white-space:nowrap}
+.section-index{font:9px var(--mono);color:#8a947d;margin-bottom:8px;letter-spacing:1.6px}
+.gallery{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px}
+.gallery-card{padding:0;background:var(--card);border:1px solid #dfe2d6;border-radius:11px;overflow:hidden;text-align:left;transition:transform .22s,box-shadow .22s}
+.gallery-card:hover{transform:translateY(-5px);box-shadow:0 9px 20px #32431e0d}
+.gallery-card.chosen{outline:2px solid #8ba665;outline-offset:3px}
+.gallery-art{aspect-ratio:1;overflow:hidden}
+.gallery-art svg{width:100%;height:100%;transition:transform .35s}
+.gallery-card:hover svg{transform:scale(1.04)}
+.gallery-meta{padding:10px 11px}
+.gallery-meta strong{display:block;font-size:11px;font-weight:600}
+.gallery-meta p{display:flex;justify-content:space-between;gap:5px;margin:4px 0 0;font-size:8px;color:#949c88}
+.gallery-meta code{font-size:8px}
+.manifest{margin:38px 0;background:#e9edde;border:1px solid #d9dfcc;border-radius:15px;padding:26px;display:grid;grid-template-columns:1.05fr 1fr 1fr;gap:30px}
+.manifest h3{font-size:15px;margin:0 0 8px;letter-spacing:-.3px}
+.manifest p{font-size:11px;color:#808a73;margin:0;line-height:1.9}
+.manifest .num{font:9px var(--mono);letter-spacing:1px;color:#8f9b7f;margin-bottom:11px}
+footer{padding:0 0 27px;display:flex;justify-content:space-between;gap:20px;font:9px var(--mono);color:#9aA28e;letter-spacing:.5px}
+#toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,15px);background:#28372d;color:#f2f8e8;padding:11px 20px;border-radius:9px;box-shadow:0 6px 28px #0002;font-size:12px;opacity:0;pointer-events:none;transition:.25s;z-index:30;max-width:90vw;text-align:center}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+@media(min-width:1400px){.hero{padding-top:50px}.preview-panel{padding:30px 35px}.control-panel{padding:32px 36px}}
+@media(max-width:1000px){.wrap{width:calc(100% - 40px)}.gallery{grid-template-columns:repeat(4,minmax(0,1fr))}.preview-panel{padding:20px}.control-panel{padding:24px}.mini-sizes{display:none}.hero h1{font-size:38px}}
+@media(max-width:760px){.wrap{width:calc(100% - 30px)}header{height:72px}nav a{display:none}.brand small{font-size:7px}.offline{font-size:8px}.hero{padding:28px 0 24px}.hero h1{font-size:33px}.hero p{font-size:11px;max-width:280px}.hero-stamp{width:66px;height:66px;font-size:7px}.hero-stamp strong{font-size:21px}.studio{grid-template-columns:1fr;border-radius:17px}.preview-panel{padding:19px}.art-mat{max-width:460px}.mini-context{display:none}.control-panel{padding:23px}.gallery{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.gallery-meta{padding:8px}.gallery-meta strong{font-size:10px}.gallery-meta p{font-size:7px}.gallery-meta code{display:none}.manifest{grid-template-columns:1fr;gap:22px;padding:22px}.section-top h2{font-size:21px}.section-top p{max-width:230px}.section-top button{font-size:9px;padding:7px 9px}footer{font-size:8px}footer span:last-child{display:none}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 32 32" fill="none"><path d="M6 13c0-6 20-6 20 0v8c0 7-20 7-20 0z" fill="currentColor"/><path d="M10 9 7 4m15 5 3-5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M11 16v3m10-3v3" stroke="#29372c" stroke-width="3" stroke-linecap="round"/><path d="M13 23h6" stroke="#29372c" stroke-width="2"/></svg></div>
+      <div><div class="wordmark">ODD FOLK</div><small>AN ORIGINAL CHARACTER EXPERIMENT</small></div>
+    </div>
+    <nav><a href="#collection">居民图鉴</a><a href="#system">生成规则</a><div class="offline"><i></i> LOCAL GENERATOR</div></nav>
+  </header>
+
+  <section class="hero">
+    <div><div class="eyebrow">PFP STUDIO / EDITION 03</div><h1>有点古怪。<em>很有个性。</em></h1><p>不止是换一种颜色。为每个数字身份，创造一位不一样的居民。</p></div>
+    <div class="hero-stamp"><span>NOT SO</span><strong>普通</strong><span>ORDINARY</span></div>
+  </section>
+
+  <main>
+  <section class="studio" aria-label="头像生成工作室">
+    <div class="preview-panel">
+      <div class="preview-top"><span><i class="live-dot"></i> YOUR NEXT ALTER EGO</span><div class="view-controls"><button id="squareView" class="active" aria-label="方形头像预览" aria-pressed="true">▢</button><button id="circleView" aria-label="圆形头像预览" aria-pressed="false">○</button></div></div>
+      <div class="art-mat"><div id="portrait"></div></div>
+      <div class="preview-caption"><div class="name-block"><strong id="characterName"></strong><small id="signature"></small></div><span class="original-tag">ORIGINAL CHARACTER</span></div>
+      <div class="mini-context"><div class="mini-user"><div id="miniAvatar"></div><div><b>你的下一位数字分身</b><p>在社区里，一眼认出你。</p></div></div><div class="mini-sizes"><div id="tiny32" class="tiny" style="width:24px;height:24px"></div><div id="tiny24" class="tiny" style="width:18px;height:18px"></div><span>SMALL SIZE TEST</span></div></div>
+    </div>
+    <div class="control-panel">
+      <div class="control-title"><h2>捏一位新居民</h2><span class="step">GENERATOR v3.0</span></div>
+      <form id="seedForm">
+        <div class="seed-label"><label for="seed">身份种子</label><small>PUBLIC SEED · NOT A PRIVATE KEY</small></div>
+        <div class="seed-row"><input id="seed" type="text" maxlength="128" spellcheck="false" autocomplete="off" value="odd-folk-studio-001" placeholder="任意公开字符串"><button type="submit">应用</button></div>
+      </form>
+      <div class="traits-header"><span>角色 DNA / 8 个特征维度</span><button class="text-button" id="reset">恢复种子默认</button></div>
+      <div class="traits" id="traits"></div>
+      <p class="lock-hint">点小锁保留喜欢的特征；未锁定的项目将在随机时重新生成。</p>
+      <button class="random-button" id="random"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="16" height="16" rx="4" transform="rotate(12 12 12)"/><path d="m8 8 .01 0M16 8h.01M12 12h.01M8 16h.01M16 16h.01" stroke-width="3" stroke-linecap="round"/></svg>随机遇见一位居民<span style="font-size:10px;font-weight:400;opacity:.5">↗</span></button>
+      <div class="export-row"><button id="exportSvg">↓ SVG 矢量</button><button id="exportPng">↓ PNG · 2048</button><button id="exportJson">↓ DNA / JSON</button></div>
+      <div class="config-row"><span>NO WALLET · NO UPLOAD · NO MINT</span><button id="importButton">导入 DNA 文件 ↗</button></div>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+  </section>
+
+  <section id="collection">
+    <div class="section-top"><div><div class="section-index">THE NEIGHBORHOOD / 012</div><h2>欢迎来到怪趣街区。</h2><p>不同轮廓，同一种画风。点击任意居民，继续编辑它。</p></div><button id="refreshGallery">↻ 换一批居民</button></div>
+    <div class="gallery" id="gallery"></div>
+  </section>
+
+  <section class="manifest" id="system">
+    <div><div class="num">01 / CHARACTER FIRST</div><h3>先有性格，再有算法。</h3><p>十种独立角色。蘑菇、玻璃幽灵、陶土精灵、毛团野兽拥有自己的身体与五官，不穿衣服也有性格。</p></div>
+    <div><div class="num">02 / SAME DNA, SAME FOLK</div><h3>不是图片抽奖。</h3><p>固定生成器版本、种子与手动特征，即可重现同一幅画。当前为 3.0；旧版种子会换脸，1.0／2.0 配置不伪装兼容。</p></div>
+    <div><div class="num">03 / ART, NOT A PROMISE</div><h3>原创 PFP，不预设价值。</h3><p>本页是本地艺术生成原型，不铸造 NFT、不连接钱包；组合数量、稀有标签都不等于收藏价值。</p></div>
+  </section>
+  </main>
+  <footer><span>ODD FOLK / GENERATIVE PORTRAITS / 2026</span><span>MADE OF SHAPES. FULL OF CHARACTER.</span></footer>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="application/json" id="avatar-assets">
+{
+  "hat": [
+    {
+      "name": "午夜贝雷帽",
+      "svg": "<path d=\"M199 177Q158 126 230 104Q277 64 361 93Q439 87 456 148L429 180Z\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M205 175Q321 151 435 173L435 196Q316 179 204 205Z\" fill=\"{shade}\" stroke=\"{ink}\" stroke-width=\"6\"/><path d=\"M235 125Q284 94 338 105M329 94l8-18\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"6\"/><circle cx=\"401\" cy=\"142\" r=\"13\" fill=\"{trim}\"/><path d=\"m395 142 5 5 8-11\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"3\"/>"
+    },
+    {
+      "name": "沙漠牛仔帽",
+      "svg": "<path d=\"M223 174L245 79Q257 58 295 89Q323 111 354 84Q392 60 406 90L429 169Z\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M231 145Q329 169 420 140L429 172Q326 191 223 173Z\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M223 166Q175 183 143 155Q129 149 140 173Q165 219 243 209Q354 188 432 201Q490 203 503 159Q501 147 488 159Q459 179 429 163Q326 187 223 166Z\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M251 105l-8 30M392 104l9 27\" fill=\"none\" stroke=\"{light}\" stroke-width=\"7\"/><path d=\"m324 159 10-12 10 12-10 12Z\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"3\"/>"
+    },
+    {
+      "name": "唱片店耳机",
+      "svg": "<path d=\"M189 276V206C181 70 460 64 476 204L481 266\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"23\"/><path d=\"M189 225V201C189 88 452 77 469 202\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"12\"/><rect x=\"170\" y=\"239\" width=\"42\" height=\"86\" rx=\"19\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"7\"/><rect x=\"456\" y=\"228\" width=\"41\" height=\"86\" rx=\"18\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M183 260v43M481 248v43\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"6\"/>"
+    },
+    {
+      "name": "港口水手帽",
+      "svg": "<path d=\"M209 155Q194 91 244 96Q287 72 327 90Q382 63 417 95Q454 111 434 161Z\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M204 151Q318 136 441 150L444 196Q324 177 203 206Z\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M244 109l5 30M400 107l-7 31M325 161v22m-11-9q11 20 23-1m-18-7h12\" fill=\"none\" stroke=\"{coat}\" stroke-width=\"4\"/>"
+    }
+  ],
+  "outfit": [
+    {
+      "name": "机车皮衣",
+      "svg": "<path d=\"M264 407v45l-91 32q-54 19-67 86l-8 53h455l-12-68q-11-55-80-79l-65-31v-40Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M256 448l76 40 72-42 67 32q59 24 67 80l13 65H99l12-65q9-53 63-74Z\" fill=\"{ink}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m251 449 80 44 75-47-26 177h-90Z\" fill=\"{coat}\"/><path d=\"m248 448 76 48-42 54-43-41-34 15Z M409 446l-73 51 41 50 42-44 32 17Z\" fill=\"{shade}\" stroke=\"{ink}\" stroke-width=\"6\"/><path d=\"m326 515-14 108M159 548l66-14M451 540l39 14M132 581l-5 34M516 581l7 34\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"4\"/><circle cx=\"256\" cy=\"510\" r=\"5\" fill=\"{trim}\"/><circle cx=\"405\" cy=\"505\" r=\"5\" fill=\"{trim}\"/>"
+    },
+    {
+      "name": "植物学家工装",
+      "svg": "<path d=\"M266 407v45l-93 32q-54 19-67 86l-8 53h455l-12-68q-11-55-80-79l-65-31v-40Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m254 449 80 38 69-42 65 32q65 24 74 87l10 59H99l10-61q12-60 65-79Z\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m255 452 26 32-20 47-38-52Z M398 450l-44 37 32 41 37-56Z\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M334 490v133M172 539h91v65h-91Z M404 535h87v68h-87Z\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"m171 540 46 21 47-21m140-4 44 20 44-21\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"4\"/><path d=\"M453 538v-34q-29-29-31-9 2 17 31 18 30-35 33-16-2 17-33 24\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"3\"/><circle cx=\"345\" cy=\"555\" r=\"4\" fill=\"{trim}\"/><circle cx=\"345\" cy=\"589\" r=\"4\" fill=\"{trim}\"/>"
+    },
+    {
+      "name": "日落度假衫",
+      "svg": "<path d=\"M266 407v45l-93 32q-54 19-67 86l-8 53h455l-12-68q-11-55-80-79l-65-31v-40Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m252 447 81 42 70-44 66 33q57 19 77 85l7 60H98l11-62q14-57 65-78Z\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m151 536 37 11-9-37 31 22 4-36 25 46-15 15 20 38-39-21-13 33-6-45-46 5Z M436 545l24-35 4 36 35-12-24 32 22 23-36-7-12 29-5-41-36-7Z\" fill=\"{trim}\"/><path d=\"m252 448 81 41-48 49-50-45Z M404 447l-71 42 42 44 44-45Z\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M333 490v133\" stroke=\"{ink}\" stroke-width=\"4\"/><circle cx=\"343\" cy=\"554\" r=\"4\" fill=\"{light}\"/><circle cx=\"343\" cy=\"590\" r=\"4\" fill=\"{light}\"/>"
+    }
+  ],
+  "eyes": [
+    {
+      "name": "琥珀圆框",
+      "svg": "<path d=\"m211 254 29 9m176-11 39-14m-140 30q18-15 36-3\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/><circle cx=\"278\" cy=\"272\" r=\"36\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"7\"/><circle cx=\"389\" cy=\"263\" r=\"36\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"7\"/><circle cx=\"284\" cy=\"276\" r=\"11\" fill=\"{ink}\"/><circle cx=\"395\" cy=\"267\" r=\"11\" fill=\"{ink}\"/><path d=\"m253 258 21-10m90 1 21-10\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"6\"/>"
+    },
+    {
+      "name": "午夜猫眼镜",
+      "svg": "<path d=\"m211 246 23 9m195-16 25-12m-143 31q21-15 42-5\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m231 238 79 13-7 39q-40 27-61-7Z M351 248l84-26-10 54q-18 28-67 9Z\" fill=\"{ink}\" stroke=\"{trim}\" stroke-width=\"6\"/><path d=\"m251 251 32 33m86-33 24 27\" fill=\"none\" stroke=\"{light}\" stroke-width=\"7\" opacity=\".55\"/>"
+    },
+    {
+      "name": "海盗独眼罩",
+      "svg": "<path d=\"m207 235 246 48\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"M242 245q34-14 71 0l-5 44q-36 28-62-2Z\" fill=\"{ink}\" stroke=\"{ink}\" stroke-width=\"6\"/><ellipse cx=\"391\" cy=\"267\" rx=\"28\" ry=\"24\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"5\"/><ellipse cx=\"398\" cy=\"272\" rx=\"8\" ry=\"12\" fill=\"{ink}\"/><path d=\"m362 229 51-3\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"m261 254 14 17 13-20\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"3\"/>"
+    }
+  ],
+  "accessory": [
+    {
+      "name": "相机漫游者",
+      "svg": "<path d=\"m261 454 62 97 73-101\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"13\"/><path d=\"m261 454 62 97 73-101\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"5\"/><rect x=\"283\" y=\"536\" width=\"95\" height=\"65\" rx=\"10\" fill=\"{shade}\" stroke=\"{ink}\" stroke-width=\"6\"/><path d=\"m302 536 7-12h28l8 12\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"5\"/><circle cx=\"333\" cy=\"568\" r=\"22\" fill=\"{ink}\" stroke=\"{trim}\" stroke-width=\"5\"/><circle cx=\"333\" cy=\"568\" r=\"10\" fill=\"{accent}\"/><circle cx=\"329\" cy=\"564\" r=\"4\" fill=\"{light}\"/><rect x=\"291\" y=\"545\" width=\"12\" height=\"8\" rx=\"2\" fill=\"{light}\"/>"
+    },
+    {
+      "name": "珐琅徽章组",
+      "svg": "<path d=\"m437 515 13 16 20-7-7 20 12 15-22-1-10 18-6-22-21-7 20-10Z\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"4\"/><circle cx=\"411\" cy=\"575\" r=\"15\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"4\"/><path d=\"m403 575 6 5 10-12\" fill=\"none\" stroke=\"{light}\" stroke-width=\"4\"/>"
+    },
+    {
+      "name": "录音室领结",
+      "svg": "<path d=\"m329 486-47-24q-11 28 2 51l45-15 46 17q12-27 2-51l-46 22Z\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"m293 480 29 11-30 6m72-15-27 10 26 7\" fill=\"none\" stroke=\"{light}\" stroke-width=\"3\"/><rect x=\"321\" y=\"481\" width=\"18\" height=\"23\" rx=\"5\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"4\"/>"
+    }
+  ],
+  "background": [
+    {
+      "name": "拱廊光影",
+      "svg": "<path d=\"M81 600V264a219 219 0 0 1 438 0v336\" fill=\"{light}\" opacity=\".36\"/><path d=\"M111 600V264a189 189 0 0 1 378 0v336\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"3\" opacity=\".2\"/><path d=\"M0 481h600M0 529h600M0 577h600\" stroke=\"{shade}\" stroke-width=\"2\" opacity=\".12\"/>"
+    },
+    {
+      "name": "黄昏地平线",
+      "svg": "<circle cx=\"419\" cy=\"171\" r=\"100\" fill=\"{trim}\" opacity=\".75\"/><path d=\"M0 358q133-90 289-14t311-12v268H0Z\" fill=\"{accent}\" opacity=\".24\"/><path d=\"M0 443q151-97 307-6t293-4v167H0Z\" fill=\"{shade}\" opacity=\".16\"/>"
+    }
+  ],
+  "finish": "<path d=\"M209 308Q194 213 239 178\" fill=\"none\" stroke=\"{light}\" stroke-width=\"10\" opacity=\".5\"/><path d=\"M438 335q-5 52-44 77\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"8\" opacity=\".32\"/><path d=\"m232 307 12-5m-10 16 10-4m181-20 11-4\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"2.5\" opacity=\".55\"/>",
+  "creatures": [
+    {
+      "name": "蘑菇居民",
+      "body": "<ellipse cx=\"308\" cy=\"518\" rx=\"133\" ry=\"17\" fill=\"{shade}\" opacity=\".16\"/><path d=\"M239 407Q191 418 183 461M372 411Q416 418 428 452\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"12\"/><path d=\"M241 472Q227 492 208 503Q231 513 273 500M351 472Q370 494 398 497Q382 515 341 503\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M247 225Q319 205 361 236Q354 329 388 435Q410 489 337 505Q254 519 223 475Q207 449 224 397Q246 311 247 225Z\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"M331 238Q316 361 355 432Q374 479 326 498Q397 490 383 444Q349 329 361 236Z\" fill=\"{skin}\" opacity=\".55\"/><path d=\"M254 297Q239 359 241 382M247 420l-7 24M265 449l-2 18M347 449l5 15\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"5\"/><path d=\"M105 229Q289 184 495 232Q505 268 416 288Q326 316 211 287Q119 272 105 229Z\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M134 242Q210 266 255 269M160 237l96 27M198 226l72 37M240 222l40 38M310 223v40M353 227l-21 35M397 232l-48 31M450 243l-85 23M476 250l-97 23\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"3\" opacity=\".6\"/><path d=\"M92 220Q105 187 140 183C169 171 169 132 204 111C251 80 293 108 330 91C403 63 450 121 462 158Q473 189 501 201Q526 223 497 242Q451 263 373 251Q263 229 166 251Q95 269 92 220Z\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"9\"/><path d=\"M107 226Q188 204 260 215Q408 247 491 219Q515 229 490 239Q432 260 362 246Q243 223 164 246Q112 258 107 226Z\" fill=\"{shade}\" opacity=\".34\"/><path d=\"M143 185Q177 177 191 146M213 122Q244 102 275 115\" fill=\"none\" stroke=\"{light}\" stroke-width=\"8\" opacity=\".65\"/><path d=\"M196 161Q178 177 187 190Q207 203 233 186Q246 169 231 159Q216 151 196 161Z M305 112Q287 120 294 135Q305 147 322 136Q335 121 324 112Z M371 156Q348 171 363 190Q388 208 409 188Q427 165 407 153Q388 147 371 156Z\" fill=\"{trim}\"/><ellipse cx=\"457\" cy=\"208\" rx=\"18\" ry=\"10\" fill=\"{trim}\"/><circle cx=\"266\" cy=\"203\" r=\"7\" fill=\"{light}\"/><path d=\"m261 321 8-2m82 9 6 2\" stroke=\"{shade}\" stroke-width=\"3\" opacity=\".6\"/><ellipse cx=\"244\" cy=\"381\" rx=\"15\" ry=\"8\" fill=\"{accent}\" opacity=\".33\"/><ellipse cx=\"357\" cy=\"376\" rx=\"14\" ry=\"8\" fill=\"{accent}\" opacity=\".33\"/>",
+      "eyes": [
+        "<path d=\"M251 342Q268 333 284 342L281 360Q266 370 253 358Z M315 337Q334 327 351 336L348 354Q331 363 317 352Z\" fill=\"{ink}\"/><path d=\"M250 341l35-1M314 336l37-2\" stroke=\"{shade}\" stroke-width=\"5\"/><path d=\"m260 349h7m57-6h7\" stroke=\"{light}\" stroke-width=\"3\"/>",
+        "<ellipse cx=\"268\" cy=\"350\" rx=\"16\" ry=\"23\" fill=\"{ink}\"/><ellipse cx=\"333\" cy=\"344\" rx=\"17\" ry=\"25\" fill=\"{ink}\"/><ellipse cx=\"272\" cy=\"342\" rx=\"5\" ry=\"8\" fill=\"{light}\"/><ellipse cx=\"338\" cy=\"334\" rx=\"5\" ry=\"8\" fill=\"{light}\"/><path d=\"M253 316q15-8 28-2M321 309q15-7 27 1\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"4\"/>",
+        "<ellipse cx=\"268\" cy=\"349\" rx=\"16\" ry=\"23\" fill=\"{ink}\"/><ellipse cx=\"273\" cy=\"341\" rx=\"5\" ry=\"8\" fill=\"{light}\"/><path d=\"M317 347q15-17 32-3m-29 10 9-5\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/>"
+      ],
+      "mouths": [
+        "<path d=\"M281 399q16 9 29-2\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"6\"/>",
+        "<path d=\"M273 394q26 12 48-4q3 33-22 34-23-3-26-30Z\" fill=\"{ink}\"/><path d=\"m283 399 24 1-2 9-20-1Z\" fill=\"{light}\"/>",
+        "<path d=\"M280 402q23 7 35-11m-5-3 8 4-1 8\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"6\"/>",
+        "<circle cx=\"308\" cy=\"407\" r=\"31\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M293 400q0-14 17-14\" fill=\"none\" stroke=\"{light}\" stroke-width=\"5\"/>"
+      ],
+      "foreground": ""
+    },
+    {
+      "name": "玻璃幽灵",
+      "body": "<defs><linearGradient id=\"{id}-glass\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop stop-color=\"{light}\" stop-opacity=\".83\"/><stop offset=\".42\" stop-color=\"{light}\" stop-opacity=\".26\"/><stop offset=\"1\" stop-color=\"{accent}\" stop-opacity=\".62\"/></linearGradient></defs><ellipse cx=\"308\" cy=\"526\" rx=\"104\" ry=\"15\" fill=\"{shade}\" opacity=\".18\"/><path d=\"M198 346Q152 332 126 365Q113 390 157 394L194 384M406 329Q457 317 478 342Q491 365 450 378L414 374\" fill=\"{light}\" fill-opacity=\".32\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M189 261C176 185 217 124 287 117Q331 111 354 83Q371 70 371 97Q367 123 392 146C447 196 421 287 428 353Q430 398 453 424Q463 444 440 448L386 438Q399 473 378 489Q357 502 332 467Q313 505 288 487Q270 472 267 453Q221 486 205 464Q199 449 206 421Q152 440 157 411Q188 352 189 261Z\" fill=\"url(#{id}-glass)\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"M207 247Q199 165 282 140Q336 135 354 115\" fill=\"none\" stroke=\"{light}\" stroke-width=\"10\" opacity=\".9\"/><path d=\"M214 272l-1 31M209 320l-4 15M411 361q-3 37 18 64M235 431q-5 21-12 23\" fill=\"none\" stroke=\"{light}\" stroke-width=\"6\" opacity=\".75\"/><path d=\"M254 189q30-28 61-18M382 225q10 31 2 52\" fill=\"none\" stroke=\"{light}\" stroke-width=\"3\" opacity=\".5\"/><path d=\"M278 386Q297 364 316 385Q328 407 303 426Q279 414 278 386Z\" fill=\"{accent}\" opacity=\".48\"/><circle cx=\"345\" cy=\"205\" r=\"13\" fill=\"none\" stroke=\"{light}\" stroke-width=\"3\" opacity=\".65\"/><circle cx=\"235\" cy=\"388\" r=\"7\" fill=\"{light}\" opacity=\".6\"/><circle cx=\"365\" cy=\"422\" r=\"5\" fill=\"{light}\" opacity=\".7\"/><path d=\"m126 232 7-18 7 18 18 7-18 7-7 18-7-18-18-7Z M457 172l5-12 5 12 12 5-12 5-5 12-5-12-12-5Z\" fill=\"{light}\" opacity=\".85\"/>",
+      "eyes": [
+        "<path d=\"M224 276q26-17 51-6l-4 30q-19 22-40 2Z M323 265q25-14 49-4l-1 28q-20 22-41 3Z\" fill=\"{ink}\"/><path d=\"m237 283 13-2m86-6 12-1\" stroke=\"{light}\" stroke-width=\"5\"/>",
+        "<ellipse cx=\"250\" cy=\"282\" rx=\"25\" ry=\"33\" fill=\"{ink}\"/><ellipse cx=\"348\" cy=\"271\" rx=\"23\" ry=\"31\" fill=\"{ink}\"/><ellipse cx=\"243\" cy=\"269\" rx=\"8\" ry=\"12\" fill=\"{light}\"/><ellipse cx=\"342\" cy=\"258\" rx=\"7\" ry=\"11\" fill=\"{light}\"/><circle cx=\"258\" cy=\"299\" r=\"4\" fill=\"{light}\"/><circle cx=\"354\" cy=\"286\" r=\"4\" fill=\"{light}\"/>",
+        "<ellipse cx=\"250\" cy=\"282\" rx=\"25\" ry=\"33\" fill=\"{ink}\"/><ellipse cx=\"242\" cy=\"268\" rx=\"8\" ry=\"12\" fill=\"{light}\"/><path d=\"M326 276q18-24 40-9m-35 16 10-8\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"8\"/>"
+      ],
+      "mouths": [
+        "<ellipse cx=\"300\" cy=\"343\" rx=\"10\" ry=\"14\" fill=\"{ink}\"/>",
+        "<path d=\"M274 330q28 15 52-5q-1 38-24 40-22 0-28-35Z\" fill=\"{ink}\"/><path d=\"M289 355q14-11 27-4\" fill=\"none\" stroke=\"{accent}\" stroke-width=\"7\"/>",
+        "<path d=\"M282 344q27 11 40-11\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"6\"/><path d=\"m318 330 9 2-1 9\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"4\"/>",
+        "<circle cx=\"316\" cy=\"351\" r=\"33\" fill=\"{accent}\" fill-opacity=\".72\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M298 347q2-17 20-16\" fill=\"none\" stroke=\"{light}\" stroke-width=\"5\"/>"
+      ],
+      "foreground": "<path d=\"M399 173q25 40 9 94\" fill=\"none\" stroke=\"{light}\" stroke-width=\"4\" opacity=\".8\"/>"
+    },
+    {
+      "name": "陶土精灵",
+      "body": "<ellipse cx=\"304\" cy=\"523\" rx=\"133\" ry=\"17\" fill=\"{shade}\" opacity=\".16\"/><path d=\"M211 461L192 501Q202 521 251 510L270 469M334 468l10 40q42 15 65-4l-17-42\" fill=\"{shade}\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"M190 194C104 172 94 270 125 300Q143 318 181 296L178 272Q147 292 142 260Q135 214 184 222Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"M415 178L451 133Q466 129 467 148L451 224L423 236Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M179 321Q144 340 144 397Q147 427 175 412L199 380M425 312q41 6 41 62-5 26-28 17l-23-36\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M193 181Q231 134 293 147L304 168L320 148Q375 143 418 183Q444 219 435 289L438 387Q432 465 358 484Q255 510 192 459Q164 434 167 370L175 258Q170 210 193 181Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"9\"/><path d=\"M393 178Q417 262 409 365Q413 455 345 482Q424 471 434 407L435 286Q446 207 415 182Z\" fill=\"{shade}\" opacity=\".4\"/><path d=\"M194 187Q232 146 290 154l14 24 21-22q57-5 89 32 19 29 17 74-23 32-49 13-25-16-47 0-24 14-38-6-11-20-33-15-29 11-44-7-16-11-43 7-4-37 17-67Z\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M205 192q32-25 64-22M362 176q28 8 40 27\" fill=\"none\" stroke=\"{light}\" stroke-width=\"8\" opacity=\".58\"/><path d=\"m304 177 8 28-23 19 20 20-12 21\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"5\"/><path d=\"m306 206 19 12m-31 8-13-3\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"3\"/><ellipse cx=\"252\" cy=\"305\" rx=\"39\" ry=\"38\" fill=\"{shade}\" opacity=\".45\"/><path d=\"M198 370v43M207 418l7 12M388 381l-2 33M377 428l-7 10\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"5\"/><path d=\"m254 449 13 9 13-11m16 0 13 10 13-12m16-2 13 8 11-12\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"4\" opacity=\".75\"/><circle cx=\"204\" cy=\"346\" r=\"4\" fill=\"{shade}\"/><circle cx=\"219\" cy=\"355\" r=\"3\" fill=\"{shade}\"/><circle cx=\"397\" cy=\"341\" r=\"4\" fill=\"{shade}\"/>",
+      "eyes": [
+        "<path d=\"M230 303q22-11 44-1l-2 23q-21 11-40-2Z\" fill=\"{ink}\"/><path d=\"M324 295q22-10 44 0l-2 22q-21 12-39-2Z\" fill=\"{ink}\"/><path d=\"m239 312 11 1m84-9 12 1\" stroke=\"{trim}\" stroke-width=\"4\"/>",
+        "<ellipse cx=\"252\" cy=\"309\" rx=\"23\" ry=\"27\" fill=\"{ink}\"/><circle cx=\"253\" cy=\"305\" r=\"9\" fill=\"{trim}\"/><ellipse cx=\"346\" cy=\"301\" rx=\"17\" ry=\"25\" fill=\"{ink}\"/><circle cx=\"350\" cy=\"294\" r=\"5\" fill=\"{light}\"/><path d=\"M324 266q22-9 38-1\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"5\"/>",
+        "<ellipse cx=\"252\" cy=\"309\" rx=\"23\" ry=\"27\" fill=\"{ink}\"/><circle cx=\"253\" cy=\"305\" r=\"9\" fill=\"{trim}\"/><path d=\"M325 303q19-17 36-3m-34 10 10-7\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/>"
+      ],
+      "mouths": [
+        "<path d=\"M276 384l35-2\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"m282 393 24-1\" stroke=\"{light}\" stroke-width=\"3\" opacity=\".6\"/>",
+        "<path d=\"M267 371q30 8 62-4l-5 34q-27 16-51 1Z\" fill=\"{ink}\" stroke=\"{shade}\" stroke-width=\"4\"/><path d=\"m277 377 15 1-1 13-13-1m22-13 18-3-1 15-16 2\" fill=\"{trim}\"/>",
+        "<path d=\"m276 387 38-4 11-12\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m320 368 10 4\" stroke=\"{shade}\" stroke-width=\"4\"/>",
+        "<circle cx=\"318\" cy=\"386\" r=\"32\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M301 380q2-13 17-14\" fill=\"none\" stroke=\"{light}\" stroke-width=\"5\"/>"
+      ],
+      "foreground": ""
+    },
+    {
+      "name": "毛团野兽",
+      "body": "<ellipse cx=\"304\" cy=\"525\" rx=\"141\" ry=\"16\" fill=\"{shade}\" opacity=\".16\"/><path d=\"M212 459Q178 483 191 508Q219 527 268 509L276 475M334 476l9 35q53 13 73-10 5-26-34-41\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"M196 201L164 120Q161 99 183 110L249 157Q285 134 325 152L349 126L356 151L406 101Q428 79 431 108L431 182L456 174L449 208L474 218L456 244L484 279L468 299L494 334L473 344L482 376L461 388L467 418L443 427L439 452L408 454L398 479L371 475L346 493L320 482L290 496L266 482L237 492L223 472L194 471L187 448L160 445L163 417L140 409L150 381L128 367L145 339L130 317L146 295L133 275L154 253L147 229L174 221L171 195Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"9\"/><path d=\"m180 127 27 69 25-30Z M412 118l-48 48 43 22Z\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M429 201l-21 62 19 17-10 24 26 28-18 24 20 18-25 12 6 28-27 10-8 22-20 3-22 34 25-6 30 6 12-23 28-3 5-26 22-9-6-28 21-13-10-27 18-16-21-32 15-25-23-29 15-28-17-12Z\" fill=\"{shade}\" opacity=\".3\"/><path d=\"M215 243q27-40 62-25l22-13 9 18q43-25 74 5l-2 51 14 18-20 9q22 17 29 54l-12 21 9 30-22 6-10 30-29-4-24 15-26-14-30 5-14-25-28-9 7-26-16-29 9-30-16-17 14-24Z\" fill=\"{light}\"/><path d=\"M221 269q-2-37 26-46 35-4 42 25l-3 31q-30 33-58 6Z\" fill=\"{shade}\"/><path d=\"M324 249q9-37 39-26 25 11 20 48-27 28-56 7Z\" fill=\"{shade}\"/><path d=\"M275 328q23-19 49-6l-16 23-20-1Z\" fill=\"{ink}\"/><path d=\"M299 343v13\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"m186 267 10 9m-14 17 12 8m-21 27 10 9m221-53 9-9m-14 39 13-4m-209 87 10 10m16 8 7 10m155-27-9 11m-11 14-6 8M255 162l-5 20m31-24 1 17m33-14 5 19\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"4\"/><path d=\"M230 504v-11m17 14-1-12m118 12 2-11m18 9 1-12\" stroke=\"{ink}\" stroke-width=\"4\"/>",
+      "eyes": [
+        "<path d=\"M229 255q23-15 47-1l-3 26q-21 14-40-1Z M331 245q23-13 45 1l-3 25q-21 15-39-2Z\" fill=\"{light}\"/><path d=\"m249 262 0 14m102-23v14\" stroke=\"{ink}\" stroke-width=\"12\"/><path d=\"m228 255 48-1m55-9 45 1\" stroke=\"{ink}\" stroke-width=\"6\"/>",
+        "<ellipse cx=\"252\" cy=\"264\" rx=\"23\" ry=\"27\" fill=\"{light}\"/><ellipse cx=\"355\" cy=\"256\" rx=\"21\" ry=\"29\" fill=\"{light}\"/><ellipse cx=\"258\" cy=\"268\" rx=\"11\" ry=\"16\" fill=\"{ink}\"/><ellipse cx=\"360\" cy=\"259\" rx=\"10\" ry=\"17\" fill=\"{ink}\"/><circle cx=\"261\" cy=\"261\" r=\"4\" fill=\"{light}\"/><circle cx=\"363\" cy=\"251\" r=\"4\" fill=\"{light}\"/>",
+        "<ellipse cx=\"252\" cy=\"264\" rx=\"23\" ry=\"27\" fill=\"{light}\"/><ellipse cx=\"258\" cy=\"268\" rx=\"11\" ry=\"16\" fill=\"{ink}\"/><circle cx=\"261\" cy=\"261\" r=\"4\" fill=\"{light}\"/><path d=\"M335 262q19-23 36-5m-33 13 9-7\" fill=\"none\" stroke=\"{light}\" stroke-width=\"7\"/>"
+      ],
+      "mouths": [
+        "<path d=\"M270 374q27 15 53-2\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m313 378 12-4-1 18Z\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"3\"/>",
+        "<path d=\"M259 361q39 24 77-4l-3 36q-36 28-66 0Z\" fill=\"{ink}\"/><path d=\"m270 371 17 4-4 17Z M313 372l14-6-3 23Z\" fill=\"{light}\"/><path d=\"M285 397q15-10 32-6\" fill=\"none\" stroke=\"{accent}\" stroke-width=\"8\"/>",
+        "<path d=\"M274 377q31 13 54-12m-6-2 11 4\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m310 379 10-5-3 15Z\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"3\"/>",
+        "<circle cx=\"322\" cy=\"384\" r=\"35\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M303 378q0-15 19-17\" fill=\"none\" stroke=\"{light}\" stroke-width=\"5\"/>"
+      ],
+      "foreground": ""
+    }
+  ]
+}
+</script>
+<script>
+'use strict';
+const VERSION='odd-folk/3.0.0';
+const $=s=>document.querySelector(s);
+const INK='#292a29';
+const AXES={
+  species:{label:'物种 / SPECIES',names:['街头猿','尖耳猫','长耳兔','棕熊','树蛙','铁皮机器人','蘑菇居民','玻璃幽灵','陶土精灵','毛团野兽'],weights:[12,11,9,9,8,7,12,11,10,11]},
+  palette:{label:'配色 / PALETTE',names:['杏橙海盐','薄荷紫罗兰','樱桃汽水','黄油抹茶','靛蓝珊瑚','薰衣草奶油','桃子乌龙','冰川银灰','午夜黄铜','珊瑚玉石','蓝莓牛奶','沙漠红陶'],weights:[12,10,10,10,9,9,9,7,7,6,6,5]},
+  hat:{label:'头饰 / HEADWEAR',names:['自然派','罗纹毛线帽','反戴棒球帽','渔夫帽','歪歪王冠','头顶发芽','午夜贝雷帽','沙漠牛仔帽','唱片店耳机','港口水手帽'],weights:[20,13,12,10,4,6,11,8,9,7]},
+  outfit:{label:'服装 / OUTFIT',names:['复古棒球夹克','宽松卫衣','海魂衫','学院西装','轨道宇航服','机车皮衣','植物学家工装','日落度假衫'],weights:[18,17,13,12,7,12,11,10]},
+  eyes:{label:'眼神 / EYES',names:['半梦半醒','充满好奇','眨眼示意','复古墨镜','未来护目镜','琥珀圆框','午夜猫眼镜','海盗独眼罩'],weights:[23,20,14,13,7,10,8,5]},
+  mood:{label:'表情 / MOOD',names:['若无其事','露齿大笑','一脸不屑','泡泡糖时刻'],weights:[35,24,28,13]},
+  accessory:{label:'配饰 / ACCESSORY',names:['简简单单','金色耳环','冒险创可贴','街头项链','丝巾俱乐部','相机漫游者','珐琅徽章组','录音室领结'],weights:[30,13,11,10,10,9,10,7]},
+  background:{label:'背景 / BACKDROP',names:['干净色场','落日圆盘','棋盘格','漫画放射','拱廊光影','黄昏地平线'],weights:[34,22,12,8,14,10]}
+};
+const KEYS=Object.keys(AXES);
+const ASSETS=JSON.parse(document.getElementById('avatar-assets').textContent);
+function assetSvg(axis,index,p){
+  const template=axis==='finish'?ASSETS.finish:ASSETS[axis][index].svg;
+  return template.replace(/\{(ink|skin|light|shade|coat|trim|accent)\}/g,(_,key)=>key==='ink'?INK:p[key]);
+}
+function normalizedSeed(seed){return seed.replace(/^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g,'')||'odd-folk-default';}
+const PALETTES=[
+  {bg:'#b9d4e1',skin:'#c38b56',light:'#edc498',shade:'#8a593e',coat:'#e87948',trim:'#ffdf91',accent:'#668f86'},
+  {bg:'#bacbb3',skin:'#ae9bc6',light:'#d5c6e3',shade:'#796b94',coat:'#e9ad5f',trim:'#f8df9c',accent:'#728d75'},
+  {bg:'#e6b2b0',skin:'#ddd0a9',light:'#f5e4bd',shade:'#a59978',coat:'#517480',trim:'#e2c979',accent:'#b95b54'},
+  {bg:'#ddd19a',skin:'#849d6d',light:'#c1d09d',shade:'#536c4c',coat:'#697a9a',trim:'#eee3b9',accent:'#ce785a'},
+  {bg:'#7f9bb6',skin:'#dd9b85',light:'#f4c5a7',shade:'#b06e65',coat:'#9da96c',trim:'#e6d7a8',accent:'#bd665c'},
+  {bg:'#c3b5d3',skin:'#e6c876',light:'#fae5ad',shade:'#b09252',coat:'#728d80',trim:'#dbdfad',accent:'#b887a4'},
+  {bg:'#edc2a1',skin:'#8d9fac',light:'#c3d1d1',shade:'#5e7485',coat:'#ad6c61',trim:'#e2c7a0',accent:'#728c7a'},
+  {bg:'#b6ccca',skin:'#bac5c8',light:'#e7e8d9',shade:'#819197',coat:'#666a8c',trim:'#d8dbb2',accent:'#d18d70'},
+  {bg:'#343e50',skin:'#adbaa2',light:'#e0e5c4',shade:'#637967',coat:'#725565',trim:'#e9ba6f',accent:'#c68263'},
+  {bg:'#df9c86',skin:'#719b8b',light:'#b7d4b0',shade:'#416861',coat:'#485d7b',trim:'#f1d293',accent:'#d2775e'},
+  {bg:'#babfdf',skin:'#8575a2',light:'#cdbadb',shade:'#554d78',coat:'#ece0bf',trim:'#a25763',accent:'#d79d65'},
+  {bg:'#dfc7a1',skin:'#bb7356',light:'#eeb391',shade:'#854d42',coat:'#657e78',trim:'#edcf8c',accent:'#b85e47'}
+];
+const lockSvg=locked=>`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3.5" y="7" width="9" height="7" rx="1.7"/>${locked?'<path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>':'<path d="M5.5 7V5a2.5 2.5 0 0 1 5-1"/>'}<path d="M8 10v1.6"/></svg>`;
+// 非密码学哈希：仅用于稳定的视觉特征抽样，不处理秘密信息。
+function hash32(text){
+  let h=2166136261;
+  for(const byte of new TextEncoder().encode(text))h=Math.imul(h^byte,16777619);
+  h^=h>>>16;h=Math.imul(h,0x85ebca6b);h^=h>>>13;
+  h=Math.imul(h,0xc2b2ae35);h^=h>>>16;
+  return h>>>0;
+}
+function weightedPick(seed,key){
+  const a=AXES[key], total=a.weights.reduce((x,y)=>x+y,0);
+  let v=(hash32(JSON.stringify([VERSION,seed,key]))/4294967296)*total;
+  for(let i=0;i<a.weights.length;i++){v-=a.weights[i];if(v<0)return i;}
+  return a.weights.length-1;
+}
+function compatibleTraits(traits){
+  if(traits.species>=HEADS.length){traits.hat=0;traits.outfit=0;traits.accessory=0;traits.eyes%=3;}
+  return traits;
+}
+function activeAxis(traits,key){return traits.species<HEADS.length||!['hat','outfit','accessory'].includes(key);}
+function derive(c){
+  const out={};
+  for(const k of KEYS)out[k]=Object.prototype.hasOwnProperty.call(c.overrides,k)?c.overrides[k]:weightedPick(normalizedSeed(c.seed),k);
+  return compatibleTraits(out);
+}
+function fingerprint(t){return hash32(VERSION+'|'+JSON.stringify(compatibleTraits({...t}))).toString(16).padStart(8,'0').toUpperCase();}
+function randomSeed(){
+  if(globalThis.crypto && crypto.getRandomValues){
+    const a=crypto.getRandomValues(new Uint32Array(2));
+    return 'folk-'+Array.from(a,n=>n.toString(16).padStart(8,'0')).join('');
+  }
+  return 'folk-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);
+}
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+let renderCount=0;
+const path=(d,fill,extra='')=>`<path d="${d}" fill="${fill}" ${extra}/>`;
+const line=(d,color=INK,width=5,extra='')=>path(d,'none',`stroke="${color}" stroke-width="${width}" ${extra}`);
+const ellipse=(x,y,rx,ry,fill,extra='')=>`<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${fill}" ${extra}/>`;
+const circle=(x,y,r,fill,extra='')=>`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" ${extra}/>`;
+const rect=(x,y,w,h,r,fill,extra='')=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" ${extra}/>`;
+const outline=`stroke="${INK}" stroke-width="7"`;
+const HEADS=[
+  'M210 166C231 132 303 134 335 150C389 125 453 163 457 221L472 329C484 407 432 450 351 454C272 458 203 429 194 361L188 246Q184 201 210 166Z',
+  'M192 233L176 100Q179 81 194 95L278 164Q338 143 383 165L457 94Q470 85 470 111L468 249L490 296L475 313L487 338L466 345C456 415 405 446 329 444C253 447 212 414 192 368L172 356L185 333L167 314L187 298Z',
+  'M219 193C189 132 171 49 206 37C237 21 269 118 279 169L345 164C350 96 366 34 398 39C437 42 405 153 398 184C446 207 464 255 464 316C469 400 417 448 339 450C257 453 201 411 198 335C193 277 194 228 219 193Z',
+  'M207 191C167 190 149 166 159 137C170 103 211 99 232 139C286 118 367 124 402 145C428 110 470 124 474 158C479 191 455 207 443 207C470 247 478 307 468 360C457 422 407 453 329 452C244 450 197 411 190 348C181 287 186 232 207 191Z',
+  'M183 245C171 205 182 167 215 155C245 140 281 155 296 192Q332 179 361 191C378 148 422 141 450 159C481 180 483 219 466 249C492 286 490 342 471 383C449 430 397 451 326 450C252 447 197 429 179 382C163 338 166 284 183 245Z',
+  'M204 165L436 153Q463 153 467 186L478 379Q479 418 441 427L247 444Q211 447 206 412L185 205Q181 171 204 165Z'
+];
+function drawBackground(t,p,id){
+  let s=rect(0,0,600,600,0,p.bg);
+  if(t.background>=4)return s+assetSvg('background',t.background-4,p);
+  if(t.background===1)s+=circle(313,260,227,p.light,`opacity=".53"`)+rect(0,412,600,188,0,p.shade,'opacity=".08"');
+  if(t.background===2)s+=rect(0,0,600,600,0,`url(#${id}-checks)`);
+  if(t.background===3){
+    for(let i=0;i<14;i++){
+      const a=i*Math.PI/7,b=a+.105,x=300+850*Math.cos(a),y=310+850*Math.sin(a),xx=300+850*Math.cos(b),yy=310+850*Math.sin(b);
+      s+=path(`M300 310L${x.toFixed(2)} ${y.toFixed(2)}L${xx.toFixed(2)} ${yy.toFixed(2)}Z`,p.light,'opacity=".23"');
+    }
+  }
+  return s;
+}
+function drawOutfit(t,p){
+  if(t.outfit>=5)return assetSvg('outfit',t.outfit-5,p);
+  let s=path('M270 399L269 453L223 477L361 542L431 468L399 433L393 395Z',p.skin,outline);
+  s+=path('M279 419Q351 451 395 411L398 444Q353 473 276 446Z',p.shade,'opacity=".4"');
+  const body=[
+    'M240 446L165 468Q114 479 96 553L87 623H551L542 552Q531 485 464 468L403 444L333 492Z',
+    'M226 438Q202 445 184 478Q126 489 111 550L97 623H554L537 538Q516 483 464 480Q452 444 405 433L336 475Z',
+    'M253 452L174 478Q131 494 114 548L100 623H553L538 545Q522 488 460 472L402 451L333 485Z',
+    'M257 447L165 480Q128 496 117 547L99 623H555L538 543Q520 493 461 472L397 444L331 483Z',
+    'M255 439L200 463L179 482Q116 491 105 554L91 623H557L547 550Q536 490 470 480L448 458L398 437L332 461Z'
+  ];
+  s+=path(body[t.outfit],p.coat,outline);
+  s+=path('M481 491Q524 517 527 617H473L466 522Z',p.shade,'opacity=".22"');
+  if(t.outfit===0){
+    s+=path('M169 477Q146 517 143 623H99L109 550Q121 501 169 477Z',p.trim,outline);
+    s+=path('M465 473Q505 483 526 522L548 623H495L480 535Z',p.trim,outline);
+    s+=path('M245 445L332 485L409 444L420 467L335 518L235 470Z',p.trim,outline);
+    s+=line('M251 462L334 503L408 461',p.shade,3);
+    s+=line('M335 514L335 622',INK,4);
+    for(let y=541;y<620;y+=28)s+=circle(346,y,3,p.trim,`stroke="${INK}" stroke-width="2"`);
+    s+=path('M208 517L246 523L240 552L202 546Z',p.trim,`stroke="${INK}" stroke-width="3"`);
+    s+=line('M213 530l8 10 11-14',p.coat,4);
+  }else if(t.outfit===1){
+    s+=path('M228 444Q223 476 245 498L332 516L413 497Q435 472 407 444L336 476Z',p.trim,outline);
+    s+=path('M245 458L333 490L407 455L385 481L333 504L259 481Z',p.shade,`stroke="${INK}" stroke-width="3"`);
+    s+=line('M277 499L276 552M385 499L392 548',p.light,5);
+    s+=rect(271,548,9,16,3,p.trim,`stroke="${INK}" stroke-width="2"`)+rect(388,544,9,16,3,p.trim,`stroke="${INK}" stroke-width="2"`);
+    s+=path('M261 566L414 566L432 608L243 608Z',p.coat,`stroke="${INK}" stroke-width="4"`);
+    s+=line('M267 578l-13 22M406 578l12 22',p.shade,3);
+  }else if(t.outfit===2){
+    s+=path('M184 479L247 530L332 554L418 531L464 476L401 453L332 479L257 452Z',p.trim,outline);
+    s+=line('M207 481L256 517L331 540L407 518L442 481',p.coat,5);
+    s+=path('M329 538L349 538L367 585L341 572L320 589Z',p.accent,`stroke="${INK}" stroke-width="4"`);
+    s+=line('M143 561H241M443 561H528M129 584H270M407 584H536M126 607H313M382 607H540',p.trim,9);
+  }else if(t.outfit===3){
+    s+=path('M267 452L334 482L395 449L408 548L333 616L259 547Z',p.light,`stroke="${INK}" stroke-width="4"`);
+    s+=path('M324 484L344 484L352 502L344 513L359 578L335 601L317 577L328 513L317 500Z',p.accent,`stroke="${INK}" stroke-width="4"`);
+    s+=path('M251 446L333 611L249 552L267 536L228 515Z',p.coat,outline);
+    s+=path('M403 447L335 611L429 548L409 532L444 512Z',p.coat,outline);
+    s+=line('M436 556l45-7',p.trim,5);
+    s+=circle(340,617,5,p.trim,`stroke="${INK}" stroke-width="2"`);
+  }else{
+    s+=path('M247 440Q330 474 404 438L427 477Q335 526 229 479Z',p.trim,outline);
+    s+=line('M252 462Q332 499 403 459',p.shade,8);
+    s+=rect(253,532,162,79,13,p.trim,`stroke="${INK}" stroke-width="5"`);
+    s+=rect(267,544,77,30,5,p.shade,`stroke="${INK}" stroke-width="3"`);
+    s+=line('M276 560h8l6-8 9 15 8-8h22',p.light,2.5);
+    s+=circle(368,554,7,p.accent,`stroke="${INK}" stroke-width="3"`)+circle(393,554,7,p.coat,`stroke="${INK}" stroke-width="3"`);
+    s+=line('M270 590h58M359 590h31',p.shade,5);
+    s+=path('M153 528L171 589M495 522L511 584', 'none',`stroke="${p.trim}" stroke-width="20"`);
+  }
+  s+=line('M188 572L177 621M478 570L489 621',INK,4,'opacity=".65"');
+  return s;
+}
+function drawHead(t,p,id){
+  let s='';
+  if(t.species===0){
+    s+=ellipse(192,301,39,53,p.skin,outline)+ellipse(462,296,31,45,p.skin,outline);
+    s+=line('M184 324C156 282 194 271 205 291M465 274Q484 288 467 314',p.shade,6);
+  }
+  if(t.species===5){
+    s+=rect(167,249,30,77,10,p.shade,outline)+rect(466,237,30,70,9,p.shade,outline);
+    s+=line('M320 155L315 110',INK,7)+circle(314,101,12,p.accent,outline);
+  }
+  s+=path(HEADS[t.species],p.skin,outline);
+  s+=`<g clip-path="url(#${id}-head)">`;
+  s+=path('M407 117Q450 309 418 391Q393 447 313 462L526 478L522 98Z',p.shade,'opacity=".3"');
+  if(t.species===0){
+    s+=path('M215 263C210 207 258 189 293 219Q325 238 344 215C398 168 447 214 443 267L428 344L243 363Z',p.light);
+    s+=path('M267 314C284 290 339 294 359 308C398 299 441 320 447 355C455 395 416 424 349 427C281 430 245 407 246 366Q245 336 267 314Z',p.light,`stroke="${INK}" stroke-width="5"`);
+    s+=line('M219 320l13-5M218 339l10-5M428 393l-9 9',p.shade,3);
+  }else if(t.species===1){
+    s+=path('M189 118L252 172L204 211Z',p.accent,`stroke="${INK}" stroke-width="4"`);
+    s+=path('M447 120L445 213L405 174Z',p.accent,`stroke="${INK}" stroke-width="4"`);
+    s+=path('M285 332Q309 314 339 337Q367 310 394 332C423 371 392 406 338 403C276 407 258 365 285 332Z',p.light);
+    s+=line('M295 170L303 204M321 165L325 191M349 166L349 201',p.shade,8);
+    s+=line('M202 318L237 330M202 340L235 341M423 323L455 309M426 341L460 335',p.shade,4);
+  }else if(t.species===2){
+    s+=path('M213 66Q238 114 243 172L230 189Q206 143 202 97Q201 68 213 66Z',p.accent,`stroke="${INK}" stroke-width="3"`);
+    s+=path('M386 66Q393 58 393 83L375 174L361 172Q370 82 386 66Z',p.accent,`stroke="${INK}" stroke-width="3"`);
+    s+=ellipse(334,360,77,58,p.light);
+    s+=line('M219 345L243 350M219 361L243 360M420 346L446 337M420 359L445 357',p.shade,3);
+  }else if(t.species===3){
+    s+=ellipse(193,157,18,21,p.shade)+ellipse(441,163,17,20,p.shade);
+    s+=ellipse(341,352,86,65,p.light);
+    s+=line('M211 334l13 5M210 351l12 2M438 330l13-5',p.shade,3);
+  }else if(t.species===4){
+    s+=path('M188 327Q311 301 472 322L478 421L342 468L196 417Z',p.light);
+    s+=ellipse(225,209,21,31,p.light,'opacity=".4"')+ellipse(422,202,22,29,p.light,'opacity=".4"');
+    for(const [x,y,r] of [[208,303,8],[221,324,5],[451,292,7],[447,317,4],[297,212,5],[333,215,4]])s+=circle(x,y,r,p.shade,'opacity=".55"');
+  }else{
+    s+=rect(214,219,229,101,25,p.shade,`stroke="${INK}" stroke-width="5" transform="rotate(-3 329 269)"`);
+    s+=path('M211 183L424 172L431 189L216 200Z',p.light,'opacity=".75"');
+    s+=rect(255,338,170,65,15,p.light,`stroke="${INK}" stroke-width="4"`);
+    s+=line('M220 356v33M232 355v32M445 340v33',p.shade,4);
+    for(const [x,y] of [[208,208],[445,191],[232,413],[451,398]]){
+      s+=circle(x,y,5,p.light,`stroke="${INK}" stroke-width="2"`);
+      s+=line(`M${x-2} ${y}h4`,INK,1.5);
+    }
+  }
+  if(t.species!==5)s+=assetSvg('finish',0,p);
+  s+='</g>';
+  if(t.species!==5){
+    s+=path(t.species===4?'M313 319q5-7 10 0M346 317q5-7 10 0':t.species===0?'M309 328Q328 308 348 324L340 342L320 345Z':'M317 322Q340 313 359 324Q349 344 336 344Q324 342 317 322Z',t.species===4?'none':p.shade,`stroke="${INK}" stroke-width="${t.species===4?4:3}"`);
+    if(t.species!==4)s+=line('M337 344v12',INK,3);
+  }
+  return s;
+}
+function drawEyes(t,p){
+  if(t.eyes>=5)return assetSvg('eyes',t.eyes-5,p);
+  const left=278,right=390,yl=271,yr=264;
+  let s='';
+  const normal=(x,y)=>{
+    let q=ellipse(x,y,29,26,t.species===5?'#dbefb5':'#f9f0d7',`stroke="${INK}" stroke-width="5"`);
+    q+=ellipse(x+7,y+3,9,13,INK)+circle(x+10,y-2,2.5,'#fff8e7');
+    return q;
+  };
+  if(t.eyes===0){
+    for(const [x,y] of [[left,yl],[right,yr]]){
+      s+=ellipse(x,y+5,29,19,'#f7edd2',`stroke="${INK}" stroke-width="5"`);
+      s+=ellipse(x+7,y+9,7,9,INK);
+      s+=path(`M${x-31} ${y+1}Q${x-26} ${y-26} ${x+4} ${y-23}Q${x+30} ${y-23} ${x+31} ${y+1}Z`,p.skin,`stroke="${INK}" stroke-width="5"`);
+    }
+    s+=line('M249 235q24-10 48-4M365 229q25-11 48-4',p.shade,4);
+  }else if(t.eyes===1){
+    s+=normal(left,yl)+normal(right,yr);
+    s+=line('M252 231q21-12 45-5M367 223q22-11 43-3',INK,5);
+  }else if(t.eyes===2){
+    s+=normal(left,yl);
+    s+=line('M364 264Q391 245 415 260M367 270l12-4',INK,6);
+    s+=line('M252 228q23-12 46-3M370 230q21-8 42 1',INK,4);
+  }else if(t.eyes===3){
+    s+=line('M209 251L247 256M419 245L456 234',INK,9);
+    s+=path('M244 248L308 246L303 285Q275 306 250 288Z','#303f3a',`stroke="${INK}" stroke-width="7"`);
+    s+=path('M354 242L424 238L417 281Q387 299 360 282Z','#303f3a',`stroke="${INK}" stroke-width="7"`);
+    s+=line('M306 258Q330 246 355 254',INK,7);
+    s+=line('M259 253L277 289M273 251L290 285M369 247L390 285M384 246L403 281',p.light,6,'opacity=".45"');
+  }else{
+    s+=path('M233 244Q334 219 446 231L439 284Q333 313 240 294Z',p.shade,`stroke="${INK}" stroke-width="7"`);
+    s+=path('M244 252Q333 232 435 241L431 274Q333 295 248 284Z',p.accent,`stroke="${INK}" stroke-width="3"`);
+    s+=path('M266 247L289 244L312 287L289 289ZM365 237L379 237L403 279L387 281Z',p.light,'opacity=".62"');
+    s+=line('M411 250h13M411 259h10M410 268h7',p.light,2);
+  }
+  return s;
+}
+function drawMouth(t,p){
+  let s='';
+  if(t.mood===0){
+    s+=line(t.species===4?'M253 370Q343 405 426 358':'M293 375Q342 386 398 370',INK,5);
+    s+=line('M301 396q39 11 67 0',p.shade,3);
+  }else if(t.mood===1){
+    s+=path('M282 359Q341 377 404 353L397 391Q343 421 290 395Z',INK,`stroke="${INK}" stroke-width="4"`);
+    s+=path('M287 363Q341 382 399 357L396 374Q342 396 291 381Z','#fff1ce',`stroke="${INK}" stroke-width="3"`);
+    s+=line('M312 372v17M337 376v16M363 372v17M384 366v16',INK,2);
+    s+=path('M318 404Q340 387 368 405Z',p.accent);
+  }else if(t.mood===2){
+    s+=line('M298 380Q343 391 398 364M391 356q15 4 14 17',INK,5);
+    s+=line('M367 391l20-7',p.shade,3);
+    if(t.species===2)s+=path('M338 385L338 401L351 401L352 383Z','#fff3d6',`stroke="${INK}" stroke-width="2"`);
+  }else{
+    s+=ellipse(355,373,12,9,INK);
+    s+=circle(403,374,47,'#e4a2b7',`stroke="${INK}" stroke-width="5"`);
+    s+=path('M374 352Q384 334 406 339', 'none','stroke="#fbd7de" stroke-width="6"');
+    s+=circle(419,394,6,'#f7c7d5','opacity=".6"');
+  }
+  return s;
+}
+function drawHat(t,p){
+  if(t.hat>=6)return assetSvg('hat',t.hat-6,p);
+  if(t.hat===0){
+    if(t.species===0||t.species===3)return path('M275 150L291 130L298 146L322 129L319 149L342 139',p.skin,`stroke="${INK}" stroke-width="5"`);
+    return '';
+  }
+  let s='';
+  if(t.hat===1){
+    s+=path('M200 189Q179 117 251 99Q327 77 397 106Q444 125 450 184Z',p.coat,outline);
+    s+=path('M204 152Q320 112 442 150L456 204Q325 172 200 211Z',p.trim,outline);
+    s+=line('M229 155l-3 43M251 148l-2 44M274 143v43M299 140l2 41M325 138l2 43M351 140l3 42M377 143l4 42M403 150l4 40M429 157l5 36',p.shade,3);
+    s+=rect(306,145,40,28,4,p.coat,`stroke="${INK}" stroke-width="3" transform="rotate(-2 326 159)"`);
+    s+=line('M316 155l9 8 11-12',p.trim,3);
+  }else if(t.hat===2){
+    s+=path('M206 184Q210 92 306 93Q422 85 448 182Z',p.coat,outline);
+    s+=path('M211 173Q319 145 445 176L449 207Q330 176 203 211Z',p.trim,outline);
+    s+=path('M207 175L130 184Q113 184 125 198L209 219Z',p.coat,outline);
+    s+=line('M313 101Q340 126 341 162',p.shade,4);
+    s+=rect(296,177,56,20,5,p.shade,`stroke="${INK}" stroke-width="3"`);
+    s+=line('M306 186h36',p.light,3)+circle(307,97,7,p.trim,`stroke="${INK}" stroke-width="3"`);
+  }else if(t.hat===3){
+    s+=path('M232 102Q322 84 406 112L441 184L203 193Z',p.coat,outline);
+    s+=path('M225 141Q324 129 422 147L432 170Q326 150 215 169Z',p.trim,`stroke="${INK}" stroke-width="3"`);
+    s+=path('M204 176Q326 149 440 178L480 224Q337 194 168 230Z',p.coat,outline);
+    s+=line('M189 214Q332 181 459 208',p.trim,3);
+    s+=circle(364,123,4,p.trim,`stroke="${INK}" stroke-width="2"`);
+  }else if(t.hat===4){
+    s+=`<g transform="rotate(10 331 152)">`;
+    s+=path('M243 160L226 76L285 114L324 63L361 111L418 70L400 165Z','#dfb958',outline);
+    s+=path('M241 148Q322 164 402 150L399 174Q319 186 245 172Z','#edce7c',outline);
+    s+=path('M324 105L334 124L324 141L312 125Z',p.accent,`stroke="${INK}" stroke-width="3"`);
+    for(const [x,y] of [[226,76],[324,63],[418,70]])s+=circle(x,y,7,p.trim,`stroke="${INK}" stroke-width="3"`);
+    s+='</g>';
+  }else{
+    s+=line('M324 162Q327 114 345 87',INK,8);
+    s+=path('M333 128Q277 136 274 86Q326 76 333 128Z','#8eab66',`stroke="${INK}" stroke-width="5"`);
+    s+=path('M337 112Q345 63 386 66Q396 109 337 112Z','#bed48d',`stroke="${INK}" stroke-width="5"`);
+    s+=line('M287 98l37 25M347 101l25-22','#66834f',3);
+  }
+  return s;
+}
+function drawAccessory(t,p){
+  if(t.accessory>=5)return assetSvg('accessory',t.accessory-5,p);
+  if(t.accessory===1){
+    const x=t.species===0?175:t.species===5?188:207;
+    return ellipse(x,348,13,19,'none',`stroke="${INK}" stroke-width="9"`)+ellipse(x,348,13,19,'none','stroke="#e5bd63" stroke-width="5"')+circle(x-5,337,2,'#fff2ba');
+  }
+  if(t.accessory===2)return `<g transform="rotate(-24 427 321)">${rect(400,307,55,23,7,p.trim,`stroke="${INK}" stroke-width="3"`)}${rect(419,309,17,19,2,p.light,'stroke="#80735b" stroke-width="1"')}${circle(408,318,1.5,p.shade)}${circle(448,317,1.5,p.shade)}</g>`;
+  if(t.accessory===3){
+    let s=line('M250 455Q327 545 419 453',INK,13)+line('M250 455Q327 545 419 453','#ddb969',8);
+    for(let i=0;i<9;i++){
+      const x=261+i*17,y=470+29*Math.sin(i*Math.PI/8);
+      s+=ellipse(x,y,9,6,'none',`stroke="${INK}" stroke-width="2" transform="rotate(${30-i*7} ${x} ${y})"`);
+    }
+    return s+path('M327 504L339 524L329 543L316 525Z',p.trim,`stroke="${INK}" stroke-width="4"`);
+  }
+  if(t.accessory===4){
+    return path('M257 437Q336 475 413 432L423 458Q335 500 245 466Z',p.accent,outline)+path('M391 461L438 515L408 511L399 534L374 470Z',p.accent,`stroke="${INK}" stroke-width="5"`)+line('M261 455Q334 490 405 450',p.light,3)+line('M391 482l22 24',p.light,3);
+  }
+  return '';
+}
+function drawCreature(t,p,id){
+  const creature=ASSETS.creatures[t.species-HEADS.length];
+  const layers=[creature.body,creature.eyes[t.eyes],creature.mouths[t.mood],creature.foreground].join('');
+  return `<g data-creature="${AXES.species.names[t.species]}">${layers}</g>`.replace(/\{(id|ink|skin|light|shade|coat|trim|accent)\}/g,(_,key)=>key==='id'?id:key==='ink'?INK:p[key]);
+}
+function svgFor(c,namespace){
+  const t=derive(c),p=PALETTES[t.palette],id=namespace||'folk-'+(++renderCount);
+  const title=AXES.species.names[t.species]+' · '+AXES.palette.names[t.palette];
+  if(t.species>=HEADS.length){
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600" role="img" aria-label="${esc(title)}" data-avatar-version="${VERSION}"><title>${esc(title)}</title><defs><pattern id="${id}-checks" width="100" height="100" patternUnits="userSpaceOnUse" patternTransform="rotate(-10 300 300)"><rect width="50" height="50" fill="${p.light}" opacity=".22"/><rect x="50" y="50" width="50" height="50" fill="${p.light}" opacity=".22"/></pattern></defs><g stroke-linecap="round" stroke-linejoin="round">${drawBackground(t,p,id)}${drawCreature(t,p,id)}</g></svg>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600" role="img" aria-labelledby="${id}-title"><title id="${id}-title">${esc(title)}</title><defs><clipPath id="${id}-head"><path d="${HEADS[t.species]}"/></clipPath><pattern id="${id}-checks" width="100" height="100" patternUnits="userSpaceOnUse" patternTransform="rotate(-10 300 300)"><rect width="50" height="50" fill="${p.light}" opacity=".22"/><rect x="50" y="50" width="50" height="50" fill="${p.light}" opacity=".22"/></pattern></defs><g stroke-linecap="round" stroke-linejoin="round">${drawBackground(t,p,id)}${drawOutfit(t,p)}<g transform="rotate(-4 335 370)">${drawHead(t,p,id)}${drawEyes(t,p)}${drawMouth(t,p)}${drawHat(t,p)}${[1,2].includes(t.accessory)?drawAccessory(t,p):''}</g>${[1,2].includes(t.accessory)?'':drawAccessory(t,p)}</g></svg>`;
+}
+
+let config={version:VERSION,seed:'odd-folk-studio-001',overrides:{species:6,palette:0,hat:0,outfit:0,eyes:0,mood:2,accessory:0,background:4}};
+let locked=new Set();
+let toastTimer;
+function toast(text){
+  $('#toast').textContent=text;$('#toast').classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),2800);
+}
+function buildControls(){
+  $('#traits').innerHTML=KEYS.map(k=>`<div class="trait" id="trait-${k}"><div class="trait-top"><label for="select-${k}">${AXES[k].label}</label><button class="lock" type="button" data-lock="${k}" aria-label="锁定${AXES[k].label}" aria-pressed="false">${lockSvg(false)}</button></div><select id="select-${k}" data-axis="${k}">${AXES[k].names.map((v,i)=>`<option value="${i}">${v}</option>`).join('')}</select></div>`).join('');
+  $('#traits').addEventListener('change',e=>{
+    const key=e.target.dataset.axis;
+    if(!key)return;
+    config.overrides[key]=Number(e.target.value);render();
+  });
+  $('#traits').addEventListener('click',e=>{
+    const b=e.target.closest('[data-lock]');if(!b)return;
+    const k=b.dataset.lock;
+    if(locked.has(k))locked.delete(k);else{locked.add(k);config.overrides[k]=derive(config)[k];}
+    render();
+  });
+}
+function configKey(c){return JSON.stringify([c.seed,KEYS.map(k=>Object.prototype.hasOwnProperty.call(c.overrides,k)?c.overrides[k]:null)]);}
+function render(){
+  const t=derive(config);
+  $('#portrait').innerHTML=svgFor(config);
+  $('#miniAvatar').innerHTML=svgFor(config);
+  $('#tiny32').innerHTML=svgFor(config);
+  $('#tiny24').innerHTML=svgFor(config);
+  $('#characterName').textContent=AXES.species.names[t.species]+' · '+(t.species>=HEADS.length?'原生形象':AXES.hat.names[t.hat]);
+  $('#signature').textContent='VISUAL DNA / '+fingerprint(t);
+  $('#seed').value=config.seed;
+  for(const k of KEYS){
+    const select=$('#select-'+k),active=activeAxis(t,k);
+    select.disabled=!active;
+    Array.from(select.options).forEach((option,index)=>{
+      option.disabled=k==='eyes'&&t.species>=HEADS.length&&index>=3;
+      option.textContent=!active&&index===0?'原生造型 · 不参与换装':AXES[k].names[index];
+    });
+    select.value=t[k];
+    if(!active)locked.delete(k);
+    $('#trait-'+k).classList.toggle('locked',locked.has(k));
+    const b=document.querySelector(`[data-lock="${k}"]`);
+    b.disabled=!activeAxis(t,k);
+    b.innerHTML=lockSvg(locked.has(k));
+    b.setAttribute('aria-pressed',String(locked.has(k)));
+    b.setAttribute('aria-label',(locked.has(k)?'解锁':'锁定')+AXES[k].label);
+  }
+  document.querySelectorAll('.gallery-card').forEach(b=>b.classList.toggle('chosen',configKey(galleryConfigs[Number(b.dataset.index)])===configKey(config)));
+}
+$('#seedForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  config.seed=$('#seed').value.trim()||'odd-folk-default';
+  const keep={};for(const k of locked)keep[k]=derive(config)[k];
+  config.overrides=keep;render();toast('已根据种子生成；保留锁定特征');
+});
+$('#reset').addEventListener('click',()=>{
+  config.overrides={};locked.clear();render();toast('已恢复此种子的默认特征');
+});
+$('#random').addEventListener('click',()=>{
+  if(locked.size===KEYS.length){toast('所有特征都已锁定，请先解锁至少一项');return;}
+  const t=derive(config),keep={};
+  for(const k of locked)keep[k]=t[k];
+  let candidate;
+  for(let attempt=0;attempt<20;attempt++){
+    candidate={version:VERSION,seed:randomSeed(),overrides:keep};
+    if(JSON.stringify(derive(candidate))!==JSON.stringify(t))break;
+  }
+  config=candidate;render();
+});
+function setView(round){
+  $('#portrait').classList.toggle('round',round);
+  $('#circleView').classList.toggle('active',round);
+  $('#squareView').classList.toggle('active',!round);
+  $('#circleView').setAttribute('aria-pressed',String(round));
+  $('#squareView').setAttribute('aria-pressed',String(!round));
+}
+$('#circleView').addEventListener('click',()=>setView(true));
+$('#squareView').addEventListener('click',()=>setView(false));
+
+const CURATED=[[6, 0, 0, 0, 0, 2, 0, 4], [7, 4, 0, 0, 1, 0, 0, 0], [8, 11, 0, 0, 1, 2, 0, 1], [9, 1, 0, 0, 1, 1, 0, 5], [6, 3, 0, 0, 2, 1, 0, 1], [7, 8, 0, 0, 0, 2, 0, 4], [0, 8, 6, 5, 5, 2, 6, 4], [1, 9, 7, 7, 6, 0, 7, 5], [2, 10, 8, 1, 1, 0, 5, 0], [3, 11, 9, 6, 0, 1, 6, 4], [4, 3, 8, 2, 2, 1, 0, 1], [5, 6, 9, 7, 3, 2, 7, 4]];
+let galleryConfigs=[],galleryBatch=0;
+function makeGallery(curated=false){
+  galleryConfigs=[];
+  const seen=new Set();
+  for(let i=0;i<12;i++){
+    let c;
+    if(curated){
+      const ov={};KEYS.forEach((k,j)=>ov[k]=CURATED[i][j]);
+      c={version:VERSION,seed:'resident-'+String(i+1).padStart(3,'0'),overrides:ov};
+    }else{
+      for(let attempt=0;attempt<100;attempt++){
+        c={version:VERSION,seed:`neighborhood-${galleryBatch}-${i}-${attempt}`,overrides:{species:i%AXES.species.names.length}};
+        const dna=JSON.stringify(derive(c));
+        if(!seen.has(dna))break;
+      }
+    }
+    seen.add(JSON.stringify(derive(c)));galleryConfigs.push(c);
+  }
+  $('#gallery').innerHTML=galleryConfigs.map((c,i)=>{
+    const t=derive(c);
+    return `<button class="gallery-card" data-index="${i}" aria-label="编辑${AXES.species.names[t.species]}，${t.species>=HEADS.length?'原生形象':AXES.hat.names[t.hat]}"><div class="gallery-art">${svgFor(c)}</div><div class="gallery-meta"><strong>${AXES.species.names[t.species]} / ${String(i+1).padStart(2,'0')}</strong><p><span>${t.species>=HEADS.length?'原生形象':AXES.hat.names[t.hat]}</span><code>${fingerprint(t).slice(0,4)}</code></p></div></button>`;
+  }).join('');
+}
+$('#gallery').addEventListener('click',e=>{
+  const b=e.target.closest('[data-index]');if(!b)return;
+  const c=galleryConfigs[Number(b.dataset.index)];
+  config={version:VERSION,seed:c.seed,overrides:{...c.overrides}};
+  locked.clear();render();
+  toast('已载入居民，可以自由编辑或锁定特征');
+  if(innerWidth<761)document.querySelector('.studio').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth',block:'start'});
+});
+$('#refreshGallery').addEventListener('click',()=>{galleryBatch++;makeGallery(false);render();});
+
+function saveBlob(blob,filename){
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),20000);
+}
+function basename(c){return 'odd-folk-'+fingerprint(derive(c)).toLowerCase();}
+$('#exportSvg').addEventListener('click',()=>{
+  saveBlob(new Blob([svgFor(config,'odd-folk-export')],{type:'image/svg+xml;charset=utf-8'}),basename(config)+'.svg');
+  toast('已发起 SVG 下载 · 始终导出完整方形画布');
+});
+$('#exportPng').addEventListener('click',async()=>{
+  const b=$('#exportPng');b.disabled=true;
+  const snapshot={version:VERSION,seed:config.seed,overrides:{...config.overrides}};
+  let url;
+  try{
+    url=URL.createObjectURL(new Blob([svgFor(snapshot,'odd-folk-png')],{type:'image/svg+xml;charset=utf-8'}));
+    const img=new Image();
+    await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('SVG 载入失败'));img.src=url;});
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=2048;
+    const ctx=canvas.getContext('2d');if(!ctx)throw new Error('浏览器不支持 Canvas');
+    ctx.drawImage(img,0,0,2048,2048);
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+    if(!blob)throw new Error('PNG 编码失败');
+    saveBlob(blob,basename(snapshot)+'.png');toast('已发起 2048 × 2048 PNG 下载');
+  }catch(e){toast('导出失败：'+e.message);}finally{if(url)URL.revokeObjectURL(url);b.disabled=false;}
+});
+$('#exportJson').addEventListener('click',()=>{
+  const t=derive(config);
+  const metadata={
+    name:'ODD FOLK · '+AXES.species.names[t.species],
+    description:'Original procedural portrait. Local artwork; not a minted token.',
+    image:basename(config)+'.svg',
+    attributes:KEYS.filter(key=>activeAxis(t,key)).map(k=>({trait_type:AXES[k].label.split(' / ')[1],value:AXES[k].names[t[k]]})),
+    properties:{
+      generator:VERSION,seed:config.seed,overrides:Object.fromEntries(Object.entries(config.overrides).filter(([key])=>activeAxis(t,key))),
+      trait_indices:t,visual_signature:fingerprint(t),
+      note:'image is a local relative filename. Replace it with a permanent asset URI before publication.'
+    }
+  };
+  saveBlob(new Blob([JSON.stringify(metadata,null,2)],{type:'application/json;charset=utf-8'}),basename(config)+'.json');
+  toast('已导出 DNA 配置，可用「导入 DNA」复现');
+});
+$('#importButton').addEventListener('click',()=>$('#importFile').click());
+$('#importFile').addEventListener('change',async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{
+    if(f.size>100000)throw new Error('文件过大');
+    const doc=JSON.parse(await f.text()),p=doc.properties;
+    if(!p||p.generator!==VERSION)throw new Error('需要 3.0 配置；旧版画稿不能由当前版本复现');
+    if(typeof p.seed!=='string'||!p.seed.length||p.seed.length>128)throw new Error('种子格式无效');
+    if(!p.overrides||typeof p.overrides!=='object'||Array.isArray(p.overrides))throw new Error('特征配置无效');
+    const ov={};
+    for(const k of Object.keys(p.overrides)){
+      if(!KEYS.includes(k))throw new Error('存在未知特征');
+      const v=p.overrides[k];
+      if(!Number.isInteger(v)||v<0||v>=AXES[k].names.length)throw new Error('特征索引超出范围');
+      ov[k]=v;
+    }
+    config={version:VERSION,seed:p.seed,overrides:ov};locked.clear();render();
+    toast('DNA 已载入：已复现对应角色');
+  }catch(err){toast('无法导入：'+err.message);}finally{e.target.value='';}
+});
+buildControls();makeGallery(true);render();
+</script>
+</body>
+</html>

@@ -15,6 +15,9 @@ import { href, useRoute, type Route } from "./router";
 import { HomePage } from "./pages/home";
 import { SitePage } from "./pages/site";
 import { TokenPage } from "./pages/token";
+import { Publish } from "./publish";
+import { CollectionsPage } from "./pages/collections";
+import { DocsPage } from "./pages/docs";
 
 /** GitHub 授权完回到这里时地址上挂着的两样东西。 */
 function callbackParams(): { code: string; state: string } | null {
@@ -68,7 +71,8 @@ export function App() {
   return (
     <div class="shell">
       <Rail route={route} me={me} hasToken={hasToken} sites={sites.data ?? []} plazaUrl={plazaUrl} />
-      <main class="stage">
+      <a class="skip-link" href="#main-content" onClick={(event) => { event.preventDefault(); document.getElementById("main-content")?.focus(); }}>跳到内容</a>
+      <main class="stage" id="main-content" tabIndex={-1}>
         {callback === "working" ? (
           <p class="muted stage-note">正在登录…</p>
         ) : (
@@ -87,9 +91,12 @@ function page(
   sites: Loaded<Site[]>,
   plazaUrl: string,
 ) {
+  if (route.name === "docs") return <DocsPage section={route.section} />;
   if (route.name === "token" || !hasToken) return <TokenPage loginError={loginError} me={me} />;
 
   switch (route.name) {
+    case "collections":
+      return <CollectionsPage key={route.slug ?? "index"} slug={route.slug} sites={sites.data ?? []} me={me} plazaUrl={plazaUrl} />;
     case "sites":
       return <HomePage sites={sites} me={me} />;
     case "site":
@@ -97,6 +104,7 @@ function page(
         <SitePage
           key={route.slug}
           slug={route.slug}
+          initialSite={sites.data?.find((site) => site.slug === route.slug)}
           tab={route.tab}
           version={route.version}
           plazaUrl={plazaUrl}
@@ -125,26 +133,31 @@ function Rail({
   const currentSlug = route.name === "site" ? route.slug : null;
 
   return (
-    <aside class="rail">
+    <aside class="rail sidebar">
       <a class="brand" href={href({ name: "sites" })}>
         <span class="mark" aria-hidden="true">
           <svg class="mark-svg" viewBox="0 0 24 24">
-            <rect x="6" y="3.5" width="12" height="17" rx="2.2" />
-            <path d="M8.6 8h6.8M8.6 11.2h4.6" />
-            <circle class="dot" cx="14.8" cy="16.4" r="1.55" />
+            <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M4 16v3a1 1 0 0 0 1 1h3M16 20h3a1 1 0 0 0 1-1v-3" />
+            <circle class="dot" cx="12" cy="12" r="2.2" />
           </svg>
         </span>
         <span class="brand-text">
           <span class="wordmark">
-            playtest<span>.run</span>
+            playtest<span class="tld">.run</span>
           </span>
           <span class="brand-sub">控制台</span>
         </span>
       </a>
 
       <nav class="rail-nav">
-        <a class={`nav-item ${route.name === "sites" ? "active" : ""}`} href={href({ name: "sites" })}>
-          作品
+        <a class={`nav-item ${route.name === "collections" ? "active" : ""}`} href={href({ name: "collections" })} aria-current={route.name === "collections" ? "page" : undefined}>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5a1 1 0 0 1 1-1h5l2 3h7a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7Z"/></svg>合集与挑战
+        </a>
+        <a class={`nav-item docs-nav-link ${route.name === "docs" ? "active" : ""}`} href={href({ name: "docs", section: "start" })} aria-current={route.name === "docs" ? "page" : undefined}>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z"/><path d="M5 16h14M9 8h6M9 11h4"/></svg>使用文档
+        </a>
+        <a class={`nav-item ${route.name === "sites" ? "active" : ""}`} href={href({ name: "sites" })} aria-current={route.name === "sites" ? "page" : undefined}>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg>我的作品
           {sites.length > 0 ? <span class="nav-count">{sites.length}</span> : null}
         </a>
         {sites.length > 0 ? (
@@ -166,12 +179,12 @@ function Rail({
       </nav>
 
       <div class="rail-bottom">
-        {hasToken ? <PublishNote /> : null}
+        <Publish />
         <a class="nav-item" href={plazaUrl} target="_blank" rel="noreferrer">
-          广场
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="m15 9-2 4-4 2 2-4Z"/></svg>探索广场
           <span class="nav-arrow">↗</span>
         </a>
-        <a class={`nav-item account ${route.name === "token" ? "active" : ""}`} href={href({ name: "token" })}>
+        <a class={`nav-item account ${route.name === "token" ? "active" : ""}`} href={href({ name: "token" })} aria-label={hasToken ? "账号与访问令牌" : "登录控制台"}>
           {me?.avatar_url ? <img class="avatar" src={me.avatar_url} alt="" /> : <span class="avatar blank" />}
           <span class="account-name">{who ?? (hasToken ? "匿名" : "登录")}</span>
         </a>
@@ -187,21 +200,6 @@ function dotOf(site: Site): string {
   return "";
 }
 
-/**
- * 「发下一版」的便条。发布在终端里，不在网页上——这里只把那一行命令递到手边，
- * 和广场栏底那张便条是同一扇门（DESIGN §3.9）。
- */
-function PublishNote() {
-  return (
-    <div class="publish-note">
-      <h3>发下一版</h3>
-      <p>同一目录再跑一次。链接不变，关注的人会收到通知。</p>
-      <div class="codebox">
-        <code>playtest ./dist --note "这版改了什么"</code>
-      </div>
-    </div>
-  );
-}
 
 /** 玩家链接去掉 slug 那一级就是广场：`https://brisk-otter-41.playtest.run` → `https://playtest.run/`。 */
 function plazaOf(sites: Site[] | undefined): string {

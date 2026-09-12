@@ -105,9 +105,9 @@ export function sentences(version: VersionResults): string[] {
   }
 
   const stayed: string[] = [];
-  if (version.named > 0) stayed.push(`${version.named} 人留名`);
-  if (version.played_5min_plus > 0) stayed.push(`${version.played_5min_plus} 人玩过 5 分钟`);
-  if (version.returned > 0) stayed.push(`${version.returned} 人回来过`);
+  if ((version.named ?? 0) > 0) stayed.push(`${version.named} 人留名`);
+  if ((version.played_5min_plus ?? 0) > 0) stayed.push(`${version.played_5min_plus} 人玩过 5 分钟`);
+  if ((version.returned ?? 0) > 0) stayed.push(`${version.returned} 人回来过`);
   if (version.dwell_median_s !== null && version.dwell_median_s !== undefined) {
     stayed.push(`停留中位 ${seconds(version.dwell_median_s)}`);
   }
@@ -190,6 +190,7 @@ export function label(value: string | undefined): string {
 const SOURCES: Record<string, string> = {
   card: "邀请卡",
   notice: "通知",
+  collection: "合集",
   plaza: "广场",
   wechat: "微信",
   discord: "Discord",

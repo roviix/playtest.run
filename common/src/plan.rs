@@ -10,12 +10,15 @@
 //! **不做后付费**（REWRITE §4.1）：链接发出去之后开发者控制不了有多少人点开，
 //! 任何后付费都会把「分享」变成财务风险。所以每一项都是硬上限，到顶硬停。
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::limits::{GIB, MIB};
 
 /// 三档。匿名也是一档——它有自己的上限，不是「Free 的特例」。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Plan {
     /// 没登录就发的链接：24 小时，额度更紧。
@@ -36,7 +39,7 @@ impl Plan {
         }
     }
 
-    pub fn limits(self) -> Limits {
+    pub const fn limits(self) -> Limits {
         match self {
             Self::Anon => Limits {
                 // 匿名链接只活 24 小时，所以它的「月配额」其实是这一条链接一辈子的总量。
@@ -130,7 +133,7 @@ impl std::str::FromStr for Plan {
 }
 
 /// 流量额度算在哪个窗口上。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TrafficWindow {
     /// 这条链接一辈子（匿名链接只活 24 小时）。
@@ -140,7 +143,7 @@ pub enum TrafficWindow {
 }
 
 /// 一个档位的全部上限。边缘拿到的是这一份（跟着 `current.json` 下来），不认识档位这个词。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Limits {
     /// 窗口内出网字节上限。到顶硬停，不产生账单。
     pub traffic_bytes: u64,
@@ -161,7 +164,7 @@ pub struct Limits {
 }
 
 /// 配额此刻的状态。控制面算好写进 `live.json`，边缘据此决定给字节还是给一页说明。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QuotaState {
     #[default]

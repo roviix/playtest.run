@@ -59,6 +59,7 @@ pub fn to_boost(row: db::BoostRow) -> Boost {
         ends_at: row.ends_at,
         created_at: row.created_at,
         order_id: row.order_id,
+        reason: row.reason,
     }
 }
 

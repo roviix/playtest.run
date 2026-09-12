@@ -44,7 +44,7 @@ const FG: &str = "#f2f3f5";
 const DIM: &str = "#9aa2b1";
 const FAINT: &str = "#6b7280";
 const BODY: &str = "#b6bdc9";
-const ACCENT: &str = "#ffb224";
+const ACCENT: &str = "#ffffff";
 const RULE: &str = "#2b3039";
 
 /// 候选字体一串写在 SVG 里，谁在就用谁。装了 `fonts-noto-cjk` 的服务器命中第一个，
@@ -344,7 +344,8 @@ font-weight=\"700\" fill=\"#ffffff\" fill-opacity=\"0.13\">{mark}</text>\n",
     }
 
     fn qr(&self, x: f32, y: f32, size: f32) -> String {
-        qr_svg(&card_qr_url(self.origin), x, y, size)
+        let door = playtest_common::door_url(self.origin, &self.manifest.slug);
+        qr_svg(&card_qr_url(&door), x, y, size)
     }
 
     fn verb(&self) -> &'static str {
@@ -995,10 +996,11 @@ mod tests {
         let live = SiteLive::empty("brisk-otter-41");
         let m = manifest();
         let c = card(&m, &live, Shape::Portrait);
+        let door = playtest_common::door_url(c.origin, &m.slug);
         assert_eq!(
-            card_qr_url(c.origin),
+            card_qr_url(&door),
             format!(
-                "http://brisk-otter-41.localhost:8443/?from={}",
+                "http://localhost:8443/p/brisk-otter-41?from={}",
                 playtest_common::FROM_CARD
             )
         );

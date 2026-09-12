@@ -40,6 +40,7 @@ echo "== 同步源码与配置 → $HOST:${REMOTE_ROOT}（不碰 .env）"
 "${RSYNC[@]}" --delete \
   --include '/Cargo.toml' --include '/Cargo.lock' --include '/Dockerfile' --include '/.dockerignore' \
   --include '/common/***' --include '/api/***' --include '/edge/***' --include '/cli/***' \
+  --include '/ui/***' \
   --include '/sdk/' --include '/sdk/dist/***' \
   --include '/console/' --include '/console/src/***' --include '/console/index.html' \
   --include '/console/package.json' --include '/console/pnpm-lock.yaml' --include '/console/pnpm-workspace.yaml' \

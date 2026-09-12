@@ -23,6 +23,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("playtest 控制面已启动：http://{}", listener.local_addr()?);
     tracing::info!("数据目录：{}", config.data_dir.display());
+    tracing::info!("作品物料：{}", state.store().description());
     tracing::info!("玩家链接：{}", config.site_url_template);
 
     axum::serve(listener, app(state))

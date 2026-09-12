@@ -3,7 +3,6 @@
 //! 只有一个 fallback 处理函数，不交给 matchit——作品子域上兜底的那条要先查清单才知道
 //! 路径意味着什么。固定的那几条路径在 `router.rs` 那张表里，这里只写每一条落地后做什么。
 
-use std::io::SeekFrom;
 use std::sync::Arc;
 
 use axum::body::Body;
@@ -15,11 +14,9 @@ use percent_encoding::percent_decode_str;
 use playtest_common::api::ErrorCode;
 use playtest_common::follow::{root_paths, FollowTarget};
 use playtest_common::manifest::{GateMode, Manifest};
-use playtest_common::store::FsStore;
+use playtest_common::store::Store;
 use playtest_common::{GATE_COOKIE, ME_COOKIE, SESSION_COOKIE};
 use rand::RngCore;
-use tokio::io::{AsyncReadExt, AsyncSeekExt};
-use tokio_util::io::ReaderStream;
 use tower_http::trace::TraceLayer;
 
 use crate::breaker::Breaker;
@@ -31,6 +28,7 @@ use crate::follow;
 use crate::game_headers::{self, Source};
 use crate::gate::{self, GatePage};
 use crate::host::{self, HostKind};
+use crate::identity;
 use crate::live::LiveCache;
 use crate::paths::{self, AcceptEncoding, Resolved, Served};
 use crate::plaza::{self, PlazaCache};
@@ -60,6 +58,7 @@ pub struct App {
     pub sites: SiteStore,
     pub events: EventLog,
     pub breaker: Breaker,
+    pub traffic: Arc<crate::quota::Ledger>,
     /// 现在连着的隧道（DESIGN §4.3）。和 `sites` 互不知情，谁说了算在 [`site`] 里定。
     pub tunnels: Arc<Tunnels>,
     /// 广场那一份 `plaza.json`（DESIGN §3.9），同样只读对象存储。
@@ -74,24 +73,30 @@ pub struct App {
 
 impl App {
     pub fn new(config: Config) -> Self {
-        let store = FsStore::new(config.store_root());
+        Self::try_new(config).expect("对象存储配置不合法")
+    }
+
+    pub fn try_new(config: Config) -> anyhow::Result<Self> {
+        let store = Store::from_config(&config.store_config()?)?;
         let sites = SiteStore::new(store.clone());
         let plaza = PlazaCache::new(store.clone());
         let live = LiveCache::new(store.clone());
-        let caps = CapabilitiesCache::new(store);
+        let caps = CapabilitiesCache::new(store.clone());
         let events = EventLog::new(config.events_path());
-        let tunnels = Tunnels::new(&config);
-        Self {
+        let tunnels = Tunnels::new(&config, store.clone());
+        let traffic = crate::quota::Ledger::with_store(config.data_dir.clone(), store);
+        Ok(Self {
             config,
             sites,
             events,
             breaker: Breaker::new(),
+            traffic,
             tunnels,
             plaza,
             live,
             caps,
             cards: card::shared(),
-        }
+        })
     }
 }
 
@@ -121,11 +126,21 @@ async fn handle(State(app): State<Arc<App>>, req: Request) -> Response {
     match host::classify(&authority, &app.config.host_suffix) {
         HostKind::Root => root(&app, &authority, parts, body).await,
         HostKind::Unknown => page(StatusCode::NOT_FOUND, pages::not_found(), None),
-        HostKind::Site(slug) => site(&app, &slug, &authority, parts, body).await,
+        HostKind::Site(slug) => {
+            let head_only = parts.method == Method::HEAD;
+            let response = site(&app, &slug, &authority, parts, body).await;
+            if !response.status().is_success() {
+                return response;
+            }
+            match app.traffic.meter(&slug).await {
+                Ok(meter) => meter.response(response, head_only),
+                Err(denied) => denied.response(),
+            }
+        }
     }
 }
 
-/// 根域：广场、「我的」、关注与退订（DESIGN §3.9、§3.10）。**只有这几条路径**，
+/// 根域：广场、关注页、确认与退订（DESIGN §3.9、§3.10）。**只有这几条路径**，
 /// 别的一律 404——根域上不放任何用户内容，它是玩家路径里唯一我们说了算的一页。
 async fn root(
     app: &App,
@@ -133,17 +148,57 @@ async fn root(
     parts: axum::http::request::Parts,
     body: Body,
 ) -> Response {
-    let me = cookie_value(&parts.headers, ME_COOKIE)
+    if parts.method == Method::POST
+        && header_str(&parts.headers, "origin")
+            != Some(format!("{}://{authority}", app.config.public_scheme).as_str())
+    {
+        return page(StatusCode::FORBIDDEN, pages::untrusted_action(), None);
+    }
+    let me = identity::token(&parts.headers, app.config.public_scheme == "https")
         .filter(|v| is_me_token(v))
         .map(str::to_string);
-    let Some((door, allow)) = router::root(parts.uri.path()) else {
+    let path = parts.uri.path().to_string();
+    let Some((door, allow)) = router::root(&path) else {
         return page(StatusCode::NOT_FOUND, pages::not_found(), None);
     };
     if !allow.permits(&parts.method) {
         return method_not_allowed(allow.header());
     }
-    match door {
-        Root::Plaza => plaza_page(app, authority).await,
+    let mut response = match door {
+        Root::Plaza => {
+            discovery_page(
+                app,
+                authority,
+                parts.uri.query().unwrap_or_default(),
+                None,
+                false,
+                None,
+            )
+            .await
+        }
+        Root::Collections => {
+            discovery_page(
+                app,
+                authority,
+                parts.uri.query().unwrap_or_default(),
+                None,
+                true,
+                None,
+            )
+            .await
+        }
+        Root::Collection(slug) => {
+            discovery_page(
+                app,
+                authority,
+                parts.uri.query().unwrap_or_default(),
+                Some(slug),
+                false,
+                me.as_deref(),
+            )
+            .await
+        }
+        Root::Project(slug) => project_door(app, authority, slug, parts, body).await,
         Root::Follow => root_follow(app, authority, me.as_deref(), body).await,
         Root::Me => mine(app, authority, me.as_deref()).await,
         Root::MeAction => me_action(app, authority, me.as_deref(), body).await,
@@ -151,7 +206,196 @@ async fn root(
         Root::Unsubscribe(token) => unsubscribe(app, authority, token).await,
         Root::ServiceWorker => service_worker(parts.method == Method::HEAD),
         Root::Llms => llms_pointer(),
+    };
+    append(
+        response.headers_mut(),
+        "set-cookie",
+        &cookie(
+            ME_COOKIE,
+            "",
+            Some(0),
+            app.config.public_scheme == "https",
+            Some(&app.config.cookie_domain()),
+        ),
+    );
+    response
+}
+
+/// 主域作品邀请函（DESIGN §3.1、§3.3）：`playtest.run/p/<slug>`。
+/// 承载作品门面、版本告示、名额、一键秒关与【开始试玩】。
+async fn project_door(
+    app: &App,
+    authority: &str,
+    slug: &str,
+    parts: axum::http::request::Parts,
+    body: Body,
+) -> Response {
+    let manifest = match app.sites.resolve(slug).await {
+        SiteState::Live(m) => m,
+        SiteState::Expired(m) => {
+            return page(StatusCode::GONE, pages::gone(), Some((m.isolated, false)));
+        }
+        SiteState::Unavailable => {
+            return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None);
+        }
+        SiteState::Missing => match app.tunnels.get(slug) {
+            Some(session) => session.manifest(),
+            None => match app.tunnels.last_seen(slug).await {
+                Some(seen) => {
+                    return tunnel::page(
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        tunnel::offline::offline(&seen),
+                        seen.isolated,
+                    );
+                }
+                None => return page(StatusCode::NOT_FOUND, pages::not_found(), None),
+            },
+        },
+    };
+
+    let scheme = &app.config.public_scheme;
+    let suffix = &app.config.host_suffix;
+    let port = host::port_of(authority);
+    let port_part = port.map(|p| format!(":{p}")).unwrap_or_default();
+    let site_url = format!("{scheme}://{slug}.{suffix}{port_part}/");
+    let origin = format!("{scheme}://{slug}.{suffix}{port_part}");
+
+    let me_token = identity::token(&parts.headers, app.config.public_scheme == "https")
+        .filter(|v| is_me_token(v))
+        .map(str::to_string);
+
+    if parts.method == Method::POST {
+        let form = read_form(body).await;
+        let source = gate::known_source(field(&form, gate::field::FROM).as_deref());
+        let name = field(&form, gate::field::NAME).and_then(|raw| gate::clean_name(&raw));
+        let referer = field(&form, gate::field::REFERER)
+            .filter(|f| f.starts_with("http://") || f.starts_with("https://"))
+            .unwrap_or_default();
+        let ua = header_str(&parts.headers, "user-agent")
+            .unwrap_or_default()
+            .to_string();
+        let sid = cookie_value(&parts.headers, SESSION_COOKIE)
+            .filter(|s| is_session_id(s))
+            .map(str::to_string)
+            .unwrap_or_else(new_session_id);
+
+        let visitor = Visitor {
+            wechat: is_wechat(&ua),
+            sid,
+            ua,
+            referer,
+            from: source,
+            name,
+        };
+        app.events
+            .append(
+                Kind::Start,
+                &manifest.slug,
+                manifest.version,
+                &visitor,
+                None,
+                None,
+            )
+            .await;
+
+        let mut headers = base_headers();
+        put(&mut headers, "location", &site_url);
+        put(&mut headers, "cache-control", "no-store");
+        return (StatusCode::SEE_OTHER, headers).into_response();
     }
+
+    let live = app.live.get(&manifest.slug).await;
+    let caps = app.caps.get().await;
+    let already_followed = if let Some(token) = me_token.as_deref() {
+        match follow::view(app.config.api_internal_url.as_deref(), token).await {
+            follow::Mine::View(v) => v.follows.iter().any(|f| match &f.target {
+                playtest_common::follow::FollowTarget::Site { slug: s } => s == &manifest.slug,
+                _ => false,
+            }),
+            _ => false,
+        }
+    } else {
+        false
+    };
+
+    let root_url = format!("{scheme}://{suffix}{port_part}/");
+    let page_url = format!("{scheme}://{suffix}{port_part}{}", parts.uri.path());
+    let ua = header_str(&parts.headers, "user-agent").unwrap_or_default();
+    let referer = header_str(&parts.headers, "referer").unwrap_or_default();
+    let from = gate::known_source(
+        parts
+            .uri
+            .query()
+            .and_then(|q| field(q, playtest_common::FROM_PARAM))
+            .as_deref(),
+    );
+    let to_path = format!("{}{slug}", root_paths::PROJECT_PREFIX);
+
+    let is_tunnel = app.tunnels.get(slug).is_some_and(|s| !s.claims.hybrid);
+    let version_label = if is_tunnel {
+        Some(tunnel::ONLINE_LABEL)
+    } else {
+        None
+    };
+
+    let nonce = new_nonce();
+    let html = GatePage {
+        manifest: &manifest,
+        live: &live,
+        caps: &caps,
+        to: &to_path,
+        host_suffix: suffix,
+        root_url: &root_url,
+        page_url: &page_url,
+        origin: &origin,
+        wechat: is_wechat(ua),
+        version_label,
+        referer,
+        from,
+        me_token: me_token.as_deref(),
+        already_followed,
+        is_root: true,
+        nonce: Some(&nonce),
+    }
+    .render();
+
+    if parts.method == Method::GET {
+        let visitor = Visitor {
+            wechat: is_wechat(ua),
+            sid: String::new(),
+            ua: ua.to_string(),
+            referer: referer.to_string(),
+            from,
+            name: None,
+        };
+        app.events
+            .append(
+                Kind::GateView,
+                &manifest.slug,
+                manifest.version,
+                &visitor,
+                None,
+                None,
+            )
+            .await;
+    }
+
+    let context = crate::discovery::context(
+        app.plaza.get().await.as_ref(),
+        slug,
+        parts
+            .uri
+            .query()
+            .and_then(|query| field(query, "collection"))
+            .as_deref(),
+    );
+    let html = if context.is_empty() {
+        html
+    } else {
+        html.replacen("</main>", &format!("</main>{context}"), 1).replacen("</head>", "<style>.collection-context{display:flex;justify-content:space-between;gap:24px;max-width:640px;margin:12px auto;padding:0 24px;font:13px/1.6 system-ui}.collection-context a{color:#c0c4d1;text-decoration:none;min-height:44px;display:flex;align-items:center}</style></head>", 1)
+    };
+    let headers = root_headers(app, authority, &nonce);
+    (StatusCode::OK, headers, html).into_response()
 }
 
 /// 根域上给助手的一张字条：这里是玩家那一侧，开发者那几个文件在另一个域。
@@ -189,23 +433,77 @@ fn llms_pointer() -> Response {
         .into_response()
 }
 
-async fn plaza_page(app: &App, authority: &str) -> Response {
+async fn discovery_page(
+    app: &App,
+    authority: &str,
+    raw_query: &str,
+    collection_slug: Option<&str>,
+    index: bool,
+    me_token: Option<&str>,
+) -> Response {
     let plaza = app.plaza.get().await;
     let nonce = new_nonce();
-    let html = plaza::render(&plaza::View {
+    let view = plaza::View {
         plaza: &plaza,
         now: time::OffsetDateTime::now_utc(),
-    });
-    // 这一页没有脚本，nonce 只是让根域的 CSP 保持同一个形状。
+    };
+    let query = crate::discovery::Query::parse(raw_query);
+    let html = if let Some(slug) = collection_slug {
+        let Some(collection) = plaza
+            .collections
+            .iter()
+            .find(|collection| collection.slug == slug && collection.public && !collection.hidden)
+        else {
+            return root_html(app, authority, StatusCode::NOT_FOUND, plaza::wrap("合集暂不可用", "", plaza::Here::Collections, "<div class=\"content\"><h1>这个合集暂时不可用</h1><p>可能已停止公开或被移除。</p><a href=\"/collections\">看看其他合集 →</a></div>"));
+        };
+        let caps = app.caps.get().await;
+        let viewer = if let Some(token) = me_token {
+            match follow::view(app.config.api_internal_url.as_deref(), token).await {
+                follow::Mine::View(view) => Some(view),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        crate::discovery::collection(&view, collection, &query, &caps, viewer.as_ref())
+    } else {
+        crate::discovery::home(&view, &query, index)
+    };
+    let html = crate::html::enhance(html, &nonce);
     let mut headers = root_headers(app, authority, &nonce);
     // 这一页对所有人一样，可以短暂公共缓存：内容 30 秒才变一次。
-    put(&mut headers, "cache-control", "public, max-age=30");
+    put(
+        &mut headers,
+        "cache-control",
+        if collection_slug.is_some() {
+            "private, no-store"
+        } else {
+            "public, max-age=30"
+        },
+    );
     (StatusCode::OK, headers, html).into_response()
 }
 
 /// 根域上的关注：可以是某个作品，也可以是广场本身。有 `pt_me` 就是一下点击。
 async fn root_follow(app: &App, authority: &str, me: Option<&str>, body: Body) -> Response {
     let raw = read_form(body).await;
+    let action = field(&raw, "action").unwrap_or_default();
+    if action == "unfollow" {
+        let target = field(&raw, playtest_common::follow::form::TARGET)
+            .as_deref()
+            .and_then(FollowTarget::parse);
+        if let (Some(token), Some(target)) = (me, target) {
+            follow::unfollow(app.config.api_internal_url.as_deref(), token, target).await;
+        }
+        let to = field(&raw, "to")
+            .map(|t| same_origin_target(&t))
+            .unwrap_or_else(|| root_paths::ME.to_string());
+        let mut headers = base_headers();
+        put(&mut headers, "location", &to);
+        put(&mut headers, "cache-control", "no-store");
+        return (StatusCode::SEE_OTHER, headers).into_response();
+    }
+
     let submission = match follow::parse(&raw, None, me) {
         Ok(sub) => sub,
         Err(why) => {
@@ -224,11 +522,25 @@ async fn root_follow(app: &App, authority: &str, me: Option<&str>, body: Body) -
     } else {
         &submission.to
     };
+    if me.is_some() && matches!(submission.request.target, FollowTarget::Site { .. }) {
+        if matches!(
+            outcome,
+            follow::Outcome::Answered(playtest_common::follow::FollowResponse::Subscribed)
+                | follow::Outcome::Answered(
+                    playtest_common::follow::FollowResponse::AlreadyFollowing
+                )
+        ) {
+            let mut headers = base_headers();
+            put(&mut headers, "location", back);
+            put(&mut headers, "cache-control", "no-store");
+            return (StatusCode::SEE_OTHER, headers).into_response();
+        }
+    }
     let (status, html) = follow::result_page(&outcome, &submission, back);
     root_html(app, authority, status, html)
 }
 
-/// 「我的」（DESIGN §3.10）。没有 `pt_me` 的人看到的是一个邮箱输入，不是一页登录墙。
+/// 关注页（DESIGN §3.10）。没有 `pt_me` 的人看到的是一个邮箱输入，不是一页登录墙。
 async fn mine(app: &App, authority: &str, me: Option<&str>) -> Response {
     let caps = app.caps.get().await;
     let nonce = new_nonce();
@@ -250,19 +562,26 @@ async fn mine(app: &App, authority: &str, me: Option<&str>) -> Response {
         caps: &caps,
         nonce: &nonce,
     });
+    let html = crate::html::enhance(html, &nonce);
     let mut headers = root_headers(app, authority, &nonce);
     put(&mut headers, "cache-control", "no-store");
     if stale {
         append(
             &mut headers,
             "set-cookie",
-            &cookie(ME_COOKIE, "", Some(0), app.config.public_scheme == "https"),
+            &cookie(
+                identity::cookie_name(app.config.public_scheme == "https"),
+                "",
+                Some(0),
+                app.config.public_scheme == "https",
+                None,
+            ),
         );
     }
     (StatusCode::OK, headers, html).into_response()
 }
 
-/// 「我的」上那三个动作。做完一律 303 回 `/me`——刷新不会重复提交。
+/// 关注页上那三个动作。做完一律 303 回 `/me`——刷新不会重复提交。
 async fn me_action(app: &App, authority: &str, me: Option<&str>, body: Body) -> Response {
     let raw = read_form(body).await;
     let action = field(&raw, "action").unwrap_or_default();
@@ -298,7 +617,7 @@ async fn me_action(app: &App, authority: &str, me: Option<&str>, body: Body) -> 
     (StatusCode::SEE_OTHER, headers).into_response()
 }
 
-/// 确认信里那条链接：换到 `pt_me`，种在根域上（host-only，DESIGN §4.1），再 303 到「我的」。
+/// 确认信里那条链接：换到 `pt_me`，种在根域上（host-only，DESIGN §4.1），再 303 到关注页。
 async fn confirm(app: &App, authority: &str, token: &str) -> Response {
     let Some(answer) = follow::confirm(app.config.api_internal_url.as_deref(), token).await else {
         let caps = app.caps.get().await;
@@ -312,16 +631,15 @@ async fn confirm(app: &App, authority: &str, token: &str) -> Response {
     let mut headers = base_headers();
     put(&mut headers, "location", root_paths::ME);
     put(&mut headers, "cache-control", "no-store");
-    // **不写 `Domain`**：这把钥匙只属于根域这一个主机名，任何一个作品子域都读不到、
-    // 也种不进来（DESIGN §4.1）。
     append(
         &mut headers,
         "set-cookie",
         &cookie(
-            ME_COOKIE,
+            identity::cookie_name(app.config.public_scheme == "https"),
             &answer.me_token,
             Some(ME_MAX_AGE),
             app.config.public_scheme == "https",
+            None,
         ),
     );
     (StatusCode::SEE_OTHER, headers).into_response()
@@ -342,7 +660,13 @@ async fn unsubscribe(app: &App, authority: &str, token: &str) -> Response {
         append(
             response.headers_mut(),
             "set-cookie",
-            &cookie(ME_COOKIE, "", Some(0), app.config.public_scheme == "https"),
+            &cookie(
+                identity::cookie_name(app.config.public_scheme == "https"),
+                "",
+                Some(0),
+                app.config.public_scheme == "https",
+                None,
+            ),
         );
     }
     response
@@ -443,17 +767,14 @@ async fn site(
         let ctx = &ctx;
         return match tail {
             Some(tail) => reserved(app, &manifest, ctx, &tail, parts, body).await,
-            None if tunnel::wants_gate(
-                &manifest,
-                &parts.method,
-                parts.uri.path(),
-                ctx.navigation,
-                ctx.has_gate_cookie,
-            ) =>
-            {
-                gate_page(app, &manifest, ctx, &parts).await
-            }
             None => {
+                if ctx.from.is_some() && ctx.navigation {
+                    let target = format!("{}p/{}", ctx.root_url, slug);
+                    let mut headers = base_headers();
+                    put(&mut headers, "location", &target);
+                    put(&mut headers, "cache-control", "no-store");
+                    return (StatusCode::SEE_OTHER, headers).into_response();
+                }
                 tunnel::proxy::forward(
                     &session,
                     tunnel::proxy::Player {
@@ -461,6 +782,7 @@ async fn site(
                         public_scheme: &app.config.public_scheme,
                         navigation: ctx.navigation,
                         isolated: manifest.isolated,
+                        ledger: Some(&app.traffic),
                     },
                     parts,
                     body,
@@ -474,6 +796,9 @@ async fn site(
         SiteState::Live(m) => m,
         SiteState::Expired(m) => {
             return page(StatusCode::GONE, pages::gone(), Some((m.isolated, false)))
+        }
+        SiteState::Unavailable => {
+            return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None)
         }
         // 走到这里说明隧道不在线。一个作品可以既上传过又开过隧道，上面的 `Live` 分支
         // 因此排在离线页前面：给玩家一个能玩的旧版本，比给他一页「他不在线」有用。
@@ -517,6 +842,7 @@ async fn beyond_manifest(
                 public_scheme: &app.config.public_scheme,
                 navigation: ctx.navigation,
                 isolated: manifest.isolated,
+                ledger: Some(&app.traffic),
             },
             parts,
             body,
@@ -546,6 +872,7 @@ async fn beyond_manifest(
 }
 
 /// 请求里跟着走、每个分支都要用的那些东西。
+#[allow(dead_code)]
 struct Ctx {
     /// `scheme://<后缀>[:端口]/`，角标链到这里。
     root_url: String,
@@ -564,6 +891,8 @@ struct Ctx {
     version_label: Option<&'static str>,
     /// 链接上的 `?from=`，只认 `card` / `notice`（DESIGN §3.5）。
     from: Option<&'static str>,
+    /// 共享的设备身份凭证（pt_me），用于一键免登录秒关注与识别已关注状态。
+    me_token: Option<String>,
 }
 
 impl Ctx {
@@ -615,6 +944,7 @@ impl Ctx {
             accept_encoding: paths::parse_accept_encoding(header_str(headers, "accept-encoding")),
             version_label: None,
             from,
+            me_token: None,
         }
     }
 }
@@ -680,30 +1010,63 @@ async fn reserved(
             }
         }
         Reserved::Follow => site_follow(app, manifest, ctx, body).await,
+        Reserved::Invite => {
+            let target = format!("{}p/{}", ctx.root_url, manifest.slug);
+            let mut headers = base_headers();
+            put(&mut headers, "location", &target);
+            put(&mut headers, "cache-control", "no-store");
+            (StatusCode::SEE_OTHER, headers).into_response()
+        }
     }
 }
 
-/// 作品子域上的「有新版本时告诉我」（DESIGN §4.1）：表单交给玩家自己所在的域，
-/// 由边缘转给控制面——玩家的浏览器从不把邮箱直接交给另一个域。
-///
-/// 这里**不认 `pt_me`**：那把钥匙是根域的 host-only cookie，子域上读不到也不该读。
+/// 作品子域上的关注更新（DESIGN §3.3、§3.6、§4.1）：
+/// 已有 pt_me 凭证的设备一键免邮箱关注；未认证设备输入邮箱首次绑定。
 async fn site_follow(app: &App, manifest: &Manifest, ctx: &Ctx, body: Body) -> Response {
     let isolated = Some((manifest.isolated, false));
+    let invite_target = format!("{}p/{}", ctx.root_url, manifest.slug);
     let raw = read_form(body).await;
-    let submission = match follow::parse(&raw, Some(&manifest.slug), None) {
+    let action = field(&raw, "action").unwrap_or_default();
+    if action == "unfollow" {
+        if let Some(token) = ctx.me_token.as_deref() {
+            let target = FollowTarget::Site {
+                slug: manifest.slug.clone(),
+            };
+            follow::unfollow(app.config.api_internal_url.as_deref(), token, target).await;
+        }
+        let mut headers = base_headers();
+        put(&mut headers, "location", &invite_target);
+        put(&mut headers, "cache-control", "no-store");
+        return (StatusCode::SEE_OTHER, headers).into_response();
+    }
+
+    let submission = match follow::parse(&raw, Some(&manifest.slug), ctx.me_token.as_deref()) {
         Ok(sub) => sub,
         Err(why) => {
             return page(
                 StatusCode::BAD_REQUEST,
-                follow::invalid_page(&why, "/"),
+                follow::invalid_page(&why, &invite_target),
                 isolated,
             )
         }
     };
     let outcome =
         follow::register(app.config.api_internal_url.as_deref(), &submission.request).await;
-    let (status, html) = follow::result_page(&outcome, &submission, &submission.to);
-    let _ = ctx;
+    if ctx.me_token.is_some() {
+        if matches!(
+            outcome,
+            follow::Outcome::Answered(playtest_common::follow::FollowResponse::Subscribed)
+                | follow::Outcome::Answered(
+                    playtest_common::follow::FollowResponse::AlreadyFollowing
+                )
+        ) {
+            let mut headers = base_headers();
+            put(&mut headers, "location", &invite_target);
+            put(&mut headers, "cache-control", "no-store");
+            return (StatusCode::SEE_OTHER, headers).into_response();
+        }
+    }
+    let (status, html) = follow::result_page(&outcome, &submission, &invite_target);
     page(status, html, isolated)
 }
 
@@ -794,11 +1157,19 @@ async fn cover_for_card(app: &App, manifest: &Manifest) -> Option<(String, Vec<u
     if cover.size > CARD_COVER_MAX_BYTES {
         return None;
     }
-    let path = app.sites.store().blob_path(&cover.hash).ok()?;
-    match tokio::fs::read(&path).await {
-        Ok(bytes) => Some((cover.mime.clone(), bytes)),
-        Err(err) => {
-            tracing::warn!(slug = %manifest.slug, %err, "邀请卡上的封面读不到，改用字卡");
+    match app
+        .sites
+        .store()
+        .get_blob_bytes(&cover.hash, CARD_COVER_MAX_BYTES)
+        .await
+    {
+        Ok(Some(bytes)) => Some((cover.mime.clone(), bytes)),
+        Ok(None) => {
+            tracing::warn!(slug = %manifest.slug, hash = %cover.hash, "邀请卡上的封面不存在，改用字卡");
+            None
+        }
+        Err(error) => {
+            tracing::warn!(slug = %manifest.slug, %error, "邀请卡上的封面读不到，改用字卡");
             None
         }
     }
@@ -824,17 +1195,17 @@ async fn cover(app: &App, manifest: &Manifest, parts: &axum::http::request::Part
         );
         return (StatusCode::TOO_MANY_REQUESTS, headers).into_response();
     }
-    let Ok(path) = app.sites.store().blob_path(&cover.hash) else {
-        return (StatusCode::NOT_FOUND, base_headers()).into_response();
-    };
-    let file = match tokio::fs::File::open(&path).await {
-        Ok(f) => f,
-        Err(err) => {
-            tracing::warn!(slug = %manifest.slug, %err, "封面的 blob 打不开");
+    let total = match app.sites.store().blob_size(&cover.hash).await {
+        Ok(Some(size)) => size,
+        Ok(None) => {
+            tracing::warn!(slug = %manifest.slug, hash = %cover.hash, "封面的 blob 不存在");
             return (StatusCode::NOT_FOUND, base_headers()).into_response();
         }
+        Err(error) => {
+            tracing::warn!(slug = %manifest.slug, %error, "封面的 blob 读不到");
+            return (StatusCode::INTERNAL_SERVER_ERROR, base_headers()).into_response();
+        }
     };
-    let total = file.metadata().await.map(|m| m.len()).unwrap_or(0);
 
     let mut headers = base_headers();
     put(&mut headers, "content-type", &cover.mime);
@@ -855,11 +1226,19 @@ async fn cover(app: &App, manifest: &Manifest, parts: &axum::http::request::Part
     if parts.method == Method::HEAD {
         return (StatusCode::OK, headers).into_response();
     }
+    let object = match app.sites.store().get_blob(&cover.hash, None).await {
+        Ok(Some(object)) => object,
+        Ok(None) => return (StatusCode::NOT_FOUND, base_headers()).into_response(),
+        Err(error) => {
+            tracing::warn!(slug = %manifest.slug, %error, "封面的 blob 流式读取失败");
+            return (StatusCode::INTERNAL_SERVER_ERROR, base_headers()).into_response();
+        }
+    };
     app.breaker.record(&manifest.slug, total);
     (
         StatusCode::OK,
         headers,
-        Body::from_stream(ReaderStream::new(file)),
+        Body::from_stream(object.into_stream()),
     )
         .into_response()
 }
@@ -903,7 +1282,7 @@ async fn start(
     append(
         &mut headers,
         "set-cookie",
-        &cookie(GATE_COOKIE, "1", gate_max_age, secure),
+        &cookie(GATE_COOKIE, "1", gate_max_age, secure, None),
     );
 
     let sid = match &ctx.sid {
@@ -913,7 +1292,7 @@ async fn start(
             append(
                 &mut headers,
                 "set-cookie",
-                &cookie(SESSION_COOKIE, &fresh, Some(SESSION_MAX_AGE), secure),
+                &cookie(SESSION_COOKIE, &fresh, Some(SESSION_MAX_AGE), secure, None),
             );
             fresh
         }
@@ -987,66 +1366,16 @@ async fn serve_file(
             (StatusCode::MOVED_PERMANENTLY, headers, body).into_response()
         }
         Resolved::File(served) => {
-            if gate::should_show(
-                manifest.gate,
-                parts.uri.path(),
-                served.is_html,
-                ctx.navigation,
-                ctx.has_gate_cookie,
-            ) {
-                gate_page(app, manifest, ctx, &parts).await
-            } else {
-                blob(app, manifest, ctx, &parts, &served).await
+            if ctx.from.is_some() && ctx.navigation && served.is_html {
+                let target = format!("{}p/{}", ctx.root_url, manifest.slug);
+                let mut headers = base_headers();
+                put(&mut headers, "location", &target);
+                put(&mut headers, "cache-control", "no-store");
+                return (StatusCode::SEE_OTHER, headers).into_response();
             }
+            blob(app, manifest, ctx, &parts, &served).await
         }
     }
-}
-
-async fn gate_page(
-    app: &App,
-    manifest: &Manifest,
-    ctx: &Ctx,
-    parts: &axum::http::request::Parts,
-) -> Response {
-    let to = same_origin_target(
-        parts
-            .uri
-            .path_and_query()
-            .map(|pq| pq.as_str())
-            .unwrap_or("/"),
-    );
-    // 两份会变的文件，都是短缓存的本地读；控制面挂了它们就是空的，那几行不出现而已。
-    let live = app.live.get(&manifest.slug).await;
-    let caps = app.caps.get().await;
-    let html = GatePage {
-        manifest,
-        live: &live,
-        caps: &caps,
-        to: &to,
-        host_suffix: &app.config.host_suffix,
-        root_url: &ctx.root_url,
-        page_url: &ctx.page_url,
-        origin: &ctx.origin,
-        wechat: ctx.visitor.wechat,
-        version_label: ctx.version_label,
-        referer: &ctx.visitor.referer,
-        from: ctx.from,
-    }
-    .render();
-
-    if parts.method == Method::GET {
-        app.events
-            .append(
-                Kind::GateView,
-                &manifest.slug,
-                manifest.version,
-                &ctx.visitor,
-                None,
-                None,
-            )
-            .await;
-    }
-    page(StatusCode::OK, html, Some((manifest.isolated, false)))
 }
 
 async fn blob(
@@ -1056,29 +1385,18 @@ async fn blob(
     parts: &axum::http::request::Parts,
     served: &Served,
 ) -> Response {
-    let Ok(path) = app.sites.store().blob_path(&served.entry.hash) else {
-        tracing::warn!(hash = %served.entry.hash, "清单里的哈希形态不对");
-        return page(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            pages::broken(),
-            Some((manifest.isolated, false)),
-        );
-    };
-    let mut file = match tokio::fs::File::open(&path).await {
-        Ok(f) => f,
-        Err(err) => {
-            tracing::warn!(path = %path.display(), %err, "清单指向的 blob 打不开");
+    let total = match app.sites.store().blob_size(&served.entry.hash).await {
+        Ok(Some(size)) => size,
+        Ok(None) => {
+            tracing::warn!(hash = %served.entry.hash, "清单指向的 blob 不存在");
             return page(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 pages::broken(),
                 Some((manifest.isolated, false)),
             );
         }
-    };
-    let total = match file.metadata().await {
-        Ok(meta) => meta.len(),
-        Err(err) => {
-            tracing::warn!(path = %path.display(), %err, "blob 读不到大小");
+        Err(error) => {
+            tracing::warn!(hash = %served.entry.hash, %error, "blob 读不到大小");
             return page(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 pages::broken(),
@@ -1163,19 +1481,33 @@ async fn blob(
     }
     // 记账放在真的要发字节的时候：304、416、HEAD 都不算。
     app.breaker.record(&manifest.slug, length);
-    if start > 0 {
-        if let Err(err) = file.seek(SeekFrom::Start(start)).await {
-            tracing::warn!(path = %path.display(), %err, "定位 Range 起点失败");
+    let object_range = (length != total).then_some(start..start + length);
+    let object = match app
+        .sites
+        .store()
+        .get_blob(&served.entry.hash, object_range)
+        .await
+    {
+        Ok(Some(object)) => object,
+        Ok(None) => {
+            tracing::warn!(hash = %served.entry.hash, "准备流式读取时 blob 不见了");
             return page(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 pages::broken(),
                 Some((manifest.isolated, false)),
             );
         }
-    }
-    // 流式回给玩家：一个 80 MB 的 Unity `.data` 不该先进我们的内存。
-    let stream = ReaderStream::new(file.take(length));
-    (status, headers, Body::from_stream(stream)).into_response()
+        Err(error) => {
+            tracing::warn!(hash = %served.entry.hash, %error, "blob 流式读取失败");
+            return page(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                pages::broken(),
+                Some((manifest.isolated, false)),
+            );
+        }
+    };
+    // S3 与本地文件都走同一条流；Range 由源站读取，80 MB `.data` 不进整包内存。
+    (status, headers, Body::from_stream(object.into_stream())).into_response()
 }
 
 // ---------------------------------------------------------------- 熔断
@@ -1306,8 +1638,17 @@ fn cookie_value<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     None
 }
 
-fn cookie(name: &str, value: &str, max_age: Option<u64>, secure: bool) -> String {
+fn cookie(
+    name: &str,
+    value: &str,
+    max_age: Option<u64>,
+    secure: bool,
+    domain: Option<&str>,
+) -> String {
     let mut out = format!("{name}={value}; Path=/; SameSite=Lax; HttpOnly");
+    if let Some(domain) = domain {
+        out.push_str(&format!("; Domain={domain}"));
+    }
     if let Some(age) = max_age {
         out.push_str(&format!("; Max-Age={age}"));
     }
@@ -1420,12 +1761,16 @@ mod tests {
     #[test]
     fn cookie_attributes() {
         assert_eq!(
-            cookie("pt_gate", "1", Some(86400), false),
+            cookie("pt_gate", "1", Some(86400), false, None),
             "pt_gate=1; Path=/; SameSite=Lax; HttpOnly; Max-Age=86400"
         );
         assert_eq!(
-            cookie("pt_gate", "1", None, true),
+            cookie("pt_gate", "1", None, true, None),
             "pt_gate=1; Path=/; SameSite=Lax; HttpOnly; Secure"
+        );
+        assert_eq!(
+            cookie("pt_me", "token123", Some(86400), true, Some(".playtest.run")),
+            "pt_me=token123; Path=/; SameSite=Lax; HttpOnly; Domain=.playtest.run; Max-Age=86400; Secure"
         );
     }
 

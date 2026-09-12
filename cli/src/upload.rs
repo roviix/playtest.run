@@ -116,7 +116,7 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         note: cli_args.note.clone(),
         summary: cli_args.summary.clone(),
         cover: cover.as_ref().map(|c| c.cover.clone()),
-        gate: cli_args.gate,
+        gate: manifest::GateMode::Once,
         isolated,
         spa: cli_args.spa,
         engine: checked.manifest_engine(),
@@ -192,14 +192,15 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         None
     };
 
+    let door_url = playtest_common::door_url(&committed.url, &committed.slug);
     let qr_text = if cli_args.no_qr {
         None
     } else {
-        ui::qr_text(&committed.url)
+        ui::qr_text(&door_url)
     };
     let mut report = UploadReport::new(
         committed.slug,
-        committed.url,
+        door_url,
         title,
         committed.version,
         timings,
@@ -221,13 +222,6 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     // 门禁页上不会有「还差几位」，这里也就不该说「想找 10 位」。
     report.seats = updated.as_ref().and_then(|site| site.listing.seats);
 
-    // 到这里链接已经能发给别人了。下面这两件事都要再问一次服务器，所以都放在
-    // `UploadReport::new` 记下时刻之后——「本次几秒」说的是链接多久能给出去（DESIGN §8），
-    // 不该被一句提醒和一张图撑大。
-    if without_cover(&client, &slug, cli_args, updated.as_ref()).await {
-        report.without_cover = true;
-        report.findings.push(Finding::note(output::NO_COVER));
-    }
     report.with_card(
         card::take(
             &report.url,
@@ -238,41 +232,13 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         )
         .await,
     );
+    report.elapsed_ms = output::elapsed_ms();
     Ok(report)
-}
-
-/// 这一版有没有封面（DESIGN §4.2 的上传时检查）。
-///
-/// 不能只看这次给没给 `--cover`：上一版传过的封面还在，第二次发不带 `--cover` 也是有封面的。
-/// 所以答案只能问服务器。刚改过广场状态的话答案已经在手里；否则多问一次，问不到就当没这回事
-/// ——一次已经成功的发布不该为了一句提醒变成失败（AGENTS 第 4 条）。
-async fn without_cover(
-    client: &Client,
-    slug: &str,
-    cli_args: &UploadArgs,
-    updated: Option<&playtest_common::api::Site>,
-) -> bool {
-    if cli_args.cover.is_some() {
-        return false;
-    }
-    let listing = match updated {
-        Some(site) => Some(site.listing.clone()),
-        None => client.get_site(slug).await.ok().map(|site| site.listing),
-    };
-    listing.is_some_and(|l| !l.has_cover)
 }
 
 /// 广场的地址就是玩家链接去掉 slug 那一级：`https://brisk-otter-41.playtest.run` → `https://playtest.run/`。
 pub(crate) fn plaza_url(site_url: &str) -> String {
-    let Some((scheme, rest)) = site_url.split_once("://") else {
-        return site_url.to_string();
-    };
-    let host_and_path = rest.trim_end_matches('/');
-    let root = match host_and_path.split_once('.') {
-        Some((_slug, root)) => root,
-        None => host_and_path,
-    };
-    format!("{scheme}://{root}/")
+    playtest_common::root_url_from_site(site_url)
 }
 
 /// 读进来的封面：清单里那条引用，加上上传时按哪个路径读。

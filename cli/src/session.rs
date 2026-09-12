@@ -64,6 +64,11 @@ impl Session {
     pub fn slug_of(&self, target: &str) -> Result<String> {
         let path = Path::new(target);
         if !path.is_dir() {
+            if target.starts_with('.') || target.contains('/') || target.contains('\\') {
+                return Err(output::bad_input(format!(
+                    "找不到目录「{target}」。请指定已发布的目录，或用 playtest ls 查看作品标识。"
+                )));
+            }
             return Ok(target.to_string());
         }
         let key = std::fs::canonicalize(path)
@@ -104,6 +109,20 @@ mod tests {
     fn a_name_that_is_not_a_directory_is_taken_as_a_slug() {
         let s = session_with(Config::default());
         assert_eq!(s.slug_of("brisk-otter-41").unwrap(), "brisk-otter-41");
+    }
+
+    #[test]
+    fn missing_paths_are_not_sent_as_site_identifiers() {
+        let session = session_with(Config::default());
+        for target in [
+            "./missing-export",
+            "/missing-export",
+            "missing/export",
+            "C:\\missing",
+        ] {
+            let error = session.slug_of(target).unwrap_err();
+            assert!(error.to_string().contains("找不到目录"), "{error}");
+        }
     }
 
     #[test]

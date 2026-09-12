@@ -18,10 +18,8 @@ use crate::routes::uploads::{clean_text, clean_title};
 use crate::routes::JsonBody;
 use crate::state::AppState;
 
-/// 匿名用户同时能有几个作品（DESIGN §6 免费档 3 个活跃 slug）。
-pub const ANON_MAX_SITES: u32 = 3;
-/// 登录账号的上限。DESIGN §6 公开后的免费档是 3；私测期放宽到 10，看真实用量再定。
-pub const LOGGED_IN_MAX_SITES: u32 = 10;
+pub const ANON_MAX_SITES: u32 = playtest_common::plan::Plan::Anon.limits().active_projects;
+pub const LOGGED_IN_MAX_SITES: u32 = playtest_common::plan::Plan::Free.limits().active_projects;
 
 /// 随机名字最多抽几次。抽不到说明词表用完了，那是我们要加词，不是用户的错。
 const SLUG_ATTEMPTS: usize = 20;
@@ -37,7 +35,8 @@ pub async fn create(
     let created_at = clock::now_string();
 
     let row = {
-        let conn = state.db().lock().await;
+        let mut connection = state.db().lock().await;
+        let conn = connection.transaction()?;
 
         let live = db::count_live_sites(&conn, &caller.user_id)?;
         if caller.kind.is_anon() {
@@ -73,6 +72,7 @@ pub async fn create(
             caller.expires_at.as_deref(),
         )?;
 
+        conn.commit()?;
         SiteRow {
             slug,
             title,
@@ -82,6 +82,35 @@ pub async fn create(
             listing: ListingRow::default(),
         }
     };
+
+    // SQLite 事务不能跨对象存储 await（rusqlite 的事务也不是 Send）。策略发布失败时把刚建的
+    // 空作品补偿删除；否则 CLI 重试会看见一个自己从未拿到成功响应的幽灵作品。
+    if let Err(error) = state
+        .store()
+        .put_policy(
+            &row.slug,
+            &playtest_common::quota::Policy {
+                owner: caller.user_id.clone(),
+                plan: if caller.kind.is_anon() {
+                    playtest_common::plan::Plan::Anon
+                } else {
+                    playtest_common::plan::Plan::Free
+                },
+                expires_at: caller.expires_at.clone(),
+            },
+        )
+        .await
+    {
+        let now = clock::now_string();
+        let cleanup = {
+            let conn = state.db().lock().await;
+            db::mark_site_deleted(&conn, &row.slug, &now)
+        };
+        if let Err(cleanup) = cleanup {
+            tracing::error!(slug = %row.slug, %cleanup, "额度策略发布失败后，空作品也没能补偿删除");
+        }
+        return Err(error.into());
+    }
 
     tracing::info!(slug = %row.slug, user_id = %caller.user_id, "建了一个作品");
     // 刚建出来的作品什么都还没有：没人留名、没人关注、没有推广。

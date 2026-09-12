@@ -3,7 +3,7 @@
 //! 这里定义的东西同时被 `api`（写）、`edge`（读）、`cli`（发）依赖：
 //!
 //! - [`manifest`]：一个版本的清单——路径 → 内容哈希，以及门禁页要显示的元信息。
-//! - [`store`]：对象存储的目录布局与本机文件系统实现。api 往里写，edge 只读，两边不直接通话。
+//! - [`store`]：对象存储布局与文件系统 / S3 实现。api 往里写，edge 只读，两边不直接通话。
 //! - [`api`]：CLI 与控制面之间的请求 / 响应体。
 //! - [`ingest`]：玩家浏览器写进来的东西——SDK 的事件与反馈、边缘补送的第一层事件。
 //! - [`results`]：控制台读出来的东西——作品时间线、会话点名册、反馈流。
@@ -22,8 +22,11 @@
 //! 改这里要保持向后兼容（只加字段、加 `#[serde(default)]`），因为三个进程不会同时升级。
 
 pub mod api;
+pub mod avatar;
 pub mod boost;
 pub mod capabilities;
+pub mod collection;
+pub mod contract;
 pub mod follow;
 pub mod hash;
 pub mod ingest;
@@ -33,6 +36,7 @@ pub mod manifest;
 pub mod plan;
 pub mod plaza;
 pub mod project;
+pub mod quota;
 pub mod results;
 pub mod slug;
 pub mod store;
@@ -83,9 +87,43 @@ pub const CARD_HEIGHT: u32 = 1350;
 pub const CARD_WIDE_WIDTH: u32 = 1200;
 pub const CARD_WIDE_HEIGHT: u32 = 630;
 
-/// 邀请卡的完整地址。`site_url` 是 `https://<slug>.playtest.run`。
-pub fn card_url(site_url: &str) -> String {
-    format!("{}{}", site_url.trim_end_matches('/'), CARD_PATH)
+fn is_ip_host(host: &str) -> bool {
+    let hostname = host.split(':').next().unwrap_or(host);
+    hostname.parse::<std::net::IpAddr>().is_ok()
+}
+
+/// 从主域邀请函地址提取/还原作品子域地址（例如：`https://playtest.run/p/slug` → `https://slug.playtest.run`）。
+pub fn site_url_from_door(door_url: &str) -> String {
+    let Some((scheme, rest)) = door_url.split_once("://") else {
+        return door_url.to_string();
+    };
+    let host_and_path = rest.trim_end_matches('/');
+    let (host, path) = match host_and_path.split_once('/') {
+        Some((h, p)) => (h, p),
+        None => (host_and_path, ""),
+    };
+    if let Some(slug) = path.strip_prefix("p/").or_else(|| path.strip_prefix("p")) {
+        let clean_slug = slug.trim_matches('/');
+        if !clean_slug.is_empty() {
+            if is_ip_host(host) {
+                return format!("{scheme}://{host}");
+            }
+            return format!("{scheme}://{clean_slug}.{host}");
+        }
+    }
+    door_url.to_string()
+}
+
+/// 邀请卡的完整地址。支持传入子域链接或主域邀请函链接。
+pub fn card_url(site_or_door: &str) -> String {
+    let site = site_url_from_door(site_or_door);
+    format!("{}{}", site.trim_end_matches('/'), CARD_PATH)
+}
+
+/// 横版邀请卡的完整地址。支持传入子域链接或主域邀请函链接。
+pub fn card_wide_url(site_or_door: &str) -> String {
+    let site = site_url_from_door(site_or_door);
+    format!("{}{}", site.trim_end_matches('/'), CARD_WIDE_PATH)
 }
 
 // ---- 来源（DESIGN §3.5「来自哪里」） ----
@@ -98,15 +136,48 @@ pub const FROM_CARD: &str = "card";
 pub const FROM_NOTICE: &str = "notice";
 /// 从广场那面墙上点进来的。三个环各带来了几个人，开发者据此知道（REWRITE §3.4「结果」）。
 pub const FROM_PLAZA: &str = "plaza";
+pub const FROM_COLLECTION: &str = "collection";
 
-/// 邀请卡二维码里的地址：作品链接加 `?from=card`。
-pub fn card_qr_url(site_url: &str) -> String {
-    format!(
-        "{}/?{}={}",
-        site_url.trim_end_matches('/'),
-        FROM_PARAM,
-        FROM_CARD
-    )
+/// 从作品子域地址（如 `https://brisk-otter-41.playtest.run` 或 `http://brisk-otter-41.localhost:8443`）
+/// 计算出根域地址（如 `https://playtest.run/` 或 `http://localhost:8443/`）。
+pub fn root_url_from_site(site_url: &str) -> String {
+    let Some((scheme, rest)) = site_url.split_once("://") else {
+        return site_url.to_string();
+    };
+    let host_and_path = rest.trim_end_matches('/');
+    let host = match host_and_path.split_once('/') {
+        Some((host, _path)) => host,
+        None => host_and_path,
+    };
+    if is_ip_host(host) {
+        return format!("{scheme}://{host}/");
+    }
+    let root = match host.split_once('.') {
+        Some((_slug, root)) => root,
+        None => host,
+    };
+    format!("{scheme}://{root}/")
+}
+
+/// 作品主域邀请函完整链接（Front Door，DESIGN §3.1 与 §3.3）。
+/// 例如：`https://brisk-otter-41.playtest.run` + `brisk-otter-41` → `https://playtest.run/p/brisk-otter-41`
+/// 本机开发：`http://brisk-otter-41.localhost:8443` + `brisk-otter-41` → `http://localhost:8443/p/brisk-otter-41`
+pub fn door_url(site_url: &str, slug: &str) -> String {
+    if site_url.contains("/p/") {
+        return site_url.to_string();
+    }
+    let root = root_url_from_site(site_url);
+    format!("{}p/{slug}", root)
+}
+
+/// 邀请卡二维码里的地址：主域邀请函加 `?from=card`（DESIGN §3.4）。
+pub fn card_qr_url(door_url: &str) -> String {
+    let base = door_url.trim_end_matches('/');
+    if base.contains('?') {
+        format!("{base}&{FROM_PARAM}={FROM_CARD}")
+    } else {
+        format!("{base}?{FROM_PARAM}={FROM_CARD}")
+    }
 }
 
 #[cfg(test)]
@@ -120,8 +191,36 @@ mod tests {
             "https://brisk-otter-41.playtest.run/_playtest/card.png"
         );
         assert_eq!(
-            card_qr_url("https://brisk-otter-41.playtest.run"),
-            "https://brisk-otter-41.playtest.run/?from=card"
+            root_url_from_site("https://brisk-otter-41.playtest.run"),
+            "https://playtest.run/"
+        );
+        assert_eq!(
+            root_url_from_site("http://brisk-otter-41.localhost:8443"),
+            "http://localhost:8443/"
+        );
+        assert_eq!(
+            door_url("https://brisk-otter-41.playtest.run", "brisk-otter-41"),
+            "https://playtest.run/p/brisk-otter-41"
+        );
+        assert_eq!(
+            door_url("http://brisk-otter-41.localhost:8443", "brisk-otter-41"),
+            "http://localhost:8443/p/brisk-otter-41"
+        );
+        assert_eq!(
+            site_url_from_door("https://playtest.run/p/brisk-otter-41"),
+            "https://brisk-otter-41.playtest.run"
+        );
+        assert_eq!(
+            site_url_from_door("http://localhost:8443/p/brisk-otter-41"),
+            "http://brisk-otter-41.localhost:8443"
+        );
+        assert_eq!(
+            card_url("https://playtest.run/p/brisk-otter-41"),
+            "https://brisk-otter-41.playtest.run/_playtest/card.png"
+        );
+        assert_eq!(
+            card_qr_url("https://playtest.run/p/brisk-otter-41"),
+            "https://playtest.run/p/brisk-otter-41?from=card"
         );
     }
 }

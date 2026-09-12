@@ -95,6 +95,17 @@ impl Site {
 
         store.put_manifest(&manifest).await.unwrap();
         store
+            .put_policy(
+                &manifest.slug,
+                &playtest_common::quota::Policy {
+                    owner: manifest.slug.clone(),
+                    plan: playtest_common::plan::Plan::Free,
+                    expires_at: manifest.expires_at.clone(),
+                },
+            )
+            .await
+            .unwrap();
+        store
             .set_current(
                 SLUG,
                 &Current {
@@ -136,6 +147,11 @@ impl Site {
 
     async fn get(&self, path: &str) -> Reply {
         self.send(nav(path).body(Body::empty()).unwrap()).await
+    }
+
+    async fn get_root(&self, path: &str) -> Reply {
+        self.send(nav_on("localhost:8443", path).body(Body::empty()).unwrap())
+            .await
     }
 
     fn events(&self) -> Vec<serde_json::Value> {
@@ -204,33 +220,42 @@ fn passed_gate(builder: axum::http::request::Builder) -> axum::http::request::Bu
 #[tokio::test]
 async fn navigation_without_cookie_gets_the_gate_page() {
     let site = Site::plain().await;
+    // 子域直出 index.html 纯净沙盒
     let reply = site.get("/").await;
-
     assert_eq!(reply.status, StatusCode::OK);
     assert_eq!(
         reply.header("content-type"),
         Some("text/html; charset=utf-8")
     );
-    assert_eq!(reply.header("cache-control"), Some("no-store"));
-    assert_eq!(reply.header("x-content-type-options"), Some("nosniff"));
+    assert_eq!(reply.header("cache-control"), Some("no-cache"));
+    assert_eq!(reply.text(), INDEX_HTML);
 
-    let html = reply.text();
-    assert!(html.contains(">开始</button>"));
+    // 根域 /p/{slug} 承载门面与邀请函
+    let root_reply = site.get_root(&format!("/p/{SLUG}")).await;
+    assert_eq!(root_reply.status, StatusCode::OK);
+    assert_eq!(
+        root_reply.header("content-type"),
+        Some("text/html; charset=utf-8")
+    );
+    assert_eq!(root_reply.header("cache-control"), None);
+
+    let html = root_reply.text();
+    assert!(html.contains("开始试玩"));
     assert!(html.contains("某某 邀请你试玩"));
     assert!(html.contains("《小球大冒险》"));
     assert!(html.contains("· v7"));
-    assert!(html.contains("action=\"/_playtest/start\""));
-    assert!(html.contains("由 localhost 提供"));
+    assert!(html.contains(&format!("action=\"/p/{SLUG}\"")));
     // 门禁页出的不是作品的 index.html。
     assert!(!html.contains("<canvas"));
     // 玩家页面上不出现品牌域名。
     assert!(!html.contains(playtest_common::DEVELOPER_HOST));
 
     let events = site.events();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0]["type"], "gate_view");
-    assert_eq!(events[0]["slug"], SLUG);
-    assert_eq!(events[0]["version"], 7);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["type"], "html_view");
+    assert_eq!(events[1]["type"], "gate_view");
+    assert_eq!(events[1]["slug"], SLUG);
+    assert_eq!(events[1]["version"], 7);
 }
 
 #[tokio::test]
@@ -285,7 +310,7 @@ async fn wechat_gets_the_open_in_browser_tip() {
     let site = Site::build(|m| m.isolated = true).await;
     let reply = site
         .send(
-            nav("/")
+            nav_on("localhost:8443", &format!("/p/{SLUG}"))
                 .header(
                     "user-agent",
                     "Mozilla/5.0 (iPhone) MicroMessenger/8.0.49 NetType/WIFI",
@@ -627,10 +652,10 @@ async fn the_cover_is_served_from_the_reserved_path() {
         Some(format!("\"{}\"", hash_bytes(COVER_PNG)).as_str())
     );
     // 门禁页拿它当第一眼，也拿它当分享卡片的图。
-    let gate = site.get("/").await;
-    assert!(gate
-        .text()
-        .contains("<img class=\"hero\" src=\"/_playtest/cover\""));
+    let gate = site.get_root(&format!("/p/{SLUG}")).await;
+    assert!(gate.text().contains(
+        "<img class=\"hero\" src=\"http://brisk-otter-41.localhost:8443/_playtest/cover\""
+    ));
     assert!(gate.text().contains(
         "<meta property=\"og:image\" content=\"http://brisk-otter-41.localhost:8443/_playtest/cover\">"
     ));
@@ -643,7 +668,7 @@ async fn the_cover_is_served_from_the_reserved_path() {
 
     // 但分享出去仍然有图：横版邀请卡。它写的是作品名和开发者名，
     // 不是一张假截图，所以可以当 og:image（DESIGN §3.3）。
-    let html = plain.get("/").await.text();
+    let html = plain.get_root(&format!("/p/{SLUG}")).await.text();
     assert!(html.contains(
         "<meta property=\"og:image\" content=\"http://brisk-otter-41.localhost:8443/_playtest/card-wide.png\">"
     ));
@@ -765,7 +790,7 @@ async fn the_real_referrer_survives_the_gate() {
     let site = Site::plain().await;
     let gate = site
         .send(
-            nav("/")
+            nav_on("localhost:8443", &format!("/p/{SLUG}"))
                 .header("referer", "https://discord.com/channels/1/2")
                 .body(Body::empty())
                 .unwrap(),
@@ -782,9 +807,10 @@ async fn the_real_referrer_survives_the_gate() {
         .send(
             Request::builder()
                 .method("POST")
-                .uri("/_playtest/start")
-                .header("host", HOST)
-                .header("referer", format!("http://{HOST}/"))
+                .uri(&format!("/p/{SLUG}"))
+                .header("host", "localhost:8443")
+                .header("referer", format!("http://localhost:8443/p/{SLUG}"))
+                .header("origin", "http://localhost:8443")
                 .header("content-type", "application/x-www-form-urlencoded")
                 .body(Body::from(
                     "to=%2F&ref=https%3A%2F%2Fdiscord.com%2Fchannels%2F1%2F2",
@@ -793,6 +819,10 @@ async fn the_real_referrer_survives_the_gate() {
         )
         .await;
     assert_eq!(reply.status, StatusCode::SEE_OTHER);
+    assert_eq!(
+        reply.header("location"),
+        Some(format!("http://{HOST}/").as_str())
+    );
 
     let events = site.events();
     let start = events.iter().find(|e| e["type"] == "start").unwrap();
@@ -803,8 +833,10 @@ async fn the_real_referrer_survives_the_gate() {
         .send(
             Request::builder()
                 .method("POST")
-                .uri("/_playtest/start")
-                .header("host", HOST)
+                .uri(&format!("/p/{SLUG}"))
+                .header("host", "localhost:8443")
+                .header("origin", "http://localhost:8443")
+                .header("referer", format!("http://localhost:8443/p/{SLUG}"))
                 .header("content-type", "application/x-www-form-urlencoded")
                 .body(Body::from("to=%2F&ref=javascript%3Aalert(1)"))
                 .unwrap(),

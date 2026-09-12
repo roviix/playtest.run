@@ -29,11 +29,47 @@ pub async fn ls(api: Option<&str>) -> Result<Report> {
     Ok(Report::Sites(client.list_sites().await?))
 }
 
+pub async fn logout(yes: bool, api: Option<&str>, ask: bool) -> Result<Report> {
+    if !yes && !ask {
+        return Err(output::usage(
+            "撤销令牌需要确认。使用 playtest logout -y --json；匿名作品请先登录接管。",
+        ));
+    }
+    let mut session = Session::open(api)?;
+    if session.config.api.as_deref() != Some(session.api.as_str()) {
+        return Err(output::bad_input(
+            "这台机器的令牌不属于这个控制面，未发送或清除任何凭据。",
+        ));
+    }
+    if session.config.token.is_none() {
+        return Ok(Report::LoggedOut);
+    }
+    if !yes && ui::confirm(
+        "要撤销当前令牌吗？作品不会删除；匿名作品请先登录接管，否则会失去管理入口。输入 y 确认：",
+    ) != Some(true)
+    {
+        return Err(output::bad_input("没有确认，当前令牌保持不变。"));
+    }
+    let mut client = crate::client::Client::new(&session.api)?;
+    client.set_token(session.config.token.clone());
+    if let Err(error) = client.revoke_token().await {
+        if !error.means_token_gone() {
+            return Err(error.into());
+        }
+    }
+    session.config.token = None;
+    session.config.token_expires_at = None;
+    session.config.login = None;
+    session.save()?;
+    Ok(Report::LoggedOut)
+}
+
 pub async fn open(target: &str, api: Option<&str>, launch: bool) -> Result<Report> {
     let session = Session::open(api)?;
     let slug = session.slug_of(target)?;
     let client = session.client_or_say("没有链接可以打开")?;
-    let site = client.get_site(&slug).await?;
+    let mut site = client.get_site(&slug).await?;
+    site.url = playtest_common::door_url(&site.url, &site.slug);
     if launch {
         sites::launch_browser(&site.url);
     }
@@ -55,6 +91,8 @@ pub async fn rm(slug: &str, yes: bool, api: Option<&str>, ask: bool) -> Result<R
     }
 
     let mut session = Session::open(api)?;
+    let resolved = session.slug_of(slug)?;
+    let slug = resolved.as_str();
     let client = session.client_or_say(&format!("没有 {slug} 可以删"))?;
 
     if !yes {
@@ -138,14 +176,20 @@ pub async fn rollback(target: &str, version: &str, api: Option<&str>) -> Result<
 
 /// `3` 和 `v3` 都认。别的形状当场说清楚，不去猜。
 fn parse_version(raw: &str) -> Result<u32> {
-    raw.trim()
-        .trim_start_matches(['v', 'V'])
-        .parse()
-        .map_err(|_| output::bad_input(format!("版本要写成 3 或 v3，不认识「{raw}」。")))
+    let trimmed = raw.trim();
+    trimmed
+        .strip_prefix(['v', 'V'])
+        .unwrap_or(trimmed)
+        .parse::<u32>()
+        .ok()
+        .filter(|number| *number > 0)
+        .ok_or_else(|| output::bad_input(format!("版本要写成 3 或 v3，不认识「{raw}」。")))
 }
 
 pub async fn unlist(slug: &str, api: Option<&str>) -> Result<Report> {
     let session = Session::open(api)?;
+    let resolved = session.slug_of(slug)?;
+    let slug = resolved.as_str();
     let client = session.client_or_say(&format!("没有 {slug} 可以从广场上拿下来"))?;
     client
         .update_site(
@@ -197,5 +241,8 @@ mod tests {
         assert!(err.to_string().contains("写成 3 或 v3"), "{err}");
         assert!(parse_version("").is_err());
         assert!(parse_version("v").is_err());
+        for invalid in ["0", "v0", "vv3", "vV3", "-1"] {
+            assert!(parse_version(invalid).is_err(), "{invalid}");
+        }
     }
 }

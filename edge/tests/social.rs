@@ -1,4 +1,4 @@
-//! 邀请卡、分享页、关注登记、「我的」、广场这五样，打真的 Router 走一遍
+//! 邀请卡、分享页、关注登记、关注页、广场这五样，打真的 Router 走一遍
 //! （DESIGN §3.4、§3.6、§3.9、§3.10）。
 //!
 //! 关注那几条要跟控制面说话，所以这里起一个假控制面：一个真的 axum 服务，
@@ -188,6 +188,17 @@ impl Site {
         validate_manifest(&manifest, 512 * 1024 * 1024).unwrap();
         store.put_manifest(&manifest).await.unwrap();
         store
+            .put_policy(
+                &manifest.slug,
+                &playtest_common::quota::Policy {
+                    owner: manifest.slug.clone(),
+                    plan: playtest_common::plan::Plan::Free,
+                    expires_at: manifest.expires_at.clone(),
+                },
+            )
+            .await
+            .unwrap();
+        store
             .set_current(
                 SLUG,
                 &Current {
@@ -265,6 +276,7 @@ impl Site {
                 .method("POST")
                 .uri(path)
                 .header("host", host)
+                .header("origin", format!("http://{host}"))
                 .header("content-type", "application/x-www-form-urlencoded")
                 .body(Body::from(form.to_string()))
                 .unwrap(),
@@ -549,7 +561,7 @@ async fn a_control_plane_that_is_not_there_is_one_calm_sentence() {
     assert!(reply.text().contains("现在登记不了，稍后再试。"));
 }
 
-// ------------------------------------------------------------------ 根域：我的
+// ------------------------------------------------------------------ 根域：关注
 
 #[tokio::test]
 async fn me_without_a_key_is_this_device_not_a_login_wall() {
@@ -558,10 +570,11 @@ async fn me_without_a_key_is_this_device_not_a_login_wall() {
     let reply = site.get_root(root_paths::ME).await;
     assert_eq!(reply.status, StatusCode::OK);
     let html = reply.text();
-    assert!(html.contains("你关注的作品会出现在这里"));
+    assert!(html.contains("<h1>关注</h1>"));
+    assert!(html.contains("每周一封"));
     assert!(html.contains("type=\"email\""));
     assert!(html.contains("aria-current=\"page\""));
-    assert!(html.contains("我的<span class=\"nav-dot\"></span>"));
+    assert!(html.contains("关注<span class=\"nav-dot\"></span>"));
     assert!(html.contains("href=\"/\""));
     assert!(html.contains("广场</a>"));
     assert!(!html.contains("看看有什么新东西"));
@@ -569,7 +582,8 @@ async fn me_without_a_key_is_this_device_not_a_login_wall() {
     for word in [">登录<", ">注册<", "账号", "密码"] {
         assert!(!html.contains(word), "「{word}」不该出现");
     }
-    // 留邮箱这一下同时就是关注广场。
+    // 找回关注与订阅周报分别提交，找回不自动订阅。
+    assert!(html.contains("value=\"send_link\""));
     assert!(html.contains(&format!("action=\"{}\"", root_paths::FOLLOW)));
     assert!(html.contains("value=\"plaza\""));
 }
@@ -583,21 +597,21 @@ async fn me_with_a_key_lists_what_this_person_follows() {
     let reply = site.get_root_as_me(root_paths::ME).await;
     assert_eq!(reply.status, StatusCode::OK);
     let html = reply.text();
-    assert!(html.contains("这台设备连着 z***@example.com。"));
+    assert!(html.contains("z***@example.com"));
     assert!(html.contains("小球大冒险"));
-    assert!(html.contains("<button type=\"submit\">取消</button>"));
+    assert!(html.contains("aria-label=\"取消关注小球大冒险\">取消关注</button>"));
     assert!(html.contains("换一台设备"));
     // 拿钥匙去问控制面，不是拿邮箱。
     let (_, body) = api.last();
     assert_eq!(body["me_token"], ME_TOKEN);
-    // 这一页不缓存：它是「我的」。
+    // 这一页不缓存：它是这台设备的抽屉。
     assert_eq!(reply.header("cache-control"), Some("no-store"));
 
     // 控制面不认这把钥匙：清掉 cookie，按没有处理，不解释。
     *api.answer.lock().unwrap() = Answer::Status(401);
     let reply = site.get_root_as_me(root_paths::ME).await;
     assert_eq!(reply.status, StatusCode::OK);
-    assert!(reply.text().contains("你关注的作品会出现在这里"));
+    assert!(reply.text().contains("<h1>关注</h1>"));
     let cleared = reply
         .cookies()
         .iter()
@@ -607,7 +621,7 @@ async fn me_with_a_key_lists_what_this_person_follows() {
     assert!(cleared.contains("Max-Age=0"));
 }
 
-/// 确认信里那条链接：种 `pt_me`，303 到「我的」。cookie 的属性是 DESIGN §4.1 的硬要求。
+/// 确认信里那条链接：种 `pt_me`，303 到关注页。cookie 的属性是 DESIGN §4.1 的硬要求。
 #[tokio::test]
 async fn confirming_plants_a_host_only_key() {
     let (api, base) = FakeApi::start(Answer::Follow(FollowResponse::Subscribed)).await;
@@ -628,9 +642,11 @@ async fn confirming_plants_a_host_only_key() {
     assert!(cookie.contains("Path=/"));
     assert!(cookie.contains("HttpOnly"));
     assert!(cookie.contains("SameSite=Lax"));
-    assert!(cookie.contains("Max-Age=31536000"));
-    // **没有 Domain**：这把钥匙只属于根域这一个主机名，作品子域读不到（DESIGN §4.1）。
-    assert!(!cookie.contains("Domain"));
+    assert!(!cookie.contains("Domain="));
+    assert!(reply
+        .cookies()
+        .iter()
+        .any(|cookie| cookie.contains("Domain=.localhost") && cookie.contains("Max-Age=0")));
     // 本机是 http，所以不加 Secure；线上 https 会加（见 config.public_scheme）。
     assert!(!cookie.contains("Secure"));
     let (path, body) = api.last();
@@ -682,6 +698,7 @@ async fn me_actions_redirect_back_and_never_repeat_themselves() {
                 .method("POST")
                 .uri(root_paths::ME_ACTION)
                 .header("host", ROOT)
+                .header("origin", format!("http://{ROOT}"))
                 .header("cookie", format!("pt_me={ME_TOKEN}"))
                 .header("content-type", "application/x-www-form-urlencoded")
                 .body(Body::from("action=unfollow&target=site%3Abrisk-otter-41"))
@@ -713,6 +730,7 @@ async fn me_actions_redirect_back_and_never_repeat_themselves() {
                 .method("POST")
                 .uri(root_paths::ME_ACTION)
                 .header("host", ROOT)
+                .header("origin", format!("http://{ROOT}"))
                 .header("cookie", format!("pt_me={ME_TOKEN}"))
                 .header("content-type", "application/x-www-form-urlencoded")
                 .body(Body::from("action=push_off"))
@@ -784,6 +802,7 @@ async fn the_wall_is_one_grid_with_a_rail_and_says_which_card_is_paid_for() {
             schema: playtest_common::plaza::SCHEMA,
             generated_at: "2026-09-09T00:00:00Z".into(),
             club_followers: 42,
+            collections: vec![],
             items: vec![
                 tile("paid-one", true, false),
                 tile("seeking-one", false, true),
@@ -796,14 +815,14 @@ async fn the_wall_is_one_grid_with_a_rail_and_says_which_card_is_paid_for() {
     let reply = site.get_root("/").await;
     assert_eq!(reply.status, StatusCode::OK);
     let html = reply.text();
-    // 栏：字标、广场（当前）、我的。发布只在栏底便条。墙上没有门口那句话。
-    assert!(html.contains("playtest<span>.run</span>"));
+    // 顶通栏：字标、广场（当前）、关注、发布。墙上没有门口那句话。
+    assert!(html.contains("playtest<span class=\"tld\">.run</span>"));
     assert!(html.contains("aria-current=\"page\""));
     assert!(html.contains("广场<span class=\"nav-dot\"></span>"));
-    assert!(html.contains("我的</a>"));
+    assert!(html.contains("关注</a>"));
     assert!(html.contains("href=\"#publish-dialog\""));
-    assert!(html.contains("从一条命令开始"));
-    assert!(!html.contains(">发布作品<"));
+    assert!(html.contains("发布作品"));
+    assert!(html.contains(">发布作品</a>"));
     assert!(!html.contains("brand-icon"));
     assert!(!html.contains("class=\"topbar\""));
     assert!(!html.contains("来玩点，还没定稿的"));
@@ -814,11 +833,11 @@ async fn the_wall_is_one_grid_with_a_rail_and_says_which_card_is_paid_for() {
     assert!(!html.contains("<i>01</i>"));
     assert!(!html.contains("有新东西时告诉我"));
     assert!(!html.contains("关注着这里"));
-    // 墙：一面网格，推广在最前面且带标，找人测其次，其余最后。
+    // 最新墙保留标明的推广；同一更新时间按 slug 排，招募不覆盖时间顺序。
     let paid = html.find("data-slug=\"paid-one\"").unwrap();
     let seeking = html.find("data-slug=\"seeking-one\"").unwrap();
     let quiet = html.find("data-slug=\"quiet-one\"").unwrap();
-    assert!(paid < seeking && seeking < quiet);
+    assert!(paid < quiet && quiet < seeking);
     assert!(html.contains("<span class=\"tag ad\">推广</span>"));
     assert!(html.contains("<span class=\"tag\">正在找人测</span>"));
     assert!(html.contains("4 / 10 位"));
@@ -827,9 +846,13 @@ async fn the_wall_is_one_grid_with_a_rail_and_says_which_card_is_paid_for() {
     assert!(!html.contains("无需登录"));
     // 卡上没有关注、想玩、举报，也没有筛选栏；这一页一行脚本都没有（DESIGN §3.9）。
     assert!(!html.contains("value=\"site:seeking-one\""));
-    for word in ["想玩", "举报", "最多人玩", "data-band", "<script"] {
+    for word in ["想玩", "举报", "最多人玩", "data-band"] {
         assert!(!html.contains(word), "「{word}」不该出现");
     }
+
+    assert_eq!(html.matches("<script nonce=").count(), 1);
+    assert!(html.contains("dialog.showModal()"));
+    assert!(!html.contains("<script src="));
 
     // 头像来自 GitHub，所以 CSP 的 img-src 里多这一个来源，且只多这一个。
     let csp = reply.header("content-security-policy").unwrap();
@@ -851,12 +874,13 @@ async fn the_wall_is_one_grid_with_a_rail_and_says_which_card_is_paid_for() {
             schema: playtest_common::plaza::SCHEMA,
             generated_at: "2026-09-09T00:00:00Z".into(),
             club_followers: 0,
+            collections: vec![],
             items: vec![tile("seeking-one", false, true)],
         })
         .await
         .unwrap();
     let html = signed.get_root_as_me("/").await.text();
-    // 有没有钥匙，这一页都一样：关注只在「我的」里办。墙上不另写介绍。
+    // 有没有钥匙，这一页都一样：关注只在关注页里办。墙上不另写介绍。
     assert!(!html.contains("有新东西时告诉我"));
     assert!(!html.contains("type=\"email\""));
     assert!(!html.contains("class=\"intro\""));
@@ -876,6 +900,7 @@ async fn following_from_the_wall_comes_back_to_the_wall() {
                 .method("POST")
                 .uri(root_paths::FOLLOW)
                 .header("host", ROOT)
+                .header("origin", format!("http://{ROOT}"))
                 .header("cookie", format!("pt_me={ME_TOKEN}"))
                 .header("content-type", "application/x-www-form-urlencoded")
                 .body(Body::from("target=plaza&from=plaza&to=%2F"))
@@ -903,6 +928,105 @@ async fn the_root_host_has_nothing_else_on_it() {
             "{path}"
         );
     }
+}
+
+#[tokio::test]
+async fn secure_identity_is_host_prefixed_and_legacy_identity_is_not_trusted() {
+    let (api, base) = FakeApi::start(Answer::Follow(FollowResponse::Subscribed)).await;
+    let mut site = Site::build(Some(base), |_| {}).await;
+    Arc::get_mut(&mut site.app).unwrap().config.public_scheme = "https".into();
+    let reply = site
+        .get_root(&format!("{}tok_abc123", root_paths::ME_CONFIRM))
+        .await;
+    let cookies = reply.cookies();
+    let active = cookies
+        .iter()
+        .find(|cookie| cookie.starts_with("__Host-pt_me="))
+        .unwrap();
+    assert!(active.contains("Secure"));
+    assert!(active.contains("HttpOnly"));
+    assert!(active.contains("Path=/"));
+    assert!(!active.contains("Domain="));
+    assert!(cookies
+        .iter()
+        .any(|cookie| cookie.starts_with("pt_me=") && cookie.contains("Max-Age=0")));
+
+    let hits = api.hits.load(Ordering::SeqCst);
+    let reply = site.get_root_as_me(root_paths::ME).await;
+    assert_eq!(reply.status, StatusCode::OK);
+    assert_eq!(api.hits.load(Ordering::SeqCst), hits);
+    assert!(!reply.text().contains("z***@example.com"));
+    let reply = site
+        .send(
+            nav_on(ROOT, root_paths::ME)
+                .header("cookie", format!("__Host-pt_me={ME_TOKEN}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(reply.status, StatusCode::OK);
+    assert!(reply.text().contains("z***@example.com"));
+}
+
+#[tokio::test]
+async fn another_work_cannot_act_with_the_root_identity() {
+    let (api, base) = FakeApi::start(Answer::Follow(FollowResponse::Subscribed)).await;
+    let site = Site::build(Some(base), |_| {}).await;
+    for route in [
+        root_paths::FOLLOW,
+        root_paths::ME_ACTION,
+        "/p/brisk-otter-41",
+    ] {
+        for origin in [
+            None,
+            Some("null"),
+            Some("http://evil.localhost:8443"),
+            Some("http://localhost:9999"),
+        ] {
+            let mut request = Request::builder()
+                .method("POST")
+                .uri(route)
+                .header("host", ROOT)
+                .header("cookie", format!("pt_me={ME_TOKEN}"))
+                .header("content-type", "application/x-www-form-urlencoded");
+            if let Some(origin) = origin {
+                request = request.header("origin", origin);
+            }
+            let reply = site
+                .send(
+                    request
+                        .body(Body::from("action=unfollow&target=site%3Abrisk-otter-41"))
+                        .unwrap(),
+                )
+                .await;
+            assert_eq!(reply.status, StatusCode::FORBIDDEN);
+            assert!(reply.text().contains("请从作品邀请页操作"));
+        }
+    }
+    assert_eq!(api.hits.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_work_does_not_use_a_legacy_shared_identity() {
+    let (api, base) = FakeApi::start(Answer::Follow(FollowResponse::Subscribed)).await;
+    let site = Site::build(Some(base), |_| {}).await;
+    let reply = site
+        .send(
+            Request::builder()
+                .method("POST")
+                .uri("/_playtest/follow")
+                .header("host", HOST)
+                .header(
+                    "cookie",
+                    format!("pt_me={ME_TOKEN}; __Host-pt_me={ME_TOKEN}"),
+                )
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from("target=site%3Abrisk-otter-41&channel=me"))
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(reply.status, StatusCode::BAD_REQUEST);
+    assert_eq!(api.hits.load(Ordering::SeqCst), 0);
 }
 
 /// 搜到玩家域的助手要能自己找到开发者那一侧，而不是照着首页猜（REWRITE §3.2）。
@@ -936,12 +1060,12 @@ async fn an_assistant_landing_on_the_player_host_is_pointed_at_the_docs() {
 async fn the_gate_shows_only_what_is_really_there() {
     // 什么文件都没有的时候：没有名额、没有群、没有分享、没有关注。
     let bare = Site::plain().await;
-    let html = bare.get("/").await.text();
+    let html = bare.get_root(&format!("/p/{SLUG}")).await.text();
     assert!(!html.contains("在找"));
     assert!(!html.contains("开发者的群"));
     assert!(!html.contains(playtest_common::SHARE_PATH));
-    assert!(!html.contains("有新版本时告诉我"));
-    assert!(html.contains(">开始</button>"));
+    assert!(!html.contains("id=\"notification-settings\""));
+    assert!(html.contains("开始试玩"));
 
     let site = Site::plain().await;
     site.caps(email_caps()).await;
@@ -961,18 +1085,26 @@ async fn the_gate_shows_only_what_is_really_there() {
     })
     .await;
 
-    let html = site.get("/?from=card").await.text();
+    let redirect = site.get("/?from=card").await;
+    assert_eq!(redirect.status, StatusCode::SEE_OTHER);
+    assert_eq!(
+        redirect.header("location"),
+        Some(format!("http://localhost:8443/p/{SLUG}").as_str())
+    );
+
+    let html = site.get_root(&format!("/p/{SLUG}?from=card")).await.text();
     assert!(html.contains("某某在找 10 位试玩者 · 已有 6 位加入"));
     assert!(html.contains("开发者的群"));
     assert!(html.contains("rel=\"noopener nofollow\""));
     assert!(html.contains(playtest_common::SHARE_PATH));
-    assert!(html.contains("有新版本时告诉我"));
+    assert!(html.contains("id=\"notification-settings\""));
     assert!(html.contains("「不知道要按哪个键」"));
     assert!(html.contains("avatars.githubusercontent.com"));
     // 扫卡进来的人：来源随「开始」一起带走。
     assert!(html.contains("<input type=\"hidden\" name=\"from\" value=\"card\">"));
     // 留名是可选的。
-    assert!(html.contains("placeholder=\"你的名字（可不填）\""));
+    assert!(html.contains("<label class=\"holder\"><span>你的名字"));
+    assert!(html.contains("· 可不填"));
     // 作品域上永远没有 CSP（硬线）。
     assert!(site
         .get("/")

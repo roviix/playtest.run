@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>playtest.run · 布局与配色重构方案对比</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #09090b;
+  --sidebar-bg: #0d0d11;
+  --card: #131317;
+  --card-hover: #18181f;
+  --fg: #f4f4f7;
+  --soft: #b0b0b8;
+  --dim: #71717a;
+  --line: rgba(255, 255, 255, 0.08);
+  --line2: rgba(255, 255, 255, 0.16);
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* 颜色方案预设 */
+body.theme-titanium {
+  --accent: #ffffff;
+  --accent-ink: #09090b;
+  --accent-soft: rgba(255, 255, 255, 0.12);
+  --accent-glow: rgba(255, 255, 255, 0.35);
+  --accent-tld: #e2e8f0;
+}
+body.theme-mint {
+  --accent: #2dd4bf; /* 薄荷玉青 / 冷杉青，高端克制 */
+  --accent-ink: #042f2e;
+  --accent-soft: rgba(45, 212, 191, 0.12);
+  --accent-glow: rgba(45, 212, 191, 0.35);
+  --accent-tld: #2dd4bf;
+}
+body.theme-emerald {
+  --accent: #34d399; /* 极客冷翠绿 */
+  --accent-ink: #064e3b;
+  --accent-soft: rgba(52, 211, 153, 0.12);
+  --accent-glow: rgba(52, 211, 153, 0.35);
+  --accent-tld: #34d399;
+}
+body.theme-ice {
+  --accent: #93c5fd; /* 极淡冰川灰蓝，低饱和 */
+  --accent-ink: #0f172a;
+  --accent-soft: rgba(147, 197, 253, 0.12);
+  --accent-glow: rgba(147, 197, 253, 0.35);
+  --accent-tld: #93c5fd;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", system-ui, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+
+/* 顶部的切换控制器悬浮条 */
+.demo-switcher {
+  position: fixed;
+  top: 12px;
+  right: 20px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(18, 18, 24, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+}
+.demo-switcher label {
+  color: var(--soft);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.demo-btn {
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 12px;
+}
+.demo-btn.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  border-color: var(--accent);
+}
+
+/* -------------------------------------------------------------
+   方案 1：208px 现代精致侧边栏 + 右侧主卡片区
+---------------------------------------------------------------- */
+.layout-sidebar-208 {
+  display: flex;
+  min-height: 100vh;
+}
+.layout-sidebar-208 .sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 208px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px 16px 20px;
+  z-index: 40;
+}
+.layout-sidebar-208 .brand-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+}
+.layout-sidebar-208 .reticle-box {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(150deg, #1d1d23 0%, #101014 100%);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 3px 8px -2px #000;
+  flex-shrink: 0;
+}
+.reticle-svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: #d4d4d8;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.reticle-svg .dot {
+  fill: var(--accent);
+  stroke: none;
+  filter: drop-shadow(0 0 4px var(--accent));
+}
+.layout-sidebar-208 .brand-wordmark {
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  color: #fff;
+  white-space: nowrap;
+}
+.layout-sidebar-208 .brand-wordmark .tld {
+  font-weight: 600;
+  color: var(--accent-tld);
+  letter-spacing: -0.02em;
+}
+
+.layout-sidebar-208 .nav-group {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.layout-sidebar-208 .nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--soft);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.layout-sidebar-208 .nav-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+.layout-sidebar-208 .nav-link.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.layout-sidebar-208 .nav-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  margin-left: auto;
+}
+.layout-sidebar-208 .nav-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.layout-sidebar-208 .sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 6px;
+}
+.layout-sidebar-208 .publish-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.layout-sidebar-208 .publish-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--line2);
+}
+
+.layout-sidebar-208 .main-stage {
+  margin-left: 208px;
+  flex: 1;
+  min-width: 0;
+  padding: 24px 36px 80px;
+}
+
+/* -------------------------------------------------------------
+   方案 2：经典 76px 窄栏 + 右侧主卡片区
+---------------------------------------------------------------- */
+.layout-rail-76 {
+  display: none;
+  min-height: 100vh;
+}
+.layout-rail-76 .rail {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 76px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 0;
+  z-index: 40;
+}
+.layout-rail-76 .rail-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+.layout-rail-76 .mark-btn {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(150deg, #1d1d23 0%, #101014 100%);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 3px 8px -2px #000;
+  cursor: pointer;
+}
+.layout-rail-76 .rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.layout-rail-76 .rail-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 54px;
+  padding: 8px 0;
+  border-radius: 10px;
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.layout-rail-76 .rail-item:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+.layout-rail-76 .rail-item.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+.layout-rail-76 .rail-item.active::before {
+  content: "";
+  position: absolute;
+  left: -11px;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+.layout-rail-76 .rail-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.layout-rail-76 .rail-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.layout-rail-76 .rail-publish {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: var(--dim);
+  font-size: 10.5px;
+  padding: 6px 0;
+}
+.layout-rail-76 .rail-publish:hover { color: #fff; }
+.layout-rail-76 .rail-publish-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+.layout-rail-76 .main-stage {
+  margin-left: 76px;
+  flex: 1;
+  min-width: 0;
+  padding: 24px 36px 80px;
+}
+
+/* -------------------------------------------------------------
+   卡片舞台（右侧主区域放卡片，协调舒服的网格）
+---------------------------------------------------------------- */
+.stage-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.card-tile {
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: all 0.25s cubic-bezier(0.2, 0.7, 0.2, 1);
+  cursor: pointer;
+}
+.card-tile:hover {
+  transform: translateY(-3px);
+  background: var(--card-hover);
+  border-color: var(--line2);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.card-shot {
+  position: relative;
+  aspect-ratio: 4/3;
+  border-radius: 11px;
+  overflow: hidden;
+  background: #0e0e10;
+}
+.card-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s;
+}
+.card-tile:hover .card-shot img {
+  transform: scale(1.04);
+}
+.card-tag {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font: 11px var(--mono);
+  color: var(--accent);
+  background: rgba(11, 11, 13, 0.85);
+  backdrop-filter: blur(8px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.card-tag::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+.card-tag.ad {
+  color: var(--soft);
+}
+.card-tag.ad::before { display: none; }
+.card-verb {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font: 11px var(--mono);
+  color: #fff;
+  background: rgba(11, 11, 13, 0.85);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: translateY(3px);
+  transition: all 0.2s;
+}
+.card-verb u {
+  text-decoration: none;
+  color: var(--accent);
+}
+.card-tile:hover .card-verb {
+  opacity: 1;
+  transform: none;
+}
+.card-body {
+  padding: 12px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.card-summary {
+  font-size: 13px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--dim);
+}
+.card-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--soft);
+}
+.card-face {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #27272a;
+}
+.card-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 11.5px var(--mono);
+}
+.card-fact i {
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  position: relative;
+  overflow: hidden;
+}
+.card-fact i::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--p, 60%);
+  background: var(--accent);
+  border-radius: 2px;
+}
+</style>
+</head>
+<body class="theme-titanium">
+
+<!-- 顶部演示切换条 -->
+<div class="demo-switcher">
+  <label>配色：</label>
+  <button class="demo-btn active" onclick="setTheme('titanium', this)">纯钛冷银白</button>
+  <button class="demo-btn" onclick="setTheme('mint', this)">薄荷冷玉青</button>
+  <button class="demo-btn" onclick="setTheme('ice', this)">冰川浅霜蓝</button>
+  <span style="color: var(--line2); margin: 0 4px;">|</span>
+  <label>布局：</label>
+  <button class="demo-btn active" onclick="setLayout('sidebar-208', this)">208px 侧边栏 (带字标)</button>
+  <button class="demo-btn" onclick="setLayout('rail-76', this)">76px 经典窄栏</button>
+</div>
+
+<!-- =============================================================
+     方案 1：208px 现代精致侧栏（品牌微标+单行字标+协调舒适右侧主区域）
+============================================================== -->
+<div class="layout-sidebar-208" id="view-sidebar-208">
+  <aside class="sidebar">
+    <div>
+      <div class="brand-row">
+        <div class="reticle-box">
+          <svg class="reticle-svg" viewBox="0 0 24 24">
+            <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M4 16v3a1 1 0 0 0 1 1h3M16 20h3a1 1 0 0 0 1-1v-3" />
+            <circle class="dot" cx="12" cy="12" r="2.2" />
+          </svg>
+        </div>
+        <div class="brand-wordmark">
+          playtest<span class="tld">.run</span>
+        </div>
+      </div>
+
+      <nav class="nav-group">
+        <a class="nav-link active" href="#">
+          <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>
+          广场
+          <span class="nav-dot"></span>
+        </a>
+        <a class="nav-link" href="#">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 4.2a5.3 5.3 0 0 0-5.3 5.3c0 4-1.7 5.4-1.7 5.4h14s-1.7-1.4-1.7-5.4A5.3 5.3 0 0 0 12 4.2Z"/><path d="M10.3 18.2a2 2 0 0 0 3.4 0"/></svg>
+          关注
+        </a>
+      </nav>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="publish-btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        发布作品
+      </button>
+    </div>
+  </aside>
+
+  <main class="main-stage">
+    <section class="stage-grid">
+      <!-- 卡片 1 -->
+      <div class="card-tile">
+        <div class="card-shot">
+          <img src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80" alt="">
+          <span class="card-tag">正在找人测</span>
+          <span class="card-verb">试玩 <u>↗</u></span>
+        </div>
+        <div class="card-body">
+          <h2 class="card-title">小球大冒险</h2>
+          <p class="card-summary"><span style="color:var(--soft)">这次想测</span> 新手引导看得懂吗</p>
+          <div class="card-meta">
+            <span class="card-who"><span class="card-face"></span>某某</span>
+            <span class="card-fact" style="--p:60%"><i></i>6 / 10 位</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 卡片 2 -->
+      <div class="card-tile">
+        <div class="card-shot">
+          <img src="https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=600&q=80" alt="">
+          <span class="card-tag ad">推广</span>
+          <span class="card-verb">体验 <u>↗</u></span>
+        </div>
+        <div class="card-body">
+          <h2 class="card-title">赛博引力场</h2>
+          <p class="card-summary">重力感应射击，五分钟一局</p>
+          <div class="card-meta">
+            <span class="card-who"><span class="card-face"></span>Aki</span>
+            <span class="card-fact">28 人玩过</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 卡片 3 -->
+      <div class="card-tile">
+        <div class="card-shot">
+          <img src="https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=600&q=80" alt="">
+          <span class="card-tag">正在找人测</span>
+          <span class="card-verb">试玩 <u>↗</u></span>
+        </div>
+        <div class="card-body">
+          <h2 class="card-title">纸上地牢</h2>
+          <p class="card-summary">纯手绘极简肉鸽爬塔</p>
+          <div class="card-meta">
+            <span class="card-who"><span class="card-face"></span>老王</span>
+            <span class="card-fact" style="--p:80%"><i></i>8 / 10 位</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 卡片 4 -->
+      <div class="card-tile">
+        <div class="card-shot">
+          <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80" alt="">
+          <span class="card-verb">试玩 <u>↗</u></span>
+        </div>
+        <div class="card-body">
+          <h2 class="card-title">虚空巡航者</h2>
+          <p class="card-summary">太空弹幕生存测试版</p>
+          <div class="card-meta">
+            <span class="card-who"><span class="card-face"></span>Studio 404</span>
+            <span class="card-fact">2 小时前</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- =============================================================
+     方案 2：经典 76px 极简窄栏
+============================================================== -->
+<div class="layout-rail-76" id="view-rail-76">
+  <aside class="rail">
+    <div class="rail-top">
+      <div class="mark-btn" title="playtest.run">
+        <svg class="reticle-svg" viewBox="0 0 24 24" style="width: 18px; height: 18px;">
+          <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M4 16v3a1 1 0 0 0 1 1h3M16 20h3a1 1 0 0 0 1-1v-3" />
+          <circle class="dot" cx="12" cy="12" r="2.2" />
+        </svg>
+      </div>
+
+      <nav class="rail-nav">
+        <a class="rail-item active" href="#">
+          <svg class="rail-icon" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>
+          广场
+        </a>
+        <a class="rail-item" href="#">
+          <svg class="rail-icon" viewBox="0 0 24 24"><path d="M12 4.2a5.3 5.3 0 0 0-5.3 5.3c0 4-1.7 5.4-1.7 5.4h14s-1.7-1.4-1.7-5.4A5.3 5.3 0 0 0 12 4.2Z"/><path d="M10.3 18.2a2 2 0 0 0 3.4 0"/></svg>
+          关注
+        </a>
+      </nav>
+    </div>
+
+    <div class="rail-bottom">
+      <a class="rail-publish" href="#">
+        <div class="rail-publish-icon">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        </div>
+        发布
+      </a>
+    </div>
+  </aside>
+
+  <main class="main-stage">
+    <section class="stage-grid">
+      <!-- 相同卡片列表 -->
+      <div class="card-tile">
+        <div class="card-shot">
+          <img src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80" alt="">
+          <span class="card-tag">正在找人测</span>
+          <span class="card-verb">试玩 <u>↗</u></span>
+        </div>
+        <div class="card-body">
+          <h2 class="card-title">小球大冒险</h2>
+          <p class="card-summary"><span style="color:var(--soft)">这次想测</span> 新手引导看得懂吗</p>
+          <div class="card-meta">
+            <span class="card-who"><span class="card-face"></span>某某</span>
+            <span class="card-fact" style="--p:60%"><i></i>6 / 10 位</span>
+          </div>
+        </div>
+      </div>
+      <div class="card-tile">
+        <div class="card-shot">
+          <img src="https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=600&q=80" alt="">
+          <span class="card-tag ad">推广</span>
+          <span class="card-verb">体验 <u>↗</u></span>
+        </div>
+        <div class="card-body">
+          <h2 class="card-title">赛博引力场</h2>
+          <p class="card-summary">重力感应射击，五分钟一局</p>
+          <div class="card-meta">
+            <span class="card-who"><span class="card-face"></span>Aki</span>
+            <span class="card-fact">28 人玩过</span>
+          </div>
+        </div>
+      </div>
+      <div class="card-tile">
+        <div class="card-shot">
+          <img src="https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=600&q=80" alt="">
+          <span class="card-tag">正在找人测</span>
+          <span class="card-verb">试玩 <u>↗</u></span>
+        </div>
+        <div class="card-body">
+          <h2 class="card-title">纸上地牢</h2>
+          <p class="card-summary">纯手绘极简肉鸽爬塔</p>
+          <div class="card-meta">
+            <span class="card-who"><span class="card-face"></span>老王</span>
+            <span class="card-fact" style="--p:80%"><i></i>8 / 10 位</span>
+          </div>
+        </div>
+      </div>
+      <div class="card-tile">
+        <div class="card-shot">
+          <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80" alt="">
+          <span class="card-verb">试玩 <u>↗</u></span>
+        </div>
+        <div class="card-body">
+          <h2 class="card-title">虚空巡航者</h2>
+          <p class="card-summary">太空弹幕生存测试版</p>
+          <div class="card-meta">
+            <span class="card-who"><span class="card-face"></span>Studio 404</span>
+            <span class="card-fact">2 小时前</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+function setTheme(theme, btn) {
+  document.body.className = 'theme-' + theme;
+  document.querySelectorAll('.demo-switcher button').forEach(b => {
+    if (b.textContent.includes('钛') || b.textContent.includes('薄荷') || b.textContent.includes('冰川')) {
+      b.classList.remove('active');
+    }
+  });
+  btn.classList.add('active');
+}
+
+function setLayout(layout, btn) {
+  document.getElementById('view-sidebar-208').style.display = layout === 'sidebar-208' ? 'flex' : 'none';
+  document.getElementById('view-rail-76').style.display = layout === 'rail-76' ? 'flex' : 'none';
+  document.querySelectorAll('.demo-switcher button').forEach(b => {
+    if (b.textContent.includes('栏')) {
+      b.classList.remove('active');
+    }
+  });
+  btn.classList.add('active');
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (location.hash === '#mint') {
+    setTheme('mint', document.querySelectorAll('.demo-switcher button')[1]);
+  } else if (location.hash === '#rail') {
+    setLayout('rail-76', document.querySelectorAll('.demo-switcher button')[4]);
+  }
+});
+</script>
+
+</body>
+</html>

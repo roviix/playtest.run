@@ -79,14 +79,10 @@ pub async fn collect_blobs(state: &AppState) -> anyhow::Result<(usize, u64)> {
     let cutoff = std::time::SystemTime::now() - BLOB_GRACE;
     let mut removed = 0usize;
     let mut bytes = 0u64;
-    for (hash, modified) in store.list_blobs().await? {
+    for (hash, modified, size) in store.list_blobs().await? {
         if referenced.contains(&hash) || modified > cutoff {
             continue;
         }
-        let size = tokio::fs::metadata(store.blob_path(&hash)?)
-            .await
-            .map(|m| m.len())
-            .unwrap_or(0);
         store.remove_blob(&hash).await?;
         let conn = state.db().lock().await;
         db::delete_blob(&conn, &hash)?;

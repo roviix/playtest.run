@@ -11,7 +11,7 @@
 //! 接住 CLI 开过来的 WebSocket，按 Host 找到会话，把玩家的请求送进去（DESIGN §4.3）。
 //!
 //! 根域是广场（DESIGN §3.9）：[`plaza`] 读控制面写进对象存储的 `plaza.json`，渲染成一页卡片；
-//! 根域上还有「我的」（[`follow`]）——关注、确认、退订，玩家侧不需要注册。
+//! 根域上还有关注页（[`follow`]）——关注、确认、退订，玩家侧不需要注册。
 //!
 //! 每个作品还有一张邀请卡（[`card`]）：门禁页上那些字渲染成一张 PNG，发到群里就是一张图
 //! （DESIGN §3.4、§4.9）。[`share`] 是它的保存页。
@@ -26,17 +26,20 @@ pub mod cache;
 pub mod capabilities;
 pub mod card;
 pub mod config;
+pub mod discovery;
 pub mod events;
 pub mod follow;
 pub mod game_headers;
 pub mod gate;
 pub mod host;
 pub mod html;
+mod identity;
 pub mod live;
 pub mod me;
 pub mod pages;
 pub mod paths;
 pub mod plaza;
+pub mod quota;
 pub mod range;
 pub mod router;
 pub mod sdk;

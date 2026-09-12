@@ -1,0 +1,139 @@
+{
+  "hat": [
+    {
+      "name": "午夜贝雷帽",
+      "svg": "<path d=\"M199 177Q158 126 230 104Q277 64 361 93Q439 87 456 148L429 180Z\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M205 175Q321 151 435 173L435 196Q316 179 204 205Z\" fill=\"{shade}\" stroke=\"{ink}\" stroke-width=\"6\"/><path d=\"M235 125Q284 94 338 105M329 94l8-18\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"6\"/><circle cx=\"401\" cy=\"142\" r=\"13\" fill=\"{trim}\"/><path d=\"m395 142 5 5 8-11\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"3\"/>"
+    },
+    {
+      "name": "沙漠牛仔帽",
+      "svg": "<path d=\"M223 174L245 79Q257 58 295 89Q323 111 354 84Q392 60 406 90L429 169Z\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M231 145Q329 169 420 140L429 172Q326 191 223 173Z\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M223 166Q175 183 143 155Q129 149 140 173Q165 219 243 209Q354 188 432 201Q490 203 503 159Q501 147 488 159Q459 179 429 163Q326 187 223 166Z\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M251 105l-8 30M392 104l9 27\" fill=\"none\" stroke=\"{light}\" stroke-width=\"7\"/><path d=\"m324 159 10-12 10 12-10 12Z\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"3\"/>"
+    },
+    {
+      "name": "唱片店耳机",
+      "svg": "<path d=\"M189 276V206C181 70 460 64 476 204L481 266\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"23\"/><path d=\"M189 225V201C189 88 452 77 469 202\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"12\"/><rect x=\"170\" y=\"239\" width=\"42\" height=\"86\" rx=\"19\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"7\"/><rect x=\"456\" y=\"228\" width=\"41\" height=\"86\" rx=\"18\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M183 260v43M481 248v43\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"6\"/>"
+    },
+    {
+      "name": "港口水手帽",
+      "svg": "<path d=\"M209 155Q194 91 244 96Q287 72 327 90Q382 63 417 95Q454 111 434 161Z\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M204 151Q318 136 441 150L444 196Q324 177 203 206Z\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M244 109l5 30M400 107l-7 31M325 161v22m-11-9q11 20 23-1m-18-7h12\" fill=\"none\" stroke=\"{coat}\" stroke-width=\"4\"/>"
+    }
+  ],
+  "outfit": [
+    {
+      "name": "机车皮衣",
+      "svg": "<path d=\"M264 407v45l-91 32q-54 19-67 86l-8 53h455l-12-68q-11-55-80-79l-65-31v-40Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M256 448l76 40 72-42 67 32q59 24 67 80l13 65H99l12-65q9-53 63-74Z\" fill=\"{ink}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m251 449 80 44 75-47-26 177h-90Z\" fill=\"{coat}\"/><path d=\"m248 448 76 48-42 54-43-41-34 15Z M409 446l-73 51 41 50 42-44 32 17Z\" fill=\"{shade}\" stroke=\"{ink}\" stroke-width=\"6\"/><path d=\"m326 515-14 108M159 548l66-14M451 540l39 14M132 581l-5 34M516 581l7 34\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"4\"/><circle cx=\"256\" cy=\"510\" r=\"5\" fill=\"{trim}\"/><circle cx=\"405\" cy=\"505\" r=\"5\" fill=\"{trim}\"/>"
+    },
+    {
+      "name": "植物学家工装",
+      "svg": "<path d=\"M266 407v45l-93 32q-54 19-67 86l-8 53h455l-12-68q-11-55-80-79l-65-31v-40Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m254 449 80 38 69-42 65 32q65 24 74 87l10 59H99l10-61q12-60 65-79Z\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m255 452 26 32-20 47-38-52Z M398 450l-44 37 32 41 37-56Z\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M334 490v133M172 539h91v65h-91Z M404 535h87v68h-87Z\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"m171 540 46 21 47-21m140-4 44 20 44-21\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"4\"/><path d=\"M453 538v-34q-29-29-31-9 2 17 31 18 30-35 33-16-2 17-33 24\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"3\"/><circle cx=\"345\" cy=\"555\" r=\"4\" fill=\"{trim}\"/><circle cx=\"345\" cy=\"589\" r=\"4\" fill=\"{trim}\"/>"
+    },
+    {
+      "name": "日落度假衫",
+      "svg": "<path d=\"M266 407v45l-93 32q-54 19-67 86l-8 53h455l-12-68q-11-55-80-79l-65-31v-40Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m252 447 81 42 70-44 66 33q57 19 77 85l7 60H98l11-62q14-57 65-78Z\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m151 536 37 11-9-37 31 22 4-36 25 46-15 15 20 38-39-21-13 33-6-45-46 5Z M436 545l24-35 4 36 35-12-24 32 22 23-36-7-12 29-5-41-36-7Z\" fill=\"{trim}\"/><path d=\"m252 448 81 41-48 49-50-45Z M404 447l-71 42 42 44 44-45Z\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M333 490v133\" stroke=\"{ink}\" stroke-width=\"4\"/><circle cx=\"343\" cy=\"554\" r=\"4\" fill=\"{light}\"/><circle cx=\"343\" cy=\"590\" r=\"4\" fill=\"{light}\"/>"
+    }
+  ],
+  "eyes": [
+    {
+      "name": "琥珀圆框",
+      "svg": "<path d=\"m211 254 29 9m176-11 39-14m-140 30q18-15 36-3\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/><circle cx=\"278\" cy=\"272\" r=\"36\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"7\"/><circle cx=\"389\" cy=\"263\" r=\"36\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"7\"/><circle cx=\"284\" cy=\"276\" r=\"11\" fill=\"{ink}\"/><circle cx=\"395\" cy=\"267\" r=\"11\" fill=\"{ink}\"/><path d=\"m253 258 21-10m90 1 21-10\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"6\"/>"
+    },
+    {
+      "name": "午夜猫眼镜",
+      "svg": "<path d=\"m211 246 23 9m195-16 25-12m-143 31q21-15 42-5\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m231 238 79 13-7 39q-40 27-61-7Z M351 248l84-26-10 54q-18 28-67 9Z\" fill=\"{ink}\" stroke=\"{trim}\" stroke-width=\"6\"/><path d=\"m251 251 32 33m86-33 24 27\" fill=\"none\" stroke=\"{light}\" stroke-width=\"7\" opacity=\".55\"/>"
+    },
+    {
+      "name": "海盗独眼罩",
+      "svg": "<path d=\"m207 235 246 48\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"M242 245q34-14 71 0l-5 44q-36 28-62-2Z\" fill=\"{ink}\" stroke=\"{ink}\" stroke-width=\"6\"/><ellipse cx=\"391\" cy=\"267\" rx=\"28\" ry=\"24\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"5\"/><ellipse cx=\"398\" cy=\"272\" rx=\"8\" ry=\"12\" fill=\"{ink}\"/><path d=\"m362 229 51-3\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"m261 254 14 17 13-20\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"3\"/>"
+    }
+  ],
+  "accessory": [
+    {
+      "name": "相机漫游者",
+      "svg": "<path d=\"m261 454 62 97 73-101\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"13\"/><path d=\"m261 454 62 97 73-101\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"5\"/><rect x=\"283\" y=\"536\" width=\"95\" height=\"65\" rx=\"10\" fill=\"{shade}\" stroke=\"{ink}\" stroke-width=\"6\"/><path d=\"m302 536 7-12h28l8 12\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"5\"/><circle cx=\"333\" cy=\"568\" r=\"22\" fill=\"{ink}\" stroke=\"{trim}\" stroke-width=\"5\"/><circle cx=\"333\" cy=\"568\" r=\"10\" fill=\"{accent}\"/><circle cx=\"329\" cy=\"564\" r=\"4\" fill=\"{light}\"/><rect x=\"291\" y=\"545\" width=\"12\" height=\"8\" rx=\"2\" fill=\"{light}\"/>"
+    },
+    {
+      "name": "珐琅徽章组",
+      "svg": "<path d=\"m437 515 13 16 20-7-7 20 12 15-22-1-10 18-6-22-21-7 20-10Z\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"4\"/><circle cx=\"411\" cy=\"575\" r=\"15\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"4\"/><path d=\"m403 575 6 5 10-12\" fill=\"none\" stroke=\"{light}\" stroke-width=\"4\"/>"
+    },
+    {
+      "name": "录音室领结",
+      "svg": "<path d=\"m329 486-47-24q-11 28 2 51l45-15 46 17q12-27 2-51l-46 22Z\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"m293 480 29 11-30 6m72-15-27 10 26 7\" fill=\"none\" stroke=\"{light}\" stroke-width=\"3\"/><rect x=\"321\" y=\"481\" width=\"18\" height=\"23\" rx=\"5\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"4\"/>"
+    }
+  ],
+  "background": [
+    {
+      "name": "拱廊光影",
+      "svg": "<path d=\"M81 600V264a219 219 0 0 1 438 0v336\" fill=\"{light}\" opacity=\".36\"/><path d=\"M111 600V264a189 189 0 0 1 378 0v336\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"3\" opacity=\".2\"/><path d=\"M0 481h600M0 529h600M0 577h600\" stroke=\"{shade}\" stroke-width=\"2\" opacity=\".12\"/>"
+    },
+    {
+      "name": "黄昏地平线",
+      "svg": "<circle cx=\"419\" cy=\"171\" r=\"100\" fill=\"{trim}\" opacity=\".75\"/><path d=\"M0 358q133-90 289-14t311-12v268H0Z\" fill=\"{accent}\" opacity=\".24\"/><path d=\"M0 443q151-97 307-6t293-4v167H0Z\" fill=\"{shade}\" opacity=\".16\"/>"
+    }
+  ],
+  "finish": "<path d=\"M209 308Q194 213 239 178\" fill=\"none\" stroke=\"{light}\" stroke-width=\"10\" opacity=\".5\"/><path d=\"M438 335q-5 52-44 77\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"8\" opacity=\".32\"/><path d=\"m232 307 12-5m-10 16 10-4m181-20 11-4\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"2.5\" opacity=\".55\"/>",
+  "creatures": [
+    {
+      "name": "蘑菇居民",
+      "body": "<ellipse cx=\"308\" cy=\"518\" rx=\"133\" ry=\"17\" fill=\"{shade}\" opacity=\".16\"/><path d=\"M239 407Q191 418 183 461M372 411Q416 418 428 452\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"12\"/><path d=\"M241 472Q227 492 208 503Q231 513 273 500M351 472Q370 494 398 497Q382 515 341 503\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M247 225Q319 205 361 236Q354 329 388 435Q410 489 337 505Q254 519 223 475Q207 449 224 397Q246 311 247 225Z\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"M331 238Q316 361 355 432Q374 479 326 498Q397 490 383 444Q349 329 361 236Z\" fill=\"{skin}\" opacity=\".55\"/><path d=\"M254 297Q239 359 241 382M247 420l-7 24M265 449l-2 18M347 449l5 15\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"5\"/><path d=\"M105 229Q289 184 495 232Q505 268 416 288Q326 316 211 287Q119 272 105 229Z\" fill=\"{trim}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M134 242Q210 266 255 269M160 237l96 27M198 226l72 37M240 222l40 38M310 223v40M353 227l-21 35M397 232l-48 31M450 243l-85 23M476 250l-97 23\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"3\" opacity=\".6\"/><path d=\"M92 220Q105 187 140 183C169 171 169 132 204 111C251 80 293 108 330 91C403 63 450 121 462 158Q473 189 501 201Q526 223 497 242Q451 263 373 251Q263 229 166 251Q95 269 92 220Z\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"9\"/><path d=\"M107 226Q188 204 260 215Q408 247 491 219Q515 229 490 239Q432 260 362 246Q243 223 164 246Q112 258 107 226Z\" fill=\"{shade}\" opacity=\".34\"/><path d=\"M143 185Q177 177 191 146M213 122Q244 102 275 115\" fill=\"none\" stroke=\"{light}\" stroke-width=\"8\" opacity=\".65\"/><path d=\"M196 161Q178 177 187 190Q207 203 233 186Q246 169 231 159Q216 151 196 161Z M305 112Q287 120 294 135Q305 147 322 136Q335 121 324 112Z M371 156Q348 171 363 190Q388 208 409 188Q427 165 407 153Q388 147 371 156Z\" fill=\"{trim}\"/><ellipse cx=\"457\" cy=\"208\" rx=\"18\" ry=\"10\" fill=\"{trim}\"/><circle cx=\"266\" cy=\"203\" r=\"7\" fill=\"{light}\"/><path d=\"m261 321 8-2m82 9 6 2\" stroke=\"{shade}\" stroke-width=\"3\" opacity=\".6\"/><ellipse cx=\"244\" cy=\"381\" rx=\"15\" ry=\"8\" fill=\"{accent}\" opacity=\".33\"/><ellipse cx=\"357\" cy=\"376\" rx=\"14\" ry=\"8\" fill=\"{accent}\" opacity=\".33\"/>",
+      "eyes": [
+        "<path d=\"M251 342Q268 333 284 342L281 360Q266 370 253 358Z M315 337Q334 327 351 336L348 354Q331 363 317 352Z\" fill=\"{ink}\"/><path d=\"M250 341l35-1M314 336l37-2\" stroke=\"{shade}\" stroke-width=\"5\"/><path d=\"m260 349h7m57-6h7\" stroke=\"{light}\" stroke-width=\"3\"/>",
+        "<ellipse cx=\"268\" cy=\"350\" rx=\"16\" ry=\"23\" fill=\"{ink}\"/><ellipse cx=\"333\" cy=\"344\" rx=\"17\" ry=\"25\" fill=\"{ink}\"/><ellipse cx=\"272\" cy=\"342\" rx=\"5\" ry=\"8\" fill=\"{light}\"/><ellipse cx=\"338\" cy=\"334\" rx=\"5\" ry=\"8\" fill=\"{light}\"/><path d=\"M253 316q15-8 28-2M321 309q15-7 27 1\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"4\"/>",
+        "<ellipse cx=\"268\" cy=\"349\" rx=\"16\" ry=\"23\" fill=\"{ink}\"/><ellipse cx=\"273\" cy=\"341\" rx=\"5\" ry=\"8\" fill=\"{light}\"/><path d=\"M317 347q15-17 32-3m-29 10 9-5\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/>"
+      ],
+      "mouths": [
+        "<path d=\"M281 399q16 9 29-2\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"6\"/>",
+        "<path d=\"M273 394q26 12 48-4q3 33-22 34-23-3-26-30Z\" fill=\"{ink}\"/><path d=\"m283 399 24 1-2 9-20-1Z\" fill=\"{light}\"/>",
+        "<path d=\"M280 402q23 7 35-11m-5-3 8 4-1 8\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"6\"/>",
+        "<circle cx=\"308\" cy=\"407\" r=\"31\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M293 400q0-14 17-14\" fill=\"none\" stroke=\"{light}\" stroke-width=\"5\"/>"
+      ],
+      "foreground": ""
+    },
+    {
+      "name": "玻璃幽灵",
+      "body": "<defs><linearGradient id=\"{id}-glass\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop stop-color=\"{light}\" stop-opacity=\".83\"/><stop offset=\".42\" stop-color=\"{light}\" stop-opacity=\".26\"/><stop offset=\"1\" stop-color=\"{accent}\" stop-opacity=\".62\"/></linearGradient></defs><ellipse cx=\"308\" cy=\"526\" rx=\"104\" ry=\"15\" fill=\"{shade}\" opacity=\".18\"/><path d=\"M198 346Q152 332 126 365Q113 390 157 394L194 384M406 329Q457 317 478 342Q491 365 450 378L414 374\" fill=\"{light}\" fill-opacity=\".32\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M189 261C176 185 217 124 287 117Q331 111 354 83Q371 70 371 97Q367 123 392 146C447 196 421 287 428 353Q430 398 453 424Q463 444 440 448L386 438Q399 473 378 489Q357 502 332 467Q313 505 288 487Q270 472 267 453Q221 486 205 464Q199 449 206 421Q152 440 157 411Q188 352 189 261Z\" fill=\"url(#{id}-glass)\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"M207 247Q199 165 282 140Q336 135 354 115\" fill=\"none\" stroke=\"{light}\" stroke-width=\"10\" opacity=\".9\"/><path d=\"M214 272l-1 31M209 320l-4 15M411 361q-3 37 18 64M235 431q-5 21-12 23\" fill=\"none\" stroke=\"{light}\" stroke-width=\"6\" opacity=\".75\"/><path d=\"M254 189q30-28 61-18M382 225q10 31 2 52\" fill=\"none\" stroke=\"{light}\" stroke-width=\"3\" opacity=\".5\"/><path d=\"M278 386Q297 364 316 385Q328 407 303 426Q279 414 278 386Z\" fill=\"{accent}\" opacity=\".48\"/><circle cx=\"345\" cy=\"205\" r=\"13\" fill=\"none\" stroke=\"{light}\" stroke-width=\"3\" opacity=\".65\"/><circle cx=\"235\" cy=\"388\" r=\"7\" fill=\"{light}\" opacity=\".6\"/><circle cx=\"365\" cy=\"422\" r=\"5\" fill=\"{light}\" opacity=\".7\"/><path d=\"m126 232 7-18 7 18 18 7-18 7-7 18-7-18-18-7Z M457 172l5-12 5 12 12 5-12 5-5 12-5-12-12-5Z\" fill=\"{light}\" opacity=\".85\"/>",
+      "eyes": [
+        "<path d=\"M224 276q26-17 51-6l-4 30q-19 22-40 2Z M323 265q25-14 49-4l-1 28q-20 22-41 3Z\" fill=\"{ink}\"/><path d=\"m237 283 13-2m86-6 12-1\" stroke=\"{light}\" stroke-width=\"5\"/>",
+        "<ellipse cx=\"250\" cy=\"282\" rx=\"25\" ry=\"33\" fill=\"{ink}\"/><ellipse cx=\"348\" cy=\"271\" rx=\"23\" ry=\"31\" fill=\"{ink}\"/><ellipse cx=\"243\" cy=\"269\" rx=\"8\" ry=\"12\" fill=\"{light}\"/><ellipse cx=\"342\" cy=\"258\" rx=\"7\" ry=\"11\" fill=\"{light}\"/><circle cx=\"258\" cy=\"299\" r=\"4\" fill=\"{light}\"/><circle cx=\"354\" cy=\"286\" r=\"4\" fill=\"{light}\"/>",
+        "<ellipse cx=\"250\" cy=\"282\" rx=\"25\" ry=\"33\" fill=\"{ink}\"/><ellipse cx=\"242\" cy=\"268\" rx=\"8\" ry=\"12\" fill=\"{light}\"/><path d=\"M326 276q18-24 40-9m-35 16 10-8\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"8\"/>"
+      ],
+      "mouths": [
+        "<ellipse cx=\"300\" cy=\"343\" rx=\"10\" ry=\"14\" fill=\"{ink}\"/>",
+        "<path d=\"M274 330q28 15 52-5q-1 38-24 40-22 0-28-35Z\" fill=\"{ink}\"/><path d=\"M289 355q14-11 27-4\" fill=\"none\" stroke=\"{accent}\" stroke-width=\"7\"/>",
+        "<path d=\"M282 344q27 11 40-11\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"6\"/><path d=\"m318 330 9 2-1 9\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"4\"/>",
+        "<circle cx=\"316\" cy=\"351\" r=\"33\" fill=\"{accent}\" fill-opacity=\".72\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M298 347q2-17 20-16\" fill=\"none\" stroke=\"{light}\" stroke-width=\"5\"/>"
+      ],
+      "foreground": "<path d=\"M399 173q25 40 9 94\" fill=\"none\" stroke=\"{light}\" stroke-width=\"4\" opacity=\".8\"/>"
+    },
+    {
+      "name": "陶土精灵",
+      "body": "<ellipse cx=\"304\" cy=\"523\" rx=\"133\" ry=\"17\" fill=\"{shade}\" opacity=\".16\"/><path d=\"M211 461L192 501Q202 521 251 510L270 469M334 468l10 40q42 15 65-4l-17-42\" fill=\"{shade}\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"M190 194C104 172 94 270 125 300Q143 318 181 296L178 272Q147 292 142 260Q135 214 184 222Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"M415 178L451 133Q466 129 467 148L451 224L423 236Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M179 321Q144 340 144 397Q147 427 175 412L199 380M425 312q41 6 41 62-5 26-28 17l-23-36\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"M193 181Q231 134 293 147L304 168L320 148Q375 143 418 183Q444 219 435 289L438 387Q432 465 358 484Q255 510 192 459Q164 434 167 370L175 258Q170 210 193 181Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"9\"/><path d=\"M393 178Q417 262 409 365Q413 455 345 482Q424 471 434 407L435 286Q446 207 415 182Z\" fill=\"{shade}\" opacity=\".4\"/><path d=\"M194 187Q232 146 290 154l14 24 21-22q57-5 89 32 19 29 17 74-23 32-49 13-25-16-47 0-24 14-38-6-11-20-33-15-29 11-44-7-16-11-43 7-4-37 17-67Z\" fill=\"{coat}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M205 192q32-25 64-22M362 176q28 8 40 27\" fill=\"none\" stroke=\"{light}\" stroke-width=\"8\" opacity=\".58\"/><path d=\"m304 177 8 28-23 19 20 20-12 21\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"5\"/><path d=\"m306 206 19 12m-31 8-13-3\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"3\"/><ellipse cx=\"252\" cy=\"305\" rx=\"39\" ry=\"38\" fill=\"{shade}\" opacity=\".45\"/><path d=\"M198 370v43M207 418l7 12M388 381l-2 33M377 428l-7 10\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"5\"/><path d=\"m254 449 13 9 13-11m16 0 13 10 13-12m16-2 13 8 11-12\" fill=\"none\" stroke=\"{trim}\" stroke-width=\"4\" opacity=\".75\"/><circle cx=\"204\" cy=\"346\" r=\"4\" fill=\"{shade}\"/><circle cx=\"219\" cy=\"355\" r=\"3\" fill=\"{shade}\"/><circle cx=\"397\" cy=\"341\" r=\"4\" fill=\"{shade}\"/>",
+      "eyes": [
+        "<path d=\"M230 303q22-11 44-1l-2 23q-21 11-40-2Z\" fill=\"{ink}\"/><path d=\"M324 295q22-10 44 0l-2 22q-21 12-39-2Z\" fill=\"{ink}\"/><path d=\"m239 312 11 1m84-9 12 1\" stroke=\"{trim}\" stroke-width=\"4\"/>",
+        "<ellipse cx=\"252\" cy=\"309\" rx=\"23\" ry=\"27\" fill=\"{ink}\"/><circle cx=\"253\" cy=\"305\" r=\"9\" fill=\"{trim}\"/><ellipse cx=\"346\" cy=\"301\" rx=\"17\" ry=\"25\" fill=\"{ink}\"/><circle cx=\"350\" cy=\"294\" r=\"5\" fill=\"{light}\"/><path d=\"M324 266q22-9 38-1\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"5\"/>",
+        "<ellipse cx=\"252\" cy=\"309\" rx=\"23\" ry=\"27\" fill=\"{ink}\"/><circle cx=\"253\" cy=\"305\" r=\"9\" fill=\"{trim}\"/><path d=\"M325 303q19-17 36-3m-34 10 10-7\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/>"
+      ],
+      "mouths": [
+        "<path d=\"M276 384l35-2\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"m282 393 24-1\" stroke=\"{light}\" stroke-width=\"3\" opacity=\".6\"/>",
+        "<path d=\"M267 371q30 8 62-4l-5 34q-27 16-51 1Z\" fill=\"{ink}\" stroke=\"{shade}\" stroke-width=\"4\"/><path d=\"m277 377 15 1-1 13-13-1m22-13 18-3-1 15-16 2\" fill=\"{trim}\"/>",
+        "<path d=\"m276 387 38-4 11-12\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m320 368 10 4\" stroke=\"{shade}\" stroke-width=\"4\"/>",
+        "<circle cx=\"318\" cy=\"386\" r=\"32\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M301 380q2-13 17-14\" fill=\"none\" stroke=\"{light}\" stroke-width=\"5\"/>"
+      ],
+      "foreground": ""
+    },
+    {
+      "name": "毛团野兽",
+      "body": "<ellipse cx=\"304\" cy=\"525\" rx=\"141\" ry=\"16\" fill=\"{shade}\" opacity=\".16\"/><path d=\"M212 459Q178 483 191 508Q219 527 268 509L276 475M334 476l9 35q53 13 73-10 5-26-34-41\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"8\"/><path d=\"M196 201L164 120Q161 99 183 110L249 157Q285 134 325 152L349 126L356 151L406 101Q428 79 431 108L431 182L456 174L449 208L474 218L456 244L484 279L468 299L494 334L473 344L482 376L461 388L467 418L443 427L439 452L408 454L398 479L371 475L346 493L320 482L290 496L266 482L237 492L223 472L194 471L187 448L160 445L163 417L140 409L150 381L128 367L145 339L130 317L146 295L133 275L154 253L147 229L174 221L171 195Z\" fill=\"{skin}\" stroke=\"{ink}\" stroke-width=\"9\"/><path d=\"m180 127 27 69 25-30Z M412 118l-48 48 43 22Z\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M429 201l-21 62 19 17-10 24 26 28-18 24 20 18-25 12 6 28-27 10-8 22-20 3-22 34 25-6 30 6 12-23 28-3 5-26 22-9-6-28 21-13-10-27 18-16-21-32 15-25-23-29 15-28-17-12Z\" fill=\"{shade}\" opacity=\".3\"/><path d=\"M215 243q27-40 62-25l22-13 9 18q43-25 74 5l-2 51 14 18-20 9q22 17 29 54l-12 21 9 30-22 6-10 30-29-4-24 15-26-14-30 5-14-25-28-9 7-26-16-29 9-30-16-17 14-24Z\" fill=\"{light}\"/><path d=\"M221 269q-2-37 26-46 35-4 42 25l-3 31q-30 33-58 6Z\" fill=\"{shade}\"/><path d=\"M324 249q9-37 39-26 25 11 20 48-27 28-56 7Z\" fill=\"{shade}\"/><path d=\"M275 328q23-19 49-6l-16 23-20-1Z\" fill=\"{ink}\"/><path d=\"M299 343v13\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"m186 267 10 9m-14 17 12 8m-21 27 10 9m221-53 9-9m-14 39 13-4m-209 87 10 10m16 8 7 10m155-27-9 11m-11 14-6 8M255 162l-5 20m31-24 1 17m33-14 5 19\" fill=\"none\" stroke=\"{shade}\" stroke-width=\"4\"/><path d=\"M230 504v-11m17 14-1-12m118 12 2-11m18 9 1-12\" stroke=\"{ink}\" stroke-width=\"4\"/>",
+      "eyes": [
+        "<path d=\"M229 255q23-15 47-1l-3 26q-21 14-40-1Z M331 245q23-13 45 1l-3 25q-21 15-39-2Z\" fill=\"{light}\"/><path d=\"m249 262 0 14m102-23v14\" stroke=\"{ink}\" stroke-width=\"12\"/><path d=\"m228 255 48-1m55-9 45 1\" stroke=\"{ink}\" stroke-width=\"6\"/>",
+        "<ellipse cx=\"252\" cy=\"264\" rx=\"23\" ry=\"27\" fill=\"{light}\"/><ellipse cx=\"355\" cy=\"256\" rx=\"21\" ry=\"29\" fill=\"{light}\"/><ellipse cx=\"258\" cy=\"268\" rx=\"11\" ry=\"16\" fill=\"{ink}\"/><ellipse cx=\"360\" cy=\"259\" rx=\"10\" ry=\"17\" fill=\"{ink}\"/><circle cx=\"261\" cy=\"261\" r=\"4\" fill=\"{light}\"/><circle cx=\"363\" cy=\"251\" r=\"4\" fill=\"{light}\"/>",
+        "<ellipse cx=\"252\" cy=\"264\" rx=\"23\" ry=\"27\" fill=\"{light}\"/><ellipse cx=\"258\" cy=\"268\" rx=\"11\" ry=\"16\" fill=\"{ink}\"/><circle cx=\"261\" cy=\"261\" r=\"4\" fill=\"{light}\"/><path d=\"M335 262q19-23 36-5m-33 13 9-7\" fill=\"none\" stroke=\"{light}\" stroke-width=\"7\"/>"
+      ],
+      "mouths": [
+        "<path d=\"M270 374q27 15 53-2\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m313 378 12-4-1 18Z\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"3\"/>",
+        "<path d=\"M259 361q39 24 77-4l-3 36q-36 28-66 0Z\" fill=\"{ink}\"/><path d=\"m270 371 17 4-4 17Z M313 372l14-6-3 23Z\" fill=\"{light}\"/><path d=\"M285 397q15-10 32-6\" fill=\"none\" stroke=\"{accent}\" stroke-width=\"8\"/>",
+        "<path d=\"M274 377q31 13 54-12m-6-2 11 4\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"7\"/><path d=\"m310 379 10-5-3 15Z\" fill=\"{light}\" stroke=\"{ink}\" stroke-width=\"3\"/>",
+        "<circle cx=\"322\" cy=\"384\" r=\"35\" fill=\"{accent}\" stroke=\"{ink}\" stroke-width=\"5\"/><path d=\"M303 378q0-15 19-17\" fill=\"none\" stroke=\"{light}\" stroke-width=\"5\"/>"
+      ],
+      "foreground": ""
+    }
+  ]
+}

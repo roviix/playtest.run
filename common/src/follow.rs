@@ -14,6 +14,7 @@
 //!
 //! 开发者永远看不到邮箱，只看到数字（[`crate::live::SiteLive::followers`]）。
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// 控制面上的路径（边缘 → 控制面，内网；控制台不用这些）。
@@ -24,7 +25,7 @@ pub mod routes {
     pub const CONFIRM: &str = "/v1/follow/confirm";
     /// `POST` [`super::UnsubscribeRequest`] → 200 [`super::MeView`]：信底那个一键退订
     pub const UNSUBSCRIBE: &str = "/v1/follow/unsubscribe";
-    /// `POST` [`super::MeRequest`] → 200 [`super::MeView`]：「我的」那一页要显示的东西
+    /// `POST` [`super::MeRequest`] → 200 [`super::MeView`]：关注页要显示的东西
     pub const ME_VIEW: &str = "/v1/me/view";
     /// `POST` [`super::UnfollowRequest`] → 200 [`super::MeView`]：在「我的」里取消一项
     pub const ME_UNFOLLOW: &str = "/v1/me/unfollow";
@@ -54,6 +55,12 @@ pub mod root_paths {
     pub const ME_UNSUBSCRIBE: &str = "/me/unsubscribe/";
     /// `POST`：「我的」里的动作（取消关注、给自己发链接、关掉浏览器通知）。
     pub const ME_ACTION: &str = "/me/action";
+    /// `GET /p/{slug}`：主域作品邀请函（DESIGN §3.1、§3.3）。
+    pub const PROJECT_PREFIX: &str = "/p/";
+
+    pub fn project_path(slug: &str) -> String {
+        format!("{PROJECT_PREFIX}{slug}")
+    }
 }
 
 /// 玩家表单的字段名。边缘解析表单后拼成 [`FollowRequest`]。
@@ -70,10 +77,11 @@ pub mod form {
 }
 
 /// 一个作品，或广场本身。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum FollowTarget {
     Site { slug: String },
+    Collection { slug: String },
     Plaza,
 }
 
@@ -83,6 +91,12 @@ impl FollowTarget {
         let raw = raw.trim();
         if raw == "plaza" {
             return Some(Self::Plaza);
+        }
+        if let Some(slug) = raw.strip_prefix("collection:") {
+            crate::slug::validate(slug).ok()?;
+            return Some(Self::Collection {
+                slug: slug.to_string(),
+            });
         }
         let slug = raw.strip_prefix("site:")?;
         crate::slug::validate(slug).ok()?;
@@ -94,25 +108,26 @@ impl FollowTarget {
     pub fn form_value(&self) -> String {
         match self {
             Self::Site { slug } => format!("site:{slug}"),
+            Self::Collection { slug } => format!("collection:{slug}"),
             Self::Plaza => "plaza".to_string(),
         }
     }
 }
 
 /// 浏览器 `PushSubscription.toJSON()` 的形状。原样存、原样用，我们不解读里面的字节。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct PushSubscription {
     pub endpoint: String,
     pub keys: PushKeys,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct PushKeys {
     pub p256dh: String,
     pub auth: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum FollowChannel {
     /// 要双重确认：先发确认信，点了才算关注。
@@ -123,7 +138,7 @@ pub enum FollowChannel {
     Me { me_token: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct FollowRequest {
     pub target: FollowTarget,
     pub channel: FollowChannel,
@@ -132,7 +147,7 @@ pub struct FollowRequest {
     pub from: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum FollowResponse {
     /// 邮箱路径：确认信已经在路上（或在队列里——邮件服务商不可用时也是这个，玩家不该看到报错）。
@@ -143,41 +158,41 @@ pub enum FollowResponse {
     AlreadyFollowing,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ConfirmRequest {
     pub token: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ConfirmResponse {
     /// 种进 `pt_me` 的值。长期有效，撤销靠退订。
     pub me_token: String,
     pub me: MeView,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct UnsubscribeRequest {
     pub token: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct MeRequest {
     pub me_token: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct UnfollowRequest {
     pub me_token: String,
     pub target: FollowTarget,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct SendLinkRequest {
     pub email: String,
 }
 
-/// 「我的」那一页（DESIGN §3.10）：一个抽屉，不是一个 profile。
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// 关注页（DESIGN §3.10）：一个抽屉，不是一个 profile。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct MeView {
     /// 打码显示的邮箱，如 `z***@example.com`；只用浏览器通知、没留邮箱的人没有。
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -189,7 +204,7 @@ pub struct MeView {
     pub follows: Vec<FollowView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct FollowView {
     pub target: FollowTarget,
     /// 作品名；广场那一项没有。

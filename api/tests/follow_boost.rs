@@ -420,7 +420,7 @@ async fn an_email_only_counts_after_the_link_is_clicked() {
         subject.contains("确认关注") && subject.contains("小球"),
         "{subject}"
     );
-    assert!(body.contains("忽略这封信"), "{body}");
+    assert!(body.contains("确认邮箱后，关注才会生效"), "{body}");
     assert_eq!(status, "pending");
 
     // 点了才算。

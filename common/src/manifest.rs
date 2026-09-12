@@ -3,6 +3,7 @@
 //! 边缘按它服务：请求路径 → 找到 [`FileEntry`] → 按哈希取对象。门禁页要显示的
 //! 东西（作品名、开发者、版本、这版改了什么、是否到期）也在这里，边缘因此不必问控制面。
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::limits;
@@ -11,7 +12,7 @@ use crate::limits;
 pub const SCHEMA: u32 = 1;
 
 /// 门禁页出现的策略（DESIGN §3.3）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum GateMode {
     /// 一次点开在 24 小时内不再重复出现。默认。
@@ -39,7 +40,7 @@ impl std::str::FromStr for GateMode {
 }
 
 /// 清单里的一个文件。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct FileEntry {
     /// 相对于上传目录的路径。正斜杠分隔，不以斜杠开头，没有 `.` / `..` / 空段。
     /// 例：`index.html`、`Build/game.wasm.br`。
@@ -51,7 +52,7 @@ pub struct FileEntry {
 
 /// 封面（DESIGN §3.3）。**不在 `files` 里**：它不是开发者目录的一部分，是清单单独的一条引用，
 /// 边缘在 `/_playtest/cover` 提供。这样开发者目录的字节一个不多一个不少（§3.7 最后一条）。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Cover {
     pub hash: String,
     pub size: u64,
@@ -107,7 +108,7 @@ pub fn sniff_image_mime(head: &[u8]) -> Option<&'static str> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Manifest {
     pub schema: u32,
     pub slug: String,

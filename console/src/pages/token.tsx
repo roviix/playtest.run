@@ -7,12 +7,28 @@
 
 import { useState } from "preact/hooks";
 
-import { forgetToken, githubLoginUrl, readToken, saveToken, type Me } from "../api";
-import { go } from "../router";
+import { forgetToken, githubLoginUrl, readToken, revokeToken, saveToken, type Me } from "../api";
+import { go, href } from "../router";
 
 export function TokenPage({ loginError, me }: { loginError: string | null; me: Me | null }) {
   const existing = readToken();
   const [value, setValue] = useState("");
+  const [revoking, setRevoking] = useState(false);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
+
+  async function revoke() {
+    setRevoking(true);
+    setRevokeError(null);
+    try {
+      await revokeToken();
+      location.reload();
+    } catch (error) {
+      setRevokeError(error instanceof Error ? error.message : "未能撤销，令牌保留在本机，请重试。");
+    } finally {
+      setRevoking(false);
+    }
+  }
 
   function submit(event: Event) {
     event.preventDefault();
@@ -37,6 +53,7 @@ export function TokenPage({ loginError, me }: { loginError: string | null; me: M
               : "令牌只存在这台设备的浏览器里。"}
         </p>
       </header>
+      <a class="docs-context-link" href={href({ name: "docs", section: "start" })}>第一次使用？先看发布与账号说明 →</a>
 
       {loginError ? <p class="notice">登录失败：{loginError}</p> : null}
 
@@ -102,11 +119,21 @@ export function TokenPage({ loginError, me }: { loginError: string | null; me: M
                 location.reload();
               }}
             >
-              {loggedIn ? "退出" : "清除令牌"}
+              仅清除本机令牌
             </button>
           </p>
         ) : null}
       </form>
+      {existing ? <section class="block">
+        <h2>撤销当前令牌</h2>
+        <p class="muted">同时让这枚令牌的其他副本失效，不删除作品，不影响其他设备独立签发的令牌。已建立的隧道连接不会因此立即断开。</p>
+        {!loggedIn ? <p class="notice">匿名作品请先登录接管，否则撤销后会失去这些作品的管理入口。</p> : null}
+        {confirmRevoke ? <div class="row-actions">
+          <button class="button" type="button" disabled={revoking} onClick={revoke}>{revoking ? "正在撤销…" : "确认撤销当前令牌"}</button>
+          <button class="button quiet" type="button" disabled={revoking} onClick={() => setConfirmRevoke(false)}>取消</button>
+        </div> : <button class="button quiet" type="button" onClick={() => setConfirmRevoke(true)}>撤销当前令牌…</button>}
+        {revokeError ? <p class="notice" role="alert">{revokeError}</p> : null}
+      </section> : null}
     </div>
   );
 }

@@ -575,7 +575,11 @@ pub fn touch_session(conn: &Connection, seen: &Seen<'_>) -> rusqlite::Result<()>
     let referrer_kind = match (seen.from, usable_referer, wechat) {
         // `?from=` 是我们自己放在链接上的，最可信：扫卡的人多半在微信里，
         // 但开发者想知道的是「这张卡带来的」，不是「微信带来的」（`ingest::source_kind`）。
-        (Some(from), _, _) if from == ingest::source::CARD || from == ingest::source::NOTICE => {
+        (Some(from), _, _)
+            if from == ingest::source::CARD
+                || from == ingest::source::NOTICE
+                || from == ingest::source::COLLECTION =>
+        {
             Some(ingest::source_kind(Some(from), "", wechat, seen.plaza_host))
         }
         (_, _, true) => Some(ingest::source::WECHAT),

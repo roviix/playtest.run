@@ -14,6 +14,7 @@
 //!
 //! 字节流适配与 yamux 的驾驭在 [`io`]（feature `tunnel-io`），控制面不需要它。
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::manifest::GateMode;
@@ -54,7 +55,7 @@ pub mod close {
 }
 
 /// 令牌里的声明。边缘靠它渲染门禁页、决定响应头，不必再问任何人。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Claims {
     /// 令牌格式版本，现在是 1。
     pub v: u8,
@@ -223,7 +224,7 @@ pub mod key_files {
 }
 
 /// `POST /v1/projects/{slug}/tunnel` 的请求体。
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct TunnelRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
@@ -237,7 +238,7 @@ pub struct TunnelRequest {
 }
 
 /// `POST /v1/projects/{slug}/tunnel` 的响应：CLI 拿它去连边缘。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct TunnelGrant {
     pub slug: String,
     /// 玩家链接，例如 `https://brisk-otter-41.playtest.run`。

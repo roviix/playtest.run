@@ -70,6 +70,17 @@ impl Site {
 
         store.put_manifest(&manifest).await.unwrap();
         store
+            .put_policy(
+                &manifest.slug,
+                &playtest_common::quota::Policy {
+                    owner: manifest.slug.clone(),
+                    plan: playtest_common::plan::Plan::Free,
+                    expires_at: manifest.expires_at.clone(),
+                },
+            )
+            .await
+            .unwrap();
+        store
             .set_current(
                 SLUG,
                 &Current {
@@ -311,7 +322,20 @@ async fn one_slug_tripping_does_not_touch_the_others() {
 
     let reply = site.send(nav("/").body(Body::empty()).unwrap()).await;
     assert_eq!(reply.status, StatusCode::OK);
-    assert!(reply.text().contains(">开始</button>"));
+    assert_eq!(reply.text(), INDEX_HTML);
+
+    let gate_reply = site
+        .send(
+            Request::builder()
+                .uri(format!("/p/{SLUG}"))
+                .header("host", "localhost:8443")
+                .header("accept", "text/html")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(gate_reply.status, StatusCode::OK);
+    assert!(gate_reply.text().contains("开始"));
 
     // 根域介绍页也不受任何 slug 的影响。
     let root = site

@@ -23,14 +23,22 @@ pub enum SiteState {
     Live(Arc<Manifest>),
     /// 没有这个 slug，或者对象存储里被删了。
     Missing,
+    /// 对象存储这一刻不可用；不能把它缓存或伪装成作品不存在。
+    Unavailable,
     Expired(Arc<Manifest>),
+}
+
+#[derive(Debug, Clone)]
+enum ManifestLoad {
+    Found(Arc<Manifest>),
+    Missing,
 }
 
 pub struct SiteStore {
     store: FsStore,
     /// 清单按 `(slug, version)` 不可变，留多久都行——但**不能无限多个**：
     /// 随机打子域名的扫描器每个 slug 都会让我们读一次盘（`crate::cache` 的上限管着这件事）。
-    manifests: CachedMap<(String, u32), Manifest>,
+    manifests: CachedMap<(String, u32), ManifestLoad>,
     /// 「这个 slug 现在是第几版」。`None` 表示没有这个作品，那个答案也要缓存——
     /// 打进来的多数 slug 根本不存在。
     current: CachedMap<String, Option<u32>>,
@@ -54,14 +62,18 @@ impl SiteStore {
     }
 
     pub async fn resolve(&self, slug: &str) -> SiteState {
-        let Some(version) = self.current_version(slug).await else {
-            return SiteState::Missing;
+        let version = match self.current_version(slug).await {
+            Ok(Some(version)) => version,
+            Ok(None) => return SiteState::Missing,
+            Err(()) => return SiteState::Unavailable,
         };
-        let Some(manifest) = self.manifest(slug, version).await else {
-            // 指针指向一个不存在的版本：api 写坏了或者对象被删了一半。
-            // 对玩家只能是「这个链接不存在」，但日志里要留得下痕迹。
-            tracing::warn!(slug, version, "current 指向的清单读不到");
-            return SiteState::Missing;
+        let manifest = match self.manifest(slug, version).await {
+            Ok(Some(manifest)) => manifest,
+            Ok(None) => {
+                tracing::warn!(slug, version, "current 指向的清单不存在");
+                return SiteState::Unavailable;
+            }
+            Err(()) => return SiteState::Unavailable,
         };
         if is_expired(&manifest, OffsetDateTime::now_utc()) {
             return SiteState::Expired(manifest);
@@ -69,10 +81,10 @@ impl SiteStore {
         SiteState::Live(manifest)
     }
 
-    async fn current_version(&self, slug: &str) -> Option<u32> {
-        *self
+    async fn current_version(&self, slug: &str) -> Result<Option<u32>, ()> {
+        let loaded = self
             .current
-            .get_or(slug.to_string(), || async {
+            .get(slug.to_string(), || async {
                 match self.store.get_current(slug).await {
                     Ok(cur) => Some(cur.map(|c| c.version)),
                     Err(err) => {
@@ -84,13 +96,17 @@ impl SiteStore {
                 }
             })
             .await
+            .ok_or(())?;
+        Ok(*loaded)
     }
 
-    async fn manifest(&self, slug: &str, version: u32) -> Option<Arc<Manifest>> {
-        self.manifests
+    async fn manifest(&self, slug: &str, version: u32) -> Result<Option<Arc<Manifest>>, ()> {
+        let loaded = self
+            .manifests
             .get((slug.to_string(), version), || async {
                 match self.store.get_manifest(slug, version).await {
-                    Ok(m) => m,
+                    Ok(Some(manifest)) => Some(ManifestLoad::Found(Arc::new(manifest))),
+                    Ok(None) => Some(ManifestLoad::Missing),
                     Err(err) => {
                         tracing::warn!(slug, version, %err, "读清单失败");
                         None
@@ -98,6 +114,11 @@ impl SiteStore {
                 }
             })
             .await
+            .ok_or(())?;
+        match loaded.as_ref() {
+            ManifestLoad::Found(manifest) => Ok(Some(manifest.clone())),
+            ManifestLoad::Missing => Ok(None),
+        }
     }
 }
 

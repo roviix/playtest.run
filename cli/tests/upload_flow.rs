@@ -151,7 +151,9 @@ async fn commit_upload(
     State(fake): State<Arc<Fake>>,
     UrlPath((slug, upload_id)): UrlPath<(String, String)>,
 ) -> Json<CommitUploadResponse> {
-    fake.record(format!("POST /v1/projects/{slug}/uploads/{upload_id}/commit"));
+    fake.record(format!(
+        "POST /v1/projects/{slug}/uploads/{upload_id}/commit"
+    ));
     Json(CommitUploadResponse {
         slug: slug.clone(),
         version: 1,
@@ -273,7 +275,7 @@ fn uploads_only_the_blobs_the_server_is_missing() {
     // stdout 上只有链接，方便 `| pbcopy`。
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        format!("http://{NEW_SLUG}.localhost:8443\n")
+        format!("http://localhost:8443/p/{NEW_SLUG}\n")
     );
 
     let calls = fake.calls();

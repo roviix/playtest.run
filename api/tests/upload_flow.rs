@@ -645,23 +645,28 @@ async fn no_token_and_stale_token_say_different_things() {
 }
 
 #[tokio::test]
-async fn anonymous_users_stop_at_three_sites() {
+async fn anonymous_users_stop_at_the_published_plan_limit() {
     let h = Harness::start().await;
     let token = h.anon_token().await;
 
     let mut slugs = Vec::new();
-    for _ in 0..3 {
+    let limit = playtest_common::plan::Plan::Anon.limits().active_projects;
+    for _ in 0..limit {
         slugs.push(h.new_site(&token).await.slug);
     }
     slugs.sort();
     slugs.dedup();
-    assert_eq!(slugs.len(), 3, "随机名字撞车了");
+    assert_eq!(slugs.len(), limit as usize, "随机名字撞车了");
 
     let body = h
         .post(paths::SITES, Some(&token), &CreateSiteRequest::default())
         .await
         .error(StatusCode::FORBIDDEN, ErrorCode::QuotaExceeded);
-    assert!(body.message.contains('3'), "{}", body.message);
+    assert!(
+        body.message.contains(&format!("最多同时留 {limit} 个作品")),
+        "{}",
+        body.message
+    );
 
     // 删掉一个就能再建一个。
     h.request(
@@ -673,6 +678,92 @@ async fn anonymous_users_stop_at_three_sites() {
     )
     .await;
     h.new_site(&token).await;
+}
+
+#[tokio::test]
+async fn revoking_one_token_preserves_other_tokens_and_published_work() {
+    let harness = Harness::start().await;
+    let token = harness.anon_token().await;
+    let site = harness.new_site(&token).await;
+    let policy = harness.store.get_policy(&site.slug).await.unwrap().unwrap();
+    assert_eq!(policy.plan, playtest_common::plan::Plan::Anon);
+    let other = "second-device-token";
+    {
+        let connection = harness.state.db().lock().await;
+        playtest_api::db::insert_token(
+            &connection,
+            &hash::hash_bytes(other.as_bytes()),
+            &policy.owner,
+            "2026-09-12T00:00:00Z",
+            None,
+        )
+        .unwrap();
+    }
+    let reply = harness
+        .request(
+            "DELETE",
+            paths::ME_TOKEN,
+            Some(&token),
+            Body::empty(),
+            false,
+        )
+        .await;
+    assert_eq!(reply.status, StatusCode::NO_CONTENT);
+    harness
+        .get(&paths::site(&site.slug), &token)
+        .await
+        .error(StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized);
+    let preserved: Site = harness.get(&paths::site(&site.slug), other).await.json();
+    assert_eq!(preserved.slug, site.slug);
+    assert!(harness
+        .store
+        .get_policy(&site.slug)
+        .await
+        .unwrap()
+        .is_some());
+}
+
+#[tokio::test]
+async fn a_failed_policy_write_does_not_consume_a_project_slot() {
+    let harness = Harness::start().await;
+    let token = harness.anon_token().await;
+    std::fs::write(harness._dir.path().join("store/sites"), b"not a directory").unwrap();
+    let reply = harness
+        .post(paths::SITES, Some(&token), &CreateSiteRequest::default())
+        .await;
+    reply.error(StatusCode::INTERNAL_SERVER_ERROR, ErrorCode::Internal);
+    let sites: Vec<Site> = harness.get(paths::SITES, &token).await.json();
+    assert!(sites.is_empty());
+}
+
+#[tokio::test]
+async fn free_accounts_share_the_published_creation_limit() {
+    let harness = Harness::start().await;
+    let token = harness.anon_token().await;
+    harness
+        .state
+        .db()
+        .lock()
+        .await
+        .execute("UPDATE users SET kind='github', expires_at=NULL", [])
+        .unwrap();
+    for _ in 0..playtest_common::plan::Plan::Free.limits().active_projects {
+        let site = harness.new_site(&token).await;
+        assert_eq!(
+            harness
+                .store
+                .get_policy(&site.slug)
+                .await
+                .unwrap()
+                .unwrap()
+                .plan,
+            playtest_common::plan::Plan::Free
+        );
+    }
+    harness
+        .post(paths::SITES, Some(&token), &CreateSiteRequest::default())
+        .await
+        .error(StatusCode::FORBIDDEN, ErrorCode::QuotaExceeded);
 }
 
 #[tokio::test]
@@ -820,6 +911,12 @@ async fn expired_anonymous_sites_are_swept() {
 async fn orphaned_blobs_are_collected_but_never_live_ones() {
     let h = Harness::start().await;
     let token = h.anon_token().await;
+    h.state
+        .db()
+        .lock()
+        .await
+        .execute("UPDATE users SET kind='github', expires_at=NULL", [])
+        .unwrap();
 
     // 作品 A 用 index.html；作品 B 用 index.html + 一个只有它有的文件。
     let shared = entry("index.html", INDEX_HTML);

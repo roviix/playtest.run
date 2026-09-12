@@ -78,6 +78,17 @@ impl Edge {
             .join(key_files::VERIFYING_KEY_OBJECT);
         std::fs::create_dir_all(key_path.parent().unwrap()).unwrap();
         std::fs::write(&key_path, signing.verifying_key().to_base64()).unwrap();
+        FsStore::new(dir.path().join("store"))
+            .put_policy(
+                SLUG,
+                &playtest_common::quota::Policy {
+                    owner: SLUG.into(),
+                    plan: playtest_common::plan::Plan::Free,
+                    expires_at: None,
+                },
+            )
+            .await
+            .unwrap();
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -360,6 +371,33 @@ fn request(
         .unwrap()
 }
 
+fn request_root(
+    method: Method,
+    path: &str,
+    headers: &[(&str, &str)],
+    body: &str,
+) -> Request<Full<Bytes>> {
+    let mut builder = Request::builder()
+        .method(method)
+        .uri(path)
+        .header("host", "localhost:8443")
+        .header("origin", "http://localhost:8443");
+    for (name, value) in headers {
+        builder = builder.header(*name, *value);
+    }
+    builder
+        .body(Full::new(Bytes::from(body.to_string())))
+        .unwrap()
+}
+
+async fn navigate_root(edge: SocketAddr, path: &str) -> Reply {
+    let headers = vec![
+        ("accept", "text/html,application/xhtml+xml"),
+        ("sec-fetch-dest", "document"),
+    ];
+    send(edge, request_root(Method::GET, path, &headers, "")).await
+}
+
 /// 浏览器点开一条链接时长的样子。
 async fn navigate(edge: SocketAddr, path: &str, cookie: Option<&str>) -> Reply {
     let mut headers = vec![
@@ -419,6 +457,7 @@ fn error_body(reply: &Reply) -> ErrorBody {
 }
 
 /// `Set-Cookie` 里的门禁 cookie，拼成下一次请求能直接用的 `Cookie` 头。
+#[allow(dead_code)]
 fn gate_cookie(reply: &Reply) -> String {
     reply
         .headers
@@ -440,8 +479,8 @@ async fn a_player_plays_what_is_running_on_the_developers_machine() {
         let cli = FakeCli::connect(&edge, &edge.token("jti-1", |_| {}), dev).await;
         edge.wait_online().await;
 
-        // 1. 第一眼是门禁页，不是游戏。版本那个位置写「在线」——隧道没有版本。
-        let gate = navigate(edge.addr, "/", None).await;
+        // 1. 第一眼是主域邀请函门禁页，不是游戏。版本那个位置写「在线」——隧道没有版本。
+        let gate = navigate_root(edge.addr, &format!("/p/{SLUG}")).await;
         assert_eq!(gate.status, StatusCode::OK);
         assert_eq!(
             gate.header("content-type"),
@@ -455,16 +494,25 @@ async fn a_player_plays_what_is_running_on_the_developers_machine() {
         // 门禁页是我们渲染的，开发者的 HTML 一个字节都还没出去。
         assert!(!gate.text().contains("开发者机器上的那一版"));
 
-        // 2. 点「开始」之后才是开发者机器上那一版。
+        // 2. 主域门禁点「开始」后 303 重定向到作品子域
         let started = send(
             edge.addr,
-            request(Method::POST, "/_playtest/start", &[], "to=%2F"),
+            request_root(
+                Method::POST,
+                &format!("/p/{SLUG}"),
+                &[("content-type", "application/x-www-form-urlencoded")],
+                "to=%2F",
+            ),
         )
         .await;
         assert_eq!(started.status, StatusCode::SEE_OTHER);
-        let cookie = gate_cookie(&started);
+        assert_eq!(
+            started.header("location"),
+            Some(format!("http://{HOST}:8443/")).as_deref()
+        );
 
-        let page = navigate(edge.addr, "/", Some(&cookie)).await;
+        // 3. 进入作品子域，直接是开发者机器上那一版。
+        let page = navigate(edge.addr, "/", None).await;
         assert_eq!(page.status, StatusCode::OK);
         assert_eq!(page.text(), UPSTREAM_HTML, "响应体要一个字节不差");
 
@@ -617,20 +665,26 @@ async fn a_hybrid_tunnel_takes_only_what_the_manifest_does_not_have() {
         edge.wait_online().await;
 
         // 1. 门禁页按上传的版本说话：有真的版本号，不写「在线」。
-        let gate = navigate(edge.addr, "/", None).await;
+        let gate = navigate_root(edge.addr, &format!("/p/{SLUG}")).await;
         assert_eq!(gate.status, StatusCode::OK);
         assert!(gate.text().contains("· v7"), "{}", gate.text());
         assert!(!gate.text().contains("· 在线"));
         assert!(!gate.text().contains("后端自己的首页"));
 
-        // 2. 点「开始」之后是上传的首页，不是后端的首页；静态文件也从清单给。
+        // 2. 点「开始」之后 303 重定向到作品子域；进入子域是上传的首页，不是后端的首页；静态文件也从清单给。
         let started = send(
             edge.addr,
-            request(Method::POST, "/_playtest/start", &[], "to=%2F"),
+            request_root(
+                Method::POST,
+                &format!("/p/{SLUG}"),
+                &[("content-type", "application/x-www-form-urlencoded")],
+                "to=%2F",
+            ),
         )
         .await;
-        let cookie = gate_cookie(&started);
-        let page = navigate(edge.addr, "/", Some(&cookie)).await;
+        assert_eq!(started.status, StatusCode::SEE_OTHER);
+
+        let page = navigate(edge.addr, "/", None).await;
         assert_eq!(page.status, StatusCode::OK);
         assert_eq!(page.text(), UPLOADED_HTML);
         let js = fetch(edge.addr, "/game.js").await;
@@ -692,7 +746,7 @@ async fn a_hybrid_tunnel_takes_only_what_the_manifest_does_not_have() {
         // 5. 后端断了：页面照常能开，清单外的路径回 503 JSON——游戏里的 fetch 能读懂。
         cli.disconnect();
         edge.wait_offline().await;
-        let page = navigate(edge.addr, "/", Some(&cookie)).await;
+        let page = navigate(edge.addr, "/", None).await;
         assert_eq!(page.status, StatusCode::OK);
         assert_eq!(page.text(), UPLOADED_HTML);
 

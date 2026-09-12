@@ -57,9 +57,17 @@ pub fn wants_gate(
     path: &str,
     navigation: bool,
     has_cookie: bool,
+    from: Option<&str>,
 ) -> bool {
     (method == Method::GET || method == Method::HEAD)
-        && gate::should_show(manifest.gate, path, navigation, navigation, has_cookie)
+        && gate::should_show(
+            manifest.gate,
+            path,
+            navigation,
+            navigation,
+            has_cookie,
+            from,
+        )
 }
 
 /// 握手失败的回答。对端是 CLI 不是浏览器，所以这里是 [`ErrorBody`] 的 JSON 不是 HTML。
@@ -139,31 +147,55 @@ mod tests {
     #[test]
     fn only_a_document_navigation_gets_the_gate_page() {
         let m = manifest(GateMode::Once);
-        assert!(wants_gate(&m, &Method::GET, "/", true, false));
-        assert!(wants_gate(&m, &Method::HEAD, "/level/3", true, false));
+        assert!(wants_gate(&m, &Method::GET, "/", true, false, None));
+        assert!(wants_gate(&m, &Method::HEAD, "/level/3", true, false, None));
 
-        // 点过开始了。
-        assert!(!wants_gate(&m, &Method::GET, "/", true, true));
+        // 点过开始了，但若显式带了 from=plaza 仍会展示邀请函。
+        assert!(!wants_gate(&m, &Method::GET, "/", true, true, None));
+        assert!(wants_gate(&m, &Method::GET, "/", true, true, Some("plaza")));
         // 子资源、XHR、WebSocket 升级：浏览器没说要文档。
-        assert!(!wants_gate(&m, &Method::GET, "/main.js", false, false));
-        assert!(!wants_gate(&m, &Method::GET, "/socket.io/", false, false));
+        assert!(!wants_gate(
+            &m,
+            &Method::GET,
+            "/main.js",
+            false,
+            false,
+            None
+        ));
+        assert!(!wants_gate(
+            &m,
+            &Method::GET,
+            "/socket.io/",
+            false,
+            false,
+            None
+        ));
         // 就算客户端把自己说成导航，长得像资源的路径也不出门禁页。
         assert!(!wants_gate(
             &m,
             &Method::GET,
             "/assets/app-4f2c.js",
             true,
-            false
+            false,
+            None
         ));
         // 游戏自己发的 POST 不能被拦，否则请求体就丢了。
-        assert!(!wants_gate(&m, &Method::POST, "/api/score", true, false));
+        assert!(!wants_gate(
+            &m,
+            &Method::POST,
+            "/api/score",
+            true,
+            false,
+            None
+        ));
         // 开发者选了不出就不出。
         assert!(!wants_gate(
             &manifest(GateMode::Never),
             &Method::GET,
             "/",
             true,
-            false
+            false,
+            None
         ));
     }
 

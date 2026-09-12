@@ -41,7 +41,7 @@ pub async fn rebuild(state: &AppState) -> anyhow::Result<usize> {
     let players_since = clock::format(now - Duration::days(PLAYERS_WINDOW_DAYS));
     let reports_since = clock::format(now - Duration::hours(REPORTS_WINDOW_HOURS));
 
-    let (items, club_followers) = {
+    let (items, club_followers, mut collections) = {
         let conn = state.db().lock().await;
         let players = db::players_since(&conn, &players_since)?;
         let joined = db::joined_counts(&conn)?;
@@ -95,11 +95,20 @@ pub async fn rebuild(state: &AppState) -> anyhow::Result<usize> {
                 items.push(item);
             }
         }
-        (items, db::plaza_followers_count(&conn)?)
+        (
+            items,
+            db::plaza_followers_count(&conn)?,
+            crate::collections::list(&conn, None, &now_string)?,
+        )
     };
 
     let mut items = items;
     sort_default(&mut items);
+    for collection in &mut collections {
+        collection
+            .entries
+            .retain(|entry| items.iter().any(|item| item.slug == entry.slug));
+    }
     let count = items.len();
     state
         .store()
@@ -108,6 +117,7 @@ pub async fn rebuild(state: &AppState) -> anyhow::Result<usize> {
             generated_at: now_string,
             items,
             club_followers,
+            collections,
         })
         .await?;
     Ok(count)

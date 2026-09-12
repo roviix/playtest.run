@@ -1,6 +1,7 @@
 //! 匿名会话：不登录也能拿到一个 24 小时的链接（DESIGN §3.2）。
 
 use axum::extract::State;
+use axum::http::{header, HeaderMap, StatusCode};
 use axum::Json;
 use playtest_common::api::AnonSessionResponse;
 use playtest_common::hash;
@@ -12,6 +13,25 @@ use crate::clock;
 use crate::db::{self, NewUser};
 use crate::error::ApiResult;
 use crate::state::AppState;
+
+pub async fn revoke(
+    State(state): State<AppState>,
+    caller: crate::auth::Caller,
+    headers: HeaderMap,
+) -> ApiResult<StatusCode> {
+    let token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split_once(' '))
+        .map(|(_, token)| token.trim())
+        .ok_or_else(|| crate::error::ApiError::unauthorized("这个请求没带令牌。"))?;
+    let connection = state.db().lock().await;
+    connection.execute(
+        "DELETE FROM tokens WHERE token_hash=?1 AND user_id=?2",
+        rusqlite::params![hash::hash_bytes(token.as_bytes()), caller.user_id],
+    )?;
+    Ok(StatusCode::NO_CONTENT)
+}
 
 pub async fn create(State(state): State<AppState>) -> ApiResult<Json<AnonSessionResponse>> {
     let now = clock::now();

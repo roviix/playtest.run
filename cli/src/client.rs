@@ -210,6 +210,18 @@ impl Client {
         self.read_json(response).await
     }
 
+    pub async fn revoke_token(&self) -> Result<()> {
+        let response = self
+            .request(Method::DELETE, routes::ME_TOKEN)
+            .send()
+            .await
+            .map_err(|error| self.transport(error))?;
+        if response.status().is_success() {
+            return Ok(());
+        }
+        Err(self.read_error(response).await)
+    }
+
     pub async fn create_site(&self, request: &CreateSiteRequest) -> Result<Site> {
         let response = self
             .request(Method::POST, routes::SITES)
@@ -452,6 +464,9 @@ mod tests {
     fn urls_do_not_double_up_slashes() {
         install_crypto_provider();
         let client = Client::new("http://127.0.0.1:8787/").unwrap();
-        assert_eq!(client.url(routes::SITES), "http://127.0.0.1:8787/v1/projects");
+        assert_eq!(
+            client.url(routes::SITES),
+            "http://127.0.0.1:8787/v1/projects"
+        );
     }
 }

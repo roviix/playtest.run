@@ -7,6 +7,7 @@
 //! 2026-09-09 起（方向 B）多了：推广位（`boosted`，DESIGN §3.11）、关注数、名额进度、开发者头像，
 //! 以及关注广场的人数。全部带默认值，旧文件照常解析。
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// 墙上那一张卡。形状搬到了 [`crate::project`]（REWRITE §2.1）：广场和控制台作品墙
@@ -26,7 +27,7 @@ pub const REPORTS_WINDOW_HOURS: i64 = 24;
 /// 对象存储里的键。
 pub const KEY: &str = "plaza.json";
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Plaza {
     pub schema: u32,
     /// RFC 3339，这份是什么时候整理的。排查用，页面上不显示。
@@ -37,6 +38,8 @@ pub struct Plaza {
     /// 关注广场本身的人数（DESIGN §3.6 的周报收件人）。页面上不写，给周报用。
     #[serde(default)]
     pub club_followers: u32,
+    #[serde(default)]
+    pub collections: Vec<crate::collection::Collection>,
 }
 
 /// 一面空墙。控制面还没写过这份文件、或者它坏了的时候，边缘按这个出——
@@ -48,6 +51,7 @@ impl Default for Plaza {
             generated_at: String::new(),
             items: Vec::new(),
             club_followers: 0,
+            collections: Vec::new(),
         }
     }
 }

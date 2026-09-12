@@ -2,7 +2,7 @@
 //!
 //! 人看的那一套在 [`crate::ui`]，这里管的是脚本和 agent 看的那一套。两者的分界只有一条：
 //! **加了 `--json`，stdout 上就只有一个 JSON 对象**，别的什么都没有；说明、进度、提醒、
-//! 报错的原文全部走 stderr。没加 `--json` 时这个模块只负责结尾那行耗时。
+//! 报错的原文全部走 stderr。人类模式渲染同一份结果，不展示常规耗时。
 //!
 //! # stdout 上那个对象长什么样
 //!
@@ -12,7 +12,7 @@
 //!
 //! ```json
 //! {"ok":true,"action":"upload","slug":"brisk-otter-41",
-//!  "url":"https://brisk-otter-41.playtest.run","version":7,
+//!  "url":"https://playtest.run/p/brisk-otter-41","version":7,
 //!  "elapsed_ms":5100,"timings":{"hash_ms":300,"prepare_ms":900,"upload_ms":3100,"commit_ms":800},
 //!  "expires_at":"2026-09-08T04:09:03Z","qr_text":"█▀▀▀▀▀█ …",
 //!  "card_url":"https://brisk-otter-41.playtest.run/_playtest/card.png",
@@ -41,7 +41,7 @@
 //! - `qr_text` 是终端二维码的原文，**JSON 模式下不往终端画**，交给 agent 自己贴回对话；
 //!   加了 `--no-qr` 就没有这个字段。
 //! - `card_url` 总是有——那张卡由边缘按当前版本渲染，地址不随时间变；`card_path` 只有真的
-//!   存下来了才有（加了 `--no-card`、或者这一刻边缘还没渲染好，就没有）。
+//!   存下来了才有（未显式下载、或者这一刻边缘还没渲染好，就没有）。
 //! - `console_url` 是开发者自己看结果的地方，玩家路径上不出现它（AGENTS 第 7 条）。
 //! - `expires_at`、`hint`、`qr_text`、`card_path`、`seats`、`plaza_url` 可能不出现
 //!   （没有就是没有），其余字段一定在。
@@ -417,7 +417,7 @@ pub struct UploadReport {
     pub qr_text: Option<String>,
     /// 那张邀请卡在哪儿（DESIGN §3.4）。边缘按当前版本渲染，所以这个地址一直有效。
     pub card_url: String,
-    /// 存到本地哪儿了。没存成（`--no-card`，或者这一刻还拿不到）就没有这一项。
+    /// 存到本地哪儿了。没存成（`--card -`，或者这一刻还拿不到）就没有这一项。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub card_path: Option<String>,
     /// 想找几位试玩者（`--seats`）。没说就没有这一项。
@@ -435,13 +435,6 @@ pub struct UploadReport {
     /// 卡的下场。人类模式靠它决定说哪一句；JSON 里看 `card_path` 有没有就够了。
     #[serde(skip)]
     pub card: card::Outcome,
-    /// 卡的字节。只有 MCP 用得上（贴一张图回对话），不进 JSON——几百 KB 的 base64
-    /// 塞进一行 stdout，对着管道读的脚本会很难受。
-    #[serde(skip)]
-    pub card_png: Option<Vec<u8>>,
-    /// 这一版没有封面。JSON 里它是 `findings` 里的一条，人类模式排在耗时前面那一行。
-    #[serde(skip)]
-    pub without_cover: bool,
 }
 
 /// 广场状态在输出里的样子。
@@ -486,8 +479,6 @@ impl UploadReport {
             findings,
             plaza: None,
             card: card::Outcome::default(),
-            card_png: None,
-            without_cover: false,
         }
     }
 
@@ -500,14 +491,14 @@ impl UploadReport {
 
     /// 那张邀请卡的下场。
     pub fn with_card(&mut self, taken: card::Taken) {
+        if taken.outcome == card::Outcome::Missing {
+            self.findings.push(
+                Finding::warn("作品已发布，但邀请卡未能保存")
+                    .hint(format!("运行 playtest card {} 重试", self.slug)),
+            );
+        }
         self.card = taken.outcome;
         self.card_path = taken.path;
-        self.card_png = taken.png;
-    }
-
-    /// 把卡的字节拿走（MCP 要贴进对话）。拿走而不是借用：几百 KB 的图只该有一份。
-    pub fn take_card_png(&mut self) -> Option<Vec<u8>> {
-        self.card_png.take()
     }
 }
 
@@ -579,14 +570,10 @@ fn after_the_link(report: &UploadReport) -> Vec<(Tone, String)> {
         lines.push(expiry_line(expires_at, "想让它留下来：playtest login。"));
     }
     lines.push((Tone::Plain, console_line(&report.slug)));
-    if report.without_cover {
-        lines.push((Tone::Plain, NO_COVER.to_string()));
-    }
-    lines.push((Tone::Plain, timing_line(report.elapsed_ms, report.timings)));
     lines
 }
 
-/// 邀请卡那一行。`--no-card` 时一个字都不说——他说了不要。
+/// 邀请卡那一行。`--card -` 时一个字都不说——他说了不要。
 fn card_line(outcome: card::Outcome, path: Option<&str>, url: &str, slug: &str) -> Option<String> {
     match (outcome, path) {
         (card::Outcome::Saved, Some(path)) => {
@@ -594,15 +581,11 @@ fn card_line(outcome: card::Outcome, path: Option<&str>, url: &str, slug: &str) 
         }
         // 存下来了却没有路径，是不可能的；真出现了也当没拿到说，别打一句半截的话。
         (card::Outcome::Saved, None) | (card::Outcome::Missing, _) => Some(format!(
-            "邀请卡稍后可以在 {url} 拿到，或 playtest card {slug}"
+            "邀请卡未能保存，可重试 playtest card {slug}，或打开 {url}"
         )),
         (card::Outcome::Skipped, _) => None,
     }
 }
-
-/// 没有封面时那一句（DESIGN §4.2 的上传时检查，只提醒、不拦）。广场好不好看八成取决于封面，
-/// 但我们不猜、不截图（DESIGN §3.12「从不运行用户代码」），只说一句。
-pub const NO_COVER: &str = "没有封面：加 --cover 一张图，广场和邀请卡都会好看很多";
 
 /// 「来的人玩成什么样」那一行。发完不说这句，「知道结果」这半个产品就没人知道在哪
 /// （`docs/spikes/2026-09-08-dogfood-mofish-airdrop.md` 第四节第 4 条）。
@@ -612,7 +595,7 @@ fn console_line(slug: &str) -> String {
 
 /// 名额那一行（DESIGN §3.3 第 4 条）。「加入」的定义要说出来，不然发的人会以为是打开的人数。
 fn seats_line(seats: u32) -> String {
-    format!("想找 {seats} 位试玩者，门禁页和邀请卡上都写着；留了名字的人算加入")
+    format!("想找 {seats} 位试玩者，邀请函和邀请卡上都写着；留了名字的人算加入")
 }
 
 /// 匿名链接还剩不到这么久就要提醒：一场测试从发链接到大家点开常常要一两个小时，
@@ -649,24 +632,6 @@ pub fn plaza_line(plaza: &PlazaOut) -> String {
     }
 }
 
-/// 「本次 4.2 秒（哈希 0.3 · 上传 3.1 · 提交 0.8）」。
-///
-/// DESIGN §8 要的那个数就是句首那个：从敲下命令到链接出现。分段是为了知道慢在哪一段；
-/// 整体不到 2 秒时没有「慢在哪」可问，四个 0.0 只是噪声，不打。
-fn timing_line(elapsed_ms: u64, timings: Timings) -> String {
-    if elapsed_ms < 2000 {
-        return format!("本次 {} 秒", seconds(elapsed_ms));
-    }
-    format!(
-        "本次 {} 秒（哈希 {} · 准备 {} · 上传 {} · 提交 {}）",
-        seconds(elapsed_ms),
-        seconds(timings.hash_ms),
-        seconds(timings.prepare_ms),
-        seconds(timings.upload_ms),
-        seconds(timings.commit_ms)
-    )
-}
-
 fn seconds(ms: u64) -> String {
     format!("{:.1}", ms as f64 / 1000.0)
 }
@@ -691,9 +656,10 @@ pub struct SiteOut {
 
 impl From<Site> for SiteOut {
     fn from(site: Site) -> Self {
+        let url = playtest_common::door_url(&site.url, &site.slug);
         Self {
             slug: site.slug,
-            url: site.url,
+            url,
             title: site.title,
             version: site.current_version,
             followers: site.listing.followers,
@@ -751,7 +717,7 @@ pub async fn fetch_site(slug: &str, api_flag: Option<&str>) -> Result<SiteOut> {
 /// 失败仍然是那个 `{"ok":false,…}` 对象加分层退出码，和别的命令一样。
 ///
 /// ```json
-/// {"event":"online","slug":"brisk-otter-41","url":"https://brisk-otter-41.playtest.run",
+/// {"event":"online","slug":"brisk-otter-41","url":"https://playtest.run/p/brisk-otter-41",
 ///  "expires_at":"2026-09-08T04:09:03Z","attempt":0,"elapsed_ms":1200,"qr_text":"█▀▀▀▀▀█ …",
 ///  "findings":[{"level":"note","message":"检测到 Vite：…"}]}
 /// {"event":"players","count":3}
@@ -822,6 +788,12 @@ impl OnlineReport {
     }
 
     pub fn with_card(&mut self, taken: card::Taken) {
+        if taken.outcome == card::Outcome::Missing {
+            self.findings.push(
+                Finding::warn("作品已发布，但邀请卡未能保存")
+                    .hint(format!("运行 playtest card {} 重试", self.slug)),
+            );
+        }
         self.card = taken.outcome;
         self.card_path = taken.path;
     }
@@ -876,10 +848,6 @@ pub fn report_online(report: &OnlineReport) {
     ui::say(&console_line(&report.slug));
     say_findings(&report.findings);
     ui::say("按 Ctrl-C 结束，结束后玩家会看到「开发者的电脑暂时不在线」。");
-    ui::say(&format!(
-        "本次 {} 秒（从敲命令到链接出来）",
-        seconds(report.elapsed_ms)
-    ));
 }
 
 #[derive(Debug, Serialize)]
@@ -1159,7 +1127,6 @@ mod tests {
         report.with_card(card::Taken {
             outcome: card::Outcome::Saved,
             path: Some("./小球大冒险-邀请卡.png".into()),
-            png: Some(vec![1, 2, 3]),
         });
         report.seats = Some(10);
         report.on_plaza(PlazaOut {
@@ -1175,7 +1142,6 @@ mod tests {
         assert_eq!(json["plaza"]["seeking"], true);
         // 卡的字节只给 MCP 贴图用，几百 KB 的 base64 不该出现在 stdout 的那一行里。
         assert!(json.get("card_png").is_none());
-        assert_eq!(report.take_card_png(), Some(vec![1, 2, 3]));
     }
 
     #[test]
@@ -1224,7 +1190,6 @@ mod tests {
         report.with_card(card::Taken {
             outcome: card::Outcome::Saved,
             path: Some("./小球大冒险-邀请卡.png".into()),
-            png: None,
         });
         report.on_plaza(PlazaOut {
             url: "https://playtest.run/".into(),
@@ -1233,7 +1198,6 @@ mod tests {
             seek_note: Some("新手引导看得懂吗".into()),
         });
         report.seats = Some(10);
-        report.without_cover = true;
 
         let lines: Vec<String> = after_the_link(&report)
             .into_iter()
@@ -1245,8 +1209,6 @@ mod tests {
             "想找 10 位",
             "这是匿名链接",
             "来的人玩成什么样",
-            "没有封面",
-            "本次",
         ];
         assert_eq!(lines.len(), heads.len(), "{lines:#?}");
         for (line, head) in lines.iter().zip(heads) {
@@ -1277,34 +1239,5 @@ mod tests {
         let said = &after_the_link(&missing)[0].1;
         assert!(said.contains("/_playtest/card.png"), "{said}");
         assert!(said.contains("playtest card brisk-otter-41"), "{said}");
-    }
-
-    #[test]
-    fn the_timing_line_reads_like_a_sentence() {
-        assert_eq!(
-            timing_line(
-                5100,
-                Timings {
-                    hash_ms: 300,
-                    prepare_ms: 900,
-                    upload_ms: 3100,
-                    commit_ms: 800
-                }
-            ),
-            "本次 5.1 秒（哈希 0.3 · 准备 0.9 · 上传 3.1 · 提交 0.8）"
-        );
-        assert_eq!(
-            timing_line(
-                240,
-                Timings {
-                    hash_ms: 20,
-                    prepare_ms: 60,
-                    upload_ms: 90,
-                    commit_ms: 40
-                }
-            ),
-            "本次 0.2 秒",
-            "一下就完的上传不用拆段"
-        );
     }
 }

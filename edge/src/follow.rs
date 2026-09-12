@@ -1,4 +1,4 @@
-//! 关注、「我的」、确认与退订（DESIGN §3.6、§3.10、§4.10）。
+//! 关注、关注页、确认与退订（DESIGN §3.6、§3.10、§4.10）。
 //!
 //! 这是边缘对控制面**仅有的同步写调用**（DESIGN §4.1）：玩家按下「告诉我」之后站在
 //! 页面前等一句回话，所以这一条不像事件那样先落盘再批量送。控制面不在的时候如实说
@@ -10,7 +10,7 @@
 //! **作品子域上不做浏览器通知。** Web Push 要先注册一个 Service Worker，而作品自己
 //! 可能已经注册了一个（Godot / Unity 的 PWA 导出、Vite 的 PWA 插件都会装）。边缘往
 //! 作品域上注册 SW 会顶掉它、还可能把旧文件缓存住——那是把别人的作品弄坏。所以子域的
-//! 门禁页只给邮箱这一种，浏览器通知只在根域（广场、「我的」）上做，SW 是我们自己域上
+//! 门禁页只给邮箱这一种，浏览器通知只在根域（广场、关注页）上做，SW 是我们自己域上
 //! 我们自己的那一个。
 
 use std::time::Duration;
@@ -155,7 +155,7 @@ pub async fn unsubscribe(api_base: Option<&str>, token: &str) -> bool {
     )
 }
 
-/// 「我的」要显示的东西。
+/// 关注页要显示的东西。
 pub enum Mine {
     View(MeView),
     /// 这把钥匙控制面不认（退订过、或者根本是伪造的）：清掉 cookie，按没有处理。
@@ -251,6 +251,7 @@ async fn try_post<B: serde::Serialize, R: serde::de::DeserializeOwned>(
 /// 结果页：一句话加一个「返回」。这几句要经得起「第一次用的人读一遍就懂」。
 pub fn result_page(outcome: &Outcome, sub: &Submission, back: &str) -> (StatusCode, String) {
     let plaza = matches!(sub.request.target, FollowTarget::Plaza);
+    let collection = matches!(sub.request.target, FollowTarget::Collection { .. });
     let (status, headline, detail) = match outcome {
         Outcome::Answered(FollowResponse::ConfirmSent) => {
             let masked = sub.email.as_deref().map(mask_email).unwrap_or_default();
@@ -263,6 +264,11 @@ pub fn result_page(outcome: &Outcome, sub: &Submission, back: &str) -> (StatusCo
         Outcome::Answered(FollowResponse::Subscribed) if plaza => (
             StatusCode::OK,
             "好，广场有新东西时会通知你。".to_string(),
+            "",
+        ),
+        Outcome::Answered(FollowResponse::Subscribed) if collection => (
+            StatusCode::OK,
+            "好，每周有新投稿时给你一封合集摘要。".to_string(),
             "",
         ),
         Outcome::Answered(FollowResponse::Subscribed) => (
@@ -401,24 +407,32 @@ fn hidden_fields(target: &FollowTarget, to: &str, from: &str) -> String {
 /// 「用浏览器通知」。只在根域上出现（模块头说明了为什么），且只在这个浏览器真的能用时
 /// 才由脚本把它显出来——iOS 上不加到主屏幕就没有推送，与其显示一个点了没反应的按钮，
 /// 不如不显示（DESIGN §3.6）。
-pub fn push_button(caps: &Capabilities, target: &FollowTarget, already: bool) -> String {
+/// `row` 为真时它在关注页那张列表里，左边已经有「浏览器通知」这个标了，
+/// 自己就只说状态与动作；为假时它自己站着，得把话说全。
+pub fn push_button(caps: &Capabilities, target: &FollowTarget, already: bool, row: bool) -> String {
     let Some(key) = &caps.push_public_key else {
         return String::new();
     };
     if already {
+        let state = if row {
+            "已开启"
+        } else {
+            "浏览器通知：已开启"
+        };
         return format!(
             "<form method=\"post\" action=\"{action}\" class=\"pushed\">\n\
 <input type=\"hidden\" name=\"action\" value=\"{off}\">\n\
-<span>浏览器通知：已开启</span><button type=\"submit\">关掉</button>\n</form>",
+<span>{state}</span><button type=\"submit\">关掉</button>\n</form>",
             action = root_paths::ME_ACTION,
             off = ACTION_PUSH_OFF,
         );
     }
     format!(
         "<button type=\"button\" id=\"pt-push\" class=\"ghost\" hidden data-key=\"{key}\" \
-data-target=\"{target}\">用浏览器通知</button>",
+data-target=\"{target}\">{label}</button>",
         key = esc(key),
         target = esc(&target.form_value()),
+        label = if row { "开启" } else { "用浏览器通知" },
     )
 }
 
@@ -426,7 +440,7 @@ data-target=\"{target}\">用浏览器通知</button>",
 pub const PUSH_SCRIPT: &str = "(function(){\
 var b=document.getElementById('pt-push');if(!b)return;\
 if(!('serviceWorker'in navigator)||!('PushManager'in window)||!('Notification'in window))return;\
-b.hidden=false;\
+b.hidden=false;if(b.parentNode)b.parentNode.hidden=false;\
 function key(s){var p=new Array((4-s.length%4)%4+1).join('=');\
 var raw=atob((s+p).replace(/-/g,'+').replace(/_/g,'/'));var out=new Uint8Array(raw.length);\
 for(var i=0;i<raw.length;i++){out[i]=raw.charCodeAt(i)}return out}\
@@ -441,7 +455,7 @@ body:'target='+encodeURIComponent(b.getAttribute('data-target'))+'&from=me&push=
 })();";
 
 /// 根域上我们自己的 Service Worker：只做两件事——收到推送弹一条、点了打开那条链接。
-/// 不缓存任何东西（它在根域上，根域只有广场和「我的」，都是服务端直出的）。
+/// 不缓存任何东西（它在根域上，根域只有广场和关注页，都是服务端直出的）。
 ///
 // TODO(contract): 推送负载的字段名（title / body / url）现在只写在这里和控制面的发信实现里，
 // 应该进 common::follow 一个 `PushPayload` 类型，两边都从那里取。
@@ -455,7 +469,7 @@ e.waitUntil(clients.matchAll({type:'window'}).then(function(list){\
 for(var i=0;i<list.length;i++){if(list[i].url===u&&'focus'in list[i])return list[i].focus()}\
 if(clients.openWindow)return clients.openWindow(u)}))});\n";
 
-// ---------------------------------------------------------------- 「我的」
+// ---------------------------------------------------------------- 关注页
 
 /// `/me/action` 表单里 `action` 的取值。
 pub const ACTION_UNFOLLOW: &str = "unfollow";
@@ -469,21 +483,14 @@ pub struct MePage<'a> {
     pub nonce: &'a str,
 }
 
-/// 「我的」（DESIGN §3.10）：一个抽屉，不是一个 profile。
-/// 没有头像、没有昵称、没有历史记录，也没有「创建账号」这四个字。
+/// 关注列表和通知设置分开呈现；邮箱只在用户主动打开对话框后填写。
 pub fn me_page(page: &MePage<'_>) -> String {
-    let mut body = String::from("<div class=\"drawer\"><h1>我的</h1>\n");
-    match page.view {
-        Some(view) => body.push_str(&signed_in(view, page.caps)),
-        None => body.push_str(&signed_out(page.caps)),
-    }
-    // 没有 `pt_me` 的人也能开浏览器通知：推送订阅本身就是一个身份，不需要先有邮箱。
-    let push = push_button(
-        page.caps,
-        &FollowTarget::Plaza,
-        page.view.is_some_and(|v| v.push),
-    );
-    let push_script = if push.contains("id=\"pt-push\"") {
+    let mut body = String::from("<div class=\"drawer\"><h1>关注</h1>");
+    body.push_str(&match page.view {
+        Some(view) => signed_in(view, page.caps),
+        None => signed_out(page.caps),
+    });
+    let push_script = if body.contains("id=\"pt-push\"") {
         format!(
             "<script nonce=\"{}\">{PUSH_SCRIPT}</script>\n",
             esc(page.nonce)
@@ -491,80 +498,153 @@ pub fn me_page(page: &MePage<'_>) -> String {
     } else {
         String::new()
     };
-    if !push.is_empty() {
-        body.push_str(&format!("<div class=\"more\">{push}</div>\n"));
-    }
     body.push_str(&format!("</div>\n{push_script}"));
-    plaza::wrap("我的", "", Here::Mine, &body)
+    plaza::wrap("关注", "", Here::Mine, &body)
+}
+
+/// 同一份紧凑对话框用于找回、设置和自愿关注；锚点保留无脚本路径。
+pub fn notification_dialog(id: &str, title: &str, content: &str) -> String {
+    format!("<dialog id=\"{id}\" class=\"notice\" aria-labelledby=\"{id}-title\"><div class=\"notice-head\"><h2 id=\"{id}-title\">{title}</h2><a href=\"#\" data-close-dialog aria-label=\"关闭\">×</a></div>{content}</dialog>", id=esc(id), title=esc(title))
+}
+
+fn restore_form(label: &str) -> String {
+    format!("<form method=\"post\" action=\"{action}\" class=\"notice-form\"><input type=\"hidden\" name=\"action\" value=\"{send}\"><label>你的邮箱<input type=\"email\" name=\"{email}\" required placeholder=\"name@example.com\" autocomplete=\"email\"></label><button type=\"submit\">{label}</button></form><p class=\"notice-note\">打开邮件中的链接，即可查看已有关注。开发者看不到你的邮箱。</p>", action=root_paths::ME_ACTION, send=ACTION_SEND_LINK, email=form::EMAIL, label=esc(label))
+}
+
+fn weekly_row(caps: &Capabilities, connected: bool) -> String {
+    let control = if connected {
+        one_click(
+            root_paths::FOLLOW,
+            &FollowTarget::Plaza,
+            root_paths::ME,
+            FROM_ME,
+            "订阅周报",
+            "",
+        )
+    } else if caps.email {
+        "<a class=\"ghost\" href=\"#weekly-notifications\" data-dialog=\"weekly-notifications\">订阅周报</a>".into()
+    } else {
+        String::new()
+    };
+    if control.is_empty() {
+        return String::new();
+    }
+    format!("<div class=\"follow-weekly\"><span class=\"follow-name\">广场周报<small>每周一封新作品</small></span>{control}</div>")
 }
 
 fn signed_in(view: &MeView, caps: &Capabilities) -> String {
-    let mut out = String::new();
-    match &view.email_masked {
-        Some(masked) => out.push_str(&format!(
-            "<p class=\"lead\">这台设备连着 {}。</p>\n",
-            esc(masked)
-        )),
-        None => out.push_str("<p class=\"lead\">这台设备用浏览器通知收消息。</p>\n"),
-    }
-
-    if view.follows.is_empty() {
-        out.push_str("<p class=\"summary\">还没有关注任何东西。在作品页上点「有新版本时告诉我」，它就会出现在这里。</p>\n");
+    let channel = view.email_masked.as_deref().unwrap_or(if view.push {
+        "浏览器通知"
     } else {
-        out.push_str("<ul class=\"mine\">\n");
-        for item in &view.follows {
-            let link = match (&item.title, &item.url) {
-                (Some(title), Some(url)) => {
-                    format!("<a href=\"{}\">{}</a>", esc(url), esc(title))
-                }
-                _ => "<a href=\"/\">广场</a>".to_string(),
-            };
-            out.push_str(&format!(
-                "<li>{link}\n<form method=\"post\" action=\"{action}\">\
-<input type=\"hidden\" name=\"action\" value=\"{unfollow}\">\
-<input type=\"hidden\" name=\"{target}\" value=\"{value}\">\
-<button type=\"submit\">取消</button></form></li>\n",
-                action = root_paths::ME_ACTION,
-                unfollow = ACTION_UNFOLLOW,
-                target = form::TARGET,
-                value = esc(&item.target.form_value()),
-            ));
-        }
-        out.push_str("</ul>\n");
+        "尚未开启通知"
+    });
+    let mut settings = String::new();
+    if let Some(masked) = &view.email_masked {
+        settings.push_str(&format!(
+            "<p class=\"notice-note\">接收邮箱：{}</p>",
+            esc(masked)
+        ));
     }
-
-    // 换一台设备就是再点一次链接。没有密码、没有「登录」两个字（DESIGN §3.6）。
+    let push = push_button(caps, &FollowTarget::Plaza, view.push, true);
+    if !push.is_empty() {
+        settings.push_str(&format!(
+            "<div class=\"notice-channel\"{}><span>浏览器通知</span>{push}</div>",
+            if view.push { "" } else { " hidden" }
+        ));
+    }
     if caps.email && view.email_masked.is_some() {
-        out.push_str(&format!(
-            "<div class=\"more\"><details class=\"tell\"><summary>换一台设备</summary>\n\
-<form method=\"post\" action=\"{action}\" class=\"row\">\
-<input type=\"hidden\" name=\"action\" value=\"{send}\">\
-<input type=\"email\" name=\"{email}\" required placeholder=\"你的邮箱\" autocomplete=\"email\" \
-aria-label=\"你的邮箱\">\
-<button type=\"submit\">发一条链接给我</button></form>\n</details></div>\n",
-            action = root_paths::ME_ACTION,
-            send = ACTION_SEND_LINK,
-            email = form::EMAIL,
+        settings.push_str("<details class=\"notice-restore\"><summary>换一台设备</summary>");
+        settings.push_str(&restore_form("寄链接给我"));
+        settings.push_str("</details>");
+    }
+    let control = if settings.is_empty() {
+        String::new()
+    } else {
+        "<a href=\"#notification-settings\" data-dialog=\"notification-settings\">通知设置</a>"
+            .into()
+    };
+    let mut out = format!(
+        "<div class=\"follow-status\"><span>{}</span>{control}</div>",
+        esc(channel)
+    );
+    if view.follows.is_empty() {
+        out.push_str("<div class=\"follow-empty\"><p>还没有关注作品或合集</p><a href=\"/\">去广场看看 →</a></div>");
+    } else {
+        out.push_str("<ul class=\"mine\">");
+        for item in &view.follows {
+            let (title, url, detail) = match &item.target {
+                FollowTarget::Site { slug } => (
+                    item.title.as_deref().unwrap_or(slug),
+                    root_paths::project_path(slug),
+                    "新版本发布时通知",
+                ),
+                FollowTarget::Collection { slug } => (
+                    item.title.as_deref().unwrap_or(slug),
+                    format!("/c/{slug}"),
+                    "每周新作品摘要",
+                ),
+                FollowTarget::Plaza => ("广场", "/".into(), "每周一封新作品周报"),
+            };
+            let initial = title.chars().next().unwrap_or('·').to_string();
+            out.push_str(&format!("<li><a href=\"{}\"><span class=\"follow-art\" aria-hidden=\"true\">{}</span><span class=\"follow-name\">{}<small>{detail}</small></span></a><form method=\"post\" action=\"{action}\"><input type=\"hidden\" name=\"action\" value=\"{unfollow}\"><input type=\"hidden\" name=\"{target}\" value=\"{value}\"><button type=\"submit\" aria-label=\"取消关注{label}\">取消关注</button></form></li>", esc(&url), esc(&initial), esc(title), action=root_paths::ME_ACTION, unfollow=ACTION_UNFOLLOW, target=form::TARGET, value=esc(&item.target.form_value()), label=esc(title)));
+        }
+        out.push_str("</ul>");
+        if !view.follows.iter().any(|item| {
+            matches!(
+                item.target,
+                FollowTarget::Site { .. } | FollowTarget::Collection { .. }
+            )
+        }) {
+            out.push_str("<p class=\"summary\">还没有关注作品。去 <a href=\"/\">广场</a> 看看，在作品页点「关注更新」。</p>");
+        }
+    }
+    if !view
+        .follows
+        .iter()
+        .any(|item| matches!(item.target, FollowTarget::Plaza))
+    {
+        out.push_str(&weekly_row(caps, true));
+    }
+    if !settings.is_empty() {
+        out.push_str(&notification_dialog(
+            "notification-settings",
+            "通知设置",
+            &settings,
         ));
     }
     out
 }
 
-/// 没有钥匙的人看到的：一句话说这里会放什么，一个邮箱输入。留下就是关注广场（DESIGN §3.10）。
 fn signed_out(caps: &Capabilities) -> String {
-    let mut out = String::from(
-        "<p class=\"lead\">你关注的作品会出现在这里；留个邮箱，换一台设备也能找到它们。</p>\n",
-    );
+    let mut out = String::from("<div class=\"follow-empty\"><p>在这台设备查看关注的作品</p>");
     if caps.email {
-        out.push_str(&format!(
-            "<form method=\"post\" action=\"{action}\" class=\"row\">\n{hidden}\
-<input type=\"email\" name=\"{email}\" required placeholder=\"你的邮箱\" autocomplete=\"email\" \
-aria-label=\"你的邮箱\"><button type=\"submit\">给我留个入口</button>\n</form>\n\
-<p class=\"summary\">这也是关注广场：每周一一封，说说这周新出了什么。</p>\n",
-            action = root_paths::FOLLOW,
-            hidden = hidden_fields(&FollowTarget::Plaza, root_paths::ME, FROM_ME),
-            email = form::EMAIL,
+        out.push_str("<a class=\"restore-follow\" href=\"#notification-settings\" data-dialog=\"notification-settings\">找回关注</a>");
+    } else {
+        out.push_str("<p class=\"summary\">邮箱通知暂未开放。</p>");
+    }
+    out.push_str("<a href=\"/\">去广场看看 →</a></div>");
+    out.push_str(&weekly_row(caps, false));
+    let push = push_button(caps, &FollowTarget::Plaza, false, false);
+    if caps.email {
+        out.push_str(&notification_dialog(
+            "notification-settings",
+            "找回关注",
+            &restore_form("寄链接给我"),
         ));
+        let mut email = format!("<form method=\"post\" action=\"{action}\" class=\"notice-form\">{hidden}<label>你的邮箱<input type=\"email\" name=\"{email}\" required placeholder=\"name@example.com\" autocomplete=\"email\"></label><button type=\"submit\">订阅周报</button></form><p class=\"notice-note\">每周一封新作品。点击确认信后开始接收，随时可退订。开发者看不到你的邮箱。</p>", action=root_paths::FOLLOW, hidden=hidden_fields(&FollowTarget::Plaza, root_paths::ME, FROM_ME), email=form::EMAIL);
+        if !push.is_empty() {
+            email.push_str(&format!(
+                "<div class=\"notice-channel\" hidden>{push}</div>"
+            ));
+        }
+        out.push_str(&notification_dialog(
+            "weekly-notifications",
+            "广场周报",
+            &email,
+        ));
+    }
+    if !caps.email && !push.is_empty() {
+        out.push_str(&format!("<div class=\"follow-weekly\" hidden><span class=\"follow-name\">广场周报<small>浏览器接收新作品通知</small></span>{push}</div>"));
     }
     out
 }
@@ -728,17 +808,17 @@ mod tests {
 
     #[test]
     fn the_push_button_only_exists_when_there_is_a_key() {
-        assert!(push_button(&caps(), &FollowTarget::Plaza, false).is_empty());
+        assert!(push_button(&caps(), &FollowTarget::Plaza, false, false).is_empty());
         let with_key = Capabilities {
             email: true,
             push_public_key: Some("BKey".into()),
             ..Default::default()
         };
-        let html = push_button(&with_key, &FollowTarget::Plaza, false);
+        let html = push_button(&with_key, &FollowTarget::Plaza, false, false);
         // 默认藏着，由脚本在真的能用的浏览器上显出来。
         assert!(html.contains("hidden"));
         assert!(html.contains("data-key=\"BKey\""));
-        let on = push_button(&with_key, &FollowTarget::Plaza, true);
+        let on = push_button(&with_key, &FollowTarget::Plaza, true, false);
         assert!(on.contains("已开启"));
         assert!(on.contains("push_off"));
     }
@@ -750,20 +830,62 @@ mod tests {
             caps: &caps(),
             nonce: "n0nce",
         });
-        assert!(html.contains("你关注的作品会出现在这里"));
+        assert!(html.contains("<h1>关注</h1>"));
+        assert!(html.contains("每周一封"));
+        assert!(html.contains(">寄链接给我</button>"));
+        // 代价和边界要写在框边上，不写在别处（DESIGN §3.10）。
+        assert!(html.contains("打开邮件中的链接"));
+        assert!(html.contains("开发者看不到你的邮箱"));
+        let restore = html
+            .split("id=\"notification-settings\"")
+            .nth(1)
+            .unwrap()
+            .split("</dialog>")
+            .next()
+            .unwrap();
+        assert!(restore.contains("action=\"/me/action\""));
+        assert!(restore.contains("value=\"send_link\""));
+        assert!(!restore.contains("value=\"plaza\""));
+        assert!(restore.contains("data-close-dialog"));
+        assert!(!html.contains("follow-welcome"));
+        assert!(!html.contains("给我留个入口"));
         assert!(html.contains("action=\"/follow\""));
         assert!(html.contains("value=\"plaza\""));
         assert!(html.contains("aria-current=\"page\""));
-        assert!(html.contains("我的<span class=\"nav-dot\"></span>"));
+        assert!(html.contains("关注<span class=\"nav-dot\"></span>"));
         assert!(html.contains("href=\"/\""));
         assert!(html.contains("广场</a>"));
         assert!(!html.contains("看看有什么新东西"));
         // 没有推送能力时这一页一行脚本都没有：邮箱是原生表单。
         assert!(!html.contains("<script"));
-        // 「我的」不是个人主页：没有这些东西（DESIGN §3.10）。
+        // 这一页不是个人主页：没有这些东西（DESIGN §3.10）。
         for word in [">登录<", ">注册<", "昵称", "创建账号"] {
             assert!(!html.contains(word), "「{word}」不该出现");
         }
+    }
+
+    #[test]
+    fn weekly_channels_share_one_entry_without_hiding_push_only_access() {
+        let mut channels = caps();
+        channels.push_public_key = Some("BKey".into());
+        let html = signed_out(&channels);
+        assert_eq!(html.matches("class=\"follow-weekly\"").count(), 1);
+        assert_eq!(html.matches("id=\"pt-push\"").count(), 1);
+        let weekly = html
+            .split("id=\"weekly-notifications\"")
+            .nth(1)
+            .unwrap()
+            .split("</dialog>")
+            .next()
+            .unwrap();
+        assert!(weekly.contains("id=\"pt-push\""));
+        assert!(weekly.contains("type=\"email\""));
+        assert!(weekly.contains("class=\"notice-channel\" hidden"));
+        channels.email = false;
+        let html = signed_out(&channels);
+        assert_eq!(html.matches("class=\"follow-weekly\"").count(), 1);
+        assert_eq!(html.matches("id=\"pt-push\"").count(), 1);
+        assert!(!html.contains("type=\"email\""));
     }
 
     #[test]
@@ -794,9 +916,50 @@ mod tests {
         assert!(html.contains("z***@example.com"));
         assert!(html.contains("小球大冒险"));
         assert!(html.contains(">广场</a>"));
-        assert_eq!(html.matches(">取消</button>").count(), 2);
+        assert_eq!(html.matches(">取消关注</button>").count(), 2);
         assert!(html.contains("value=\"site:brisk-otter-41\""));
-        assert!(html.contains("发一条链接给我"));
+        assert!(html.contains("寄链接给我"));
+        assert!(!html.contains("还没有关注作品"));
+    }
+
+    #[test]
+    fn me_with_a_key_and_nothing_followed_points_at_the_plaza() {
+        let view = MeView {
+            email_masked: Some("z***@example.com".into()),
+            push: false,
+            follows: vec![],
+        };
+        let html = me_page(&MePage {
+            view: Some(&view),
+            caps: &caps(),
+            nonce: "n0nce",
+        });
+        assert!(html.contains("<h1>关注</h1>"));
+        assert!(html.contains("还没有关注作品或合集"));
+        assert!(html.contains("href=\"/\">去广场看看 →</a>"));
+    }
+
+    #[test]
+    fn me_with_only_plaza_still_points_at_a_work() {
+        let view = MeView {
+            email_masked: Some("z***@example.com".into()),
+            push: false,
+            follows: vec![FollowView {
+                target: FollowTarget::Plaza,
+                title: None,
+                url: None,
+                since: "2026-09-08T00:00:00Z".into(),
+            }],
+        };
+        let html = me_page(&MePage {
+            view: Some(&view),
+            caps: &caps(),
+            nonce: "n0nce",
+        });
+        assert!(html.contains(">广场</a>"));
+        assert!(html.contains("还没有关注作品"));
+        assert!(html.contains("关注更新"));
+        assert!(!html.contains("还没有关注作品或合集"));
     }
 
     #[test]

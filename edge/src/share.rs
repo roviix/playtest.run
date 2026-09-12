@@ -27,7 +27,7 @@ impl SharePage<'_> {
         }
         let m = self.manifest;
         let title = esc(&m.title);
-        let link = esc(&format!("{}/", self.origin.trim_end_matches('/')));
+        let link = esc(&playtest_common::door_url(self.origin, &m.slug));
         // 卡是 1080×1350。先用 aspect-ratio 占好位，图慢一点到也不会把页面顶下去。
         // `height:auto` 不能省：标签上的 `height="1350"` 是有效的样式声明，
         // 不覆盖它，浏览器就真的按 1350 像素高排，卡会被拉长。
@@ -122,7 +122,7 @@ mod tests {
         let html = page(&m, &live).render().unwrap();
         assert!(html.contains("<img class=\"shot\" src=\"/_playtest/card.png\""));
         assert!(html.contains("download=\"playtest-brisk-otter-41.png\""));
-        assert!(html.contains("value=\"http://brisk-otter-41.localhost:8443/\""));
+        assert!(html.contains("value=\"http://localhost:8443/p/brisk-otter-41\""));
         assert!(html.contains(">复制链接</button>"));
         // 系统分享默认藏着：没有 navigator.share 的浏览器上它不该占位。
         assert!(html.contains("id=\"pt-share\" data-title=\"小球大冒险\" hidden"));

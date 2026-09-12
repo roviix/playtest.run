@@ -498,12 +498,16 @@ async fn restarting_keeps_the_same_key() {
 async fn the_environment_key_wins_over_the_file() {
     let dir = tempfile::tempdir().unwrap();
     let store_root = dir.path().join("store");
+    let store = playtest_common::store::Store::new(&store_root);
 
-    let from_file = tunnel_keys::load_or_create(dir.path(), &store_root, None).unwrap();
+    let from_file = tunnel_keys::load_or_create(dir.path(), &store, None)
+        .await
+        .unwrap();
 
     let injected = SigningKey::generate();
-    let used =
-        tunnel_keys::load_or_create(dir.path(), &store_root, Some(&injected.to_base64())).unwrap();
+    let used = tunnel_keys::load_or_create(dir.path(), &store, Some(&injected.to_base64()))
+        .await
+        .unwrap();
     assert_eq!(used.verifying_key(), injected.verifying_key());
     assert_ne!(used.verifying_key(), from_file.verifying_key());
 
@@ -515,7 +519,9 @@ async fn the_environment_key_wins_over_the_file() {
         "发布给边缘的公钥要跟着换"
     );
 
-    let again = tunnel_keys::load_or_create(dir.path(), &store_root, None).unwrap();
+    let again = tunnel_keys::load_or_create(dir.path(), &store, None)
+        .await
+        .unwrap();
     assert_eq!(
         again.verifying_key(),
         from_file.verifying_key(),

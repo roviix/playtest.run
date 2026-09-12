@@ -1,0 +1,204 @@
+[
+  {
+    "seed": "alice",
+    "traits": {
+      "species": 6,
+      "palette": 4,
+      "hat": 0,
+      "outfit": 0,
+      "eyes": 1,
+      "mood": 3,
+      "accessory": 0,
+      "background": 1
+    },
+    "fingerprint": "D07B1526",
+    "creature_hash": 1410348046
+  },
+  {
+    "seed": "开发者小林",
+    "traits": {
+      "species": 0,
+      "palette": 6,
+      "hat": 1,
+      "outfit": 1,
+      "eyes": 3,
+      "mood": 1,
+      "accessory": 0,
+      "background": 2
+    },
+    "fingerprint": "91CBADF9"
+  },
+  {
+    "seed": "你好🎨",
+    "traits": {
+      "species": 3,
+      "palette": 3,
+      "hat": 1,
+      "outfit": 0,
+      "eyes": 4,
+      "mood": 0,
+      "accessory": 6,
+      "background": 1
+    },
+    "fingerprint": "CADB6D58"
+  },
+  {
+    "seed": " café ",
+    "traits": {
+      "species": 2,
+      "palette": 0,
+      "hat": 3,
+      "outfit": 7,
+      "eyes": 2,
+      "mood": 2,
+      "accessory": 6,
+      "background": 0
+    },
+    "fingerprint": "9758FA15"
+  },
+  {
+    "seed": "",
+    "traits": {
+      "species": 1,
+      "palette": 3,
+      "hat": 2,
+      "outfit": 0,
+      "eyes": 0,
+      "mood": 3,
+      "accessory": 0,
+      "background": 0
+    },
+    "fingerprint": "1DAEE054"
+  },
+  {
+    "seed": "画家",
+    "traits": {
+      "species": 4,
+      "palette": 10,
+      "hat": 9,
+      "outfit": 3,
+      "eyes": 5,
+      "mood": 1,
+      "accessory": 6,
+      "background": 2
+    },
+    "fingerprint": "1EA17F6B"
+  },
+  {
+    "seed": "﻿artist﻿",
+    "traits": {
+      "species": 8,
+      "palette": 2,
+      "hat": 0,
+      "outfit": 0,
+      "eyes": 0,
+      "mood": 0,
+      "accessory": 0,
+      "background": 1
+    },
+    "fingerprint": "BE89EE88",
+    "creature_hash": 4194018388
+  },
+  {
+    "seed": "odd-folk-studio-001",
+    "traits": {
+      "species": 5,
+      "palette": 5,
+      "hat": 9,
+      "outfit": 4,
+      "eyes": 1,
+      "mood": 2,
+      "accessory": 0,
+      "background": 3
+    },
+    "fingerprint": "AB20962C"
+  },
+  {
+    "seed": "\"<>&\\",
+    "traits": {
+      "species": 0,
+      "palette": 10,
+      "hat": 8,
+      "outfit": 3,
+      "eyes": 5,
+      "mood": 1,
+      "accessory": 0,
+      "background": 0
+    },
+    "fingerprint": "437606A8"
+  },
+  {
+    "seed": "　playtest\n",
+    "traits": {
+      "species": 4,
+      "palette": 2,
+      "hat": 9,
+      "outfit": 3,
+      "eyes": 7,
+      "mood": 2,
+      "accessory": 5,
+      "background": 4
+    },
+    "fingerprint": "AFFEB825"
+  },
+  {
+    "seed": "原生居民-6-3",
+    "traits": {
+      "species": 6,
+      "palette": 11,
+      "hat": 0,
+      "outfit": 0,
+      "eyes": 0,
+      "mood": 1,
+      "accessory": 0,
+      "background": 4
+    },
+    "fingerprint": "A466FFD5",
+    "creature_hash": 1744647039
+  },
+  {
+    "seed": "原生居民-7-4",
+    "traits": {
+      "species": 7,
+      "palette": 4,
+      "hat": 0,
+      "outfit": 0,
+      "eyes": 0,
+      "mood": 0,
+      "accessory": 0,
+      "background": 1
+    },
+    "fingerprint": "754D1D75",
+    "creature_hash": 140284820
+  },
+  {
+    "seed": "原生居民-8-1",
+    "traits": {
+      "species": 8,
+      "palette": 7,
+      "hat": 0,
+      "outfit": 0,
+      "eyes": 0,
+      "mood": 0,
+      "accessory": 0,
+      "background": 1
+    },
+    "fingerprint": "F716D80D",
+    "creature_hash": 1388235196
+  },
+  {
+    "seed": "原生居民-9-2",
+    "traits": {
+      "species": 9,
+      "palette": 6,
+      "hat": 0,
+      "outfit": 0,
+      "eyes": 0,
+      "mood": 3,
+      "accessory": 0,
+      "background": 1
+    },
+    "fingerprint": "72B1E795",
+    "creature_hash": 1591468743
+  }
+]

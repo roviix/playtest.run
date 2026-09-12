@@ -3,6 +3,7 @@
 pub mod admin;
 pub mod agents;
 pub mod blobs;
+pub mod collections;
 pub mod events;
 pub mod feedback;
 pub mod follow;
@@ -21,6 +22,7 @@ use axum::routing::{delete, get, patch, post, put};
 use axum::{middleware, Extension, Json, Router};
 use playtest_common::api::{routes as paths, ErrorBody, ErrorCode};
 use playtest_common::boost::routes as admin_paths;
+use playtest_common::collection::routes as collection_paths;
 use playtest_common::follow::routes as follow_paths;
 use playtest_common::ingest::routes as ingest_paths;
 use playtest_common::limits;
@@ -46,6 +48,21 @@ pub fn app(state: AppState) -> Router {
         .route(paths::LOGIN_WEB_START, get(login::web_start))
         .route(paths::LOGIN_WEB_EXCHANGE, post(login::web_exchange))
         .route(paths::ME, get(login::me))
+        .route(paths::ME_TOKEN, axum::routing::delete(sessions::revoke))
+        .route(
+            collection_paths::COLLECTIONS,
+            get(collections::list).post(collections::create),
+        )
+        .route(collection_paths::OPEN, get(collections::open))
+        .route(
+            collection_paths::COLLECTION,
+            get(collections::show)
+                .put(collections::update)
+                .delete(collections::remove),
+        )
+        .route(collection_paths::ENTRIES, post(collections::submit))
+        .route(collection_paths::ENTRY, delete(collections::withdraw))
+        .route(collection_paths::BLOCK, delete(collections::unblock))
         .route(paths::SITES, get(sites::list).post(sites::create))
         .route(
             paths::SITE,
@@ -95,6 +112,7 @@ pub fn app(state: AppState) -> Router {
     // 没配管理令牌就整组不注册：外面探到的是 404，看不出这台机器有没有管理接口。
     let router = if state.admin_token().is_some() {
         router
+            .route(collection_paths::MODERATE, put(collections::moderate))
             .route(admin_paths::BOOSTS, get(admin::list).post(admin::grant))
             .route(admin_paths::BOOST_REVIEW, post(admin::review))
             .route(admin_paths::BOOST, delete(admin::end))

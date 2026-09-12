@@ -37,6 +37,7 @@ impl Server {
     fn start_against(home: &Path, api: &str) -> Self {
         let mut child = Command::new(env!("CARGO_BIN_EXE_playtest"))
             .args(["mcp"])
+            .current_dir(home)
             .env("HOME", home)
             .env("PLAYTEST_API", api)
             .env("NO_PROXY", "*")
@@ -294,7 +295,7 @@ const CARD_BYTES: &[u8] = b"\x89PNG\r\n\x1a\nnot-really-a-png";
 /// 一个只回两件事的假服务器：这个作品长什么样、它的邀请卡在哪。它同时扮控制面和边缘。
 fn start_fake_site() -> String {
     use axum::response::IntoResponse;
-    use axum::routing::get;
+    use axum::routing::{get, post};
 
     let (tx, rx) = std::sync::mpsc::channel::<std::net::SocketAddr>();
     std::thread::spawn(move || {
@@ -307,6 +308,27 @@ fn start_fake_site() -> String {
             let addr = listener.local_addr().unwrap();
             tx.send(addr).unwrap();
             let app = axum::Router::new()
+                .route(
+                    playtest_common::api::routes::SITES,
+                    post(move || async move {
+                        axum::Json(json!({
+                            "slug": "brisk-otter-41", "url": format!("http://{addr}"),
+                            "title": "小球试玩", "created_at": "2026-09-12T00:00:00Z"
+                        }))
+                    }),
+                )
+                .route(
+                    playtest_common::api::routes::SITE_UPLOADS,
+                    post(|| async {
+                        axum::Json(json!({ "upload_id": "upload-1", "missing": [], "missing_bytes": 0, "files": 1 }))
+                    }),
+                )
+                .route(
+                    playtest_common::api::routes::SITE_UPLOAD_COMMIT,
+                    post(move || async move {
+                        axum::Json(json!({ "slug": "brisk-otter-41", "url": format!("http://{addr}"), "version": 7 }))
+                    }),
+                )
                 .route(
                     playtest_common::api::routes::SITE,
                     get(
@@ -380,6 +402,40 @@ fn the_card_comes_back_as_an_image_the_assistant_can_hand_over() {
         CARD_BYTES,
         "贴回去的得是服务器上那张卡"
     );
+}
+
+#[test]
+fn uploading_through_mcp_returns_an_image_without_writing_a_card() {
+    let home = tempfile::tempdir().unwrap();
+    let dist = home.path().join("dist");
+    std::fs::create_dir(&dist).unwrap();
+    std::fs::write(
+        dist.join("index.html"),
+        "<!doctype html><title>小球</title>",
+    )
+    .unwrap();
+    let api = start_fake_site();
+    remember_token(home.path(), &api);
+    let mut server = Server::start_against(home.path(), &api);
+    handshake(&mut server);
+    let reply = server.call(2, "playtest_upload", json!({ "dir": dist }));
+    assert_ne!(reply["result"]["isError"], json!(true), "{reply}");
+    assert!(payload(&reply).get("card_path").is_none(), "{reply}");
+    let image = &reply["result"]["content"][1];
+    assert_eq!(image["type"], "image", "{reply}");
+    assert_eq!(
+        base64::engine::general_purpose::STANDARD
+            .decode(image["data"].as_str().unwrap())
+            .unwrap(),
+        CARD_BYTES
+    );
+    for dir in [home.path(), dist.as_path()] {
+        assert!(!std::fs::read_dir(dir).unwrap().any(|entry| entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .ends_with(".png")));
+    }
 }
 
 #[test]

@@ -1,0 +1,18 @@
+.main>.drawer{max-width:760px;padding:40px clamp(24px,4vw,64px) 80px;box-sizing:content-box}
+.drawer h1{margin:0 0 20px;font-size:28px;font-weight:600;letter-spacing:-.03em}
+.follow-status,.follow-weekly{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12px}
+.follow-status{margin-bottom:28px;color:var(--dim)}
+.follow-status a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}
+.mine{list-style:none;padding:0;margin:0;border-top:1px solid var(--line)}
+.mine li{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 0;border-bottom:1px solid var(--line);font-size:13px}
+.mine li>a{display:flex;align-items:center;gap:14px;min-height:44px;min-width:0;color:var(--fg);overflow-wrap:anywhere}
+.follow-art{display:grid;place-items:center;flex-shrink:0;width:44px;height:44px;border-radius:10px;background:var(--card2);font-size:20px;color:var(--accent)}
+.follow-name{display:flex;flex-direction:column;gap:4px}.follow-name small{font-size:12px;color:var(--dim);font-weight:normal}
+.mine form,.pushed{margin:0;display:flex;align-items:center;gap:10px}
+.mine button,.pushed button,.ghost,.follow-weekly button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 12px;border:1px solid var(--line2);border-radius:8px;background:none;color:var(--soft);font:12px/1.5 system-ui;white-space:nowrap;cursor:pointer}
+.follow-empty{display:flex;align-items:flex-start;flex-direction:column;gap:16px;padding:32px 0 40px;font-size:14px}
+.follow-empty p{margin:0}.follow-empty>a{display:inline-flex;align-items:center;min-height:44px;font-size:12px;color:var(--dim)}
+.follow-empty .restore-follow{padding:8px 18px;border-radius:8px;background:var(--accent);color:var(--accent-ink);font-size:13px;font-weight:600}
+.follow-weekly{padding:20px 0;border-top:1px solid var(--line)}
+.drawer .summary{color:var(--dim);font-size:12px;line-height:1.8}.drawer .summary a{color:var(--accent)}
+@media(max-width:767px){.main>.drawer{padding:28px 18px 56px}.mine li{gap:12px}.mine li>a{gap:10px}}

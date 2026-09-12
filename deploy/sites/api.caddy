@@ -16,6 +16,12 @@
 	}
 	redir /console /console/ permanent
 
+	handle /install.sh {
+		root * /srv/site
+		header Content-Type "text/plain; charset=utf-8"
+		file_server
+	}
+
 	# 介绍页：一个 HTML 文件，从 deploy/site 挂进来。开发者第一次搜到这个域名时看到的东西。
 	handle / {
 		root * /srv/site

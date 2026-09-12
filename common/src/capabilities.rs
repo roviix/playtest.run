@@ -4,12 +4,13 @@
 //! 还是什么都不显示——这取决于控制面有没有配邮件服务商、有没有 Web Push 的密钥。
 //! 控制面启动时把答案写进对象存储，边缘读它。**做不到的就不显示，不解释**（AGENTS 第 4 条）。
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub const SCHEMA: u32 = 1;
 pub const KEY: &str = "capabilities.json";
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Capabilities {
     #[serde(default)]
     pub schema: u32,

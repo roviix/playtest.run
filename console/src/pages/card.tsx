@@ -6,7 +6,7 @@
 
 import { useState } from "preact/hooks";
 
-import { cardUrl, cardWideUrl, type Site } from "../api";
+import { cardUrl, cardWideUrl, doorUrl, type Site } from "../api";
 import { Empty } from "./status";
 
 export function CardTab({ site }: { site: Site }) {
@@ -24,20 +24,21 @@ export function CardTab({ site }: { site: Site }) {
   const tall = `${cardUrl(site.url)}?v=${site.current_version}`;
   const wide = `${cardWideUrl(site.url)}?v=${site.current_version}`;
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  const link = doorUrl(site.url, site.slug);
 
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(site.url);
+      await navigator.clipboard.writeText(link);
       setCopied("已复制");
     } catch {
-      setCopied(site.url);
+      setCopied(link);
     }
     setTimeout(() => setCopied(null), 2500);
   }
 
   async function share() {
     try {
-      await navigator.share({ title: site.title, url: site.url });
+      await navigator.share({ title: site.title, url: link });
     } catch {
       // 用户取消了，或者浏览器不让——都不算错。
     }

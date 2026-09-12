@@ -1,0 +1,1208 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>playtest.run · 独立游戏试玩邀请凭证与可玩小样</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #07080a;
+  --panel: #0d0e12;
+  --card: #121318;
+  --card2: #181920;
+  --fg: #f4f4f7;
+  --soft: #a6a6b2;
+  --dim: #6a6a75;
+  --line: rgba(255, 255, 255, 0.08);
+  --line2: rgba(255, 255, 255, 0.16);
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* 浅色主题 (Luxury Letterpress / Warm Paper) */
+body.light {
+  color-scheme: light;
+  --bg: #f4f4f6;
+  --panel: #ffffff;
+  --card: #ffffff;
+  --card2: #eaeaea;
+  --fg: #18181b;
+  --soft: #52525b;
+  --dim: #71717a;
+  --line: rgba(0, 0, 0, 0.08);
+  --line2: rgba(0, 0, 0, 0.15);
+}
+
+/* 配色预设 */
+body.theme-titanium {
+  --accent: #ffffff;
+  --accent-ink: #09090b;
+  --accent-glow: rgba(255, 255, 255, 0.25);
+  --badge-bg: rgba(255, 255, 255, 0.08);
+  --badge-border: rgba(255, 255, 255, 0.16);
+}
+body.light.theme-titanium {
+  --accent: #18181b;
+  --accent-ink: #ffffff;
+  --accent-glow: rgba(0, 0, 0, 0.15);
+  --badge-bg: rgba(0, 0, 0, 0.05);
+  --badge-border: rgba(0, 0, 0, 0.12);
+}
+body.theme-amber {
+  --accent: #f59e0b;
+  --accent-ink: #1c1002;
+  --accent-glow: rgba(245, 158, 11, 0.35);
+  --badge-bg: rgba(245, 158, 11, 0.1);
+  --badge-border: rgba(245, 158, 11, 0.25);
+}
+body.theme-mint {
+  --accent: #2dd4bf;
+  --accent-ink: #042f2e;
+  --accent-glow: rgba(45, 212, 191, 0.35);
+  --badge-bg: rgba(45, 212, 191, 0.1);
+  --badge-border: rgba(45, 212, 191, 0.25);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", system-ui, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: 80px;
+  transition: background 0.25s, color 0.25s;
+}
+
+/* 顶部控制栏 */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 28px;
+  background: rgba(10, 11, 14, 0.88);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--line);
+}
+body.light .topbar {
+  background: rgba(255, 255, 255, 0.85);
+}
+.brand-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.brand-title span {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--dim);
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+.ctrl-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.btn-toggle {
+  padding: 4px 11px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+body.light .btn-toggle {
+  background: rgba(0, 0, 0, 0.04);
+}
+.btn-toggle:hover { background: rgba(255, 255, 255, 0.1); }
+body.light .btn-toggle:hover { background: rgba(0, 0, 0, 0.08); }
+.btn-toggle.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  border-color: var(--accent);
+}
+
+/* 载体理念导言 */
+.intro-section {
+  max-width: 860px;
+  margin: 36px auto 20px;
+  padding: 0 24px;
+  text-align: center;
+}
+.intro-eyebrow {
+  font: 11px/1.2 var(--mono);
+  letter-spacing: 0.15em;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+.intro-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+  margin-bottom: 10px;
+}
+.intro-desc {
+  font-size: 14px;
+  color: var(--soft);
+  max-width: 640px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* 主展示舞台容器 */
+.stage-wrap {
+  max-width: 960px;
+  margin: 28px auto;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+}
+
+/* 舞台视窗 */
+.mockup-viewport {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 40px 16px;
+  background: radial-gradient(80% 50% at 50% 20%, rgba(255, 255, 255, 0.03) 0%, transparent 80%);
+  border-radius: 24px;
+  position: relative;
+}
+
+/* =============================================================
+   核心载体：【垂直实体试玩凭据 (The Vertical Pass)】
+   - 4:3 比例顶画框，100% 对应游戏封面与广场卡，零裁切
+   - 中段水平打孔虚线撕票缝
+   - 下段舒展对齐的副券
+============================================================= */
+.pass-ticket {
+  width: 100%;
+  max-width: 412px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 10px;
+  box-shadow: 0 36px 80px -20px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: transform 0.25s, box-shadow 0.25s, background 0.25s;
+}
+body.light .pass-ticket {
+  box-shadow: 0 24px 60px -15px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+/* 顶层 4:3 画框 */
+.pass-ticket .cover-frame {
+  width: 100%;
+  aspect-ratio: 4/3;
+  border-radius: 13px;
+  overflow: hidden;
+  position: relative;
+  background: #090a0d;
+  border: 1px solid var(--line);
+}
+.pass-ticket .cover-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.pass-ticket .cover-frame .tag-admit {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font: 10px var(--mono);
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(10, 11, 14, 0.82);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.pass-ticket .cover-frame .tag-admit i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+.pass-ticket .cover-frame .edition-stamp {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  font: 9.5px var(--mono);
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.65);
+  padding: 2px 7px;
+  border-radius: 4px;
+  backdrop-filter: blur(4px);
+}
+
+/* 中段撕票缝 */
+.pass-ticket .perforation {
+  position: relative;
+  margin: 12px -10px;
+  height: 1px;
+  border-top: 1px dashed var(--line2);
+}
+.pass-ticket .perforation::before,
+.pass-ticket .perforation::after {
+  content: "";
+  position: absolute;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bg); /* 与背景融合形成自然缺口 */
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.pass-ticket .perforation::before { left: -7px; }
+.pass-ticket .perforation::after { right: -7px; }
+
+/* 下部副券信息区 */
+.pass-ticket .stub-body {
+  padding: 4px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pass-ticket .ticket-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pass-ticket .modal-eyebrow {
+  font: 9.5px/1.2 var(--mono);
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.pass-ticket .inviter-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--soft);
+}
+.pass-ticket .avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #2b2b35;
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+.pass-ticket .work-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.pass-ticket .work-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+.pass-ticket .work-meta-row .seats {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--soft);
+}
+.pass-ticket .work-meta-row .seats i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+.pass-ticket .summary-quote {
+  font-size: 12.5px;
+  color: var(--soft);
+  font-style: italic;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border-left: 2px solid var(--accent);
+}
+body.light .pass-ticket .summary-quote {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* 核心行动区 (表单) */
+.pass-ticket .entry-form {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pass-ticket .holder {
+  width: 100%;
+  position: relative;
+}
+.pass-ticket .name-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  font-size: 12.5px;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+body.light .pass-ticket .name-input {
+  background: rgba(0, 0, 0, 0.03);
+}
+.pass-ticket .name-input:focus {
+  border-color: var(--accent);
+  outline: none;
+  background: rgba(0, 0, 0, 0.45);
+}
+.pass-ticket .nickname-reassure {
+  font-size: 10.5px;
+  color: var(--dim);
+  text-align: center;
+  margin-top: 3px;
+}
+
+.pass-ticket .btn-start {
+  width: 100%;
+  height: 42px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  border: 0;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transition: transform 0.1s, filter 0.15s;
+}
+.pass-ticket .btn-start:hover { filter: brightness(1.04); }
+.pass-ticket .btn-start:active { transform: scale(0.985); }
+
+/* 折叠式关注 */
+.pass-ticket .follow-details {
+  text-align: center;
+  margin-top: 2px;
+}
+.pass-ticket .follow-details summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--dim);
+  transition: color 0.15s;
+}
+.pass-ticket .follow-details summary::-webkit-details-marker { display: none; }
+.pass-ticket .follow-details summary:hover { color: var(--soft); }
+.pass-ticket .follow-details[open] summary { display: none; }
+.pass-ticket .follow-capsule {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 2px 3px 2px 10px;
+  background: rgba(0, 0, 0, 0.3);
+  margin-top: 6px;
+}
+body.light .pass-ticket .follow-capsule {
+  background: rgba(0, 0, 0, 0.03);
+}
+.pass-ticket .follow-capsule input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  background: none;
+  border: 0;
+  font-size: 11.5px;
+  color: var(--fg);
+}
+.pass-ticket .follow-capsule button {
+  padding: 3px 9px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--fg);
+  border: 0;
+  font-size: 11px;
+  cursor: pointer;
+}
+body.light .pass-ticket .follow-capsule button {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.pass-ticket .footer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--dim);
+}
+.pass-ticket .link-about {
+  background: none;
+  border: 0;
+  color: var(--soft);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 0;
+}
+.pass-ticket .link-about:hover { color: var(--fg); }
+
+/* 内置 SVG 插画 (无外部图片时) */
+.wordcard-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* =============================================================
+   弹窗设计体系 (Dialogs: About & Mini Playable Preview)
+============================================================= */
+dialog {
+  margin: auto;
+  border: 0;
+  border-radius: 20px;
+  background: rgba(16, 18, 24, 0.96);
+  backdrop-filter: blur(28px);
+  box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.85), 0 0 0 1px var(--line2);
+  color: var(--fg);
+  max-width: min(780px, 94vw);
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+}
+dialog::backdrop {
+  background: rgba(3, 4, 6, 0.78);
+  backdrop-filter: blur(10px);
+}
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.modal-head .modal-eyebrow {
+  font: 10px/1.2 var(--mono);
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.modal-head h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+.modal-head .close {
+  background: none;
+  border: 0;
+  color: var(--soft);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+.modal-head .close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* 关于页面内容 */
+.about-content {
+  padding: 24px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--soft);
+}
+.about-content p { margin-bottom: 12px; }
+.about-content strong { color: #fff; }
+.about-content ul {
+  margin: 12px 0 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.about-small {
+  font-size: 11.5px;
+  color: var(--dim);
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-top: 16px;
+}
+
+/* 可玩小样 (Game Shell) */
+.game-shell {
+  position: relative;
+  padding: 16px 20px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.game-hud {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font: 12.5px/1.4 var(--mono);
+  color: var(--soft);
+}
+#playerLabel {
+  font-weight: 600;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+#playerLabel::before {
+  content: "●";
+  color: var(--accent);
+  font-size: 8px;
+}
+#scoreLabel {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  color: var(--accent);
+  font-weight: 600;
+}
+canvas#game {
+  display: block;
+  width: 100%;
+  max-width: 720px;
+  height: auto;
+  aspect-ratio: 750 / 500;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: crosshair;
+  outline: none;
+  background: #101c35;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+.game-help {
+  font-size: 12px;
+  color: var(--dim);
+  text-align: center;
+  padding: 10px 20px 20px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* 胜利面板 */
+.win {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(340px, 85%);
+  background: rgba(14, 17, 24, 0.94);
+  backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 18px;
+  padding: 28px 20px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
+  animation: popIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  z-index: 10;
+}
+@keyframes popIn {
+  from { opacity: 0; transform: translate(-50%, -46%) scale(0.95); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.win-icon {
+  font-size: 32px;
+  color: #fde047;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 0 12px #fde047);
+}
+.win h4 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 6px;
+}
+.win p {
+  font-size: 13px;
+  color: var(--soft);
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+#replay {
+  padding: 8px 22px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 0;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+/* 底部设计沉淀总结卡 */
+.philosophy-grid {
+  max-width: 860px;
+  margin: 40px auto 0;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+.phil-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+}
+.phil-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--fg);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.phil-title i {
+  color: var(--accent);
+  font-style: normal;
+}
+.phil-desc {
+  font-size: 12px;
+  color: var(--soft);
+  line-height: 1.6;
+}
+</style>
+</head>
+<body class="theme-titanium">
+
+<!-- 顶部交互控制栏 -->
+<div class="topbar">
+  <div class="brand-title">
+    playtest.run · 试玩邀请页
+    <span>垂直数字实体凭证 (The Vertical Pass)</span>
+  </div>
+
+  <div class="ctrl-actions">
+    <button id="themeButton" class="btn-toggle" aria-label="切换到浅色主题">☀️ 浅色 / 🌙 深色</button>
+    <span style="color: var(--line2); margin: 0 4px;">|</span>
+    <label style="color: var(--dim);">配色：</label>
+    <button class="btn-toggle active" onclick="setTheme('titanium', this)">冷银白</button>
+    <button class="btn-toggle" onclick="setTheme('amber', this)">曜石金</button>
+    <button class="btn-toggle" onclick="setTheme('mint', this)">冷翠青</button>
+    <span style="color: var(--line2); margin: 0 4px;">|</span>
+    <label style="color: var(--dim);">封面：</label>
+    <button class="btn-toggle active" onclick="setCover('image', this)">真实 4:3 游戏封面</button>
+    <button class="btn-toggle" onclick="setCover('svg', this)">内置 4:3 算法插画</button>
+  </div>
+</div>
+
+<div class="intro-section">
+  <div class="intro-eyebrow">BEFORE THE ADVENTURE</div>
+  <h1 class="intro-title">很高兴，你愿意来玩。</h1>
+  <p class="intro-desc">
+    不需要复杂的介绍，只希望一个好画面、一句真诚的邀请，就能让人愿意开始。<br>
+    输入昵称后点击「开始试玩」，可体验内置的星光收集小样与完整心流。
+  </p>
+</div>
+
+<div class="stage-wrap">
+  <div class="mockup-viewport">
+
+    <!-- ==================== 垂直入场凭证票 ==================== -->
+    <div class="pass-ticket">
+      <!-- 4:3 封面画框 -->
+      <div class="cover-frame">
+        <div class="cover-media cover-real">
+          <img src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80" alt="游戏原画">
+          <span class="tag-admit"><i></i>ADMIT ONE</span>
+          <span class="edition-stamp">EDITION #01</span>
+        </div>
+        <div class="cover-media cover-svg" style="display:none; width:100%; height:100%;">
+          <svg class="wordcard-svg" viewBox="0 0 400 300" fill="none" aria-hidden="true">
+            <defs>
+              <radialGradient id="skyGrad" cx="50%" cy="40%" r="75%">
+                <stop offset="0%" stop-color="#141c2e"/>
+                <stop offset="100%" stop-color="#08090d"/>
+              </radialGradient>
+            </defs>
+            <rect width="400" height="300" fill="url(#skyGrad)"/>
+            <!-- 经纬微网格 -->
+            <path d="M0 100h400M0 200h400M133 0v300M267 0v300" stroke="rgba(255,255,255,0.05)"/>
+            <!-- 同心星轨与坐标环 -->
+            <circle cx="200" cy="140" r="68" stroke="rgba(190,215,255,0.18)" stroke-dasharray="2 6"/>
+            <circle cx="200" cy="140" r="38" stroke="rgba(190,215,255,0.3)" stroke-dasharray="4 4"/>
+            <circle cx="200" cy="140" r="16" stroke="rgba(255,255,255,0.4)"/>
+            <circle cx="200" cy="140" r="4" fill="#ffffff"/>
+            <!-- 散落小星尘 -->
+            <circle cx="95" cy="85" r="1.5" fill="#f6e2b7" opacity="0.8"/>
+            <circle cx="310" cy="90" r="2" fill="#d3dcff" opacity="0.6"/>
+            <circle cx="160" cy="220" r="1.2" fill="#ffd666" opacity="0.9"/>
+            <circle cx="320" cy="210" r="1.5" fill="#ffffff" opacity="0.7"/>
+            <circle cx="280" cy="130" r="1.8" fill="#d8eaff" opacity="0.8"/>
+            <!-- 徽记与编号 -->
+            <text x="22" y="32" font-size="9" font-weight="700" letter-spacing="1.5" fill="rgba(255,255,255,0.6)" font-family="system-ui,sans-serif">PLAYTEST PASS</text>
+            <text x="378" y="32" text-anchor="end" font-size="8.5" font-family="monospace" fill="rgba(255,255,255,0.3)">01 / 4:3</text>
+            <text x="22" y="278" font-size="64" font-weight="800" fill="rgba(255,255,255,0.12)" font-family="system-ui,sans-serif">星</text>
+            <text x="378" y="278" text-anchor="end" font-size="9" font-family="monospace" fill="rgba(255,255,255,0.35)">little-stars</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- 物理撕票打孔虚线 -->
+      <div class="perforation"></div>
+
+      <!-- 下段副券 -->
+      <div class="stub-body">
+        <div class="ticket-head">
+          <span class="inviter-line">
+            <span class="avatar">某</span>
+            某某 邀请你试玩
+          </span>
+          <span class="modal-eyebrow">BEFORE THE ADVENTURE</span>
+        </div>
+
+        <h3 class="work-title">《收集散落的星光》</h3>
+
+        <div class="work-meta-row">
+          <span>v1.0 · 9 月 12 日</span>
+          <span>·</span>
+          <span class="seats"><i></i>在找 10 位试玩者 · 已有 4 位加入</span>
+        </div>
+
+        <div class="summary-quote">
+          “这里是一份为独立游戏设计的试玩邀请。只希望一个好画面、一句真诚的邀请，就能让人愿意开始。”
+        </div>
+
+        <!-- 核心交互：署名与进入 -->
+        <form id="entryForm" class="entry-form">
+          <div class="holder">
+            <input id="nickname" type="text" class="name-input" placeholder="你的名字（可不填，签名进入）" autocomplete="nickname">
+            <div class="nickname-reassure">昵称仅用于当前页面的欢迎语，不会上传或保存</div>
+          </div>
+          <button type="submit" class="btn-start">开始试玩 ↗</button>
+
+          <!-- 折叠关注 -->
+          <details class="follow-details">
+            <summary>+ 关注更新（有新版本时告诉我）</summary>
+            <div class="follow-capsule">
+              <input type="email" placeholder="输入邮箱接收版本更新">
+              <button type="button">关注</button>
+            </div>
+          </details>
+        </form>
+
+        <div class="footer-row">
+          <span>凭证有效至 18:00 · 由 localhost 提供</span>
+          <button type="button" id="aboutButton" class="link-about">关于这份试玩邀请 ↗</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 设计哲学沉淀 -->
+<div class="philosophy-grid">
+  <div class="phil-card">
+    <div class="phil-title"><i>✦</i> 4:3 黄金画幅与零裁切</div>
+    <div class="phil-desc">创作者上传的封面与广场卡片严格遵循 4:3 比例。垂直形态将画幅置顶，原汁原味展示游戏截图或内置矢量插画，彻底告别左右分栏导致的横图腰斩。</div>
+  </div>
+  <div class="phil-card">
+    <div class="phil-title"><i>✦</i> 一句真诚邀请的仪式感</div>
+    <div class="phil-desc">眉题「BEFORE THE ADVENTURE」与作者引用块，赋予页面独立艺术品的温度，而不是冷冰冰的访问拦截弹窗。</div>
+  </div>
+  <div class="phil-card">
+    <div class="phil-title"><i>✦</i> 零负担签名与纯粹行动</div>
+    <div class="phil-desc">昵称仅用于当场欢迎；唯一的纯白高光主按键负责进入；辅助信息与邮箱一律折叠收纳，界面极其克制干净。</div>
+  </div>
+</div>
+
+<!-- ==================== 对话框：关于说明 ==================== -->
+<dialog id="aboutModal" aria-labelledby="aboutTitle">
+  <div class="modal-head">
+    <div>
+      <div class="modal-eyebrow">BEFORE THE ADVENTURE</div>
+      <h3 id="aboutTitle">很高兴，你愿意来玩。</h3>
+    </div>
+    <button class="close" aria-label="关闭说明" data-close="aboutModal">×</button>
+  </div>
+  <div class="about-content">
+    <p>这里是一份为独立游戏设计的<strong>试玩邀请页原型</strong>。不需要复杂的介绍，只希望一个好画面、一句真诚的邀请，就能让人愿意开始。</p>
+    <ul>
+      <li>封面是内置 SVG 插画，无需加载外部图片。</li>
+      <li>点击「开始试玩」可体验一个收集星光的小样。</li>
+      <li>昵称仅用于当前页面的欢迎语，不会上传或保存。</li>
+    </ul>
+    <div class="about-small">工作室、游戏设定与封面均为设计示例；正式发布时可替换成你的游戏内容和试玩链接。</div>
+  </div>
+</dialog>
+
+<!-- ==================== 对话框：可玩小样 ==================== -->
+<dialog id="gameModal" aria-labelledby="gameTitle">
+  <div class="modal-head">
+    <div>
+      <div class="modal-eyebrow">A LITTLE PLAYABLE PREVIEW</div>
+      <h3 id="gameTitle">收集散落的星光</h3>
+    </div>
+    <button class="close" aria-label="结束试玩" data-close="gameModal">×</button>
+  </div>
+  <div class="game-shell">
+    <div class="game-hud">
+      <span id="playerLabel">你好，冒险家</span>
+      <span id="scoreLabel" aria-live="polite">星光 0 / 5</span>
+    </div>
+    <canvas id="game" width="750" height="500" tabindex="0" aria-label="收集星光小游戏。使用方向键或 WASD 移动；也可以点击、触摸画面前往指定位置。"></canvas>
+    <div class="win" id="winPanel" hidden>
+      <div class="win-icon">✧</div>
+      <h4>小小冒险，完成。</h4>
+      <p id="winText">谢谢你，让这个世界亮了一点。</p>
+      <button id="replay">再逛一圈 ↗</button>
+    </div>
+  </div>
+  <p class="game-help">方向键 / WASD 移动 · 也可以点击或触摸目的地<br>收集 5 颗星光，再走进右上方的光环。</p>
+</dialog>
+
+<script>
+  const $ = s => document.querySelector(s);
+  const about = $('#aboutModal'), gameModal = $('#gameModal');
+
+  // 弹窗唤起与关闭
+  $('#aboutButton').addEventListener('click', () => about.showModal());
+  $('#themeButton').addEventListener('click', () => {
+    const light = document.body.classList.toggle('light');
+    $('#themeButton').textContent = light ? '🌙 切换深色' : '☀️ 切换浅色';
+    $('#themeButton').setAttribute('aria-label', light ? '切换到深色主题' : '切换到浅色主题');
+  });
+
+  document.querySelectorAll('[data-close]').forEach(button => {
+    button.addEventListener('click', () => document.getElementById(button.dataset.close).close());
+  });
+
+  [about, gameModal].forEach(dialog => dialog.addEventListener('click', e => {
+    const r = dialog.getBoundingClientRect();
+    if (e.target === dialog && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) {
+      dialog.close();
+    }
+  }));
+
+  // Canvas 小游戏核心逻辑
+  const canvas = $('#game'), ctx = canvas.getContext('2d');
+  let player, stars, target, frame = 0, last = 0, complete = false;
+  const keys = new Set(), portal = {x: 656, y: 105};
+  const dust = Array.from({length: 38}, (_, i) => ({
+    x: (i * 137 + 31) % 750,
+    y: (i * 83 + 46) % 500,
+    r: i % 3 === 0 ? 1.4 : 0.7
+  }));
+
+  function resetGame() {
+    cancelAnimationFrame(frame);
+    keys.clear();
+    player = {x: 92, y: 391};
+    target = null;
+    complete = false;
+    stars = [
+      {x: 166, y: 188},
+      {x: 310, y: 325},
+      {x: 379, y: 122},
+      {x: 518, y: 365},
+      {x: 577, y: 222}
+    ].map(s => ({...s, got: false}));
+
+    $('#winPanel').hidden = true;
+    $('#scoreLabel').textContent = '星光 0 / 5';
+    last = 0;
+    frame = requestAnimationFrame(draw);
+    canvas.focus({preventScroll: true});
+  }
+
+  $('#entryForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const name = $('#nickname').value.trim() || '冒险家';
+    $('#playerLabel').textContent = '你好，' + name;
+    $('#winText').textContent = '谢谢你，' + name + '。让这个世界亮了一点。';
+    gameModal.showModal();
+    resetGame();
+  });
+
+  $('#replay').addEventListener('click', resetGame);
+  gameModal.addEventListener('close', () => {
+    cancelAnimationFrame(frame);
+    keys.clear();
+    target = null;
+  });
+  window.addEventListener('blur', () => keys.clear());
+
+  const controls = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd'];
+  window.addEventListener('keydown', e => {
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (gameModal.open && controls.includes(key) && !complete) {
+      e.preventDefault();
+      keys.add(key);
+      target = null;
+    }
+  });
+  window.addEventListener('keyup', e => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
+
+  function pointerTarget(e) {
+    const r = canvas.getBoundingClientRect();
+    target = {
+      x: Math.max(28, Math.min(722, (e.clientX - r.left) * 750 / r.width)),
+      y: Math.max(65, Math.min(468, (e.clientY - r.top) * 500 / r.height))
+    };
+  }
+
+  canvas.addEventListener('pointerdown', e => {
+    if (!complete) {
+      pointerTarget(e);
+      canvas.setPointerCapture(e.pointerId);
+      canvas.focus({preventScroll: true});
+    }
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (e.buttons && !complete) pointerTarget(e);
+  });
+
+  function starShape(x, y, r, t) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(t);
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / 5;
+      const rr = i % 2 ? r * 0.45 : r;
+      i ? ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function draw(time) {
+    if (!gameModal.open) return;
+    const dt = last ? Math.min((time - last) / 1000, 0.035) : 0;
+    last = time;
+
+    let dx = (keys.has('ArrowRight') || keys.has('d') ? 1 : 0) - (keys.has('ArrowLeft') || keys.has('a') ? 1 : 0);
+    let dy = (keys.has('ArrowDown') || keys.has('s') ? 1 : 0) - (keys.has('ArrowUp') || keys.has('w') ? 1 : 0);
+
+    if (target) {
+      dx = target.x - player.x;
+      dy = target.y - player.y;
+      if (Math.hypot(dx, dy) < 4) {
+        target = null;
+        dx = dy = 0;
+      }
+    }
+
+    const len = Math.hypot(dx, dy);
+    if (len && !complete) {
+      const distance = target ? Math.min(190 * dt, len) : 190 * dt;
+      player.x = Math.max(28, Math.min(722, player.x + dx / len * distance));
+      player.y = Math.max(65, Math.min(468, player.y + dy / len * distance));
+    }
+
+    let changed = false;
+    stars.forEach(s => {
+      if (!s.got && Math.hypot(player.x - s.x, player.y - s.y) < 28) {
+        s.got = true;
+        changed = true;
+      }
+    });
+
+    const count = stars.filter(s => s.got).length;
+    if (changed) $('#scoreLabel').textContent = '星光 ' + count + ' / 5';
+
+    // 背景深邃星海渐变
+    const bg = ctx.createLinearGradient(0, 0, 750, 500);
+    bg.addColorStop(0, '#101c35');
+    bg.addColorStop(1, '#303755');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, 750, 500);
+
+    // 星云光晕
+    const haze = ctx.createRadialGradient(560, 120, 5, 480, 190, 400);
+    haze.addColorStop(0, '#777ec62b');
+    haze.addColorStop(1, '#777ec600');
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, 0, 750, 500);
+
+    // 微光斜网格
+    ctx.strokeStyle = '#a3b9e00b';
+    ctx.lineWidth = 1;
+    for (let x = -500; x < 900; x += 55) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 500, 500); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + 500, 0); ctx.lineTo(x, 500); ctx.stroke();
+    }
+
+    // 悬浮微尘星屑
+    dust.forEach((p, i) => {
+      ctx.globalAlpha = 0.25 + 0.2 * Math.sin(time / 1400 + i);
+      ctx.fillStyle = '#d3dcff';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // 目标点击圆点
+    if (target && !complete) {
+      ctx.strokeStyle = '#c0d5ff45';
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, 7, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // 出口光环 Portal
+    ctx.save();
+    ctx.translate(portal.x, portal.y);
+    ctx.shadowColor = count === 5 ? '#efd4ff' : '#899fda';
+    ctx.shadowBlur = count === 5 ? 25 : 8;
+    ctx.strokeStyle = count === 5 ? '#f2d9f8' : '#7386b777';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 23, 33, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.fillStyle = '#a8b7d1';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(count === 5 ? '出口已点亮' : '收集星光点亮出口', portal.x, portal.y + 54);
+
+    // 绘制散落的金色小星光
+    stars.forEach((s, i) => {
+      if (s.got) return;
+      ctx.save();
+      ctx.fillStyle = '#f6e2b7';
+      ctx.shadowColor = '#ffe1ac';
+      ctx.shadowBlur = 16;
+      starShape(s.x, s.y + Math.sin(time / 550 + i) * 4, 12, Math.sin(time / 1200 + i) * 0.12);
+      ctx.restore();
+    });
+
+    // 玩家角色：微光小精灵
+    ctx.fillStyle = '#00000030';
+    ctx.beginPath();
+    ctx.ellipse(player.x, player.y + 19, 19, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const ball = ctx.createRadialGradient(player.x - 7, player.y - 9, 1, player.x, player.y, 20);
+    ball.addColorStop(0, '#ffffff');
+    ball.addColorStop(0.35, '#d8eaff');
+    ball.addColorStop(0.8, '#87aaea');
+    ball.addColorStop(1, '#5873b7');
+    ctx.save();
+    ctx.fillStyle = ball;
+    ctx.shadowColor = '#9ec5ff';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, 19, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 灵动的小眼睛
+    ctx.fillStyle = '#354b7a';
+    [-5, 5].forEach(x => {
+      ctx.beginPath();
+      ctx.arc(player.x + x, player.y + 2, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // 通关判定
+    if (count === 5 && Math.hypot(player.x - portal.x, player.y - portal.y) < 30 && !complete) {
+      complete = true;
+      target = null;
+      keys.clear();
+      $('#winPanel').hidden = false;
+      $('#replay').focus({preventScroll: true});
+    }
+
+    if (!complete) frame = requestAnimationFrame(draw);
+  }
+
+  // 配色切换
+  function setTheme(theme, btn) {
+    document.body.classList.remove('theme-titanium', 'theme-amber', 'theme-mint');
+    document.body.classList.add('theme-' + theme);
+    document.querySelectorAll('.ctrl-actions button').forEach(b => {
+      if (b.textContent.includes('银') || b.textContent.includes('金') || b.textContent.includes('青')) {
+        b.classList.remove('active');
+      }
+    });
+    btn.classList.add('active');
+  }
+
+  // 封面切换
+  function setCover(type, btn) {
+    const reals = document.querySelectorAll('.cover-real');
+    const svgs = document.querySelectorAll('.cover-svg');
+    if (type === 'svg') {
+      reals.forEach(el => el.style.display = 'none');
+      svgs.forEach(el => el.style.display = 'block');
+    } else {
+      reals.forEach(el => el.style.display = 'block');
+      svgs.forEach(el => el.style.display = 'none');
+    }
+    document.querySelectorAll('.ctrl-actions button').forEach(b => {
+      if (b.textContent.includes('游戏') || b.textContent.includes('算法')) {
+        b.classList.remove('active');
+      }
+    });
+    btn.classList.add('active');
+  }
+</script>
+
+</body>
+</html>

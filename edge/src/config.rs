@@ -46,22 +46,27 @@ impl Config {
         })
     }
 
-    /// 对象存储根，只读。api 往里写。
+    /// 共享 cookie 的域名（带前导点，如 `.playtest.run` 或 `.localhost`）。
+    pub fn cookie_domain(&self) -> String {
+        let clean = self.host_suffix.trim_start_matches('.');
+        format!(".{clean}")
+    }
+
+    /// 本机文件系统后端的根；S3 后端不把作品持久化到这里。
     pub fn store_root(&self) -> PathBuf {
         self.data_dir.join("store")
+    }
+
+    pub fn store_config(&self) -> anyhow::Result<playtest_common::store::StoreConfig> {
+        playtest_common::store::StoreConfig::from_env(
+            self.store_root(),
+            self.data_dir.join("upload-tmp"),
+        )
     }
 
     /// 第一层数据先落这里，第三周再送控制面（DESIGN §3.4）。
     pub fn events_path(&self) -> PathBuf {
         self.data_dir.join("edge-events.jsonl")
-    }
-
-    /// 隧道令牌的验签公钥。控制面第一次启动时写进对象存储，边缘只读
-    /// （DESIGN §4.5：只验签不回源）。环境变量 `PLAYTEST_TUNNEL_VERIFYING_KEY`
-    /// 优先于它，见 `tunnel::keys`。
-    pub fn tunnel_key_path(&self) -> PathBuf {
-        self.store_root()
-            .join(playtest_common::tunnel::key_files::VERIFYING_KEY_OBJECT)
     }
 
     /// 隧道「上次在线」的记录。放边缘自己的目录、不放对象存储：

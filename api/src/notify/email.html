@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{subject}</title>
+<style>
+@media only screen and (max-width: 620px) {{
+  .email-shell {{ padding: 16px 10px !important; }}
+  .email-content {{ padding: 28px 24px !important; }}
+  .email-footer {{ padding: 22px 24px !important; }}
+  .email-title {{ font-size: 25px !important; }}
+  .action-table {{ width: 100% !important; }}
+}}
+@media (prefers-color-scheme: dark) {{
+  .email-background {{ background-color: #09090b !important; }}
+  .email-card {{ background-color: #151518 !important; border-color: #303036 !important; color: #f4f4f7 !important; }}
+  .email-footer, .digest-item {{ border-color: #303036 !important; }}
+  .muted {{ color: #b0b0b8 !important; }}
+  .text-link {{ color: #f4f4f7 !important; }}
+  .button {{ background-color: #f4f4f7 !important; border-color: #f4f4f7 !important; color: #151518 !important; }}
+  .note {{ border-color: #62626c !important; }}
+}}
+</style>
+</head>
+<body class="email-background" style="margin:0;padding:0;width:100%;background-color:#f2f2f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',Arial,sans-serif;-webkit-text-size-adjust:100%">
+<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all">{preview}</div>
+<table role="presentation" class="email-background" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f2f2f0">
+<tr><td class="email-shell" align="center" style="padding:40px 16px">
+<table role="presentation" class="email-card" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#ffffff" style="max-width:600px;border:1px solid #dedee2;border-radius:14px;background-color:#ffffff;color:#202024;table-layout:fixed">
+<tr><td class="email-content" style="padding:36px 40px 32px">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr>
+<td style="font-size:19px;font-weight:700;letter-spacing:-0.7px;line-height:1.4">playtest<span class="muted" style="color:#62626c;font-weight:400">.run</span></td>
+<td class="muted" align="right" style="font-size:11px;color:#62626c;letter-spacing:1px">{category}</td>
+</tr></table>
+<h1 class="email-title" style="margin:36px 0 22px;font-size:29px;font-weight:600;line-height:1.5;letter-spacing:-0.7px;overflow-wrap:anywhere;word-break:break-word">{subject}</h1>
+{body}
+{action}
+{safety}
+</td></tr>
+<tr><td class="email-footer" style="padding:24px 40px 26px;border-top:1px solid #e8e8ec">
+{fallback}
+<p class="muted" style="margin:0 0 12px;color:#62626c;font-size:11px;line-height:1.9">{reason}</p>
+<p class="muted" style="margin:0;color:#62626c;font-size:11px;line-height:2">{footer_links}</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

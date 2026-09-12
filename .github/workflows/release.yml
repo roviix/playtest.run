@@ -48,6 +48,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           name="playtest-${version}-${{ matrix.target }}"
           mkdir -p "dist/$name"
+          printf '{"version":"%s","commit":"%s","target":"%s"}\n' "$GITHUB_REF_NAME" "$GITHUB_SHA" '${{ matrix.target }}' > "dist/$name/build-info.json"
           if [[ "${{ matrix.target }}" == *windows* ]]; then
             cp "target/${{ matrix.target }}/release/playtest.exe" "dist/$name/"
             cp LICENSE README.md "dist/$name/"
@@ -89,3 +90,6 @@ jobs:
             在「系统设置 → 隐私与安全性」里放行一次（私测阶段没有签名与公证）。
 
             边缘与控制面不发预编译包，部署方式见 `deploy/README.md`。
+
+            `SHA256SUMS` 用于下载完整性校验；每个压缩包包含 `build-info.json`，记录标签、源码提交和目标平台。
+            尚未签名与公证，不把文件校验称为代码签名。私有仓库仍仅受邀账号可下载。

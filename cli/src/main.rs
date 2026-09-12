@@ -24,7 +24,7 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::error::ErrorKind;
-use clap::{CommandFactory, Parser};
+use clap::{CommandFactory, FromArgMatches};
 
 use args::{Cli, Command, Target};
 
@@ -35,12 +35,24 @@ fn main() -> ExitCode {
     clock::init_local_offset();
     client::install_crypto_provider();
 
-    let cli = match Cli::try_parse() {
+    let matches = match Cli::command().try_get_matches() {
+        Ok(matches) => matches,
+        Err(error) => return report_parse_outcome(error),
+    };
+    let explicit_publish_options = ["isolated"]
+        .iter()
+        .any(|name| matches.value_source(name) == Some(clap::parser::ValueSource::CommandLine));
+    let cli = match Cli::from_arg_matches(&matches) {
         Ok(cli) => cli,
         Err(e) => return report_parse_outcome(e),
     };
     // 命令行解析出来的才作数：`-m "--json"` 这种在 begin() 里会被当成开了机器模式。
     output::set_json(cli.json);
+    if cli.legacy_gate.is_some() {
+        return output::report_failure(&output::classify(&output::usage(
+            "--gate 已撤出：主域始终展示邀请函，作品子域直接运行。请移除 --gate 及其值后重试。",
+        )));
+    }
 
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
@@ -51,7 +63,7 @@ fn main() -> ExitCode {
         }
     };
 
-    match runtime.block_on(dispatch(cli)) {
+    match runtime.block_on(dispatch(cli, explicit_publish_options)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => output::report_failure(&output::classify(&e)),
     }
@@ -67,6 +79,10 @@ fn report_parse_outcome(e: clap::Error) -> ExitCode {
             | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
     );
     if !output::is_json() {
+        if e.kind() == ErrorKind::DisplayHelp && std::env::args().skip(1).eq(["-h"]) {
+            println!("{}", args::QUICK_HELP);
+            return ExitCode::SUCCESS;
+        }
         let _ = e.print();
         return if asked_for_help {
             ExitCode::SUCCESS
@@ -95,62 +111,52 @@ fn first_line(rendered: &str) -> String {
         .to_string()
 }
 
-async fn dispatch(cli: Cli) -> Result<()> {
+async fn dispatch(cli: Cli, explicit_publish_options: bool) -> Result<()> {
     let machine = output::is_json();
-    if cli.command.is_some() && cli.upload.any_set() {
+    let api = cli.upload.api.as_deref();
+    if cli.command.is_some() && (cli.upload.any_set() || explicit_publish_options) {
         return Err(output::usage(
-            "子命令（ls / rm / open / unlist / versions / rollback / card / mcp）不和要发出去的目录一起用。要发目录就只写 playtest ./dist；\
+            "管理命令不和发布选项一起用。要发目录就只写 playtest ./dist；\
              要用子命令就把目录和 --name 这类参数去掉。",
         ));
     }
     // 这几条都产出一个 Report，说出来只有一处（`output::say`）——人话和 `--json`
     // 不可能只做到一半（REWRITE §3.1）。
     let report = match cli.command {
-        Some(Command::Login { api }) => return login::run(api.as_deref()).await,
-        Some(Command::Mcp { setup, api }) => return mcp::run(setup, api).await,
-        None => return run_default(cli).await,
+        Some(Command::Login) => return login::run(api).await,
+        Some(Command::Mcp { setup }) => return mcp::run(setup, cli.upload.api).await,
+        None => return run_default(cli, explicit_publish_options).await,
 
-        Some(Command::Ls { api }) => commands::ls(api.as_deref()).await?,
-        Some(Command::Whoami { api }) => commands::whoami(api.as_deref()).await?,
-        Some(Command::Files {
-            target,
-            version,
-            api,
-        }) => commands::files(&target, version.as_deref(), api.as_deref()).await?,
-        Some(Command::Open { target, api }) => {
+        Some(Command::Ls) => commands::ls(api).await?,
+        Some(Command::Whoami) => commands::whoami(api).await?,
+        Some(Command::Logout { yes }) => commands::logout(yes, api, !machine).await?,
+        Some(Command::Files { target, version }) => {
+            commands::files(&target, version.as_deref(), api).await?
+        }
+        Some(Command::Open { target }) => {
             // `--json` 下不弹浏览器：跑在 agent 或 CI 里多半没有浏览器，也不该抢焦点。
-            commands::open(&target, api.as_deref(), !machine).await?
+            commands::open(&target, api, !machine).await?
         }
-        Some(Command::Rm { slug, yes, api }) => {
-            commands::rm(&slug, yes, api.as_deref(), !machine).await?
+        Some(Command::Rm { slug, yes }) => commands::rm(&slug, yes, api, !machine).await?,
+        Some(Command::Versions { target }) => commands::versions(&target, api).await?,
+        Some(Command::Rollback { target, version }) => {
+            commands::rollback(&target, &version, api).await?
         }
-        Some(Command::Versions { target, api }) => {
-            commands::versions(&target, api.as_deref()).await?
-        }
-        Some(Command::Rollback {
-            target,
-            version,
-            api,
-        }) => commands::rollback(&target, &version, api.as_deref()).await?,
-        Some(Command::Unlist { slug, api }) => commands::unlist(&slug, api.as_deref()).await?,
-        Some(Command::Card { target, out, api }) => {
-            commands::card(&target, out.as_deref(), api.as_deref()).await?
-        }
+        Some(Command::Unlist { slug }) => commands::unlist(&slug, api).await?,
+        Some(Command::Card { target, out }) => commands::card(&target, out.as_deref(), api).await?,
     };
     output::say(&report);
     Ok(())
 }
 
-async fn run_default(cli: Cli) -> Result<()> {
+async fn run_default(cli: Cli, explicit_publish_options: bool) -> Result<()> {
     let Some(target) = cli.upload.target.clone() else {
-        if output::is_json() {
+        if output::is_json() || cli.upload.any_set() || explicit_publish_options {
             return Err(output::usage(
                 "没说要发什么。给一个目录（playtest ./dist），或者一个本地端口（playtest 5173）。",
             ));
         }
-        let mut command = Cli::command();
-        let _ = command.print_help();
-        println!();
+        println!("{}", args::QUICK_HELP);
         return Ok(());
     };
 

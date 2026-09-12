@@ -10,6 +10,7 @@ use std::io::Write;
 use std::path::Path;
 
 use anyhow::{anyhow, Context};
+use playtest_common::store::Store;
 use playtest_common::tunnel::{key_files, SigningKey};
 
 /// 直接给一把私钥（base64url 的 32 字节种子）。容器里不挂盘、或者以后有第二个控制面实例要签同一把钥匙时用它。
@@ -25,9 +26,9 @@ pub fn key_from_env() -> Option<String> {
 }
 
 /// 定下这次启动用的私钥，并把公钥发布给边缘。`from_env` 是 [`SIGNING_KEY_ENV`] 的值。
-pub fn load_or_create(
+pub async fn load_or_create(
     data_dir: &Path,
-    store_root: &Path,
+    store: &Store,
     from_env: Option<&str>,
 ) -> anyhow::Result<SigningKey> {
     let key = match from_env {
@@ -36,7 +37,7 @@ pub fn load_or_create(
         })?,
         None => from_file(&data_dir.join(key_files::SIGNING_KEY_FILE))?,
     };
-    publish_verifying_key(store_root, &key)?;
+    publish_verifying_key(store, &key).await?;
     Ok(key)
 }
 
@@ -103,19 +104,16 @@ fn write_new_key(path: &Path) -> anyhow::Result<Option<SigningKey>> {
 
 /// 公钥每次启动都重写一遍：换过私钥、或者对象存储被清过之后，边缘下一次读到的就是对的那把。
 ///
-/// `FsStore` 只认清单、指针和 blob 这三种对象，公钥这一个键直接落文件系统。
-fn publish_verifying_key(store_root: &Path, key: &SigningKey) -> anyhow::Result<()> {
-    let path = store_root.join(key_files::VERIFYING_KEY_OBJECT);
-    let parent = path.parent().expect("对象键至少有一级目录");
-    std::fs::create_dir_all(parent).with_context(|| format!("建不了目录 {}", parent.display()))?;
-
-    // 先写临时文件再改名：边缘随时可能在读，不能让它读到半行。
-    let tmp = parent.join(format!(".tunnel.pub.{}.tmp", std::process::id()));
+async fn publish_verifying_key(store: &Store, key: &SigningKey) -> anyhow::Result<()> {
     let line = format!("{}\n", key.verifying_key().to_base64());
-    std::fs::write(&tmp, line).with_context(|| format!("写不了 {}", tmp.display()))?;
-    std::fs::rename(&tmp, &path).with_context(|| format!("改不了名字 {}", path.display()))?;
-
-    tracing::info!(path = %path.display(), "隧道公钥已发布，边缘从这里读");
+    store
+        .put_bytes(key_files::VERIFYING_KEY_OBJECT, line.as_bytes())
+        .await
+        .context("隧道验签公钥写不进对象存储")?;
+    tracing::info!(
+        object = key_files::VERIFYING_KEY_OBJECT,
+        "隧道公钥已发布到对象存储"
+    );
     Ok(())
 }
 
@@ -123,13 +121,15 @@ fn publish_verifying_key(store_root: &Path, key: &SigningKey) -> anyhow::Result<
 mod tests {
     use super::*;
 
-    #[test]
-    fn broken_key_file_says_what_to_do() {
+    #[tokio::test]
+    async fn broken_key_file_says_what_to_do() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(key_files::SIGNING_KEY_FILE);
         std::fs::write(&path, "这不是密钥").unwrap();
+        let store = Store::new(dir.path().join("store"));
 
-        let err = load_or_create(dir.path(), &dir.path().join("store"), None)
+        let err = load_or_create(dir.path(), &store, None)
+            .await
             .unwrap_err()
             .to_string();
         assert!(err.contains("删掉它"), "{err}");
@@ -137,10 +137,12 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "这不是密钥");
     }
 
-    #[test]
-    fn broken_env_key_names_the_variable() {
+    #[tokio::test]
+    async fn broken_env_key_names_the_variable() {
         let dir = tempfile::tempdir().unwrap();
-        let err = load_or_create(dir.path(), &dir.path().join("store"), Some("not-a-key"))
+        let store = Store::new(dir.path().join("store"));
+        let err = load_or_create(dir.path(), &store, Some("not-a-key"))
+            .await
             .unwrap_err()
             .to_string();
         assert!(err.contains(SIGNING_KEY_ENV), "{err}");

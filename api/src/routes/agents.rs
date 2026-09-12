@@ -15,9 +15,7 @@ use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use playtest_common::api::routes as paths;
-use playtest_common::ingest::routes as ingest_paths;
-use playtest_common::results::routes as result_paths;
-use playtest_common::{limits, DEVELOPER_API_URL};
+use playtest_common::{contract, limits, DEVELOPER_API_URL};
 use serde_json::{json, Value};
 
 /// 这几个文件都不带用户数据，缓存久一点没关系；助手可能一天拉好几次。
@@ -121,7 +119,7 @@ Tools: `playtest_upload` (a built directory), `playtest_share` (a local port), `
 
 Otherwise use the CLI (single binary, no runtime):
 
-    playtest ./dist            # upload a built directory -> link + QR + invite card
+    playtest ./dist            # upload a built directory -> link + QR (no image file written)
     playtest 5173              # tunnel a running dev server
     playtest ./dist --backend 3000   # static from us, everything else tunneled to their backend
     playtest ./dist --json     # one JSON object on stdout, narration on stderr
@@ -132,7 +130,7 @@ Or call the HTTP API directly: see {api}/llms-full.txt and {api}/openapi.json.
 
 1. **The url.** That is the thing they share.
 2. **`qr_text`** — paste it verbatim in a code block when they will open it on a phone.
-3. **The invite card** (`card_path` / an image block from MCP). In WeChat a bare link has no
+3. **The invite card**, when needed: use `playtest card --out invite.png` or the image block from MCP. CLI uploads do not download it by default. In WeChat a bare link has no
    title and no face; the card is a picture with the developer's name on it, and pictures travel.
    Hand the image over, do not just mention it.
 
@@ -178,8 +176,17 @@ which is a device-code flow a human has to finish in a browser.
         commit = paths::SITE_UPLOAD_COMMIT,
     ));
     out.push_str("\n### Every endpoint\n\n");
-    for (method, path, what) in endpoints() {
-        out.push_str(&format!("- `{method} {path}` — {what}\n"));
+    for e in endpoints() {
+        let auth = match e.auth {
+            contract::Auth::Public => "",
+            contract::Auth::Bearer => " (bearer token)",
+            contract::Auth::Ingest => " (called by the page, not by you)",
+            contract::Auth::Admin => " (operator only)",
+        };
+        out.push_str(&format!(
+            "- `{} {}` — {}{auth}\n",
+            e.method, e.path, e.summary
+        ));
     }
     out.push_str(&format!(
         "
@@ -192,10 +199,11 @@ which is a device-code flow a human has to finish in a browser.
 ### Failure shapes
 
 Errors are `{{\"code\": \"...\", \"message\": \"...\"}}` with a human-readable message in the
-user's language. Codes: `usage`, `needs_login`, `network`, `server_error`, `bad_input`,
-`quota_exceeded`. The CLI maps them to exit codes 2/3/4/5/6/7; 0 is success, 1 is unexpected.
+user's language. Codes: {codes}. The full list with meanings is `ErrorCode` in /openapi.json.
+The CLI turns them into exit codes: 0 success, 1 unexpected, 2 usage, 3 needs login, 4 network,
+5 server, 6 bad input, 7 quota.
 
-`bad_input` on upload is usually a real problem with the build that we detected before anyone
+`invalid` on upload is usually a real problem with the build that we detected before anyone
 opened the link — a missing `index.html` at the top level, a Godot threaded export that needs
 `--isolated`, a missing `.pck` or `.data`. Read `message` and `hint` and fix the build; do not
 retry blindly.
@@ -204,95 +212,48 @@ retry blindly.
         version = limits::MAX_VERSION_BYTES / limits::MIB,
         files = limits::MAX_FILES_PER_VERSION,
         hours = playtest_common::ANON_LINK_TTL_HOURS,
+        codes = error_codes(),
     ));
     out
 }
 
-/// 端点表。这一份同时喂 `llms-full.txt` 和 `openapi.json`，所以只有一处。
-fn endpoints() -> Vec<(&'static str, &'static str, &'static str)> {
-    vec![
-        ("GET", paths::HEALTH, "is this control plane up"),
-        (
-            "POST",
-            paths::ANON_SESSIONS,
-            "an anonymous token; the links it makes expire",
-        ),
-        ("GET", paths::ME, "who this token belongs to"),
-        ("GET", paths::SITES, "the caller's projects"),
-        ("POST", paths::SITES, "create a project"),
-        ("GET", paths::SITE, "one project as it is right now"),
-        (
-            "PATCH",
-            paths::SITE,
-            "change plaza listing, seats, community link, public feedback",
-        ),
-        ("DELETE", paths::SITE, "delete it; the link stops working"),
-        (
-            "POST",
-            paths::SITE_UPLOADS,
-            "declare the files, learn which hashes are missing",
-        ),
-        ("PUT", paths::BLOB, "upload one file by content hash"),
-        (
-            "POST",
-            paths::SITE_UPLOAD_COMMIT,
-            "make the uploaded files the live version",
-        ),
-        ("GET", paths::SITE_VERSIONS, "every version, newest first"),
-        (
-            "POST",
-            paths::SITE_VERSION_ACTIVATE,
-            "roll back: point players at an older version",
-        ),
-        (
-            "GET",
-            paths::SITE_VERSION_FILES,
-            "what is actually in a version: path, size, sha256, direct url",
-        ),
-        (
-            "POST",
-            paths::SITE_TUNNEL,
-            "a signed token for the tunnel (the CLI uses this)",
-        ),
-        (
-            "GET",
-            result_paths::SITE_RESULTS,
-            "per-version roster: opened, started, stayed, where they came from",
-        ),
-        (
-            "GET",
-            result_paths::SITE_VERSION_SESSIONS,
-            "one row per player for a version",
-        ),
-        ("GET", result_paths::SITE_FEEDBACK, "what players wrote"),
-        (
-            "PATCH",
-            result_paths::SITE_FEEDBACK_ITEM,
-            "mark a note seen/done, or hide it",
-        ),
-        (
-            "POST",
-            ingest_paths::EVENTS,
-            "the in-page SDK reports errors and milestones here",
-        ),
-        (
-            "POST",
-            ingest_paths::FEEDBACK,
-            "the in-page SDK submits a player's note here",
-        ),
-    ]
+/// `ErrorCode` 的每个值，从 schema 里读，和实际能回的一致。
+fn error_codes() -> String {
+    let defs = contract::definitions();
+    let mut out = Vec::new();
+    if let Some(one_of) = defs
+        .get("ErrorCode")
+        .and_then(|s| s.get("oneOf"))
+        .and_then(Value::as_array)
+    {
+        for variant in one_of {
+            if let Some(c) = variant.get("const").and_then(Value::as_str) {
+                out.push(format!("`{c}`"));
+            }
+            if let Some(list) = variant.get("enum").and_then(Value::as_array) {
+                out.extend(
+                    list.iter()
+                        .filter_map(Value::as_str)
+                        .map(|c| format!("`{c}`")),
+                );
+            }
+        }
+    }
+    out.join(", ")
+}
+
+/// 端点表在 `common::contract`，`llms-full.txt`、`openapi.json` 与控制台的 TS 都读那一份。
+fn endpoints() -> Vec<contract::Endpoint> {
+    contract::endpoints()
 }
 
 fn openapi() -> Value {
     let mut paths_obj = serde_json::Map::new();
-    for (method, path, what) in endpoints() {
+    for endpoint in endpoints() {
         let entry = paths_obj
-            .entry(path.to_string())
+            .entry(endpoint.path.to_string())
             .or_insert_with(|| json!({}));
-        entry[method.to_lowercase()] = json!({
-            "summary": what,
-            "responses": { "200": { "description": what } },
-        });
+        entry[endpoint.method.to_lowercase()] = contract::openapi_operation(&endpoint);
     }
     json!({
         "openapi": "3.1.0",
@@ -308,8 +269,10 @@ fn openapi() -> Value {
         "servers": [{ "url": DEVELOPER_API_URL }],
         "components": {
             "securitySchemes": {
-                "bearer": { "type": "http", "scheme": "bearer" }
-            }
+                "bearer": { "type": "http", "scheme": "bearer", "description": "a developer token from `playtest login` or POST /v1/anon/sessions" },
+                "admin": { "type": "http", "scheme": "bearer", "description": "the operator token; not for developers" }
+            },
+            "schemas": contract::openapi_schemas(),
         },
         "security": [{ "bearer": [] }],
         "paths": Value::Object(paths_obj),
@@ -366,12 +329,12 @@ Answer fields worth reading: `url`, `qr_text`, `card_path`, `expires_at`, `conso
 Useful flags:
 
 - `-n, --name` the title players see before they start
-- `-m, --note` what changed in this version — shown on the gate page, sent to followers, and
+- `-m, --note` what changed in this version — shown on the invitation page, sent to followers, and
   used as the \"what I want you to look at\" line on the plaza
-- `--summary` one line about what the project is
+- `--summary` the persistent project description; omitted values keep the existing description
 - `--cover cover.png` the first thing players see; without it we typeset a plain title card
 - `--public` put it on the plaza; `--seats 10` also marks it as looking for that many testers
-- `--card <path>` where to write the invite card (`-` to skip it)
+- `--card <path>` explicitly download an invite card (default: no download; `-` also skips it)
 - `--isolated=on|off|auto` cross-origin isolation; Godot 4 threaded exports need it (auto detects)
 
 ## After publishing, hand the user three things
@@ -379,7 +342,7 @@ Useful flags:
 1. The **url**.
 2. The **QR code** — paste `qr_text` verbatim inside a code block. It only scans in a monospace
    block; do not reflow or summarise it.
-3. The **invite card** image at `card_path`. This matters more than it sounds: in WeChat a bare
+3. If an image is needed, run `playtest card --out invite.png` or use the MCP image block. CLI uploads do not write a card by default; `card_path` appears only after an explicit successful download. This matters more than it sounds: in WeChat a bare
    link shows no title and no face, and a picture with the developer's name on it is what people
    actually forward. Attach the image; do not just say it exists.
 
@@ -461,13 +424,21 @@ mod tests {
         let spec = openapi();
         let listed = spec["paths"].as_object().unwrap();
         let text = long();
-        for (method, path, _) in endpoints() {
+        for e in endpoints() {
+            let (method, path) = (e.method, e.path);
             assert!(listed.contains_key(path), "OpenAPI 里少了 {method} {path}");
             assert!(
                 listed[path].get(method.to_lowercase()).is_some(),
                 "OpenAPI 的 {path} 上少了 {method}"
             );
             assert!(text.contains(path), "llms-full.txt 里少了 {path}");
+        }
+        // 每个 $ref 都指得到 components/schemas 里的一项。
+        let schemas = spec["components"]["schemas"].as_object().unwrap();
+        let text = serde_json::to_string(&spec).unwrap();
+        for piece in text.split("#/components/schemas/").skip(1) {
+            let name: String = piece.chars().take_while(|c| c.is_alphanumeric()).collect();
+            assert!(schemas.contains_key(&name), "OpenAPI 引用了不存在的 {name}");
         }
         assert_eq!(spec["openapi"], "3.1.0");
         assert_eq!(spec["servers"][0]["url"], DEVELOPER_API_URL);

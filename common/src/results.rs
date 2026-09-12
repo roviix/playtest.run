@@ -17,7 +17,19 @@
 //! 在将来的 `--json` 里、在 `playtest mcp` 的回答里要说成不同的话，把措辞钉死在服务端
 //! 只会让每一处都得先把句子拆回数字。
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+
+fn nullable_u32(_gen: &mut schemars::generate::SchemaGenerator) -> schemars::Schema {
+    let serde_json::Value::Object(map) = serde_json::json!({
+        "type": ["integer", "null"],
+        "minimum": 0,
+        "format": "uint32"
+    }) else {
+        unreachable!()
+    };
+    schemars::Schema::from(map)
+}
 
 pub mod routes {
     /// `GET` → [`super::SiteResults`]
@@ -61,7 +73,7 @@ pub const TOP_ERRORS: usize = 3;
 pub const MAX_EVENTS_PER_SESSION: usize = 100;
 
 /// 作品时间线：一屏能看完的全部（DESIGN §3.4「点开是这一版的会话列表」的上一层）。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct SiteResults {
     pub slug: String,
     pub title: String,
@@ -75,7 +87,7 @@ pub struct SiteResults {
 }
 
 /// 一个版本的全部数字。控制台按这些拼那段话，数为 0 的句子不说。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct VersionResults {
     pub version: u32,
     /// 这一版上传的时间。只在会话里见过、版本表里没有的版本是 `None`。
@@ -92,12 +104,12 @@ pub struct VersionResults {
     ///
     /// `None` 表示**这一版我们不知道**：没有任何会话报过首帧，多半是没接 SDK。
     /// 不知道就说不知道，不拿 0 冒充「一个都没掉」（AGENTS 第 4 条）。
-    #[serde(default)]
+    #[schemars(schema_with = "nullable_u32")]
     pub dropped_before_first_frame: Option<u32>,
     /// 回头再来一次的人数。
     pub returned: u32,
     /// 停留秒数的中位数，见 [`median_seconds`]。没有会话时是 `None`。
-    #[serde(default)]
+    #[schemars(schema_with = "nullable_u32")]
     pub dwell_median_s: Option<u32>,
     /// 停留超过 [`LONG_PLAY_SECONDS`] 的人数。
     pub played_5min_plus: u32,
@@ -119,14 +131,14 @@ pub struct VersionResults {
     pub named: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct SourceTally {
     pub kind: String,
     pub count: u32,
 }
 
 /// 错误按 fingerprint 归堆之后的样子。
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ErrorSummary {
     /// 去重之后有几种。
     pub distinct: u32,
@@ -137,7 +149,7 @@ pub struct ErrorSummary {
     pub top: Vec<ErrorTally>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ErrorTally {
     /// SDK 报上来的 `name`，通常是「错误类型 + 出错的那一行」。
     pub fingerprint: String,
@@ -145,7 +157,7 @@ pub struct ErrorTally {
 }
 
 /// 点名册的排法。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum RosterSort {
     /// 停留最短的排最前面——排在最前面的人就是你要看的人（DESIGN §3.4）。默认。
@@ -169,7 +181,7 @@ impl std::str::FromStr for RosterSort {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct VersionSessions {
     pub slug: String,
     pub version: u32,
@@ -178,7 +190,7 @@ pub struct VersionSessions {
 }
 
 /// 点名册里的一个人。每一列都要能回答「我下一步该看谁」，回答不了的列不加。
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct SessionRow {
     pub id: String,
     /// 打开的时间。
@@ -205,7 +217,7 @@ pub struct SessionRow {
     /// 停留秒数：最后一次看见减第一次看见。
     pub dwell_s: u32,
     /// 最后一次输入距「进入」多久。没接 SDK、或者一次都没动过是 `None`。
-    #[serde(default)]
+    #[schemars(required)]
     pub last_input_after_s: Option<u32>,
     /// 玩到哪：最后一个自定义事件的名字。
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -222,7 +234,7 @@ pub struct SessionRow {
     pub more_events: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct SessionEvent {
     pub ts: String,
     /// edge / sdk。
@@ -235,7 +247,7 @@ pub struct SessionEvent {
     pub data: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum FeedbackStatus {
     /// 还没看。
@@ -281,7 +293,7 @@ impl std::str::FromStr for FeedbackStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct FeedbackList {
     pub slug: String,
     /// 时间倒序，最新的在最前面。
@@ -289,7 +301,7 @@ pub struct FeedbackList {
 }
 
 /// 一条反馈：一句话 + 让这句话能被定位的上下文（DESIGN §3.4）。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct FeedbackItem {
     pub id: i64,
     pub session_id: String,
@@ -317,7 +329,7 @@ pub struct FeedbackItem {
 
 /// `PATCH /v1/projects/{slug}/feedback/{id}`：只改带了的字段。
 /// `public: Some(false)` 是「把这一条藏起来」——作品级的开关在 [`crate::api::UpdateSiteRequest::feedback_public`]。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct UpdateFeedbackRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<FeedbackStatus>,

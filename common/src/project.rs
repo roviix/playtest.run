@@ -19,6 +19,7 @@
 //! 卡上那「一件事实」（REWRITE §3.3）也在这里算：[`ProjectCard::fact`]。边缘和控制台
 //! 各判一次的话，同一张卡在两个地方会说不同的话。
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::boost::Boost;
@@ -27,7 +28,7 @@ use crate::manifest::{GateMode, GAME_ENGINES};
 /// 一个作品的全部事实。控制面从库里读一次、拼一次，其余都是投影。
 ///
 /// 六组属性的分法见 REWRITE §2.1：身份、交付、呈现、访问、上架、社会。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Project {
     // ---------------------------------------------------------------- 身份
     pub slug: String,
@@ -129,7 +130,7 @@ pub struct Project {
 }
 
 /// 作品的主人。匿名开发者也是一个 owner，只是没有名字和头像。
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Owner {
     #[serde(default)]
     pub kind: OwnerKind,
@@ -142,7 +143,7 @@ pub struct Owner {
     pub avatar_url: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum OwnerKind {
     #[default]
@@ -172,7 +173,7 @@ impl std::str::FromStr for OwnerKind {
 }
 
 /// 这个作品的字节从哪来（REWRITE §2.1「交付」）。切换对玩家透明，同一个 slug。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DeliveryMode {
     /// 上传的静态目录，按清单分发。
@@ -213,7 +214,7 @@ impl std::str::FromStr for DeliveryMode {
 }
 
 /// 谁能玩（REWRITE §3.3）。三档都在门禁页上完成，玩家不需要注册。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Access {
     /// 任何拿到链接的人。默认。
@@ -261,7 +262,7 @@ impl std::str::FromStr for Access {
 
 /// 门禁页上显示的一条公开反馈。开发者看到的那份（`results::FeedbackItem`）字段多得多，
 /// 带设备、浏览器、会话号——那些不该给玩家，所以这里是裁剪过的投影，不是同一个类型。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct PublicNote {
     /// 留下的名字；没留就显示「一位试玩者」，由渲染方决定，这里是 `None`。
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -357,7 +358,7 @@ impl Project {
 ///
 /// 两处用同一个类型不是省事：开发者从广场点进控制台，看到的应该是同一张卡、
 /// 同一件事实。各写一份的话，同一个作品在两个地方会说不同的话。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ProjectCard {
     pub slug: String,
     pub url: String,
@@ -505,7 +506,7 @@ pub const PUBLIC_NOTES_ON_GATE: usize = 3;
 /// 控制面挂了门禁页照常出，只是数字旧几分钟——所以没有这份文件的作品一律按
 /// [`ProjectLive::default`] 解析：没名额、没人关注、没有群、反馈不公开，
 /// 门禁页上对应的那几行不出现，不报错。
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ProjectLive {
     #[serde(default)]
     pub schema: u32,
@@ -737,6 +738,7 @@ mod tests {
             ends_at: None,
             created_at: "2026-09-09T00:00:00Z".into(),
             order_id: None,
+            reason: None,
         };
         p.boost = Some(b.clone());
         assert!(!p.boosted(), "排队中的还没上位");

@@ -73,8 +73,6 @@ pub struct Taken {
     pub outcome: Outcome,
     /// 存到哪了。打印用的相对路径，不是绝对路径——人要照着它去找这个文件。
     pub path: Option<String>,
-    /// PNG 的字节。MCP 要把它贴进对话（DESIGN §3.2），`--json` 不带。
-    pub png: Option<Vec<u8>>,
 }
 
 /// 发布成功之后：取一张卡存下来。**任何一步不成都只是没有卡，不是失败。**
@@ -100,7 +98,6 @@ pub async fn take(
         Ok(()) => Taken {
             outcome: Outcome::Saved,
             path: Some(shown(&path)),
-            png: Some(png),
         },
         // 写不下去（目录不在、只读、盘满了）也一样：卡还在服务器上，说一声去哪儿拿就行。
         Err(e) => {
@@ -108,7 +105,6 @@ pub async fn take(
             Taken {
                 outcome: Outcome::Missing,
                 path: None,
-                png: Some(png),
             }
         }
     }

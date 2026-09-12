@@ -39,6 +39,21 @@ pub fn broken() -> String {
     shell("文件取不出来", "", body)
 }
 
+/// 当前无法确认作品是否存在或仍有权访问。503 与 404 分开，恢复后浏览器和 CDN 才会重试。
+pub fn unavailable() -> String {
+    let body = "<h1>作品暂时取不出来</h1>\n\
+<p class=\"lead\">我们暂时连不上作品存储，不能确认这份内容现在是否允许访问。稍后再试，你的设备没有问题。</p>\n";
+    shell("作品暂时不可用", "", body)
+}
+
+pub fn untrusted_action() -> String {
+    shell(
+        "请从作品邀请页操作",
+        "",
+        "<h1>请从作品邀请页操作</h1><p class=\"lead\">这个请求不是从本站发出的。请回到作品邀请页再试。</p><footer><a href=\"/\">回到广场</a></footer>",
+    )
+}
+
 pub const REPORT_REASONS: &[(&str, &str)] = &[
     ("phishing", "假冒别人、骗账号或骗钱"),
     ("malware", "病毒、恶意脚本或有害下载"),

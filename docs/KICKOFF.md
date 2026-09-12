@@ -40,6 +40,8 @@
 
 ## 3. 本机怎么验泛域名
 
+按步骤走完广场、门禁、关注、控制台：[`LOCAL.md`](LOCAL.md)。
+
 不买域名也能把两条路走通：Chrome 与 Firefox 把 `*.localhost` 一律解析到 `127.0.0.1`，边缘本机监听 `:8443`（明文），`brisk-otter-41.localhost:8443` 就是一个 slug，根域就是 `localhost:8443`。Safari 不认 `*.localhost`，本机测试用 Chrome；手机真机要等域名。
 
 本机三个进程的约定（都从仓库根目录起，数据都在 `.data/`，已 gitignore）：

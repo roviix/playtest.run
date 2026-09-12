@@ -232,13 +232,14 @@ pub async fn commit(
     // 发信慢或者失败都不该让这次上传变成失败。
     {
         let conn = state.db().lock().await;
+        let door_url = playtest_common::door_url(&state.site_url(&site.slug), &site.slug);
         match crate::notify::enqueue_site_version(
             &conn,
             &site.slug,
             &title,
             version,
             note.as_deref(),
-            &state.site_url(&site.slug),
+            &door_url,
             clock::now(),
         ) {
             Ok(queued) if queued > 0 => {

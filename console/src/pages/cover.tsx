@@ -14,12 +14,12 @@ export function Cover({ site, small, children }: { site: Site; small?: boolean; 
     site.listing?.has_cover && site.current_version !== undefined
       ? coverUrl(site.url, site.current_version)
       : null;
-  const [broken, setBroken] = useState(false);
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
 
   return (
-    <div class={`shot ${small ? "small" : ""}`} style={`--h:${hue(site.slug)}`}>
-      {url && !broken ? (
-        <img class="cover" src={url} alt="" loading="lazy" onError={() => setBroken(true)} />
+    <div class={`shot ${small ? "small" : ""}`} style={`--h:${hue(site.slug)};view-transition-name:cover-${Array.from(site.slug).map((char) => char.codePointAt(0)!.toString(16)).join("-")}`}>
+      {url && brokenUrl !== url ? (
+        <img class="cover" src={url} alt="" loading={small ? "eager" : "lazy"} onError={() => setBrokenUrl(url)} />
       ) : (
         <div class="cover word">
           <b>{monogram(site.title, site.slug)}</b>
