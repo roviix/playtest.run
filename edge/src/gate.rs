@@ -208,6 +208,8 @@ pub struct GatePage<'a> {
     pub nonce: Option<&'a str>,
     /// 文章在控制面提交时生成的安全 HTML。只有 `Article` 使用；原始 Markdown 不进根域。
     pub article_html: Option<&'a str>,
+    /// 如果是从合集跳过来的，在邀请函顶上显示返回合集与下一件作品（DESIGN §3.1）。
+    pub collection_context: Option<&'a str>,
 }
 
 impl GatePage<'_> {
@@ -249,6 +251,9 @@ impl GatePage<'_> {
         // 假截图，它和玩家点开后看到的是同一个物件（DESIGN §3.3、§3.4）。
         let hue = crate::html::hue(&m.slug);
         head.push_str(&format!("<style>:root{{--h:{hue}}}</style>\n"));
+        if self.collection_context.is_some() {
+            head.push_str("<style>.collection-context{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:400px;margin:0 0 10px;font-size:13px}.collection-context a{color:var(--soft);text-decoration:none;padding:6px 12px;border-radius:8px;background:#ffffff0a;border:1px solid #ffffff12;transition:all .15s}.collection-context a:hover{color:var(--fg);background:#ffffff14;border-color:#ffffff24}</style>\n");
+        }
         if m.kind != WorkKind::Web {
             head.push_str(&format!("<style>{PRESENTATION_CSS}</style>\n"));
         }
@@ -460,9 +465,10 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
         } else {
             "card media-card"
         };
+        let context_bar = self.collection_context.unwrap_or_default();
         let rendered = rendered.replacen(
             "<main class=\"card\">",
-            &format!("{navigation}<main class=\"{card_class}\">"),
+            &format!("{context_bar}{navigation}<main class=\"{card_class}\">"),
             1,
         );
         let dialog = self.follow_dialog();
@@ -477,7 +483,7 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
         rendered.replacen("</body>", &format!("{dialog}{script}</body>"), 1)
     }
 
-    /// 无封面时按作品 slug 色相算法生成的几何星轨艺术图案，作为邀请函头图。
+    /// 无封面时按作品 slug 色相算法生成的几何星轨艺术图案，作为邀请函头图（DESIGN §3.3）。
     fn generative_art(&self) -> String {
         let m = self.manifest;
         let initial = m
@@ -489,25 +495,25 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
         let slug = esc(&m.slug);
         let version_tag = match self.version_label {
             Some(label) => esc(label),
-            None => format!("#{}", m.version),
+            None => format!("v{}", m.version),
         };
         format!(
-            "<div class=\"hero word\"><svg viewBox=\"0 0 400 300\" fill=\"none\" aria-hidden=\"true\">\
-<defs><radialGradient id=\"p-sky\" cx=\"50%\" cy=\"45%\" r=\"70%\">\
-<stop offset=\"0%\" stop-color=\"#131a29\"/>\
-<stop offset=\"100%\" stop-color=\"#08090d\"/>\
-</radialGradient></defs>\
-<rect width=\"400\" height=\"300\" fill=\"url(#p-sky)\"/>\
-<path d=\"M0 100h400M0 200h400M133 0v300M267 0v300\" stroke=\"#ffffff0a\"/>\
-<circle cx=\"200\" cy=\"140\" r=\"72\" stroke=\"#bed7ff1f\" stroke-dasharray=\"2 6\"/>\
-<circle cx=\"200\" cy=\"140\" r=\"42\" stroke=\"#bed7ff38\" stroke-dasharray=\"4 4\"/>\
-<circle cx=\"200\" cy=\"140\" r=\"18\" stroke=\"#bed7ff59\"/>\
-<circle cx=\"200\" cy=\"140\" r=\"5\" fill=\"#67e8f9\"/>\
-<circle cx=\"200\" cy=\"140\" r=\"2\" fill=\"#fff\"/>\
-<text x=\"24\" y=\"34\" font-size=\"9\" font-weight=\"700\" letter-spacing=\"1.5\" fill=\"#ffffff8c\" font-family=\"sans-serif\">PLAYTEST PASS</text>\
-<text x=\"376\" y=\"34\" text-anchor=\"end\" font-size=\"9\" font-family=\"monospace\" fill=\"#ffffff4d\">{version_tag}</text>\
-<text x=\"24\" y=\"276\" font-size=\"64\" font-weight=\"800\" fill=\"#ffffff1f\" font-family=\"sans-serif\">{initial}</text>\
-<text x=\"376\" y=\"276\" text-anchor=\"end\" font-size=\"9.5\" font-family=\"monospace\" fill=\"#ffffff59\">{slug}</text>\
+            "<div class=\"hero word\"><svg viewBox=\"0 0 400 250\" fill=\"none\" aria-hidden=\"true\">\
+<defs><radialGradient id=\"p-sky\" cx=\"50%\" cy=\"45%\" r=\"65%\">\
+<stop offset=\"0%\" stop-color=\"#131e1a\"/>\
+<stop offset=\"100%\" stop-color=\"#08090b\"/>\
+</defs>\
+<rect width=\"400\" height=\"250\" fill=\"url(#p-sky)\"/>\
+<path d=\"M0 83h400M0 166h400M133 0v250M267 0v250\" stroke=\"#ffffff08\"/>\
+<circle cx=\"200\" cy=\"118\" r=\"64\" stroke=\"#75cdb518\" stroke-dasharray=\"2 6\"/>\
+<circle cx=\"200\" cy=\"118\" r=\"38\" stroke=\"#75cdb530\" stroke-dasharray=\"4 4\"/>\
+<circle cx=\"200\" cy=\"118\" r=\"16\" stroke=\"#75cdb555\"/>\
+<circle cx=\"200\" cy=\"118\" r=\"5\" fill=\"#71e8bf\"/>\
+<circle cx=\"200\" cy=\"118\" r=\"2\" fill=\"#fff\"/>\
+<text x=\"24\" y=\"32\" font-size=\"9\" font-weight=\"700\" letter-spacing=\"1.5\" fill=\"#d4d4d8\" font-family=\"sans-serif\">PLAYTEST PASS</text>\
+<text x=\"376\" y=\"32\" text-anchor=\"end\" font-size=\"9.5\" font-family=\"monospace\" font-weight=\"600\" fill=\"#75cdb5\">{version_tag}</text>\
+<text x=\"24\" y=\"228\" font-size=\"52\" font-weight=\"800\" fill=\"#ffffff1c\" font-family=\"sans-serif\">{initial}</text>\
+<text x=\"376\" y=\"228\" text-anchor=\"end\" font-size=\"9.5\" font-family=\"monospace\" fill=\"#a1a1aa\">{slug}</text>\
 </svg></div>\n"
         )
     }
@@ -626,7 +632,7 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
             .filter(|u| u.starts_with("https://") || u.starts_with("http://"))
         {
             rows.push(format!(
-                "<a href=\"{}\" rel=\"noopener nofollow\">开发者的群</a>",
+                "<a class=\"community\" href=\"{}\" rel=\"noopener nofollow\">开发者的群</a>",
                 esc(url)
             ));
         }
@@ -806,6 +812,7 @@ mod tests {
             is_root: false,
             nonce: None,
             article_html: None,
+            collection_context: None,
         }
     }
 

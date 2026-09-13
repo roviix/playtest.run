@@ -13,7 +13,7 @@ const data = mkdtempSync(resolve(root, ".data/collections-check-"));
 const children = [];
 const keep = process.argv.includes("--keep");
 const shotDirectory = resolve(root, "docs/spikes/img");
-const stamp = `2026-09-12-collections-${new Date().toISOString().replace(/[^0-9]/g, "").slice(8, 14)}`;
+const stamp = `2026-09-13-collections-${new Date().toISOString().replace(/[^0-9]/g, "").slice(8, 14)}`;
 const sleep = milliseconds => new Promise(accept => setTimeout(accept, milliseconds));
 async function until(check, label, timeout = 15000) {
   const limit = Date.now() + timeout;
@@ -59,11 +59,13 @@ try {
     PLAYTEST_EMAIL_PROVIDER: "log", PLAYTEST_PUBLIC_ROOT_URL: playerBase,
     PLAYTEST_SITE_URL_TEMPLATE: `http://{slug}.localhost:${edgePort}`,
     PLAYTEST_ADMIN_TOKEN: "", PLAYTEST_GITHUB_CLIENT_ID: "", PLAYTEST_GITHUB_CLIENT_SECRET: "",
+    PLAYTEST_EDGE_INGEST_TOKEN: "dev-edge-ingest-token-0000000000",
   });
   await until(async () => (await fetch(`${apiBase}/health`)).ok, "控制面启动").catch(error => { throw new Error(`${error}\n${apiProcess.logs.join("")}`); });
   const edgeProcess = launch(resolve(root, "target/debug/playtest-edge"), [], {
     PLAYTEST_DATA_DIR: data, PLAYTEST_HOST_SUFFIX: "localhost", PLAYTEST_EDGE_LISTEN: `127.0.0.1:${edgePort}`,
     PLAYTEST_API_INTERNAL_URL: apiBase, PLAYTEST_API_PUBLIC_URL: apiBase,
+    PLAYTEST_EDGE_INGEST_TOKEN: "dev-edge-ingest-token-0000000000",
   });
   await until(async () => (await fetch(`${playerBase}/`)).ok, "玩家站启动").catch(error => { throw new Error(`${error}\n${edgeProcess.logs.join("")}`); });
   const tokens = [0, 1, 2].map(index => {
@@ -115,12 +117,14 @@ try {
   let sequence = 0;
   const pending = new Map();
   const exceptions = [];
+  const networkLogs = [];
   connection.onmessage = event => {
     const reply = JSON.parse(event.data);
     if (reply.id) {
       const completion = pending.get(reply.id); if (!completion) return;
       pending.delete(reply.id); reply.error ? completion.reject(new Error(JSON.stringify(reply.error))) : completion.accept(reply.result);
     } else if (reply.method === "Runtime.exceptionThrown") exceptions.push(reply.params.exceptionDetails);
+    else if (reply.method === "Network.responseReceivedExtraInfo") networkLogs.push(reply.params);
   };
   function command(method, params = {}) {
     return new Promise((accept, reject) => { const id = ++sequence; pending.set(id, { accept, reject }); connection.send(JSON.stringify({ id, method, params })); });
@@ -130,10 +134,10 @@ try {
     if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
     return result.result.value;
   }
-  await command("Page.enable"); await command("Runtime.enable");
-  async function navigate(url) {
+  await command("Page.enable"); await command("Runtime.enable"); await command("Network.enable");
+  async function navigate(url, expectedPrefix = url.split("#")[0]) {
     await command("Page.navigate", { url });
-    await until(() => evaluate(`document.readyState === 'complete' && location.href.startsWith(${JSON.stringify(url.split("#")[0])})`), url);
+    await until(() => evaluate(`document.readyState === 'complete' && location.href.startsWith(${JSON.stringify(expectedPrefix)})`), url);
   }
   async function click(selector) {
     const rect = await evaluate(`(() => { const element = document.querySelector(${JSON.stringify(selector)}); if (!element) return null; element.scrollIntoView({block:'center'}); const bounds = element.getBoundingClientRect(); return {x:bounds.x+bounds.width/2,y:bounds.y+bounds.height/2}; })()`);
@@ -187,9 +191,22 @@ try {
   await sleep(31000);
   const shots = [];
   await viewport(1440, 1040); await navigate(playerBase);
-  await until(() => evaluate("!!document.querySelector('.collection-card')"), "首页挑战入口");
   assert.equal(await evaluate("document.querySelectorAll('.tile').length"), 6);
   shots.push(await screenshot("plaza-desktop"));
+  await click('.discover-search input');
+  shots.push(await screenshot("search-focus-desktop"));
+  await viewport(390, 844);
+  shots.push(await screenshot("plaza-mobile"));
+  await viewport(1440, 1040);
+  await navigate(`${playerBase}/me`);
+  await until(() => evaluate("!!document.querySelector('.restore-follow')"), "关注页登录入口");
+  shots.push(await screenshot("follow-empty-desktop"));
+  await click('a.restore-follow');
+  await until(() => evaluate("location.hash==='#follow-login' || !!document.querySelector('#follow-login[open]')"), "登录弹窗打开");
+  shots.push(await screenshot("follow-login-dialog"));
+  await click('.dialog-close-btn');
+  await click('a.nav-item[href="/collections"]');
+  await until(() => evaluate("!!document.querySelector('.collection-card')"), "合集大厅挑战入口");
   await click('a.collection-card[href="/c/pelican-bicycle"]');
   await until(() => evaluate("!!document.querySelector('#challenge-prompt')"), "挑战页");
   assert.equal(await evaluate("document.querySelectorAll('.collection-entries article').length"), 5);
@@ -202,6 +219,13 @@ try {
   await click('.collection-entries .tile');
   await until(() => evaluate("!!document.querySelector('.collection-context')"), "邀请函合集上下文");
   assert.ok(await evaluate("document.querySelector('.collection-context').innerText.includes('下一件')"));
+  shots.push(await screenshot("invitation-desktop"));
+  await navigate(`${playerBase}/p/local-pelican-0`);
+  await until(() => evaluate("!!document.querySelector('main.card')"), "独立邀请函页面");
+  shots.push(await screenshot("invitation-standalone-desktop"));
+  await viewport(390, 844);
+  shots.push(await screenshot("invitation-standalone-mobile"));
+  await viewport(1440, 1040);
   await navigate(`${playerBase}/c/pelican-bicycle`); await viewport(390, 844);
   assert.ok(await evaluate("document.documentElement.scrollWidth<=innerWidth+1"), "挑战页手机布局溢出");
   shots.push(await screenshot("challenge-mobile"));
@@ -227,10 +251,17 @@ try {
   await fill('input[type="email"]', "viewer@example.com");
   await click('.collection-actions details.tell button[type="submit"]');
   await until(() => evaluate("document.body.innerText.includes('确认')"), "关注结果");
-  const notification = sql("SELECT body FROM notifications WHERE kind='confirm' ORDER BY id DESC LIMIT 1");
+  const notification = await until(async () => {
+    const row = sql("SELECT body FROM notifications WHERE kind='confirm' ORDER BY id DESC LIMIT 1");
+    return row.includes("/me/confirm/") ? row : null;
+  }, "数据库写入确认通知");
   const confirmation = notification.match(/http:\/\/localhost:\d+\/me\/confirm\/[^\s]+/)[0];
-  await navigate(confirmation);
+  await navigate(confirmation, `${playerBase}/me`);
   await until(() => evaluate("location.pathname==='/me' && document.body.innerText.includes('鹈鹕骑单车')"), "确认后关注页显示合集");
+  shots.push(await screenshot("follow-mobile"));
+  await viewport(1440, 1040);
+  shots.push(await screenshot("follow-desktop"));
+  await viewport(390, 844);
   await navigate(`${playerBase}/c/pelican-bicycle`);
   await until(() => evaluate("document.body.innerText.includes('已关注')"), "已关注状态");
   shots.push(await screenshot("subscribed-mobile"));

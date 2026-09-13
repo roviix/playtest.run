@@ -504,20 +504,48 @@ pub fn me_page(page: &MePage<'_>) -> String {
 
 /// 同一份紧凑对话框用于找回、设置和自愿关注；锚点保留无脚本路径。
 pub fn notification_dialog(id: &str, title: &str, content: &str) -> String {
-    format!("<dialog id=\"{id}\" class=\"account-dialog\" aria-labelledby=\"{id}-title\"><div class=\"notice-head\"><h2 id=\"{id}-title\">{title}</h2><a href=\"#\" data-close-dialog aria-label=\"关闭\">×</a></div>{content}</dialog>", id=esc(id), title=esc(title))
+    format!(
+        "<dialog id=\"{id}\" class=\"account-dialog\" aria-labelledby=\"{id}-title\">\
+<div class=\"notice-head\"><h2 id=\"{id}-title\">{title}</h2>\
+<a href=\"#\" class=\"dialog-close-btn\" data-close-dialog aria-label=\"关闭\">×</a></div>\
+{content}</dialog>",
+        id = esc(id),
+        title = esc(title),
+    )
 }
 
 /// 关注、周报与已有邮箱登录共用输入组件；hidden 只由本站生成。
 pub fn email_form(action: &str, hidden: &str, label: &str, note: &str) -> String {
-    format!("<form method=\"post\" action=\"{}\" class=\"notice-form\">{hidden}<label>邮箱<input type=\"email\" name=\"email\" required placeholder=\"name@example.com\" autocomplete=\"email\"></label><button type=\"submit\">{}</button><p class=\"notice-note\">{}</p></form>", esc(action), esc(label), esc(note))
+    email_form_with_placeholder(action, hidden, label, note, "name@example.com")
+}
+
+pub fn email_form_with_placeholder(
+    action: &str,
+    hidden: &str,
+    label: &str,
+    note: &str,
+    placeholder: &str,
+) -> String {
+    let note_p = if note.is_empty() {
+        String::new()
+    } else {
+        format!("<p class=\"notice-note\">{}</p>", esc(note))
+    };
+    format!(
+        "<form method=\"post\" action=\"{}\" class=\"notice-form\">{hidden}<label>邮箱<input type=\"email\" name=\"email\" required placeholder=\"{}\" autocomplete=\"email\"></label><button type=\"submit\">{}</button>{note_p}</form>",
+        esc(action),
+        esc(placeholder),
+        esc(label)
+    )
 }
 
 fn restore_form() -> String {
-    email_form(
+    email_form_with_placeholder(
         root_paths::ME_ACTION,
         &format!("<input type=\"hidden\" name=\"action\" value=\"{ACTION_SEND_LINK}\">"),
         "发送登录链接",
-        "使用关注时的邮箱。",
+        "",
+        "输入曾用于关注的邮箱",
     )
 }
 
@@ -842,8 +870,8 @@ mod tests {
         assert!(html.contains("<h1>关注</h1>"));
         assert!(html.contains("每周一封"));
         assert!(html.contains(">发送登录链接</button>"));
-        // 恢复已有关注不是创建账号；这一句提示不能删。
-        assert!(html.contains("使用关注时的邮箱。"));
+        // 恢复已有关注不是创建账号；这一句提示自然融入输入框 placeholder。
+        assert!(html.contains("placeholder=\"输入曾用于关注的邮箱\""));
         let restore = html
             .split("id=\"follow-login\"")
             .nth(1)

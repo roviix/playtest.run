@@ -366,9 +366,9 @@ fn publish_sheet() -> String {
 <p class=\"pub-status\" role=\"status\"></p>\n\
 </div>\n\
 <div class=\"pub-foot\">\
-<a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">{dl}下载 playtest CLI</a>\
+<a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">{dl}下载 CLI</a>\
 <a href=\"{usage}\" target=\"_blank\" rel=\"noopener\">{book}使用方法</a>\
-<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">打开网页控制台{out}</a>\
+<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">前往控制台{out}</a>\
 </div>\n\
 </div>\n\
 </dialog>\n",
@@ -562,7 +562,7 @@ mod tests {
             "Tab 在终端舱上方"
         );
         assert!(html.contains("class=\"pub-foot\""));
-        assert!(html.contains(">下载 playtest CLI</a>"));
+        assert!(html.contains(">下载 CLI</a>"));
         assert!(html.contains(">使用方法</a>"));
         assert!(html.contains("for=\"tab-static\">导出目录</label>"));
         assert!(html

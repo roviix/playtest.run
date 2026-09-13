@@ -120,7 +120,13 @@ fn search(query: &Query, base: &str, collection: Option<&Collection>) -> String 
             models.push_str("</select></label>");
         }
     }
-    format!("<form class=\"discover-search\" method=\"get\" action=\"{}\" role=\"search\"><div class=\"search-box\"><label class=\"search-field\"><span class=\"sr-only\">搜索作品与合集</span><input type=\"search\" name=\"q\" maxlength=\"280\" placeholder=\"搜索作品、作者…\" value=\"{}\"></label><button type=\"submit\" aria-label=\"搜索\" title=\"搜索\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"/><path d=\"m16 16 4 4\"/></svg></button></div>{models}<input type=\"hidden\" name=\"sort\" value=\"{}\"></form>", esc(base), esc(&query.search), if query.hot { "hot" } else { "latest" })
+    let clear = if !query.search.is_empty() {
+        let clear_target = if query.hot { format!("{base}?sort=hot") } else { base.to_string() };
+        format!("<a class=\"search-clear\" href=\"{}\" aria-label=\"清空搜索\" title=\"清空搜索\">×</a>", esc(&clear_target))
+    } else {
+        String::new()
+    };
+    format!("<form class=\"discover-search\" method=\"get\" action=\"{}\" role=\"search\"><div class=\"search-box\"><label class=\"search-field\"><span class=\"sr-only\">搜索作品与合集</span><input type=\"search\" name=\"q\" maxlength=\"280\" placeholder=\"搜索作品、作者…\" value=\"{}\"></label>{clear}<button type=\"submit\" aria-label=\"搜索\" title=\"搜索\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"/><path d=\"m16 16 4 4\"/></svg></button></div>{models}<input type=\"hidden\" name=\"sort\" value=\"{}\"></form>", esc(base), esc(&query.search), if query.hot { "hot" } else { "latest" })
 }
 
 fn tabs(query: &Query, base: &str) -> String {
@@ -214,8 +220,15 @@ fn collection_card(collection: &Collection, view: &View<'_>) -> String {
                 .any(|item| item.slug == entry.slug && visible(item, &now))
         })
         .count();
-    format!("<a class=\"collection-card\" href=\"{}\"><div class=\"collection-art\" aria-hidden=\"true\">{art}</div><div class=\"collection-card-body\"><span class=\"collection-state\">{}</span><h2>{}</h2><p>{}</p><div class=\"collection-meta\"><span>{}</span><span>{}</span></div></div></a>",
-        esc(&collection.path()), esc(&status(collection, &now)), esc(&collection.title), esc(&collection.summary), esc(&collection.creator), if count == 0 { "等你带来第一件作品".to_string() } else { format!("{count} 件作品 ↗") })
+    let state_class = if collection.kind == CollectionKind::Challenge && !collection.closed(&now) {
+        "challenge-open"
+    } else if collection.closed(&now) {
+        "challenge-closed"
+    } else {
+        "collection-regular"
+    };
+    format!("<a class=\"collection-card\" href=\"{}\"><div class=\"collection-art\" aria-hidden=\"true\">{art}</div><div class=\"collection-card-body\"><span class=\"collection-state {}\">{}</span><h2>{}</h2><p>{}</p><div class=\"collection-meta\"><span>{}</span><span class=\"count-badge\">{}</span></div></div></a>",
+        esc(&collection.path()), state_class, esc(&status(collection, &now)), esc(&collection.title), esc(&collection.summary), esc(&collection.creator), if count == 0 { "等你带来第一件作品".to_string() } else { format!("{count} 件作品 ↗") })
 }
 
 pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
@@ -234,10 +247,8 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
         .filter(|collection| {
             collection.public && !collection.hidden && collection_matches(collection, &query.search)
         })
-        .filter(|collection| {
-            index
-                || searching
-                || (collection.kind == CollectionKind::Challenge && !collection.closed(&now))
+        .filter(|_| {
+            index || searching
         })
         .collect();
     if !collections.is_empty() {
@@ -350,7 +361,7 @@ pub fn collection(
     let followed =
         viewer.is_some_and(|viewer| viewer.follows.iter().any(|follow| follow.target == target));
     let subscribe = if followed {
-        "<a class=\"discovery-button\" href=\"/me\">已关注 · 管理订阅</a>".to_string()
+        "<a class=\"utility-btn subscribed\" href=\"/me\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 13 4 4L19 7\"/></svg>已关注</a>".to_string()
     } else if !caps.email {
         String::new()
     } else if viewer.is_some_and(|viewer| viewer.email_masked.is_some()) {
@@ -360,10 +371,10 @@ pub fn collection(
             &base,
             "collection",
             "关注新投稿",
-            "collection-subscribe",
+            "utility-btn collection-subscribe",
         )
     } else {
-        crate::follow::email_details(
+        let form = crate::follow::email_details(
             caps,
             "关注新投稿",
             "/follow",
@@ -371,19 +382,102 @@ pub fn collection(
             &base,
             "collection",
             "确认关注",
+        );
+        form.replacen(
+            "</form>",
+            "<p class=\"tell-hint\">每周有新投稿时汇总一封，可随时退订</p></form>",
+            1,
         )
     };
-    let mut body = format!("<div class=\"content discovery\"><a class=\"back-collections\" href=\"/collections\">← 合集与挑战</a><header class=\"collection-head\"><span class=\"collection-state\">{}</span><h1>{}</h1><p class=\"collection-summary\">{}</p><p class=\"discovery-note\">{} 发起</p><div class=\"collection-actions\">{}<button type=\"button\" class=\"discovery-button\" data-share-collection hidden>分享合集</button>{subscribe}</div><p role=\"status\" class=\"discovery-note\" data-collection-status></p></header>",
-        esc(&status(collection, &now)), esc(&collection.title), esc(&collection.summary), esc(&collection.creator),
-        if collection.kind == CollectionKind::Challenge && !collection.closed(&now) { "<a class=\"discovery-button primary\" href=\"#participate\">我也来做一个 ↗</a>" } else { "" });
-    if !collection.prompt.is_empty() || !collection.rules.is_empty() {
-        body.push_str(&format!("<section class=\"challenge-brief\" aria-label=\"创作题目\"><div class=\"discovery-section\"><h2>这次做什么</h2><button type=\"button\" class=\"discovery-button\" data-copy-prompt hidden>复制题目</button></div><pre id=\"challenge-prompt\">{}</pre>{}</section>", esc(&collection.prompt), if collection.rules.is_empty() { String::new() } else { format!("<details><summary>投稿规则</summary><p class=\"preserve-lines\">{}</p></details>", esc(&collection.rules)) }));
-    }
-    if collection.kind == CollectionKind::Challenge && !collection.closed(&now) {
-        body.push_str(&format!("<details id=\"participate\" class=\"challenge-participate\"><summary>怎么参与</summary><p>把题目交给你喜欢的模型，做一个浏览器里能打开的作品。已有作品也可以投稿，不用重复上传。</p><p><code>playtest ./dist --public</code></p><p>发布后到控制台的「合集与挑战」，选择这个题目和自己的公开作品。临时隧道与到期链接不能留作投稿。</p><a class=\"discovery-button\" href=\"/?join={}#publish-dialog\">发布说明与投稿入口 →</a></details>", esc(&collection.slug)));
-    }
+    let state_class = if collection.kind == CollectionKind::Challenge && !collection.closed(&now) {
+        "challenge-open"
+    } else if collection.closed(&now) {
+        "challenge-closed"
+    } else {
+        "collection-regular"
+    };
+    let has_prompt = !collection.prompt.is_empty();
+    let has_rules = !collection.rules.is_empty();
+    let is_open_challenge = collection.kind == CollectionKind::Challenge && !collection.closed(&now);
+    let participate_btn = if is_open_challenge {
+        "<a class=\"discovery-button primary action-participate\" href=\"#participate\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\"/></svg>我也来做一个 ↗</a>"
+    } else {
+        ""
+    };
+
+    let brief = if has_prompt || has_rules {
+        let mut guide_sections = String::new();
+        if has_rules {
+            guide_sections.push_str(&format!(
+                "<div class=\"guide-section\"><h3>投稿规则</h3><p class=\"preserve-lines\">{}</p></div>",
+                esc(&collection.rules)
+            ));
+        }
+        if is_open_challenge {
+            guide_sections.push_str(&format!(
+                "<div class=\"guide-section\"><h3>如何参与</h3>\
+<p>把题目交给你喜欢的模型，做一个浏览器里能打开的作品。已有作品也可以投稿，不用重复上传。</p>\
+<div class=\"command-pill\"><code>playtest ./dist --public</code></div>\
+<p class=\"guide-subtext\">发布后到控制台的「合集与挑战」，选择这个题目和自己的公开作品。临时隧道与到期链接不能留作投稿。</p>\
+<a class=\"guide-cta\" href=\"/?join={}#publish-dialog\">发布说明与投稿入口 →</a>\
+</div>",
+                esc(&collection.slug)
+            ));
+        }
+        let guide = if guide_sections.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "<details id=\"participate\" class=\"challenge-guide\">\
+<summary><div class=\"guide-summary-label\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 16v-4m0-4h.01\"/></svg><span>规则与参与说明</span></div><span class=\"guide-toggle-hint\">展开 ▾</span></summary>\
+<div class=\"guide-body\">{guide_sections}</div></details>"
+            )
+        };
+        let prompt_part = if has_prompt {
+            format!(
+                "<div class=\"brief-bar\"><div class=\"brief-label\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><path d=\"M14 2v6h6M16 13H8M16 17H8M10 9H8\"/></svg><h2>创作题目</h2></div>\
+<button type=\"button\" class=\"utility-btn copy-prompt-btn\" data-copy-prompt hidden><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"8\" y=\"8\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3\"/></svg><span>复制题目</span></button></div>\
+<div class=\"prompt-canvas\"><pre id=\"challenge-prompt\">{}</pre></div>",
+                esc(&collection.prompt)
+            )
+        } else {
+            String::new()
+        };
+        format!(
+            "<section class=\"challenge-brief\" aria-label=\"创作题目\">\
+{prompt_part}\
+{guide}\
+</section>"
+        )
+    } else {
+        String::new()
+    };
+
+    let mut body = format!(
+        "<div class=\"content discovery\">\
+<header class=\"collection-hero\">\
+<div class=\"collection-hero-head\">\
+<div class=\"collection-hero-main\">\
+<div class=\"collection-badges\"><span class=\"collection-state {state_class}\">{}</span><span class=\"collection-creator\">{} 发起</span></div>\
+<h1>{}</h1>\
+<p class=\"collection-summary\">{}</p>\
+</div>\
+<div class=\"collection-actions\">{participate_btn}\
+<div class=\"collection-utilities\"><button type=\"button\" class=\"utility-btn action-share\" data-share-collection hidden><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"5\" r=\"3\"/><circle cx=\"6\" cy=\"12\" r=\"3\"/><circle cx=\"18\" cy=\"19\" r=\"3\"/><path d=\"m8.59 13.51 6.83 3.98m-.01-10.98-6.82 3.98\"/></svg><span>分享</span></button>{subscribe}</div>\
+</div>\
+</div>\
+{brief}\
+<p role=\"status\" class=\"discovery-note\" data-collection-status></p>\
+</header>",
+        esc(&status(collection, &now)),
+        esc(&collection.creator),
+        esc(&collection.title),
+        esc(&collection.summary),
+    );
+    body.push_str("<div class=\"collection-gallery-bar\">");
     body.push_str(&search(query, &base, Some(collection)));
     body.push_str(&tabs(query, &base));
+    body.push_str("</div>");
     let mut entries: Vec<_> = collection
         .entries
         .iter()
@@ -432,14 +526,40 @@ pub fn collection(
                 ),
                 1,
             );
-            body.push_str(&format!("<article>{tile}<details class=\"creation-note\"><summary>{} · {}</summary><p>作者填写，未经平台认证。</p><p>投稿 v{}{} · {}</p>{}</details></article>", esc(if entry.model.is_empty() { "模型未填写" } else { &entry.model }), entry.method.label(), entry.submitted_version,
-                if entry.submitted_version != item.version { format!(" · 当前 v{}（作品已更新，打开的是当前版本）", item.version) } else { String::new() }, esc(&entry.submitted_at), if entry.prompt.is_empty() { "<p>作者没有公开提示词。</p>".to_string() } else { format!("<pre>{}</pre>", esc(&entry.prompt)) }));
+            let model_name = if entry.model.is_empty() {
+                "模型未填写"
+            } else {
+                &entry.model
+            };
+            let version_diff = if entry.submitted_version != item.version {
+                format!(" · 当前 v{}（作品已更新，打开的是当前版本）", item.version)
+            } else {
+                String::new()
+            };
+            let prompt_box = if entry.prompt.is_empty() {
+                "<p class=\"empty-prompt\">作者没有公开提示词。</p>".to_string()
+            } else {
+                format!("<div class=\"prompt-box\"><span class=\"box-label\">公开提示词</span><pre>{}</pre></div>", esc(&entry.prompt))
+            };
+            body.push_str(&format!(
+                "<article class=\"collection-entry\">{tile}\
+<details class=\"creation-note\">\
+<summary class=\"creation-summary\"><span class=\"model-tag\">{}</span><span class=\"method-tag\">{}</span><span class=\"version-tag\">投稿 v{}{}</span></summary>\
+<div class=\"creation-body\">\
+<p class=\"creation-disclaimer\">作者填写，未经平台认证。</p>\
+<p class=\"creation-time\">投稿时间 · {}</p>\
+{}\
+</div></details></article>",
+                esc(model_name),
+                entry.method.label(),
+                entry.submitted_version,
+                version_diff,
+                esc(&entry.submitted_at),
+                prompt_box
+            ));
         }
         body.push_str("</section>");
         body.push_str(&navigation);
-    }
-    if !subscribe.is_empty() {
-        body.push_str("<p class=\"discovery-note\">关注后每周有新投稿时才发一封邮件；可以随时取消。不是每件作品都通知。</p>");
     }
     body.push_str("</div>");
     let head = format!("<meta property=\"og:type\" content=\"website\"><meta property=\"og:title\" content=\"{}\"><meta property=\"og:description\" content=\"{}\"><meta name=\"description\" content=\"{}\">", esc(&collection.title), esc(&collection.summary), esc(&collection.summary));

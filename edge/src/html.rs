@@ -66,28 +66,7 @@ pub fn hue(slug: &str) -> u32 {
 /// - `.wordmark` 是单行不折行的纯小写品牌字标，`playtest` 钛白加粗，`.run` 浅钛银灰。
 /// - `.nav-dot` 是当前那间房旁边的一颗微核指示点。
 /// - 发布说明桌面居中 42rem、手机贴近底部；原生 dialog 增强焦点与关闭，无脚本时保留 `:target`。
-pub const BASE: &str = concat!("\
-:root{color-scheme:dark;--bg:#09090b;--card:#121215;--card2:#18181c;--fg:#f4f4f5;--soft:#d4d4d8;--dim:#a1a1aa;\
---line:#ffffff12;--line2:#ffffff1f;--accent:#75cdb5;--accent-ink:#101e19;--warn:#f0dcac;--warn-bg:#1f1a10;--warn-line:#443a1e;\
---mono:ui-monospace,Menlo,monospace}\
-*{box-sizing:border-box}\
-html,body{margin:0;padding:0;background:var(--bg)}\
-body{min-height:100vh;background:var(--bg);color:var(--fg);\
-font:16px/1.6 system-ui}\
-:focus{outline:none}\
-:focus-visible{outline:2px solid var(--accent);outline-offset:3px}\
-:is(input,textarea):focus-visible{border-color:var(--accent)}\
-[hidden]{display:none!important}\
-::selection{background:#57ad9540;color:#c0e8dc}\
-.lead{color:var(--dim);font-size:14px}\
-.row{display:flex;gap:8px}\
-.row input{flex:1;min-width:0}\
-.row button{width:auto;margin:0;padding:9px 14px;white-space:nowrap}\
-:is(input,select,textarea){width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:7px;\
-background:var(--bg);color:var(--fg);font:inherit}\
-label{display:block}textarea{resize:vertical}\
-.more{display:flex;justify-content:center;gap:12px;margin:10px 0 0;font-size:12px}\
-@media(prefers-reduced-motion:reduce){@view-transition{navigation:none}*,*::before,*::after{animation:none!important;transition:none!important}}", include_str!("../../ui/dialog.css"));
+pub const BASE: &str = concat!(":root{color-scheme:dark;--bg:#09090b;--card:#121216;--card2:#17181d;--fg:#f4f4f5;--soft:#d4d4d8;--dim:#a1a1aa;--line:#ffffff14;--line2:#ffffff20;--accent:#75cdb5;--accent-ink:#101e19;--warn:#f0dcac;--warn-bg:#1f1a10;--warn-line:#443a1e;--mono:ui-monospace,Menlo,monospace}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--fg);font:15px/1.6 system-ui}:focus{outline:none}:focus-visible{outline:2px solid var(--accent);outline-offset:2px}[hidden]{display:none!important}::selection{background:#57ad9540;color:#c0e8dc}.lead{color:var(--dim);font-size:14px}.row{display:flex;gap:8px}.row input{flex:1;min-width:0}.row button{width:auto;margin:0;padding:9px 14px;white-space:nowrap}:is(input,select,textarea){width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}label{display:block}textarea{resize:vertical}.more{display:flex;justify-content:center;gap:12px;margin:10px 0 0;font-size:12px}@media(prefers-reduced-motion:reduce){@view-transition{navigation:none}*,*::before,*::after{animation:none!important;transition:none!important}}", include_str!("../../ui/dialog.css"));
 
 pub const MARK: &str = include_str!("../../ui/mark.svg");
 

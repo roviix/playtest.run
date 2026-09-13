@@ -639,7 +639,7 @@ async fn confirming_plants_a_host_only_key() {
     let cookie = reply
         .cookies()
         .iter()
-        .find(|c| c.starts_with("pt_me="))
+        .find(|c| c.starts_with("pt_me=") && !c.contains("Domain="))
         .unwrap()
         .to_string();
     assert!(cookie.contains(ME_TOKEN));
