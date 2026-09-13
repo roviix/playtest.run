@@ -195,6 +195,15 @@ try {
   shots.push(await screenshot("plaza-desktop"));
   await click('.discover-search input');
   shots.push(await screenshot("search-focus-desktop"));
+  await click('.publish');
+  await until(() => evaluate("!!document.querySelector('#publish-dialog[open]')"), "发布弹窗打开");
+  shots.push(await screenshot("publish-dialog-desktop"));
+  await click('[data-copy-command]');
+  await until(() => evaluate("document.querySelector('.copy-text')?.textContent==='已复制'"), "已复制状态");
+  const hasScrollbar = await evaluate("(() => { const sheet = document.querySelector('.publish-sheet'); return sheet.scrollHeight > sheet.clientHeight; })()");
+  assert.equal(hasScrollbar, false, "发布弹窗不应出现滚动条");
+  shots.push(await screenshot("publish-dialog-copied-desktop"));
+  await click('#publish-dialog .close');
   await viewport(390, 844);
   shots.push(await screenshot("plaza-mobile"));
   await viewport(1440, 1040);

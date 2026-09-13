@@ -27,7 +27,7 @@
         copy.dataset.copied = 'true';
         copy.setAttribute('aria-label', '已复制命令');
         copy.title = '已复制';
-        if (copyText) copyText.textContent = '已复制!';
+        if (copyText) copyText.textContent = '已复制';
         status.dataset.state = 'success';
         status.textContent = '已复制命令。';
       } catch {

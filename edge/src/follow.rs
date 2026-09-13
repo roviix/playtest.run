@@ -532,7 +532,7 @@ pub fn email_form_with_placeholder(
         format!("<p class=\"notice-note\">{}</p>", esc(note))
     };
     format!(
-        "<form method=\"post\" action=\"{}\" class=\"notice-form\">{hidden}<label>邮箱<input type=\"email\" name=\"email\" required placeholder=\"{}\" autocomplete=\"email\"></label><button type=\"submit\">{}</button>{note_p}</form>",
+        "<form method=\"post\" action=\"{}\" class=\"notice-form\">{hidden}<input type=\"email\" name=\"email\" required aria-label=\"邮箱\" placeholder=\"{}\" autocomplete=\"email\"><button type=\"submit\">{}</button>{note_p}</form>",
         esc(action),
         esc(placeholder),
         esc(label)

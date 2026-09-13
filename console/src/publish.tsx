@@ -77,7 +77,7 @@ export function Publish() {
               <button class="copy-command" type="button" aria-label={copied ? "已复制命令" : "复制命令"} title={copied ? "已复制" : "复制命令"} data-copied={copied || undefined} onClick={copy}>
                 <svg class="icon copy-glyph" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></svg>
                 <svg class="icon copied-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
-                <span class="copy-text">{copied ? "已复制!" : "复制"}</span>
+                <span class="copy-text">{copied ? "已复制" : "复制"}</span>
               </button>
             </div>
             <div class="codebox selected" tabIndex={0} role="region" aria-label="发布命令"><b aria-hidden="true">$</b><code>{selected.command}</code></div>
@@ -91,7 +91,7 @@ export function Publish() {
         <div class="pub-foot">
           <a href="https://github.com/roviix/playtest.run/releases" target="_blank" rel="noreferrer">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0-4-4m4 4 4-4M4 20h16" /></svg>
-            下载 playtest CLI
+            下载 CLI
           </a>
           <a href={href({ name: "docs", section: "publish" })} onClick={() => dialog.current?.close()}>
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15Z" /></svg>
