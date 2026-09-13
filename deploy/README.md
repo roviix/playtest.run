@@ -12,7 +12,8 @@ Rust 依赖的编译缓存留在主机的 BuildKit 里，第一次构建慢（�
 # 1. 机器初始化（Docker、2 GB swap、日志上限、数据目录、备份 cron），只跑一次
 ssh playtest-hk 'bash -s' < deploy/provision.sh
 
-# 2. 服务器上建 .env（照 .env.example），至少填 ACME_EMAIL
+# 2. 服务器上建 .env（照 .env.example）；必须给边缘上报生成 PLAYTEST_EDGE_INGEST_TOKEN，
+#    再按域名、S3 与邮件开通范围填写其余项
 ssh playtest-hk 'mkdir -p ~/workspace/playtest.run/deploy && vi ~/workspace/playtest.run/deploy/.env'
 
 # 3. 同步源码、服务器上构建并发布（本机不需要 Docker）
@@ -47,6 +48,10 @@ Caddy 会加载 `sites/content.caddy` 并向 Let's Encrypt 签 `playtest.run` + 
 API 启动会写入、读回并删除一个小探针，edge 启动会验证读取；配置、权限或连通性失败时容器
 直接失败，不会回退到 `/data/store` 后仍报告成功。旧共享盘迁移完成前不要切生产写入源；先复制、
 校验，再用同一个真实域名核对现有链接、Range、回滚和删除，旧盘保留到回退验收完成。
+
+`PLAYTEST_EDGE_INGEST_TOKEN` 是 API 与 edge 共用的一段至少 32 字节随机值，只放服务器 `.env`。
+它只用于 compose 内网里的事件批量上报，不写进 URL、事件文件或日志；缺失时 edge 会拒绝启动，
+而不是退回到可由浏览器伪造的公开事件入口。
 
 迁移工具只接受本地旧目录作为源、S3 作为目标；逐对象计算 SHA-256，blob 还会核对哈希键，
 写后从目标再读一遍。已一致的对象会跳过，不同内容的 blob / 历史清单拒绝覆盖，当前指针最后写：

@@ -11,6 +11,7 @@ use anyhow::Context;
 pub const DEFAULT_LISTEN: &str = "127.0.0.1:8443";
 pub const DEFAULT_DATA_DIR: &str = ".data";
 pub const DEFAULT_HOST_SUFFIX: &str = "localhost";
+const MIN_EDGE_INGEST_TOKEN_BYTES: usize = 32;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -24,6 +25,8 @@ pub struct Config {
     /// 事件批量上报和关注登记都往这里送；没设就是「控制面不在」——作品照常能玩，
     /// 关注会如实说「现在登记不了」（DESIGN §4.1）。
     pub api_internal_url: Option<String>,
+    /// 边缘批量上报事件时使用；只在边缘与控制面的内网请求中出现。
+    pub edge_ingest_token: Option<String>,
 }
 
 impl Config {
@@ -37,12 +40,25 @@ impl Config {
             .ok()
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| default_scheme(&host_suffix).to_string());
+        let api_internal_url = Self::api_internal_url();
+        let edge_ingest_token = env_opt("PLAYTEST_EDGE_INGEST_TOKEN");
+        anyhow::ensure!(
+            api_internal_url.is_none() || edge_ingest_token.is_some(),
+            "设置 PLAYTEST_API_INTERNAL_URL 时也必须设置 PLAYTEST_EDGE_INGEST_TOKEN；否则事件不能安全上报"
+        );
+        anyhow::ensure!(
+            edge_ingest_token
+                .as_ref()
+                .is_none_or(|token| token.len() >= MIN_EDGE_INGEST_TOKEN_BYTES),
+            "PLAYTEST_EDGE_INGEST_TOKEN 至少要有 {MIN_EDGE_INGEST_TOKEN_BYTES} 字节；请生成随机值，不要使用示例值"
+        );
         Ok(Self {
             listen,
             data_dir: PathBuf::from(env_or("PLAYTEST_DATA_DIR", DEFAULT_DATA_DIR)),
             host_suffix,
             public_scheme,
-            api_internal_url: Self::api_internal_url(),
+            api_internal_url,
+            edge_ingest_token,
         })
     }
 
@@ -89,6 +105,13 @@ fn env_or(key: &str, fallback: &str) -> String {
         .ok()
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| fallback.to_string())
+}
+
+fn env_opt(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 /// `*.localhost` 在 Chrome / Firefox 里是安全上下文但走明文，本机链接得写 `http`。

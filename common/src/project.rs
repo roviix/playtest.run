@@ -23,7 +23,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::boost::Boost;
-use crate::manifest::{GateMode, GAME_ENGINES};
+use crate::manifest::{GateMode, WorkKind, GAME_ENGINES};
 
 /// 一个作品的全部事实。控制面从库里读一次、拼一次，其余都是投影。
 ///
@@ -67,6 +67,8 @@ pub struct Project {
 
     // ---------------------------------------------------------------- 呈现
     pub title: String,
+    #[serde(default)]
+    pub kind: WorkKind,
     /// 一句话介绍，最多 [`crate::limits::MAX_SUMMARY_CHARS`] 字。跟着作品走，换版本不变。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
@@ -312,6 +314,7 @@ impl Project {
             slug: self.slug.clone(),
             url: self.url.clone(),
             title: self.title.clone(),
+            kind: self.kind,
             developer: self.owner.display_name.clone(),
             avatar_url: self.owner.avatar_url.clone(),
             summary: self.summary.clone(),
@@ -363,6 +366,8 @@ pub struct ProjectCard {
     pub slug: String,
     pub url: String,
     pub title: String,
+    #[serde(default)]
+    pub kind: WorkKind,
     pub developer: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
@@ -577,6 +582,7 @@ mod tests {
             tunnel_online: false,
             last_seen: None,
             title: "小球".into(),
+            kind: WorkKind::Web,
             summary: Some("一个滚来滚去的小球".into()),
             note: Some("改了新手引导".into()),
             cover_hash: Some("abcdef0123456789".into()),

@@ -16,7 +16,7 @@ for (const section of sections) {
   assert.ok(router.includes(`"${section}"`), `missing route: ${section}`);
   assert.equal([...docs.matchAll(new RegExp(`<Chapter name="${section}">`, "g"))].length, 1);
 }
-assert.ok(app.indexOf('if (route.name === "docs")') < app.indexOf('if (route.name === "token" || !hasToken)'));
+assert.ok(app.indexOf('if (route.name === "docs")') < app.indexOf('if (!hasToken)'));
 const publishCommands = [...publish.matchAll(/command: "([^"\n]+)"/g)].map((match) => match[1]);
 assert.equal(publishCommands.length, 3, "all three publish modes remain available");
 assert.ok(publishCommands.every((command) => !command.includes("--public")), "default publish must not opt into plaza");
@@ -32,7 +32,7 @@ const binary = process.env.PLAYTEST_CLI || resolve(JSON.parse(metadata.stdout).t
 const version = spawnSync(binary, ["--version"], { cwd: root, encoding: "utf8" });
 assert.equal(version.status, 0, "需要先 cargo build -p playtest，或用 PLAYTEST_CLI 指定待检查的 CLI 二进制。");
 const commands = [...docs.matchAll(/<CommandBlock command="([^"]+)"/g)].map((match) => match[1]);
-commands.push("playtest ./dist --seats 10", "playtest ./dist --card invite.png", "playtest rm ./dist -y --json", "playtest files ./dist --version v3");
+commands.push(...publishCommands, "playtest ./dist --seats 10", "playtest ./dist --card invite.png", "playtest rm ./dist -y --json", "playtest files ./dist --version v3");
 for (const command of new Set(commands)) {
   const words = command.split(/\s+/).slice(1);
   const checked = spawnSync(binary, [...words, "--help"], { cwd: root, encoding: "utf8" });

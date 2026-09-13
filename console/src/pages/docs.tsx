@@ -106,7 +106,7 @@ export function DocsPage({ section }: { section: DocSection }) {
           <p>第一次使用自动申请匿名身份。终端会给出作品、版本、分享链接、二维码、到期提醒和结果入口；默认不下载图片，也不会自动上广场。</p>
           <div class="doc-output"><span>成功输出示意</span><pre>{'已发布《小小星球》v1\nhttps://playtest.run/p/brisk-otter-41\n\n[终端二维码]\n匿名链接将在指定时间到期\n查看试玩结果：终端中的控制台地址'}</pre></div>
           <p>匿名链接通常有效 24 小时，以实际到期提示为准。需要使用账号身份时运行 <code>playtest login</code>，按终端提示在 GitHub 确认；登录不是无条件永久托管的承诺。</p>
-          <p>浏览器控制台和 CLI 分别保存身份，不会因为终端登录就自动登录浏览器。使用同一个 GitHub 账号，或在账号页手动连接已有令牌。不要把令牌发给玩家。</p>
+          <p>浏览器控制台和 CLI 分别保存身份，不会因为终端登录就自动登录浏览器。使用同一个 GitHub 账号，或在登录弹窗选择访问令牌。已有令牌可在本机 <code>~/.config/playtest/config.json</code> 中找到。不要把令牌发给玩家。</p>
         </Chapter>
         <Chapter name="publish">
           <h3>选择一种发布方式</h3>

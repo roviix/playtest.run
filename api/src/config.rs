@@ -22,6 +22,11 @@ pub const SMTP_URL_ENV: &str = "PLAYTEST_SMTP_URL";
 pub const PUBLIC_ROOT_URL_ENV: &str = "PLAYTEST_PUBLIC_ROOT_URL";
 pub const VAPID_SUBJECT_ENV: &str = "PLAYTEST_VAPID_SUBJECT";
 pub const ADMIN_TOKEN_ENV: &str = "PLAYTEST_ADMIN_TOKEN";
+pub const EDGE_INGEST_TOKEN_ENV: &str = "PLAYTEST_EDGE_INGEST_TOKEN";
+pub const MIN_EDGE_INGEST_TOKEN_BYTES: usize = 32;
+
+/// 集成测试构造 `Config::default()` 时使用；生产进程只认环境变量，不会落到这个值。
+pub const TEST_EDGE_INGEST_TOKEN: &str = "test-edge-ingest-token-000000000";
 
 pub const DEFAULT_LISTEN: &str = "127.0.0.1:8787";
 pub const DEFAULT_DATA_DIR: &str = ".data";
@@ -46,6 +51,8 @@ pub struct Config {
     pub notify: Notify,
     /// 没配就是这台机器没有管理接口：`/admin/*` 整组不注册，外面看到的是 404。
     pub admin_token: Option<String>,
+    /// 只给边缘事件批量上报使用；浏览器和普通 API 调用方不应拿到。
+    pub edge_ingest_token: Option<String>,
 }
 
 impl Default for Config {
@@ -57,6 +64,7 @@ impl Default for Config {
             github: None,
             notify: Notify::default(),
             admin_token: None,
+            edge_ingest_token: Some(TEST_EDGE_INGEST_TOKEN.to_string()),
         }
     }
 }
@@ -170,6 +178,14 @@ impl Config {
             );
         }
 
+        let edge_ingest_token = env_opt(EDGE_INGEST_TOKEN_ENV);
+        anyhow::ensure!(
+            edge_ingest_token
+                .as_ref()
+                .is_none_or(|token| token.len() >= MIN_EDGE_INGEST_TOKEN_BYTES),
+            "{EDGE_INGEST_TOKEN_ENV} 至少要有 {MIN_EDGE_INGEST_TOKEN_BYTES} 字节；请生成随机值，不要使用示例值"
+        );
+
         Ok(Self {
             listen,
             data_dir: PathBuf::from(env_or(DATA_DIR_ENV, DEFAULT_DATA_DIR)),
@@ -177,6 +193,7 @@ impl Config {
             github: github_from_env(),
             notify: notify_from_env()?,
             admin_token: env_opt(ADMIN_TOKEN_ENV),
+            edge_ingest_token,
         })
     }
 

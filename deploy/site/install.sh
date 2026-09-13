@@ -6,7 +6,7 @@ DESTINATION="${PLAYTEST_INSTALL_DIR:-$HOME/.local/bin}"
 REPOSITORY="roviix/playtest.run"
 
 fail() { printf '安装未完成：%s\n' "$*" >&2; exit 1; }
-[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]] || fail '请先指定发布版本，例如 PLAYTEST_VERSION=v0.2.0 bash install.sh；不要安装无法确认来源的 latest。'
+[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]] || fail '请先指定发布版本，例如 PLAYTEST_VERSION=v0.3.0 bash install.sh；不要安装无法确认来源的 latest。'
 [[ "$DESTINATION" = /* ]] || fail '安装目录必须是绝对路径。'
 for tool in uname tar mktemp; do command -v "$tool" >/dev/null || fail "缺少 $tool。"; done
 

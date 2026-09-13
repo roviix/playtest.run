@@ -46,6 +46,27 @@ pub async fn post_json<B: serde::Serialize>(
     body: &B,
     timeout: Duration,
 ) -> anyhow::Result<Answer> {
+    post_json_with_bearer(api_base, path, body, timeout, None).await
+}
+
+/// 带内部服务凭据的 JSON POST。令牌只放请求头，不进入 URL 或日志。
+pub async fn post_json_bearer<B: serde::Serialize>(
+    api_base: &str,
+    path: &str,
+    body: &B,
+    timeout: Duration,
+    token: &str,
+) -> anyhow::Result<Answer> {
+    post_json_with_bearer(api_base, path, body, timeout, Some(token)).await
+}
+
+async fn post_json_with_bearer<B: serde::Serialize>(
+    api_base: &str,
+    path: &str,
+    body: &B,
+    timeout: Duration,
+    token: Option<&str>,
+) -> anyhow::Result<Answer> {
     let url: hyper::Uri = format!("{}{path}", api_base.trim_end_matches('/')).parse()?;
     if url.scheme_str() != Some("http") {
         anyhow::bail!("控制面地址只支持 http://（同机或内网）");
@@ -65,14 +86,17 @@ pub async fn post_json<B: serde::Serialize>(
         tokio::spawn(async move {
             let _ = conn.await;
         });
-        let request = Request::post(url.path())
+        let mut request = Request::post(url.path())
             .header("host", format!("{host}:{port}"))
             .header("content-type", "application/json")
             .header(
                 "user-agent",
                 concat!("playtest-edge/", env!("CARGO_PKG_VERSION")),
-            )
-            .body(Full::new(Bytes::from(payload)))?;
+            );
+        if let Some(token) = token {
+            request = request.header("authorization", format!("Bearer {token}"));
+        }
+        let request = request.body(Full::new(Bytes::from(payload)))?;
         let response = sender.send_request(request).await?;
         let status = response.status().as_u16();
         let body = response.into_body().collect().await?.to_bytes();

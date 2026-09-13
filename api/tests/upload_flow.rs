@@ -13,7 +13,7 @@ use playtest_common::api::{
     ErrorCode, PrepareUploadRequest, PrepareUploadResponse, Site, VersionList,
 };
 use playtest_common::hash;
-use playtest_common::manifest::{FileEntry, GateMode};
+use playtest_common::manifest::{FileEntry, GateMode, WorkKind};
 use playtest_common::store::FsStore;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -21,6 +21,10 @@ use tower::ServiceExt;
 
 const INDEX_HTML: &[u8] = b"<!doctype html><meta charset=utf-8><title>\xe5\xb0\x8f\xe7\x90\x83</title><canvas id=game></canvas>";
 const SPRITE_PNG: &[u8] = b"\x89PNG\r\n\x1a\n not really a png";
+const ARTICLE_MD: &[u8] =
+    "# 慢慢做成一件事\n\n这是正文。\n\n![过程图](images/过程.png)\n\n[出处](https://example.com)"
+        .as_bytes();
+const VIDEO_NOT_MP4: &[u8] = b"this extension is lying";
 
 struct Harness {
     router: Router,
@@ -193,6 +197,8 @@ fn prepare_request(files: Vec<FileEntry>) -> PrepareUploadRequest {
         isolated: true,
         spa: false,
         engine: None,
+        kind: Default::default(),
+        entry: None,
     }
 }
 
@@ -204,6 +210,19 @@ async fn health_is_plain_ok() {
         .await;
     assert_eq!(reply.status, StatusCode::OK);
     assert_eq!(reply.text(), "ok");
+}
+
+#[tokio::test]
+async fn anonymous_session_issuance_has_a_platform_fuse() {
+    let h = Harness::start().await;
+    for _ in 0..60 {
+        h.request("POST", paths::ANON_SESSIONS, None, Body::empty(), false)
+            .await
+            .json::<AnonSessionResponse>();
+    }
+    h.request("POST", paths::ANON_SESSIONS, None, Body::empty(), false)
+        .await
+        .error(StatusCode::TOO_MANY_REQUESTS, ErrorCode::QuotaExceeded);
 }
 
 /// 匿名会话 → 建作品 → 准备 → 传缺的 → 提交 → 再来一次拿到 v2。
@@ -449,6 +468,133 @@ async fn anonymous_upload_reaches_v2() {
 }
 
 #[tokio::test]
+async fn article_commit_renders_a_separate_safe_artifact_and_keeps_the_kind_stable() {
+    let h = Harness::start().await;
+    let token = h.anon_token().await;
+    let site = h.new_site(&token).await;
+    let files = vec![
+        entry("post.md", ARTICLE_MD),
+        entry("images/过程.png", SPRITE_PNG),
+    ];
+    let mut request = prepare_request(files.clone());
+    request.kind = WorkKind::Article;
+    request.entry = Some("post.md".into());
+    request.isolated = false;
+    request.title = Some("慢慢做成一件事".into());
+
+    let prepared: PrepareUploadResponse = h
+        .post(&paths::site_uploads(&site.slug), Some(&token), &request)
+        .await
+        .json();
+    for file in &files {
+        let bytes = if file.path == "post.md" {
+            ARTICLE_MD
+        } else {
+            SPRITE_PNG
+        };
+        assert!(h
+            .put_bytes(&paths::blob(&file.hash), &token, bytes)
+            .await
+            .status
+            .is_success());
+    }
+    h.post(
+        &paths::site_upload_commit(&site.slug, &prepared.upload_id),
+        Some(&token),
+        &serde_json::json!({}),
+    )
+    .await
+    .json::<CommitUploadResponse>();
+
+    let manifest = h.store.get_manifest(&site.slug, 1).await.unwrap().unwrap();
+    assert_eq!(manifest.kind, WorkKind::Article);
+    assert_eq!(manifest.entry.as_deref(), Some("post.md"));
+    let artifact = manifest.article.expect("文章提交时应生成安全展示产物");
+    let rendered = h
+        .store
+        .get_blob_bytes(
+            &artifact.hash,
+            playtest_common::limits::MAX_ARTICLE_HTML_BYTES,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let rendered = String::from_utf8(rendered).unwrap();
+    assert!(rendered.contains("<h1>慢慢做成一件事</h1>"));
+    assert!(rendered.contains(&format!(
+        "src=\"http://{}.localhost:8443/images/%E8%BF%87%E7%A8%8B.png\"",
+        site.slug
+    )));
+    assert!(!rendered.contains("<script"));
+
+    let seen: Site = h.get(&paths::site(&site.slug), &token).await.json();
+    assert_eq!(seen.kind, WorkKind::Article);
+
+    // 同一个关注地址不能从文章静默变成网页；prepare 可去重，最终提交仍以现有作品为准挡住。
+    let web_file = entry("index.html", INDEX_HTML);
+    let web_prepare: PrepareUploadResponse = h
+        .post(
+            &paths::site_uploads(&site.slug),
+            Some(&token),
+            &prepare_request(vec![web_file.clone()]),
+        )
+        .await
+        .json();
+    if web_prepare.missing.contains(&web_file.hash) {
+        h.put_bytes(&paths::blob(&web_file.hash), &token, INDEX_HTML)
+            .await;
+    }
+    let error = h
+        .post(
+            &paths::site_upload_commit(&site.slug, &web_prepare.upload_id),
+            Some(&token),
+            &serde_json::json!({}),
+        )
+        .await
+        .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
+    assert!(error.message.contains("不能在同一个链接下改成"));
+    assert_eq!(
+        h.store
+            .get_current(&site.slug)
+            .await
+            .unwrap()
+            .unwrap()
+            .version,
+        1
+    );
+}
+
+#[tokio::test]
+async fn video_commit_checks_the_real_container_instead_of_trusting_mp4_suffix() {
+    let h = Harness::start().await;
+    let token = h.anon_token().await;
+    let site = h.new_site(&token).await;
+    let file = entry("clip.mp4", VIDEO_NOT_MP4);
+    let mut request = prepare_request(vec![file.clone()]);
+    request.kind = WorkKind::Video;
+    request.entry = Some("clip.mp4".into());
+    request.isolated = false;
+
+    let prepared: PrepareUploadResponse = h
+        .post(&paths::site_uploads(&site.slug), Some(&token), &request)
+        .await
+        .json();
+    h.put_bytes(&paths::blob(&file.hash), &token, VIDEO_NOT_MP4)
+        .await;
+    let error = h
+        .post(
+            &paths::site_upload_commit(&site.slug, &prepared.upload_id),
+            Some(&token),
+            &serde_json::json!({}),
+        )
+        .await
+        .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
+    assert!(error.message.contains("MP4"), "{}", error.message);
+    assert!(h.store.get_current(&site.slug).await.unwrap().is_none());
+    h.assert_no_leftovers();
+}
+
+#[tokio::test]
 async fn deleting_a_site_takes_the_link_down() {
     let h = Harness::start().await;
     let token = h.anon_token().await;
@@ -503,6 +649,14 @@ async fn wrong_bytes_are_rejected_and_nothing_is_kept() {
     let h = Harness::start().await;
     let token = h.anon_token().await;
     let claimed = hash::hash_bytes(INDEX_HTML);
+    let site = h.new_site(&token).await;
+    h.post(
+        &paths::site_uploads(&site.slug),
+        Some(&token),
+        &prepare_request(vec![entry("index.html", INDEX_HTML)]),
+    )
+    .await
+    .json::<PrepareUploadResponse>();
 
     let reply = h
         .put_bytes(&paths::blob(&claimed), &token, SPRITE_PNG)
@@ -518,6 +672,51 @@ async fn wrong_bytes_are_rejected_and_nothing_is_kept() {
         !h.store.has_blob(&claimed).await.unwrap(),
         "对不上的内容不能落地"
     );
+    h.assert_no_leftovers();
+}
+
+#[tokio::test]
+async fn a_blob_must_belong_to_the_callers_pending_upload() {
+    let h = Harness::start().await;
+    let token = h.anon_token().await;
+    let file = entry("index.html", INDEX_HTML);
+
+    h.put_bytes(&paths::blob(&file.hash), &token, INDEX_HTML)
+        .await
+        .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
+
+    assert!(!h.store.has_blob(&file.hash).await.unwrap());
+    h.assert_no_leftovers();
+}
+
+#[tokio::test]
+async fn an_expired_prepare_no_longer_authorizes_a_blob() {
+    let h = Harness::start().await;
+    let token = h.anon_token().await;
+    let site = h.new_site(&token).await;
+    let file = entry("index.html", INDEX_HTML);
+    let prepared: PrepareUploadResponse = h
+        .post(
+            &paths::site_uploads(&site.slug),
+            Some(&token),
+            &prepare_request(vec![file.clone()]),
+        )
+        .await
+        .json();
+    {
+        let conn = h.state.db().lock().await;
+        conn.execute(
+            "UPDATE uploads SET created_at = '2020-01-01T00:00:00Z' WHERE id = ?1",
+            [&prepared.upload_id],
+        )
+        .unwrap();
+    }
+
+    h.put_bytes(&paths::blob(&file.hash), &token, INDEX_HTML)
+        .await
+        .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
+
+    assert!(!h.store.has_blob(&file.hash).await.unwrap());
     h.assert_no_leftovers();
 }
 
@@ -955,6 +1154,14 @@ async fn orphaned_blobs_are_collected_but_never_live_ones() {
     }
     // 还有一个谁都没提交过的 blob（上传了一半的人）。
     let dangling = entry("stray.bin", b"nobody committed me");
+    let dangling_site = h.new_site(&token).await;
+    h.post(
+        &paths::site_uploads(&dangling_site.slug),
+        Some(&token),
+        &prepare_request(vec![dangling.clone()]),
+    )
+    .await
+    .json::<PrepareUploadResponse>();
     h.put_bytes(&paths::blob(&dangling.hash), &token, b"nobody committed me")
         .await;
 

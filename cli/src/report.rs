@@ -348,6 +348,7 @@ mod tests {
             slug: "brisk-otter-41".into(),
             url: "https://brisk-otter-41.playtest.run".into(),
             title: "小球".into(),
+            kind: playtest_common::manifest::WorkKind::Web,
             current_version: Some(7),
             created_at: "2026-09-08T00:00:00Z".into(),
             expires_at: None,

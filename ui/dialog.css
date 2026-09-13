@@ -1,0 +1,13 @@
+.account-dialog{position:fixed;inset:0;width:min(400px,100% - 32px);max-height:calc(100dvh - 32px);box-sizing:border-box;margin:auto;padding:24px;border:1px solid var(--line2);border-radius:12px;background:var(--card);color:var(--fg);overflow:auto;box-shadow:0 24px 60px -20px #000b}
+.account-dialog:target{display:block;box-shadow:0 0 0 100vmax #06070ab8;z-index:80}
+.account-dialog::backdrop{background:#06070ab8;backdrop-filter:blur(8px)}
+.notice-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.notice-head h2{margin:0;font-size:18px;font-weight:500}
+.notice-head :is(a,button){display:grid;place-items:center;flex-shrink:0;width:44px;height:44px;margin:-8px;padding:0;border:0;border-radius:7px;background:none;color:var(--dim);font:24px/1 system-ui;text-decoration:none;cursor:pointer}
+.notice-head :is(a,button):hover{background:#ffffff08;color:var(--fg)}
+.notice-form{display:grid;gap:14px;margin-top:24px}
+.notice-form label{display:grid;gap:8px;font-size:14px;color:var(--soft)}
+.notice-form input{font-size:16px}
+.notice-form button{min-height:44px;padding:10px;border:1px solid #ffffff18;border-radius:7px;border-top-color:var(--action-edge);background:var(--action-bg);box-shadow:var(--action-shadow);color:var(--fg);font:500 14px system-ui;cursor:pointer}
+.notice-note{margin:14px 0 0;font-size:12px;line-height:1.8;color:var(--dim)}
+.notice-form .notice-note{margin:0}.notice-channel{margin-top:16px;font-size:14px}

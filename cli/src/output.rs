@@ -11,7 +11,7 @@
 //! 成功，`action` 说明这是哪条命令的结果：
 //!
 //! ```json
-//! {"ok":true,"action":"upload","slug":"brisk-otter-41",
+//! {"ok":true,"action":"upload","slug":"brisk-otter-41","kind":"web",
 //!  "url":"https://playtest.run/p/brisk-otter-41","version":7,
 //!  "elapsed_ms":5100,"timings":{"hash_ms":300,"prepare_ms":900,"upload_ms":3100,"commit_ms":800},
 //!  "expires_at":"2026-09-08T04:09:03Z","qr_text":"█▀▀▀▀▀█ …",
@@ -60,6 +60,7 @@ use std::time::Instant;
 
 use anyhow::Result;
 use playtest_common::api::{ErrorCode, Site};
+use playtest_common::manifest::WorkKind;
 use serde::{Serialize, Serializer};
 
 use crate::client;
@@ -405,6 +406,8 @@ pub struct UploadReport {
     action: &'static str,
     pub slug: String,
     pub url: String,
+    /// 这次发布的是网页、文章还是视频。旧脚本可忽略这个新增字段。
+    pub kind: WorkKind,
     /// 玩家在门禁页上看到的作品名。发完就打出来，别让人到玩家那边才发现叫《v2》。
     pub title: String,
     pub version: u32,
@@ -467,6 +470,7 @@ impl UploadReport {
             console_url: console_url(&slug),
             slug,
             url,
+            kind: WorkKind::Web,
             title,
             version,
             elapsed_ms: elapsed_ms(),
@@ -517,14 +521,26 @@ pub fn report_upload(report: &UploadReport) {
         emit(report);
         return;
     }
-    ui::say(&format!("已发布《{}》v{}", report.title, report.version));
+    let kind = match report.kind {
+        WorkKind::Web => "",
+        WorkKind::Article => "文章",
+        WorkKind::Video => "视频",
+    };
+    ui::say(&format!(
+        "已发布{kind}《{}》v{}",
+        report.title, report.version
+    ));
     ui::blank();
     ui::link(&report.url);
     ui::blank();
     if let Some(qr) = &report.qr_text {
         if ui::can_draw_qr() {
             ui::print_qr(qr);
-            ui::say("手机扫码就能玩。");
+            ui::say(match report.kind {
+                WorkKind::Web => "手机扫码就能玩。",
+                WorkKind::Article => "手机扫码就能读。",
+                WorkKind::Video => "手机扫码就能看。",
+            });
         }
     }
     for (tone, line) in after_the_link(report) {
@@ -557,6 +573,7 @@ fn after_the_link(report: &UploadReport) -> Vec<(Tone, String)> {
         report.card_path.as_deref(),
         &report.card_url,
         &report.slug,
+        report.kind,
     ) {
         lines.push((Tone::Plain, line));
     }
@@ -564,21 +581,32 @@ fn after_the_link(report: &UploadReport) -> Vec<(Tone, String)> {
         lines.push((Tone::Plain, plaza_line(plaza)));
     }
     if let Some(seats) = report.seats {
-        lines.push((Tone::Plain, seats_line(seats)));
+        lines.push((Tone::Plain, seats_line(seats, report.kind)));
     }
     if let Some(expires_at) = &report.expires_at {
         lines.push(expiry_line(expires_at, "想让它留下来：playtest login。"));
     }
-    lines.push((Tone::Plain, console_line(&report.slug)));
+    lines.push((Tone::Plain, console_line(&report.slug, report.kind)));
     lines
 }
 
 /// 邀请卡那一行。`--card -` 时一个字都不说——他说了不要。
-fn card_line(outcome: card::Outcome, path: Option<&str>, url: &str, slug: &str) -> Option<String> {
+fn card_line(
+    outcome: card::Outcome,
+    path: Option<&str>,
+    url: &str,
+    slug: &str,
+    kind: WorkKind,
+) -> Option<String> {
+    let action = match kind {
+        WorkKind::Web => "玩",
+        WorkKind::Article => "读",
+        WorkKind::Video => "看",
+    };
     match (outcome, path) {
-        (card::Outcome::Saved, Some(path)) => {
-            Some(format!("邀请卡已存到 {path}——发到群里，别人长按识别就能玩"))
-        }
+        (card::Outcome::Saved, Some(path)) => Some(format!(
+            "邀请卡已存到 {path}——发到群里，别人长按识别就能{action}"
+        )),
         // 存下来了却没有路径，是不可能的；真出现了也当没拿到说，别打一句半截的话。
         (card::Outcome::Saved, None) | (card::Outcome::Missing, _) => Some(format!(
             "邀请卡未能保存，可重试 playtest card {slug}，或打开 {url}"
@@ -589,13 +617,23 @@ fn card_line(outcome: card::Outcome, path: Option<&str>, url: &str, slug: &str) 
 
 /// 「来的人玩成什么样」那一行。发完不说这句，「知道结果」这半个产品就没人知道在哪
 /// （`docs/spikes/2026-09-08-dogfood-mofish-airdrop.md` 第四节第 4 条）。
-fn console_line(slug: &str) -> String {
-    format!("来的人玩成什么样，控制台里看得见：{}", console_url(slug))
+fn console_line(slug: &str, kind: WorkKind) -> String {
+    let action = match kind {
+        WorkKind::Web => "玩成什么样",
+        WorkKind::Article => "读过后说了什么",
+        WorkKind::Video => "看过后说了什么",
+    };
+    format!("来的人{action}，控制台里看得见：{}", console_url(slug))
 }
 
 /// 名额那一行（DESIGN §3.3 第 4 条）。「加入」的定义要说出来，不然发的人会以为是打开的人数。
-fn seats_line(seats: u32) -> String {
-    format!("想找 {seats} 位试玩者，邀请函和邀请卡上都写着；留了名字的人算加入")
+fn seats_line(seats: u32, kind: WorkKind) -> String {
+    let audience = match kind {
+        WorkKind::Web => "试玩者",
+        WorkKind::Article => "读者",
+        WorkKind::Video => "观众",
+    };
+    format!("想找 {seats} 位{audience}，邀请函和邀请卡上都写着；留了名字的人算加入")
 }
 
 /// 匿名链接还剩不到这么久就要提醒：一场测试从发链接到大家点开常常要一两个小时，
@@ -645,6 +683,7 @@ pub struct SiteOut {
     pub slug: String,
     pub url: String,
     pub title: String,
+    pub kind: WorkKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<u32>,
     /// 有多少人关注着它（DESIGN §3.6）。开发者只看到这个数字，看不到是谁——
@@ -661,6 +700,7 @@ impl From<Site> for SiteOut {
             slug: site.slug,
             url,
             title: site.title,
+            kind: site.kind,
             version: site.current_version,
             followers: site.listing.followers,
             expires_at: site.expires_at,
@@ -838,6 +878,7 @@ pub fn report_online(report: &OnlineReport) {
         report.card_path.as_deref(),
         &report.card_url,
         &report.slug,
+        WorkKind::Web,
     ) {
         ui::say(&line);
     }
@@ -845,7 +886,7 @@ pub fn report_online(report: &OnlineReport) {
         let (tone, line) = expiry_line(expires_at, "想让它留下来：playtest login。");
         say_toned(tone, &line);
     }
-    ui::say(&console_line(&report.slug));
+    ui::say(&console_line(&report.slug, WorkKind::Web));
     say_findings(&report.findings);
     ui::say("按 Ctrl-C 结束，结束后玩家会看到「开发者的电脑暂时不在线」。");
 }
@@ -1082,6 +1123,7 @@ mod tests {
         let json = serde_json::to_value(&report).unwrap();
         assert_eq!(json["ok"], true);
         assert_eq!(json["action"], "upload");
+        assert_eq!(json["kind"], "web");
         assert_eq!(json["slug"], "brisk-otter-41");
         assert_eq!(json["version"], 7);
         assert_eq!(json["timings"]["upload_ms"], 3100);
@@ -1150,6 +1192,7 @@ mod tests {
             slug: "brisk-otter-41".into(),
             url: "https://brisk-otter-41.playtest.run".into(),
             title: "小球大冒险".into(),
+            kind: playtest_common::manifest::WorkKind::Web,
             current_version: Some(7),
             created_at: "2026-09-09T00:00:00Z".into(),
             expires_at: None,
@@ -1175,6 +1218,7 @@ mod tests {
             slug: "brisk-otter-41".into(),
             url: "https://brisk-otter-41.playtest.run".into(),
             title: "小球大冒险".into(),
+            kind: playtest_common::manifest::WorkKind::Web,
             current_version: Some(7),
             created_at: "2026-09-09T00:00:00Z".into(),
             expires_at: None,

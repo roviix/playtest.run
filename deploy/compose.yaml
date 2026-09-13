@@ -82,6 +82,8 @@ services:
       PLAYTEST_VAPID_SUBJECT: ${PLAYTEST_VAPID_SUBJECT:-}
       # 管理接口（赠送推广、手工撤下）。空着 = /admin/* 整组不注册，外面看到 404。
       PLAYTEST_ADMIN_TOKEN: ${PLAYTEST_ADMIN_TOKEN:-}
+      # 只给同机边缘批量上报事件；API 与 edge 必须取同一份高熵值。
+      PLAYTEST_EDGE_INGEST_TOKEN: ${PLAYTEST_EDGE_INGEST_TOKEN}
       RUST_LOG: ${RUST_LOG:-info}
     ports:
       # 只绑主机回环：API_HOST 没配时 CLI 走 ssh -L 隧道用；有了公网入口后仍留着给运维。
@@ -124,6 +126,7 @@ services:
       PLAYTEST_S3_SESSION_TOKEN: ${PLAYTEST_S3_EDGE_SESSION_TOKEN:-}
       # 边缘的第一层事件每 60 秒送到控制面：同一台机器，走 compose 内网明文。
       PLAYTEST_API_INTERNAL_URL: http://api:8787
+      PLAYTEST_EDGE_INGEST_TOKEN: ${PLAYTEST_EDGE_INGEST_TOKEN}
       # 玩家浏览器里的 SDK 往哪发事件（/_playtest/me 告诉它）。没有公网控制面时留空，SDK 会安静地不发。
       PLAYTEST_API_PUBLIC_URL: ${PLAYTEST_API_PUBLIC_URL:-}
       RUST_LOG: ${RUST_LOG:-info}

@@ -22,6 +22,8 @@ async fn main() -> anyhow::Result<()> {
     let events_path = config.events_path();
     let suffix = config.host_suffix.clone();
     let scheme = config.public_scheme.clone();
+    let api_internal_url = config.api_internal_url.clone();
+    let edge_ingest_token = config.edge_ingest_token.clone();
 
     let app = Arc::new(App::try_new(config)?);
     // S3 凭据、桶或网络不对时，边缘必须明确起不来，不能把所有作品伪装成 404。
@@ -34,13 +36,14 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("作品从 {} 读", app.sites.store().description());
     tracing::info!("事件写到 {}", events_path.display());
     tracing::info!("一个作品就是一个 {scheme}://<slug>.{suffix}");
-    match Config::api_internal_url() {
+    match api_internal_url {
         Some(api) => {
+            let token = edge_ingest_token.expect("Config 已检查内网 API 与事件凭据成对出现");
             tracing::info!(
                 "事件每 {} 秒送一批到 {api}",
                 playtest_edge::ship::INTERVAL.as_secs()
             );
-            tokio::spawn(playtest_edge::ship::Shipper::new(events_path, api).run());
+            tokio::spawn(playtest_edge::ship::Shipper::new(events_path, api, token).run());
         }
         None => tracing::info!("没设 PLAYTEST_API_INTERNAL_URL，事件只留在本地文件里，不送控制面"),
     }

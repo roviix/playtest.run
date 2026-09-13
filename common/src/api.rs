@@ -13,7 +13,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::manifest::{Cover, FileEntry, GateMode};
+use crate::manifest::{Cover, FileEntry, GateMode, WorkKind};
 
 pub mod routes {
     pub const HEALTH: &str = "/healthz";
@@ -233,6 +233,9 @@ pub struct Site {
     /// 玩家点开的完整链接，例如 `https://brisk-otter-41.playtest.run`。
     pub url: String,
     pub title: String,
+    /// 网页 / 文章 / 视频。还没有版本以及旧控制面返回的作品按网页显示。
+    #[serde(default)]
+    pub kind: WorkKind,
     /// 还没上传过版本时为 `None`。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_version: Option<u32>,
@@ -353,6 +356,12 @@ pub struct VersionFile {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct PrepareUploadRequest {
     pub files: Vec<FileEntry>,
+    /// 单文件发布明确告诉控制面怎样验证和展示；旧 CLI 没有此字段，按网页处理。
+    #[serde(default)]
+    pub kind: WorkKind,
+    /// 文章原稿或视频文件在 `files` 里的路径；网页没有固定入口。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

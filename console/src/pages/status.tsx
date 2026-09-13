@@ -6,7 +6,7 @@
 
 import type { ComponentChildren } from "preact";
 
-import { ApiError } from "../api";
+import { ApiError, AUTH_REQUEST_EVENT } from "../api";
 import { href } from "../router";
 
 export function Loading() {
@@ -19,9 +19,7 @@ export function Failed({ error, onRetry }: { error: ApiError; onRetry: () => voi
       <div class="notice">
         <p>{error.message}</p>
         <p>
-          <a class="button small" href={href({ name: "token" })}>
-            去登录
-          </a>
+          <button class="button small" type="button" onClick={() => window.dispatchEvent(new Event(AUTH_REQUEST_EVENT))}>登录</button>
         </p>
       </div>
     );

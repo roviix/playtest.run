@@ -107,7 +107,8 @@ export function useRoute(): Route {
         current = next;
       };
       active?.skipTransition();
-      if (document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const movesCover = (current.name === "sites" && next.name === "site") || (current.name === "site" && next.name === "sites");
+      if (movesCover && document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
         const transition = document.startViewTransition(update);
         active = transition;
         void transition.finished.catch(() => {});

@@ -42,6 +42,7 @@ export type {
   VersionList,
   VersionResults,
   VersionSessions,
+  WorkKind,
 } from "./generated/api";
 
 // 构建出来的静态站默认打同源的 /v1（控制台和 api 都在 playtest.roviix.com 下）。
@@ -49,6 +50,8 @@ export type {
 const API_BASE = import.meta.env.VITE_PLAYTEST_API ?? "";
 
 const TOKEN_KEY = "playtest.token";
+export const AUTH_EXPIRED_EVENT = "playtest:auth-expired";
+export const AUTH_REQUEST_EVENT = "playtest:auth-request";
 
 /** 邀请卡的地址，和 common/src/lib.rs 的 `CARD_PATH` / `CARD_WIDE_PATH` / `card_url()` 是同一份。 */
 export const CARD_PATH = "/_playtest/card.png";
@@ -98,7 +101,7 @@ export class ApiError extends Error {
     this.code = code;
   }
 
-  /** 令牌不对或过期了，界面要把人送回粘贴令牌那一页。 */
+  /** 令牌不对或过期，由外壳统一打开登录弹窗。 */
   get needsToken(): boolean {
     return this.status === 401;
   }
@@ -118,17 +121,18 @@ export function forgetToken(): void {
 
 export async function revokeToken(): Promise<void> {
   try {
-    await call<void>("/v1/me/token", { method: "DELETE" });
+    await call<void>("/v1/me/token", { method: "DELETE" }, readToken(), false);
   } catch (error) {
     if (!(error instanceof ApiError && error.needsToken)) throw error;
   }
   forgetToken();
 }
 
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = readToken();
+export const validateToken = (token: string) => call<Me>(paths.me, {}, token, false);
+
+async function call<T>(path: string, init: RequestInit = {}, token = readToken(), notifyExpired = true): Promise<T> {
   if (!token) {
-    throw new ApiError(401, "unauthorized", "还没有令牌。先粘贴一个。");
+    throw new ApiError(401, "unauthorized", "请先登录。");
   }
 
   const headers = new Headers(init.headers);
@@ -140,9 +144,12 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   } catch {
     // 断网、控制面没起、代理没配都会走到这里。说清楚下一步做什么。
-    throw new ApiError(0, "offline", "连不上控制面。确认它在跑，或者检查一下网络。");
+    throw new ApiError(0, "offline", "暂时连接不上，请检查网络后重试。");
   }
 
+  if (response.status === 401 && notifyExpired && token === readToken()) {
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  }
   if (response.status === 204) return undefined as T;
 
   const text = await response.text();
@@ -184,7 +191,7 @@ export async function exchangeGitHubCode(code: string, state: string): Promise<L
       body: JSON.stringify({ code, state }),
     });
   } catch {
-    throw new ApiError(0, "offline", "连不上控制面。确认它在跑，或者检查一下网络。");
+    throw new ApiError(0, "offline", "暂时连接不上，请检查网络后重试。");
   }
   const body = (await response.json().catch(() => null)) as
     | (LoginResponse & { code?: string; message?: string })

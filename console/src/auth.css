@@ -1,0 +1,14 @@
+.github-login{display:flex;gap:10px;width:100%;margin-top:28px;justify-content:center;min-height:46px;font-size:14px}
+.login-token{margin-top:20px;padding-top:8px;border-top:1px solid var(--line)}
+.login-alternative{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:44px;padding:0;border:0;background:none;color:var(--soft);font:14px system-ui;cursor:pointer}.login-alternative:hover{color:var(--fg)}
+.login-alternative .icon{width:14px;height:14px;transition:transform 160ms}.login-alternative[aria-expanded=true] .icon{transform:rotate(90deg)}
+.login-token .notice-form{margin-top:12px}.login-help{justify-self:center;color:var(--dim);font-size:12px;min-height:32px;display:flex;align-items:center}.login-help:hover{color:var(--fg)}
+.login-error{margin:18px 0 0;color:var(--danger);font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.notice-form button:disabled{cursor:default;opacity:.5}
+.auth-required{max-width:960px}.auth-empty{display:flex;flex-direction:column;align-items:center;gap:24px;padding:72px 0;text-align:center}.auth-empty h2{font-size:20px;font-weight:500}.auth-empty .button{min-width:144px}
+.auth-empty-icon{display:grid;place-items:center;width:48px;height:48px;border:1px solid var(--line);border-radius:10px;color:var(--accent);background:var(--card)}.auth-empty-icon .icon{width:24px;height:24px}
+.account-profile{display:flex;align-items:center;gap:16px;padding:24px 0;border-bottom:1px solid var(--line)}.account-profile .avatar{width:44px;height:44px}.account-profile h2{font-size:18px;font-weight:500}.account-profile p{font-size:13px;color:var(--dim)}
+.account-actions{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0}.account-security{margin-top:36px;padding-top:16px;border-top:1px solid var(--line);font-size:14px}.account-security summary{min-height:44px;align-content:center;color:var(--dim);cursor:pointer}.account-security p{margin:12px 0 20px;color:var(--dim);line-height:1.8}.account-security .notice{color:var(--warn)}
+@media(max-width:767px){.auth-empty{padding:48px 0}.account-dialog{padding:24px}}
+
+.login-dialog input{width:100%;min-width:0;min-height:44px;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--fg);font:16px system-ui}

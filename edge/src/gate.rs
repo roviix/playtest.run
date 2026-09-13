@@ -6,17 +6,30 @@
 //!
 //! 这一页上不出现开发者域名：玩家路径与开发者路径是两个域名（AGENTS 第 7 条）。
 
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use playtest_common::capabilities::Capabilities;
 use playtest_common::limits::MAX_PLAYER_NAME_CHARS;
 use playtest_common::live::{SiteLive, PUBLIC_FEEDBACK_ON_GATE};
-use playtest_common::manifest::{GateMode, Manifest};
+use playtest_common::manifest::{GateMode, Manifest, WorkKind};
 use playtest_common::{
     CARD_WIDE_HEIGHT, CARD_WIDE_PATH, CARD_WIDE_WIDTH, RESERVED_PATH_PREFIX, SHARE_PATH,
 };
 
 use crate::html::{copy_row, esc, shell_hero, COPY_JS};
 use crate::when;
-use playtest_common::wording::invite_verb;
+use playtest_common::wording::{action_verb, audience_noun, invite_verb};
+
+const PATH_ENCODE: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'#')
+    .add(b'%')
+    .add(b'<')
+    .add(b'>')
+    .add(b'?')
+    .add(b'`')
+    .add(b'{')
+    .add(b'}');
 
 /// 封面在作品自己的域上的路径（DESIGN §3.3）。
 pub const COVER_PATH: &str = "/_playtest/cover";
@@ -24,6 +37,16 @@ pub const COVER_PATH: &str = "/_playtest/cover";
 const BELL_ICON: &str = "<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 13.5h12l-1.5-2.2V8a4.5 4.5 0 0 0-9 0v3.3L4 13.5ZM8 16a2.2 2.2 0 0 0 4 0\"/></svg>";
 const SHARE_ICON: &str = "<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M10 12V2.5m-3.2 3.2L10 2.5l3.2 3.2M5.5 8H4v8.5h12V8h-1.5\"/></svg>";
 const CLOCK_ICON: &str = "<svg width=\"13\" height=\"13\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"7\"/><path d=\"M10 6v4l2.5 1.5\"/></svg>";
+const PRESENTATION_CSS: &str = include_str!("../../ui/presentation.css");
+
+fn public_file_url(origin: &str, path: &str) -> String {
+    let encoded = path
+        .split('/')
+        .map(|part| utf8_percent_encode(part, PATH_ENCODE).to_string())
+        .collect::<Vec<_>>()
+        .join("/");
+    format!("{}/{encoded}", origin.trim_end_matches('/'))
+}
 
 /// 要不要拦这一次请求。三条硬线里的两条在这里（DESIGN §3.3）：
 ///
@@ -183,6 +206,8 @@ pub struct GatePage<'a> {
     pub is_root: bool,
     /// 根域上的 CSP nonce。
     pub nonce: Option<&'a str>,
+    /// 文章在控制面提交时生成的安全 HTML。只有 `Article` 使用；原始 Markdown 不进根域。
+    pub article_html: Option<&'a str>,
 }
 
 impl GatePage<'_> {
@@ -194,8 +219,8 @@ impl GatePage<'_> {
             Some(label) => esc(label),
             None => format!("v{}", m.version),
         };
-        let invite = invite_verb(m.is_game());
-        let verb = if m.is_game() { "试玩" } else { "体验" };
+        let invite = invite_verb(m.kind, m.is_game());
+        let verb = action_verb(m.kind, m.is_game());
         let summary = m
             .summary
             .as_deref()
@@ -224,6 +249,9 @@ impl GatePage<'_> {
         // 假截图，它和玩家点开后看到的是同一个物件（DESIGN §3.3、§3.4）。
         let hue = crate::html::hue(&m.slug);
         head.push_str(&format!("<style>:root{{--h:{hue}}}</style>\n"));
+        if m.kind != WorkKind::Web {
+            head.push_str(&format!("<style>{PRESENTATION_CSS}</style>\n"));
+        }
 
         // 有封面就用封面；没有封面就用算法生成的专属几何星轨图，
         // 它和作品 slug 色相呼应，具有高辨识度与收藏级数字票证质感。
@@ -278,12 +306,18 @@ impl GatePage<'_> {
         // 微信 UA 只决定要不要多说一句「右上角 → 在浏览器中打开」——那是微信独有的操作，
         // 别的浏览器里说了没意义。**能不能玩不由 UA 判断**：X5 / XWeb 的版本和能力没有
         // 官方对照表，黑名单一定会误伤（DESIGN §5）。判断交给下面那段能力检测。
-        let tips = if self.wechat {
-            "<section class=\"tip\">\n\
+        let tips = match (self.wechat, m.kind) {
+            (true, WorkKind::Web) => {
+                "<section class=\"tip\">\n\
 <p>在微信里可能玩不了：点右上角「···」，选「在浏览器中打开」。</p>\n\
 </section>\n"
-        } else {
-            ""
+            }
+            (true, WorkKind::Video) => {
+                "<section class=\"tip\">\n\
+<p>如果在微信里不能播放，点右上角「···」，选「在浏览器中打开」。</p>\n\
+</section>\n"
+            }
+            _ => "",
         };
 
         let nonce_attr = match self.nonce {
@@ -351,14 +385,9 @@ if(!isNaN(d))t.textContent=d.toLocaleString(undefined,{{month:'numeric',day:'num
             String::new()
         };
 
-        let body = format!(
-            "<div class=\"ticket-head\">\n\
-<p class=\"by\">{avatar}{developer} {invite}</p>\n\
-</div>\n\
-<h1>{title}</h1>\n\
-{summary_html}<div class=\"edition\"><p class=\"stamp\">{stamp}</p>{expires}</div>\n{note}\
-{seats}{tips}\
-<div class=\"stub\">\n\
+        let presentation = match m.kind {
+            WorkKind::Web => format!(
+                "<div class=\"stub\">\n\
 <form class=\"start\" method=\"post\" action=\"{start_action}\"{target_attr}>\n\
 <input type=\"hidden\" name=\"{to_field}\" value=\"{to}\">\n\
 <input type=\"hidden\" name=\"{ref_field}\" value=\"{referer}\">\n{from}\
@@ -368,17 +397,43 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
 </label>\n\
 <button type=\"submit\">{btn_text}</button>\n\
 </form>\n\
+</div>\n",
+                to_field = field::TO,
+                to = esc(self.to),
+                ref_field = field::REFERER,
+                referer = esc(self.referer),
+                name_field = field::NAME,
+                max_name = MAX_PLAYER_NAME_CHARS,
+            ),
+            WorkKind::Article => format!(
+                "<article class=\"article-body\">{}</article>\n",
+                self.article_html
+                    .unwrap_or("<p class=\"tip\">文章正文暂时取不到，请稍后再试。</p>")
+            ),
+            WorkKind::Video => {
+                let src = m
+                    .entry
+                    .as_deref()
+                    .map(|path| public_file_url(self.origin, path))
+                    .unwrap_or_default();
+                format!(
+                    "<div class=\"video-body\"><video controls preload=\"metadata\" playsinline src=\"{}\">你的浏览器不能播放这个视频。</video></div>\n",
+                    esc(&src)
+                )
+            }
+        };
+
+        let body = format!(
+            "<div class=\"ticket-head\">\n\
+<p class=\"by\">{avatar}{developer} {invite}</p>\n\
 </div>\n\
+<h1>{title}</h1>\n\
+{summary_html}<div class=\"edition\"><p class=\"stamp\">{stamp}</p>{expires}</div>\n{note}\
+{seats}{tips}{presentation}\
 {capability}{voices}\
 <footer>{tools}<a href=\"{report_href}\" class=\"report\">举报</a></footer>{badge}\n{mobile_script}",
             avatar = self.avatar(),
             seats = self.seats(),
-            to_field = field::TO,
-            to = esc(self.to),
-            ref_field = field::REFERER,
-            referer = esc(self.referer),
-            name_field = field::NAME,
-            max_name = MAX_PLAYER_NAME_CHARS,
             tools = self.tools(),
             capability = self.capability_note(),
             voices = self.voices(),
@@ -399,10 +454,15 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
             &body,
         );
         let mark = crate::plaza::icon("mark").replacen("<svg ", "<svg width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" ", 1).replace("<circle ", "<circle fill=\"currentColor\" stroke=\"none\" ");
-        let navigation = format!("<nav class=\"invitation-nav\" aria-label=\"返回广场\"><a href=\"{}\" aria-label=\"playtest.run · 返回广场\">{mark}<b>playtest<span>.run</span></b></a></nav>", esc(self.root_url));
+        let navigation = format!("<nav class=\"invitation-nav\" aria-label=\"返回广场\"><a href=\"{}\" aria-label=\"playtest.run · 返回广场\">{mark}{wordmark}</a></nav>", esc(self.root_url), wordmark = crate::html::WORDMARK);
+        let card_class = if m.kind == WorkKind::Web {
+            "card"
+        } else {
+            "card media-card"
+        };
         let rendered = rendered.replacen(
             "<main class=\"card\">",
-            &format!("{navigation}<main class=\"card\">"),
+            &format!("{navigation}<main class=\"{card_class}\">"),
             1,
         );
         let dialog = self.follow_dialog();
@@ -476,7 +536,13 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
         } else {
             "/_playtest/follow"
         };
-        let content = format!("<form class=\"notice-form\" method=\"post\" action=\"{action}\"><input type=\"hidden\" name=\"target\" value=\"site:{}\"><input type=\"hidden\" name=\"from\" value=\"gate\"><input type=\"hidden\" name=\"to\" value=\"{}\"><label>你的邮箱<input type=\"email\" name=\"email\" required placeholder=\"name@example.com\" autocomplete=\"email\" aria-describedby=\"follow-help\"></label><button type=\"submit\">关注更新</button></form><p class=\"notice-note\" id=\"follow-help\">点击确认信后，新版本会发信通知你。开发者看不到你的邮箱，随时可退订。</p>", esc(&self.manifest.slug), esc(self.to));
+        let hidden = format!("<input type=\"hidden\" name=\"target\" value=\"site:{}\"><input type=\"hidden\" name=\"from\" value=\"gate\"><input type=\"hidden\" name=\"to\" value=\"{}\">", esc(&self.manifest.slug), esc(self.to));
+        let content = crate::follow::email_form(
+            action,
+            &hidden,
+            "关注更新",
+            "点击确认信后接收新版本通知，随时可退订。开发者看不到你的邮箱。",
+        );
         crate::follow::notification_dialog("notification-settings", "关注更新", &content)
     }
 
@@ -510,13 +576,20 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         };
         let developer = esc(&self.manifest.developer);
         if self.live.seats_full() {
-            return format!("<p class=\"seats full\">{seats} 位已到齐 · 你仍然可以玩</p>\n");
+            let verb = match (self.manifest.kind, self.manifest.is_game()) {
+                (WorkKind::Web, true) => "玩",
+                (WorkKind::Web, false) => "体验",
+                (WorkKind::Article, _) => "阅读",
+                (WorkKind::Video, _) => "观看",
+            };
+            return format!("<p class=\"seats full\">{seats} 位已到齐 · 你仍然可以{verb}</p>\n");
         }
         let joined = match self.live.joined {
             0 => String::new(),
             n => format!(" · 已有 {n} 位加入"),
         };
-        format!("<p class=\"seats\">{developer}在找 {seats} 位试玩者{joined}</p>\n")
+        let audience = audience_noun(self.manifest.kind, self.manifest.is_game());
+        format!("<p class=\"seats\">{developer}在找 {seats} 位{audience}{joined}</p>\n")
     }
 
     /// 同一工具行的辅助动作；没有可用动作时不留空行。
@@ -553,7 +626,7 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         format!("<div class=\"invitation-tools\">{follow}{more}</div>\n")
     }
 
-    /// 试玩者的话（DESIGN §3.5）：社会证明，不是讨论区——没有回复、没有点赞、没有楼层。
+    /// 体验者的话（DESIGN §3.5）：社会证明，不是讨论区——没有回复、没有点赞、没有楼层。
     fn voices(&self) -> String {
         if !self.live.feedback_public {
             return String::new();
@@ -574,7 +647,14 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
                 .as_deref()
                 .map(str::trim)
                 .filter(|n| !n.is_empty())
-                .unwrap_or("一位试玩者");
+                .unwrap_or_else(|| {
+                    match audience_noun(self.manifest.kind, self.manifest.is_game()) {
+                        "读者" => "一位读者",
+                        "观众" => "一位观众",
+                        "试玩者" => "一位试玩者",
+                        _ => "一位体验者",
+                    }
+                });
             items.push_str(&format!(
                 "<p class=\"voice\">「{}」<cite>{} · v{}</cite></p>\n",
                 esc(text),
@@ -585,7 +665,8 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         if items.is_empty() {
             return String::new();
         }
-        format!("<section class=\"voices\">\n<h2>试玩者的话</h2>\n{items}</section>\n")
+        let audience = audience_noun(self.manifest.kind, self.manifest.is_game());
+        format!("<section class=\"voices\">\n<h2>{audience}的话</h2>\n{items}</section>\n")
     }
 
     /// 跨源隔离的作品在能力不足的浏览器里跑不起来（Godot 4 的线程导出没有
@@ -674,6 +755,9 @@ mod tests {
             isolated: false,
             spa: false,
             engine: Some("godot".into()),
+            kind: playtest_common::manifest::WorkKind::Web,
+            entry: None,
+            article: None,
             files: vec![],
         }
     }
@@ -698,6 +782,7 @@ mod tests {
             already_followed: false,
             is_root: false,
             nonce: None,
+            article_html: None,
         }
     }
 
@@ -1092,6 +1177,39 @@ mod tests {
             assert!(html.contains("<title>某某 邀请你体验《小球大冒险》</title>"));
             assert!(html.contains("content=\"某某 邀请你体验\">"));
         }
+    }
+
+    #[test]
+    fn an_article_is_read_on_the_invitation_without_a_start_gate() {
+        let mut m = manifest();
+        m.kind = WorkKind::Article;
+        m.engine = None;
+        m.entry = Some("文章.md".into());
+        let mut p = page(&m, false);
+        p.article_html = Some("<h2>第一节</h2><p>正文 <strong>在这里</strong>。</p>");
+        let html = p.render();
+
+        assert!(html.contains("某某 邀请你阅读"));
+        assert!(html.contains("class=\"card media-card\""));
+        assert!(html.contains("<article class=\"article-body\"><h2>第一节</h2>"));
+        assert!(!html.contains("class=\"start\""));
+        assert!(!html.contains("开始阅读"));
+    }
+
+    #[test]
+    fn a_video_is_embedded_with_native_controls_and_never_autoplays() {
+        let mut m = manifest();
+        m.kind = WorkKind::Video;
+        m.engine = None;
+        m.entry = Some("演示 video.mp4".into());
+        let html = page(&m, false).render();
+
+        assert!(html.contains("某某 邀请你观看"));
+        assert!(html.contains("class=\"card media-card\""));
+        assert!(html.contains("<video controls preload=\"metadata\" playsinline"));
+        assert!(html.contains("/%E6%BC%94%E7%A4%BA%20video.mp4"));
+        assert!(!html.contains("autoplay"));
+        assert!(!html.contains("class=\"start\""));
     }
 
     #[test]

@@ -178,6 +178,9 @@ impl Site {
             isolated: false,
             spa: false,
             engine: Some("phaser".into()),
+            kind: Default::default(),
+            entry: None,
+            article: None,
             files: vec![FileEntry {
                 path: "index.html".into(),
                 hash,
@@ -215,6 +218,7 @@ impl Site {
             host_suffix: "localhost".into(),
             public_scheme: "http".into(),
             api_internal_url: api,
+            edge_ingest_token: None,
         };
         Site {
             app: Arc::new(App::new(config)),
@@ -600,7 +604,7 @@ async fn me_with_a_key_lists_what_this_person_follows() {
     assert!(html.contains("z***@example.com"));
     assert!(html.contains("小球大冒险"));
     assert!(html.contains("aria-label=\"取消关注小球大冒险\">取消关注</button>"));
-    assert!(html.contains("换一台设备"));
+    assert!(html.contains("邮箱登录"));
     // 拿钥匙去问控制面，不是拿邮箱。
     let (_, body) = api.last();
     assert_eq!(body["me_token"], ME_TOKEN);
@@ -784,6 +788,7 @@ async fn the_wall_is_one_grid_with_a_rail_and_says_which_card_is_paid_for() {
         summary: None,
         engine: Some("phaser".into()),
         is_game: true,
+        kind: Default::default(),
         version: 7,
         updated_at: "2026-09-08T03:00:00Z".into(),
         expires_at: None,
@@ -816,7 +821,7 @@ async fn the_wall_is_one_grid_with_a_rail_and_says_which_card_is_paid_for() {
     assert_eq!(reply.status, StatusCode::OK);
     let html = reply.text();
     // 顶通栏：字标、广场（当前）、关注、发布。墙上没有门口那句话。
-    assert!(html.contains("playtest<span class=\"tld\">.run</span>"));
+    assert!(html.contains(playtest_edge::html::WORDMARK));
     assert!(html.contains("aria-current=\"page\""));
     assert!(html.contains("广场<span class=\"nav-dot\"></span>"));
     assert!(html.contains("关注</a>"));

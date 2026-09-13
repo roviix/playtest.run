@@ -4,7 +4,19 @@
 // 手机上要短、`--json` 要原始数字、`playtest mcp` 要另一种说法。措辞钉在服务端的话，
 // 每一处都得先把句子拆回数字。规则集中在这个文件，改文案只改这里。
 
-import type { SourceTally, VersionResults } from "./api";
+import type { SourceTally, VersionResults, WorkKind } from "./api";
+
+export function workKind(kind: WorkKind | undefined): string {
+  if (kind === "article") return "文章";
+  if (kind === "video") return "视频";
+  return "网页";
+}
+
+export function audience(kind: WorkKind | undefined): string {
+  if (kind === "article") return "读者";
+  if (kind === "video") return "观众";
+  return "试玩者";
+}
 
 /** 秒 → 人话。「45 秒」「3 分 20 秒」「1 小时 2 分」。 */
 export function seconds(value: number): string {
@@ -84,14 +96,18 @@ export function bytes(value: number): string {
  * 「0 条反馈」「0 个错误」占着地方却什么也没告诉人（DESIGN §3.5）。
  * 措辞按 §3.13「文案」：只报事实，「8 人打开」，不带括号和转折。
  */
-export function sentences(version: VersionResults): string[] {
+export function sentences(version: VersionResults, kind: WorkKind | undefined = "web"): string[] {
   if (version.opened === 0) {
     return ["还没有人打开。"];
   }
 
   const lines: string[] = [];
   const dropped = version.dropped_before_first_frame;
-  if (dropped === null || dropped === undefined) {
+  if (kind === "article") {
+    lines.push(`${version.opened} 人打开文章页面。页面打开不等于读完。`);
+  } else if (kind === "video") {
+    lines.push(`${version.opened} 人打开视频页面。目前不把页面打开算作播放。`);
+  } else if (dropped === null || dropped === undefined) {
     // 首帧要 SDK 才报得出来。没接就说没接，不拿「0 人在加载时离开」冒充。
     lines.push(`${version.opened} 人打开，${version.entered} 人点了开始。`);
     lines.push("没接 playtest.js，看不到加载时离开的人。");
@@ -106,7 +122,7 @@ export function sentences(version: VersionResults): string[] {
 
   const stayed: string[] = [];
   if ((version.named ?? 0) > 0) stayed.push(`${version.named} 人留名`);
-  if ((version.played_5min_plus ?? 0) > 0) stayed.push(`${version.played_5min_plus} 人玩过 5 分钟`);
+  if (kind === "web" && (version.played_5min_plus ?? 0) > 0) stayed.push(`${version.played_5min_plus} 人玩过 5 分钟`);
   if ((version.returned ?? 0) > 0) stayed.push(`${version.returned} 人回来过`);
   if (version.dwell_median_s !== null && version.dwell_median_s !== undefined) {
     stayed.push(`停留中位 ${seconds(version.dwell_median_s)}`);

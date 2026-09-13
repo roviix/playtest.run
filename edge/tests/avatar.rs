@@ -30,6 +30,7 @@ impl Fixture {
             host_suffix: "localhost".into(),
             public_scheme: "http".into(),
             api_internal_url: None,
+            edge_ingest_token: None,
         };
         Self {
             store: FsStore::new(directory.path().join("store")),
@@ -58,6 +59,9 @@ impl Fixture {
             isolated: false,
             spa: false,
             engine: None,
+            kind: Default::default(),
+            entry: None,
+            article: None,
             files: vec![FileEntry {
                 path: "index.html".into(),
                 hash,
@@ -86,6 +90,7 @@ impl Fixture {
             summary: None,
             engine: None,
             is_game: true,
+            kind: Default::default(),
             version: 1,
             updated_at: manifest.created_at,
             expires_at: None,

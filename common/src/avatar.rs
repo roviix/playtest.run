@@ -1388,9 +1388,10 @@ mod tests {
     #[test]
     fn native_species_are_complete_independent_characters() {
         assert_eq!(SPECIES_NAMES.len(), HEADS.len() + assets().creatures.len());
-        for species in HEADS.len()..SPECIES_NAMES.len() {
-            let creature = &assets().creatures[species - HEADS.len()];
-            assert_eq!(creature.name, SPECIES_NAMES[species]);
+        for (native_index, creature) in assets().creatures.iter().enumerate() {
+            let species = HEADS.len() + native_index;
+            let species_name = SPECIES_NAMES[species];
+            assert_eq!(creature.name, species_name);
             assert_eq!(creature.eyes.len(), 3);
             assert_eq!(creature.mouths.len(), 4);
             for palette in &PALETTES {
@@ -1404,7 +1405,7 @@ mod tests {
                             ..derive_traits("native")
                         });
                         let svg = draw_creature(&traits, palette, "audit");
-                        assert!(svg.contains(SPECIES_NAMES[species]));
+                        assert!(svg.contains(species_name));
                         assert!(!svg.contains('{'));
                         assert!(!svg.contains("<image"));
                         assert!(!svg.contains("<filter"));

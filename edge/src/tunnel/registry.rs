@@ -154,6 +154,9 @@ pub fn synthetic_manifest(claims: &Claims, connected_at: OffsetDateTime) -> Mani
         isolated: claims.isolated,
         spa: false,
         engine: None,
+        kind: playtest_common::manifest::WorkKind::Web,
+        entry: None,
+        article: None,
         files: Vec::new(),
     }
 }
@@ -472,6 +475,7 @@ mod tests {
             host_suffix: "localhost".into(),
             public_scheme: "http".into(),
             api_internal_url: None,
+            edge_ingest_token: None,
         };
         Tunnels::new(&config, Store::new(config.store_root()))
     }

@@ -89,6 +89,7 @@ async fn create_site(
         slug: NEW_SLUG.into(),
         url: format!("http://{NEW_SLUG}.localhost:8443"),
         title: request.title.unwrap_or_default(),
+        kind: playtest_common::manifest::WorkKind::Web,
         current_version: None,
         created_at: "2026-09-07T00:00:00Z".into(),
         expires_at: Some("2026-09-08T03:30:00Z".into()),
@@ -501,7 +502,7 @@ fn a_missing_directory_and_a_plain_file_each_get_their_own_message() {
     let output = run_cli(home.path(), "http://127.0.0.1:1", &[file.to_str().unwrap()]);
     assert_eq!(output.status.code(), Some(6));
     assert!(
-        stderr_of(&output).contains("请给目录，不是文件"),
+        stderr_of(&output).contains("网页作品请给包含 index.html 的目录"),
         "{}",
         stderr_of(&output)
     );

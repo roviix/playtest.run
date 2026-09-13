@@ -23,6 +23,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/004_github_login.sql"),
     include_str!("migrations/005_club.sql"),
     include_str!("migrations/006_collections.sql"),
+    include_str!("migrations/007_work_kind.sql"),
 ];
 
 /// 读连接的个数。控制面同一时刻在读的东西：几个请求、一次 `live.json` 重算、一次广场重算；
@@ -287,6 +288,7 @@ pub struct SiteRow {
     pub created_at: String,
     pub expires_at: Option<String>,
     pub current_version: Option<u32>,
+    pub work_kind: String,
     pub listing: ListingRow,
 }
 
@@ -333,11 +335,12 @@ const SITE_COLUMN_NAMES: &[&str] = &[
     "seats",
     "community_url",
     "feedback_public",
+    "work_kind",
 ];
 
 const SITE_COLUMNS: &str = "slug, title, created_at, expires_at, current_version, \
     public, seeking, seek_note, summary, cover_hash, cover_mime, engine, updated_at, \
-    hidden_at, hidden_reason, reviewed_at, seats, community_url, feedback_public";
+    hidden_at, hidden_reason, reviewed_at, seats, community_url, feedback_public, work_kind";
 
 /// 同一组列，带表别名——和别的表 JOIN 时 `created_at` / `expires_at` 会重名。
 fn site_columns(prefix: &str) -> String {
@@ -355,6 +358,7 @@ fn site_from_row(row: &Row<'_>) -> rusqlite::Result<SiteRow> {
         created_at: row.get(2)?,
         expires_at: row.get(3)?,
         current_version: row.get(4)?,
+        work_kind: row.get(19)?,
         listing: ListingRow {
             public: row.get::<_, i64>(5)? != 0,
             seeking: row.get::<_, i64>(6)? != 0,
@@ -498,6 +502,15 @@ pub fn delete_expired_tokens(conn: &Connection, now: &str) -> rusqlite::Result<u
     )
 }
 
+pub fn count_anon_users_since(conn: &Connection, since: &str) -> rusqlite::Result<u64> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM users WHERE kind = 'anon' AND created_at >= ?1",
+        params![since],
+        |row| row.get(0),
+    )?;
+    Ok(count.max(0) as u64)
+}
+
 // ---- 上传与版本 ----
 
 pub struct UploadRow {
@@ -521,6 +534,36 @@ pub fn insert_upload(
         params![id, slug, user_id, created_at, request_json],
     )?;
     Ok(())
+}
+
+/// 清掉没有走到提交、已经不应再授权 blob 写入的准备记录。
+pub fn delete_pending_uploads_before(conn: &Connection, before: &str) -> rusqlite::Result<usize> {
+    conn.execute(
+        "DELETE FROM uploads WHERE status = 'pending' AND created_at < ?1",
+        params![before],
+    )
+}
+
+pub fn count_pending_uploads(conn: &Connection, user_id: &str) -> rusqlite::Result<usize> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM uploads WHERE user_id = ?1 AND status = 'pending'",
+        params![user_id],
+        |row| row.get(0),
+    )?;
+    Ok(count.max(0) as usize)
+}
+
+/// blob 端点只需要调用者自己的待提交清单；已提交或别人的准备记录不能授权写入。
+pub fn pending_upload_requests(conn: &Connection, user_id: &str) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT request_json FROM uploads
+          WHERE user_id = ?1 AND status = 'pending'
+          ORDER BY created_at DESC",
+    )?;
+    let requests = stmt
+        .query_map(params![user_id], |row| row.get(0))?
+        .collect();
+    requests
 }
 
 pub fn find_upload(conn: &Connection, id: &str) -> rusqlite::Result<Option<UploadRow>> {
@@ -712,6 +755,7 @@ pub fn record_version_meta(
     summary: Option<&str>,
     cover: Option<(&str, &str)>,
     engine: Option<&str>,
+    work_kind: playtest_common::manifest::WorkKind,
     updated_at: &str,
 ) -> rusqlite::Result<()> {
     let (cover_hash, cover_mime) = match cover {
@@ -724,9 +768,18 @@ pub fn record_version_meta(
              cover_hash = COALESCE(?3, cover_hash),
              cover_mime = COALESCE(?4, cover_mime),
              engine     = ?5,
-             updated_at = ?6
+             updated_at = ?6,
+             work_kind  = ?7
          WHERE slug = ?1",
-        params![slug, summary, cover_hash, cover_mime, engine, updated_at],
+        params![
+            slug,
+            summary,
+            cover_hash,
+            cover_mime,
+            engine,
+            updated_at,
+            work_kind.as_str()
+        ],
     )?;
     Ok(())
 }

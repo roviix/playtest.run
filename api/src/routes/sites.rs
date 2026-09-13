@@ -79,6 +79,7 @@ pub async fn create(
             created_at,
             expires_at: caller.expires_at.clone(),
             current_version: None,
+            work_kind: "web".into(),
             listing: ListingRow::default(),
         }
     };
@@ -221,7 +222,7 @@ pub async fn update(
         };
         if public == Some(true) && site.current_version.is_none() {
             return Err(ApiError::invalid(
-                "这个作品还没上传过版本，广场上没东西可以给人玩。先发一版再公开。",
+                "这个作品还没上传过版本，广场上还没有可体验的内容。先发一版再公开。",
             ));
         }
         db::update_listing(

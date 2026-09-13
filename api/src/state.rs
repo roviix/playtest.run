@@ -33,6 +33,7 @@ struct Inner {
     http: reqwest::Client,
     notify: Arc<notify::Runtime>,
     admin_token: Option<String>,
+    edge_ingest_token: Option<String>,
     data_dir: std::path::PathBuf,
     /// 后台任务的现状（`scheduler::Board`）。
     jobs: crate::scheduler::Board,
@@ -68,6 +69,7 @@ impl AppState {
                 http,
                 notify,
                 admin_token: config.admin_token.clone(),
+                edge_ingest_token: config.edge_ingest_token.clone(),
                 data_dir: config.data_dir.clone(),
                 jobs: crate::scheduler::Board::default(),
                 login_states: std::sync::Mutex::new(HashMap::new()),
@@ -129,6 +131,11 @@ impl AppState {
     /// 管理接口的令牌。`None` 就是这台机器不开 `/admin/*`。
     pub fn admin_token(&self) -> Option<&str> {
         self.inner.admin_token.as_deref()
+    }
+
+    /// 边缘写入批量事件时携带的共享凭据。没配置就拒绝所有写入，而不是退回公开入口。
+    pub fn edge_ingest_token(&self) -> Option<&str> {
+        self.inner.edge_ingest_token.as_deref()
     }
 
     /// 数据目录。周报的时间戳这类「跟迁移无关的一行状态」放在这里。

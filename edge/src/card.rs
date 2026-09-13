@@ -21,7 +21,7 @@ use base64::Engine as _;
 use bytes::Bytes;
 use playtest_common::live::SiteLive;
 use playtest_common::manifest::Manifest;
-use playtest_common::wording::invite_verb;
+use playtest_common::wording::{audience_noun, invite_verb};
 
 use crate::when;
 use playtest_common::{card_qr_url, CARD_HEIGHT, CARD_WIDE_HEIGHT, CARD_WIDE_WIDTH, CARD_WIDTH};
@@ -349,7 +349,7 @@ font-weight=\"700\" fill=\"#ffffff\" fill-opacity=\"0.13\">{mark}</text>\n",
     }
 
     fn verb(&self) -> &'static str {
-        invite_verb(self.manifest.is_game())
+        invite_verb(self.manifest.kind, self.manifest.is_game())
     }
 
     fn title(&self) -> String {
@@ -396,7 +396,10 @@ font-weight=\"700\" fill=\"#ffffff\" fill-opacity=\"0.13\">{mark}</text>\n",
     /// 卡上没有可数的东西，就一个字不放。
     fn seats(&self) -> Option<String> {
         match self.live.seats {
-            Some(n) if n > 0 => Some(format!("在找 {n} 位试玩者")),
+            Some(n) if n > 0 => Some(format!(
+                "在找 {n} 位{}",
+                audience_noun(self.manifest.kind, self.manifest.is_game())
+            )),
             _ => None,
         }
     }
@@ -824,7 +827,7 @@ fn cjk_family(db: &usvg::fontdb::Database) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use playtest_common::manifest::{GateMode, SCHEMA};
+    use playtest_common::manifest::{GateMode, WorkKind, SCHEMA};
 
     fn manifest() -> Manifest {
         Manifest {
@@ -843,6 +846,9 @@ mod tests {
             isolated: false,
             spa: false,
             engine: Some("godot".into()),
+            kind: playtest_common::manifest::WorkKind::Web,
+            entry: None,
+            article: None,
             files: vec![],
         }
     }
@@ -942,6 +948,24 @@ mod tests {
         for forbidden in ["已有", "6 位", "6/10", "6 / 10"] {
             assert!(!svg.contains(forbidden), "卡上不该有「{forbidden}」");
         }
+    }
+
+    #[test]
+    fn article_and_video_cards_name_the_real_action_and_audience() {
+        let mut live = SiteLive::empty("brisk-otter-41");
+        live.seats = Some(10);
+        let mut m = manifest();
+        m.engine = None;
+
+        m.kind = WorkKind::Article;
+        let article = card(&m, &live, Shape::Portrait).svg();
+        assert!(article.contains("某某 邀请你阅读"));
+        assert!(article.contains("在找 10 位读者"));
+
+        m.kind = WorkKind::Video;
+        let video = card(&m, &live, Shape::Portrait).svg();
+        assert!(video.contains("某某 邀请你观看"));
+        assert!(video.contains("在找 10 位观众"));
     }
 
     #[test]

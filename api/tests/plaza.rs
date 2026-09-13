@@ -23,6 +23,7 @@ use tower::ServiceExt;
 const INDEX_HTML: &[u8] =
     b"<!doctype html><meta charset=utf-8><title>\xe5\xb0\x8f\xe7\x90\x83</title>";
 const COVER_PNG: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR pretend cover";
+const EDGE_TOKEN: &str = playtest_api::config::TEST_EDGE_INGEST_TOKEN;
 
 struct Harness {
     router: Router,
@@ -160,6 +161,8 @@ impl Harness {
             isolated: false,
             spa: false,
             engine: Some("phaser".into()),
+            kind: Default::default(),
+            entry: None,
         };
         let prepared: PrepareUploadResponse = self
             .call(
@@ -215,6 +218,7 @@ impl Harness {
                 .uri(ingest_paths::EDGE)
                 .header(header::ORIGIN, "http://brisk-otter-41.localhost:8443")
                 .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, format!("Bearer {EDGE_TOKEN}"))
                 .body(Body::from(body))
                 .unwrap(),
         )
@@ -540,6 +544,8 @@ async fn the_cover_is_a_blob_like_any_other_and_is_checked() {
         isolated: false,
         spa: false,
         engine: None,
+        kind: Default::default(),
+        entry: None,
     };
     let prepared: PrepareUploadResponse = h
         .call(

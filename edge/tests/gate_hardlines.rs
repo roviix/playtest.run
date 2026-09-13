@@ -90,6 +90,9 @@ impl Site {
             isolated: false,
             spa: false,
             engine: Some("godot".into()),
+            kind: Default::default(),
+            entry: None,
+            article: None,
             files,
         };
         shape(&mut manifest);
@@ -124,6 +127,7 @@ impl Site {
                 host_suffix: "localhost".into(),
                 public_scheme: "http".into(),
                 api_internal_url: None,
+                edge_ingest_token: None,
             })),
             _dir: dir,
         }

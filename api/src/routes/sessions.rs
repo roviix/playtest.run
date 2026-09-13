@@ -3,7 +3,7 @@
 use axum::extract::State;
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::Json;
-use playtest_common::api::AnonSessionResponse;
+use playtest_common::api::{AnonSessionResponse, ErrorCode};
 use playtest_common::hash;
 use playtest_common::ANON_LINK_TTL_HOURS;
 use uuid::Uuid;
@@ -11,8 +11,12 @@ use uuid::Uuid;
 use crate::auth::{self, UserKind, ANON_DISPLAY_NAME};
 use crate::clock;
 use crate::db::{self, NewUser};
-use crate::error::ApiResult;
+use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
+
+/// 当前单节点公开试用的全平台保险丝。它限制匿名身份的总生成速度，不冒充按来源反滥用；
+/// 反向代理能提供可信来源信息后，还要在外层增加逐来源限制。
+const ANON_SESSIONS_PER_MINUTE: u64 = 60;
 
 pub async fn revoke(
     State(state): State<AppState>,
@@ -45,6 +49,14 @@ pub async fn create(State(state): State<AppState>) -> ApiResult<Json<AnonSession
     {
         let mut conn = state.db().lock().await;
         let tx = conn.transaction()?;
+        let since = clock::format(now - time::Duration::minutes(1));
+        if db::count_anon_users_since(&tx, &since)? >= ANON_SESSIONS_PER_MINUTE {
+            return Err(ApiError::public(
+                StatusCode::TOO_MANY_REQUESTS,
+                ErrorCode::QuotaExceeded,
+                "这一分钟创建的匿名链接太多了，请稍后重试。",
+            ));
+        }
         db::insert_user(
             &tx,
             &NewUser {

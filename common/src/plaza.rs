@@ -66,6 +66,7 @@ mod tests {
             slug: "brisk-otter-41".into(),
             url: "https://brisk-otter-41.playtest.run".into(),
             title: "小球".into(),
+            kind: crate::manifest::WorkKind::Web,
             developer: "匿名开发者".into(),
             summary: None,
             note: None,

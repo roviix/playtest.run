@@ -72,10 +72,10 @@ export function ResultsTab({
                 {version.note ? <span class="ver-note">「{version.note}」</span> : null}
               </header>
 
-              <Figures version={version} />
+              <Figures version={version} kind={site.kind} />
 
               <div class="says-block">
-                {sentences(version).map((line) => (
+                {sentences(version, site.kind).map((line) => (
                   <p key={line} class="says">
                     {line}
                   </p>
@@ -113,7 +113,16 @@ export function ResultsTab({
  * 四个数：打开 / 进到游戏 / 5 分钟以上 / 反馈。
  * 没接 SDK 的版本报不出首帧，第二格退成「点了开始」——不拿「0 个人在加载时走了」冒充。
  */
-function Figures({ version }: { version: VersionResults }) {
+function Figures({ version, kind }: { version: VersionResults; kind: Site["kind"] }) {
+  if (kind === "article" || kind === "video") {
+    return (
+      <div class="figures">
+        <Figure n={version.opened} label="打开页面" />
+        <Figure n={version.returned ?? 0} label="再次回来" />
+        <Figure n={version.feedback_count} label="反馈" />
+      </div>
+    );
+  }
   const dropped = version.dropped_before_first_frame;
   const entered =
     dropped === null || dropped === undefined

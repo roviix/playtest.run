@@ -48,8 +48,8 @@
 
 | 进程 | 监听 | 环境变量 |
 |---|---|---|
-| `api` | `127.0.0.1:8787` | `PLAYTEST_DATA_DIR=.data`、`PLAYTEST_SITE_URL_TEMPLATE=http://{slug}.localhost:8443`、`PLAYTEST_PUBLIC_ROOT_URL=http://localhost:8443`、`PLAYTEST_EMAIL_PROVIDER=log`、`PLAYTEST_ADMIN_TOKEN=dev` |
-| `edge` | `127.0.0.1:8443` 明文 | `PLAYTEST_DATA_DIR=.data`（只读 `store/`）、`PLAYTEST_HOST_SUFFIX=localhost`、`PLAYTEST_API_INTERNAL_URL=http://127.0.0.1:8787`、`PLAYTEST_API_PUBLIC_URL=http://127.0.0.1:8787`、可选 `PLAYTEST_FONT_DIRS` |
+| `api` | `127.0.0.1:8787` | `PLAYTEST_DATA_DIR=.data`、`PLAYTEST_SITE_URL_TEMPLATE=http://{slug}.localhost:8443`、`PLAYTEST_PUBLIC_ROOT_URL=http://localhost:8443`、`PLAYTEST_EMAIL_PROVIDER=log`、`PLAYTEST_ADMIN_TOKEN=dev`、`PLAYTEST_EDGE_INGEST_TOKEN=dev-edge-ingest-token-0000000000` |
+| `edge` | `127.0.0.1:8443` 明文 | `PLAYTEST_DATA_DIR=.data`（只读 `store/`）、`PLAYTEST_HOST_SUFFIX=localhost`、`PLAYTEST_API_INTERNAL_URL=http://127.0.0.1:8787`、`PLAYTEST_EDGE_INGEST_TOKEN=dev-edge-ingest-token-0000000000`、`PLAYTEST_API_PUBLIC_URL=http://127.0.0.1:8787`、可选 `PLAYTEST_FONT_DIRS` |
 | `playtest` CLI | — | `PLAYTEST_API=http://127.0.0.1:8787`（或 `--api`） |
 
 对象存储的目录布局与文件格式定义在 `common/`：api 写、edge 读，两边不直接通话；边缘对控制面只有写方向的调用（事件、关注、确认、退订）。

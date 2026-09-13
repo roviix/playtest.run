@@ -6,7 +6,7 @@
 import type { Me, Site } from "../api";
 import type { Loaded } from "../load";
 import { href } from "../router";
-import { left, moment } from "../words";
+import { left, moment, workKind } from "../words";
 import { Cover } from "./cover";
 import { Failed, Loading } from "./status";
 
@@ -45,7 +45,7 @@ function Tile({ site }: { site: Site }) {
         <h2>{site.title}</h2>
         {summary ? <p class="summary">{summary}</p> : null}
         <p class="meta">
-          <span class="tile-slug mono">{site.slug}</span>
+          <span class="tile-slug mono">{workKind(site.kind)} · {site.slug}</span>
           <span class="fact">{factOf(site)}</span>
         </p>
       </div>

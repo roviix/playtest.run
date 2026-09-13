@@ -6,7 +6,7 @@
 //!
 //! 只用 hyper 的 HTTP/1.1 客户端走明文：v0.1 控制面和边缘在同一台机器上（`compose.yaml`），
 //! 上线到多边缘时控制面才有公网 HTTPS 入口，那时再加 TLS 或改走内网。
-//! 控制面收这批的端点现在是敞开的（它自己的注释写了第三周换成边缘签名令牌）。
+//! 控制面只接受带部署共享凭据的批量上报；凭据不写入事件日志和请求 URL。
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -26,16 +26,22 @@ pub struct Shipper {
     offset_path: PathBuf,
     /// 控制面地址，例如 `http://api:8787`（compose 内网）或 `http://127.0.0.1:8787`。
     api_base: String,
+    ingest_token: String,
 }
 
 impl Shipper {
-    pub fn new(log_path: impl Into<PathBuf>, api_base: impl Into<String>) -> Self {
+    pub fn new(
+        log_path: impl Into<PathBuf>,
+        api_base: impl Into<String>,
+        ingest_token: impl Into<String>,
+    ) -> Self {
         let log_path = log_path.into();
         let offset_path = log_path.with_extension("jsonl.offset");
         Self {
             log_path,
             offset_path,
             api_base: api_base.into().trim_end_matches('/').to_string(),
+            ingest_token: ingest_token.into(),
         }
     }
 
@@ -115,13 +121,14 @@ impl Shipper {
 
     /// 一批的整个往返。后台任务，没人在等，所以给得比 `follow` 那条宽。
     async fn post(&self, events: &[EdgeEvent]) -> anyhow::Result<()> {
-        let answer = crate::upstream::post_json(
+        let answer = crate::upstream::post_json_bearer(
             &self.api_base,
             ingest::routes::EDGE,
             &EdgeBatch {
                 events: events.to_vec(),
             },
             POST_TIMEOUT,
+            &self.ingest_token,
         )
         .await?;
         if !answer.ok() {
@@ -148,8 +155,11 @@ async fn write_offset(path: &Path, offset: u64) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::{header, HeaderMap};
     use axum::{routing::post, Json, Router};
     use std::sync::{Arc, Mutex};
+
+    const EDGE_TOKEN: &str = "test-edge-ingest-token";
 
     fn line(kind: &str, sid: &str) -> String {
         format!(
@@ -160,9 +170,13 @@ mod tests {
     async fn fake_api(received: Arc<Mutex<Vec<EdgeBatch>>>) -> String {
         let app = Router::new().route(
             ingest::routes::EDGE,
-            post(move |Json(batch): Json<EdgeBatch>| {
+            post(move |headers: HeaderMap, Json(batch): Json<EdgeBatch>| {
                 let received = received.clone();
                 async move {
+                    assert_eq!(
+                        headers.get(header::AUTHORIZATION).unwrap(),
+                        &format!("Bearer {EDGE_TOKEN}")
+                    );
                     received.lock().unwrap().push(batch);
                     Json(ingest::Accepted { accepted: 1 })
                 }
@@ -189,7 +203,7 @@ mod tests {
         .unwrap();
         let received = Arc::new(Mutex::new(Vec::new()));
         let api = fake_api(received.clone()).await;
-        let shipper = Shipper::new(&log, &api);
+        let shipper = Shipper::new(&log, &api, EDGE_TOKEN);
 
         assert_eq!(shipper.ship_once().await.unwrap(), 2);
         assert_eq!(shipper.ship_once().await.unwrap(), 0, "没有新行就不发");
@@ -234,7 +248,7 @@ mod tests {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         drop(listener);
-        let shipper = Shipper::new(&log, format!("http://{addr}"));
+        let shipper = Shipper::new(&log, format!("http://{addr}"), EDGE_TOKEN);
         assert!(shipper.ship_once().await.is_err());
         assert!(!log.with_extension("jsonl.offset").exists());
     }
@@ -242,7 +256,11 @@ mod tests {
     #[tokio::test]
     async fn missing_log_is_not_an_error() {
         let dir = tempfile::tempdir().unwrap();
-        let shipper = Shipper::new(dir.path().join("nope.jsonl"), "http://127.0.0.1:1");
+        let shipper = Shipper::new(
+            dir.path().join("nope.jsonl"),
+            "http://127.0.0.1:1",
+            EDGE_TOKEN,
+        );
         assert_eq!(shipper.ship_once().await.unwrap(), 0);
     }
 }

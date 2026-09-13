@@ -28,6 +28,7 @@ use serde::Serialize;
 use tower::ServiceExt;
 
 const INDEX_HTML: &[u8] = b"<!doctype html><meta charset=utf-8><canvas id=game></canvas>";
+const EDGE_TOKEN: &str = playtest_api::config::TEST_EDGE_INGEST_TOKEN;
 const PLAYER_UA: &str =
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 \
                          (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49(0x18003128)";
@@ -130,6 +131,7 @@ impl Harness {
             .method("POST")
             .uri(ingest_paths::EDGE)
             .header(header::CONTENT_TYPE, "application/json")
+            .header(header::AUTHORIZATION, format!("Bearer {EDGE_TOKEN}"))
             .body(Body::from(serde_json::to_vec(value).unwrap()))
             .unwrap();
         self.send(request).await
@@ -182,6 +184,8 @@ impl Harness {
                     isolated: false,
                     spa: false,
                     engine: None,
+                    kind: Default::default(),
+                    entry: None,
                 },
             )
             .await
@@ -235,6 +239,29 @@ impl Harness {
     async fn count(&self, sql: &str) -> i64 {
         self.one_row(sql, &[], |row| row.get(0)).await
     }
+}
+
+#[tokio::test]
+async fn edge_batches_require_the_deployment_credential() {
+    let h = Harness::start().await;
+    let batch = EdgeBatch { events: Vec::new() };
+    let body = serde_json::to_vec(&batch).unwrap();
+
+    for authorization in [None, Some("Bearer wrong-token")] {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri(ingest_paths::EDGE)
+            .header(header::CONTENT_TYPE, "application/json");
+        if let Some(value) = authorization {
+            request = request.header(header::AUTHORIZATION, value);
+        }
+        h.send(request.body(Body::from(body.clone())).unwrap())
+            .await
+            .error(StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized);
+    }
+
+    let accepted: Accepted = h.from_edge(&batch).await.json();
+    assert_eq!(accepted.accepted, 0);
 }
 
 /// 服务端只采信最近 24 小时内的客户端时间戳（`stamp`），所以测试里的时间要锚在「现在」附近，

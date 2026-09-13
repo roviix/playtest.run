@@ -89,15 +89,13 @@ pub fn app(state: AppState) -> Router {
         .route(follow_paths::ME_UNFOLLOW, post(follow::unfollow))
         .route(follow_paths::ME_PUSH_OFF, post(follow::push_off))
         .route(follow_paths::ME_SEND_LINK, post(follow::send_link))
-        // 玩家的浏览器直连这三个：不带令牌，只认 Origin 和令牌桶（见 events.rs）。
+        // 玩家的浏览器直连 SDK 事件与反馈：不带令牌，只认 Origin 和令牌桶（见 events.rs）。
         .route(
             ingest_paths::EVENTS,
             post(events::from_sdk).options(events::preflight),
         )
-        .route(
-            ingest_paths::EDGE,
-            post(events::from_edge).options(events::preflight),
-        )
+        // 边缘批量事件是服务器调用，必须带部署凭据，不提供浏览器预检。
+        .route(ingest_paths::EDGE, post(events::from_edge))
         .route(
             ingest_paths::FEEDBACK,
             post(feedback::submit).options(events::preflight),

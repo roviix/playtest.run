@@ -78,6 +78,44 @@ pub async fn scan_dir(root: &Path) -> Result<Vec<ScannedFile>> {
     Ok(files)
 }
 
+/// 单文件作品只打包明确列出的路径。文章靠它收原稿与正文实际引用的图片，不会顺手遍历
+/// 整个写作目录；视频则只有那一个 MP4。
+pub async fn scan_selected(root: &Path, paths: &[String]) -> Result<Vec<ScannedFile>> {
+    let root = std::fs::canonicalize(root).with_context(|| format!("看不了 {}", root.display()))?;
+    let mut files = Vec::with_capacity(paths.len());
+    for path in paths {
+        validate_path(path).map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        let source = root.join(path);
+        let meta = std::fs::symlink_metadata(&source)
+            .with_context(|| format!("作品需要 {path}，但找不到这个文件"))?;
+        if meta.file_type().is_symlink() || !meta.is_file() {
+            anyhow::bail!("{path} 不是普通文件；单文件作品及其配图不能用符号链接或目录。")
+        }
+        let canonical = std::fs::canonicalize(&source).with_context(|| format!("看不了 {path}"))?;
+        if !canonical.starts_with(&root) {
+            anyhow::bail!("{path} 跳出了作品所在目录，不能上传。")
+        }
+        let shown = path.clone();
+        let scanned = tokio::task::spawn_blocking(move || {
+            let (hash, size) =
+                hash_file(&canonical).with_context(|| format!("读不了 {}", canonical.display()))?;
+            anyhow::Ok(ScannedFile {
+                entry: FileEntry {
+                    path: shown,
+                    hash,
+                    size,
+                },
+                source: canonical,
+            })
+        })
+        .await
+        .context("算哈希的任务没跑完")??;
+        files.push(scanned);
+    }
+    files.sort_by(|a, b| a.entry.path.cmp(&b.entry.path));
+    Ok(files)
+}
+
 fn is_hidden(entry: &DirEntry) -> bool {
     entry
         .file_name()

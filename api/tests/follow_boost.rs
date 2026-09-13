@@ -269,6 +269,8 @@ impl Harness {
                     isolated: false,
                     spa: false,
                     engine: None,
+                    kind: Default::default(),
+                    entry: None,
                 }),
             )
             .await

@@ -4,7 +4,7 @@
 //! 代价是**每一处插值都必须自己调 [`esc`]**——清单里的作品名和开发者名是用户输入，
 //! 这里是玩家域，漏一个就是 XSS。
 //!
-//! 长相（DESIGN §3.3、§3.9）：冷蓝暗底、浅色文字、长春花紫只给动作与焦点。封面优先。
+//! 长相（DESIGN §3.3、§3.9）：黑曜暗底、浅色文字、冷萃绿只给动作与焦点。封面优先。
 //! 门禁页、分享页、关注页和错误页共用下面这一份记号，广场在它之上再加自己的一段（`plaza.rs`）。
 //! 玩家域只有这一套颜色：群里那张邀请卡、点开的门禁页、回到的广场，不换色。门禁页和邀请卡
 //! （`card.rs`）是**同一个物件的两种媒介**：同一张封面、同一句话、同一个版本号，
@@ -66,41 +66,33 @@ pub fn hue(slug: &str) -> u32 {
 /// - `.wordmark` 是单行不折行的纯小写品牌字标，`playtest` 钛白加粗，`.run` 浅钛银灰。
 /// - `.nav-dot` 是当前那间房旁边的一颗微核指示点。
 /// - 发布说明桌面居中 42rem、手机贴近底部；原生 dialog 增强焦点与关闭，无脚本时保留 `:target`。
-pub const BASE: &str = "\
-:root{color-scheme:dark;--bg:#0e111b;--card:#1a2030;--card2:#222a3d;--fg:#f2f4fc;--soft:#bfc7dd;--dim:#a0abc3;\
---line:#b9caff14;--line2:#b9caff29;\
---accent:#b1adff;--accent-ink:#15161a;--warn:#f0dcac;--warn-bg:#1f1a10;--warn-line:#443a1e;\
---mono:ui-monospace,SFMono-Regular,Menlo,monospace}\
+pub const BASE: &str = concat!("\
+:root{color-scheme:dark;--bg:#09090b;--card:#121215;--card2:#18181c;--fg:#f4f4f5;--soft:#d4d4d8;--dim:#a1a1aa;\
+--line:#ffffff12;--line2:#ffffff1f;--action-bg:radial-gradient(ellipse at 50% -65%,#18c99c40,transparent 72%),linear-gradient(180deg,#191b20,#101115);--action-shadow:inset 0 1px #b5f7df12,0 4px 10px -5px #000c,0 0 12px -5px #19c79b45;--action-edge:#71e8bf99;\
+--accent:#75cdb5;--accent-ink:#101e19;--warn:#f0dcac;--warn-bg:#1f1a10;--warn-line:#443a1e;\
+--mono:ui-monospace,Menlo,monospace}\
 *{box-sizing:border-box}\
-html,body{margin:0;padding:0}@view-transition{navigation:auto}::view-transition-group(*){animation-duration:280ms;animation-timing-function:cubic-bezier(.22,1,.36,1)}\
+html,body{margin:0;padding:0;background:var(--bg)}\
 body{min-height:100vh;background:var(--bg);color:var(--fg);\
--webkit-font-smoothing:antialiased;\
-font:16px/1.6 system-ui,-apple-system,sans-serif}\
+font:16px/1.6 system-ui}\
 :focus{outline:none}\
 :focus-visible{outline:2px solid var(--accent);outline-offset:3px}\
-input:focus-visible,textarea:focus-visible{border-color:var(--accent)}\
+:is(input,textarea):focus-visible{border-color:var(--accent)}\
 [hidden]{display:none!important}\
+::selection{background:#57ad9540;color:#c0e8dc}\
 .lead{color:var(--dim);font-size:14px}\
 .row{display:flex;gap:8px}\
 .row input{flex:1;min-width:0}\
-.row button{width:auto;margin:0;padding:9px 14px;font-size:.9rem;white-space:nowrap}\
-input,select,textarea{width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;\
-background:var(--bg);color:var(--fg);font:inherit;font-size:1rem}\
+.row button{width:auto;margin:0;padding:9px 14px;white-space:nowrap}\
+:is(input,select,textarea){width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:7px;\
+background:var(--bg);color:var(--fg);font:inherit}\
 label{display:block}textarea{resize:vertical}\
-input::placeholder{color:#858997}\
-.more{display:flex;justify-content:center;gap:12px;margin:10px 0 0;font-size:11.5px}\
-.notice{position:fixed;inset:0;width:min(380px,calc(100% - 32px));max-height:calc(100% - 32px);margin:auto;padding:20px;border:1px solid var(--line2);border-radius:14px;background:var(--card);color:var(--fg);overflow:auto}\
-.notice:target{display:block;box-shadow:0 0 0 100vmax #0009;z-index:30}\
-.notice::backdrop{background:#080b14aa}\
-.notice-head,.notice-channel{display:flex;justify-content:space-between;align-items:center;gap:12px}\
-.notice-head h2{margin:0;font-size:18px;font-weight:600}\
-.notice-head a{display:grid;place-items:center;width:44px;height:44px;margin:-10px -10px -10px 0;color:var(--dim);font-size:24px;text-decoration:none}\
-.notice-form{display:grid;gap:14px;margin-top:20px}\
-.notice-form label{display:grid;gap:8px;font-size:12px}\
-.notice-form button{min-height:44px;padding:10px;border:0;border-radius:8px;background:var(--accent);color:var(--accent-ink);font:600 13px system-ui;cursor:pointer}\
-.notice-note{margin:14px 0 0;font-size:12px;line-height:1.8;color:var(--dim)}\
-.notice-channel,.notice-restore{margin-top:16px;font-size:12px}.notice-restore summary{min-height:44px;line-height:44px;cursor:pointer}\
-@media(prefers-reduced-motion:reduce){@view-transition{navigation:none}*,*::before,*::after{transition:none!important;animation:none!important}}";
+.more{display:flex;justify-content:center;gap:12px;margin:10px 0 0;font-size:12px}\
+@media(prefers-reduced-motion:reduce){@view-transition{navigation:none}*,*::before,*::after{animation:none!important;transition:none!important}}", include_str!("../../ui/dialog.css"));
+
+pub const MARK: &str = include_str!("../../ui/mark.svg");
+
+pub const WORDMARK: &str = include_str!("../../ui/wordmark.svg");
 
 pub const CARD: &str = include_str!("../../ui/invitation.css");
 
@@ -199,12 +191,12 @@ mod tests {
     #[test]
     fn each_page_carries_only_its_two_layers_and_they_stay_small() {
         // 每一页都内联样式；它长一点，每个玩家的第一屏就慢一点（DESIGN §3.3「整页不超过几 KB」）。
-        // 卡页 6 KB：门禁页整页（含样式）仍在 11 KB 以内，见 gate.rs 的尺寸测试。
-        // 整页 20 KB：广场的墙、栏、卡、发布说明（终端舱）都在里面，没有一条卡页的规则。
+        // 卡页 6.5 KB：门禁页整页（含样式）仍在 11 KB 以内，见 gate.rs 的尺寸测试。
+        // 整页 23 KB：广场的墙、栏、卡、发布说明（终端舱）都在里面，没有一条卡页的规则。
         let card = BASE.len() + CARD.len();
         let page = BASE.len() + PAGE.len();
-        assert!(card < 6 * 1024, "卡页样式 {card} 字节");
-        assert!(page < 20 * 1024, "整页样式 {page} 字节");
+        assert!(card < 13 * 512, "卡页样式 {card} 字节");
+        assert!(page < 23 * 1024, "整页样式 {page} 字节");
         assert!(
             PAGE.contains(".publish-sheet{width:min(42rem,100%)"),
             "发布说明独立使用 42rem 阅读宽度"

@@ -9,6 +9,7 @@ use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use futures_util::StreamExt;
+use playtest_common::api::PrepareUploadRequest;
 use playtest_common::hash::{self, Hasher};
 use playtest_common::limits;
 use tokio::io::AsyncWriteExt;
@@ -32,6 +33,13 @@ pub async fn upload(
         ));
     }
 
+    let expected_sizes = pending_sizes_for(&state, &caller.user_id, &hash).await?;
+    if expected_sizes.is_empty() {
+        return Err(ApiError::invalid(
+            "这份文件不在你尚未提交的上传清单里。请重新运行一次上传。",
+        ));
+    }
+
     let tmp = state.store().new_tmp_path().await?;
     let (actual, size) = match receive(body, &tmp).await {
         Ok(received) => received,
@@ -45,6 +53,13 @@ pub async fn upload(
         discard(&tmp).await;
         return Err(ApiError::hash_mismatch(format!(
             "这些字节算出来的内容哈希是 {actual}，和地址里的 {hash} 对不上。文件在路上变了或者传错了地方，重传一次。"
+        )));
+    }
+
+    if !expected_sizes.contains(&size) {
+        discard(&tmp).await;
+        return Err(ApiError::invalid(format!(
+            "这份文件实际有 {size} 字节，和准备上传时声明的大小不一致。请重新运行一次上传。"
         )));
     }
 
@@ -71,6 +86,35 @@ pub async fn upload(
     } else {
         StatusCode::CREATED
     })
+}
+
+/// 返回调用者所有仍待提交的清单里，这个哈希被声明过的大小。
+async fn pending_sizes_for(state: &AppState, user_id: &str, hash: &str) -> ApiResult<Vec<u64>> {
+    let requests = {
+        let conn = state.db().lock().await;
+        let stale_before = clock::format(
+            clock::now() - time::Duration::hours(super::uploads::PENDING_UPLOAD_HOURS),
+        );
+        db::delete_pending_uploads_before(&conn, &stale_before)?;
+        db::pending_upload_requests(&conn, user_id)?
+    };
+    let mut sizes = Vec::new();
+    for request_json in requests {
+        let request: PrepareUploadRequest = serde_json::from_str(&request_json)?;
+        sizes.extend(
+            request
+                .files
+                .iter()
+                .filter(|file| file.hash == hash)
+                .map(|file| file.size),
+        );
+        if let Some(cover) = request.cover.filter(|cover| cover.hash == hash) {
+            sizes.push(cover.size);
+        }
+    }
+    sizes.sort_unstable();
+    sizes.dedup();
+    Ok(sizes)
 }
 
 /// 收完整个请求体，返回实际的内容哈希与字节数。

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { api, type Collection, type CollectionDraft, type CreationMethod, type EntryDraft, type Me, type Site } from "../api";
+import { api, AUTH_REQUEST_EVENT, type Collection, type CollectionDraft, type CreationMethod, type EntryDraft, type Me, type Site } from "../api";
 import { href } from "../router";
 import "../collections.css";
 
@@ -61,7 +61,7 @@ export function CollectionsPage({ slug, sites, me, plazaUrl }: { slug?: string; 
     {error ? <div class="collection-error" role="alert">{error}<button type="button" onClick={refresh}>重新读取</button></div> : null}
     {notice ? <p class="collection-notice" role="status">{notice}</p> : null}
     {!mine && !error ? <p aria-live="polite">正在读取合集…</p> : null}
-    {!authenticated && me ? <p class="collection-callout">合集需要长期账号。先在账号页用 GitHub 登录并接管作品，再创建或投稿；观看不需要登录。</p> : null}
+    {!authenticated && me ? <p class="collection-callout">创建或投稿合集需要 GitHub 账号。<button class="button quiet small" type="button" onClick={() => window.dispatchEvent(new Event(AUTH_REQUEST_EVENT))}>登录</button></p> : null}
     {creating && !slug ? <Editor onSave={async draft => {
       const collection = await api.createCollection(draft);
       location.hash = collectionLink(collection.slug);

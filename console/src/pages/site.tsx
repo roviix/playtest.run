@@ -10,7 +10,7 @@ import { useEffect, useState } from "preact/hooks";
 import { api, doorUrl, type FeedbackItem, type Site, type SiteResults, type VersionResults } from "../api";
 import { useLoad, type Loaded } from "../load";
 import { href, type Tab } from "../router";
-import { ago, left, moment } from "../words";
+import { ago, left, moment, workKind } from "../words";
 import { CardTab } from "./card";
 import { Cover } from "./cover";
 import { FeedbackTab } from "./feedback";
@@ -34,6 +34,12 @@ export function SitePage({
   plazaUrl: string;
   onSiteChanged: () => void;
 }) {
+  // 只保留本作品访问过的数据页；返回分页不再卸载重取，设置页仍按需装载。
+  const [visited, setVisited] = useState<Tab[]>([tab]);
+  useEffect(() => {
+    setVisited((tabs) => tabs.includes(tab) ? tabs : [...tabs, tab]);
+  }, [tab]);
+  const shown = (name: Tab) => name === tab || visited.includes(name);
   const loaded = useLoad(() => api.site(slug), [slug]);
   const results = useLoad(() => api.results(slug), [slug]);
   // 设置改完 PATCH 会回一份最新的 Site，存在这里，身份栏上的签立刻跟着变。
@@ -76,19 +82,19 @@ export function SitePage({
         <TabLink slug={slug} tab="card" active={tab} text="邀请卡" />
         <TabLink slug={slug} tab="settings" active={tab} text="设置" />
       </nav>
-      <section class="tab-body" key={`${tab}-${version ?? "current"}`}>
-        {tab === "results" ? (
-          <ResultsTab slug={slug} site={site} results={results} onVersionsChanged={versionsChanged} />
-        ) : null}
-        {tab === "roster" ? (
-          <RosterTab slug={slug} version={rosterVersion} versions={results.data?.versions ?? []} />
-        ) : null}
-        {tab === "feedback" ? <FeedbackTab slug={slug} site={site} /> : null}
-        {tab === "card" ? <CardTab site={site} /> : null}
-        {tab === "settings" ? (
-          <SettingsTab site={site} plazaUrl={plazaUrl} onChanged={changed} onVersionsChanged={versionsChanged} />
-        ) : null}
-      </section>
+      {shown("results") ? <section class="tab-body" hidden={tab !== "results"} aria-label="结果">
+        <ResultsTab slug={slug} site={site} results={results} onVersionsChanged={versionsChanged} />
+      </section> : null}
+      {shown("roster") ? <section class="tab-body" hidden={tab !== "roster"} aria-label="点名册">
+        <RosterTab slug={slug} version={rosterVersion} versions={results.data?.versions ?? []} />
+      </section> : null}
+      {shown("feedback") ? <section class="tab-body" hidden={tab !== "feedback"} aria-label="反馈">
+        <FeedbackTab slug={slug} site={site} />
+      </section> : null}
+      {tab === "card" ? <section class="tab-body" aria-label="邀请卡"><CardTab site={site} /></section> : null}
+      {tab === "settings" ? <section class="tab-body" aria-label="设置">
+        <SettingsTab site={site} plazaUrl={plazaUrl} onChanged={changed} onVersionsChanged={versionsChanged} />
+      </section> : null}
     </>
   );
 }
@@ -136,6 +142,7 @@ function Identity({ site }: { site: Site }) {
   }
 
   const chips: { text: string; tone: string }[] = [];
+  chips.push({ text: workKind(site.kind), tone: "plain" });
   if (site.current_version !== undefined) chips.push({ text: `v${site.current_version} · 当前`, tone: "good" });
   else chips.push({ text: "还没有版本", tone: "plain" });
   if (listing?.public) {

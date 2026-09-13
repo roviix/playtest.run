@@ -22,6 +22,7 @@
 //! 改这里要保持向后兼容（只加字段、加 `#[serde(default)]`），因为三个进程不会同时升级。
 
 pub mod api;
+pub mod article;
 pub mod avatar;
 pub mod boost;
 pub mod capabilities;
@@ -41,6 +42,7 @@ pub mod results;
 pub mod slug;
 pub mod store;
 pub mod tunnel;
+pub mod video;
 pub mod wording;
 
 /// 开发者这一侧的域名：控制面、控制台、登录、文档都在这里（DESIGN §4.1，AGENTS 第 7 条）。

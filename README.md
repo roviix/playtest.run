@@ -3,7 +3,7 @@
 > 一条命令，把你手上这个能玩的版本放到别人面前，然后知道他们玩成了什么样。
 > One command to put the build you have right now in front of real people — and see what happened.
 
-**状态：v0.1 私测前——上传、隧道、结果三条线都在线上。** `playtest <目录>`、`playtest <端口>`、`playtest <目录> --backend <端口>` 都能拿到一个真的 `https://<slug>.playtest.run` 链接，控制面与控制台在 `https://playtest.roviix.com`：上传的导出物、穿隧道的 socket.io 联机房间、静态上传加后端走隧道的小应用都在真实 Chrome 里验过；门禁页、第一层数据、SDK、结果端点与控制台接成了一条线。GitHub 登录（`playtest login`，设备码流程；登录前发的匿名作品归入账号）刚接上，正在真机验证。还没做的：自己挑链接名字、令牌撤销、用量配额；方向 B 那条主线（邀请卡 → 扫码 → 关注 → 第二版收到通知）代码在了，真机还没走通一次。做不到的地方命令会明说。重写的蓝图在 [`docs/REWRITE.md`](docs/REWRITE.md)。真机记录在 [`docs/spikes/`](docs/spikes/)。产品定义在 [`docs/DESIGN.md`](docs/DESIGN.md)，每个结论都带推导过程；方向变了直接改它。施工顺序在 [`docs/KICKOFF.md`](docs/KICKOFF.md)；一张图看架构在 [`docs/architecture.html`](docs/architecture.html)（浏览器直接打开）；要 review 设计用 [`docs/overview.html`](docs/overview.html)——五张可点的图（故事、三条路、组件与域名、结果与身份、边界与判据），每个元素标着它在 DESIGN 里的出处。
+**状态：0.3.0 公开试用候选，仍只算内部测试。** 网页目录、本地端口与混合发布，链接／二维码／邀请卡，玩家免登录试玩、留名、反馈、关注，以及作者回看结果和发布下一版已经接成一条线；真实 S3、Range 与邮件服务商接收请求已有日期记录。当前工作树补上了边缘事件凭据、上传清单绑定和匿名身份平台保险丝，但尚未部署复验；运营者全链路下架、真实手机／微信、Gmail／QQ／163 收件往返，以及与源码匹配的公开 CLI Release 仍是阻断，所以不把旧二进制或生产站称为当前公开试用。做不到的地方命令会明说。产品定义只有 [`docs/DESIGN.md`](docs/DESIGN.md)；[`docs/REWRITE.md`](docs/REWRITE.md) 只是历史施工笔记，冲突时不作为定义。真机记录在 [`docs/spikes/`](docs/spikes/)，施工顺序在 [`docs/KICKOFF.md`](docs/KICKOFF.md)；一张图看架构在 [`docs/architecture.html`](docs/architecture.html)（浏览器直接打开），设计概览在 [`docs/overview.html`](docs/overview.html)。
 
 ## 它会是什么
 
@@ -52,7 +52,7 @@ Rust 一个 Cargo workspace（`cargo test --workspace`），控制台与 SDK 是
 
 ## 安装与第一次使用
 
-预编译的单文件在 [Releases](https://github.com/roviix/playtest.run/releases)（macOS arm64 / x86_64、Linux x86_64 / arm64 musl、Windows x86_64）。解开后把 `playtest` 放进 PATH：
+预编译的单文件放在 [Releases](https://github.com/roviix/playtest.run/releases)（macOS arm64 / x86_64、Linux x86_64 / arm64 musl、Windows x86_64）。当前仓库仍是私有试制，只有受邀账号能下载；当前源码面向 0.3.0，在 `v0.3.0` 的五个平台产物和校验文件发布前，不把旧版二进制当作公开安装入口。解开后把 `playtest` 放进 PATH：
 
 ```
 cd 你的导出目录        # Godot / Unity / Phaser / Vite 导出的那个，里面有 index.html

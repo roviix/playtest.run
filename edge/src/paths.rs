@@ -253,6 +253,9 @@ mod tests {
             isolated: false,
             spa: false,
             engine: None,
+            kind: playtest_common::manifest::WorkKind::Web,
+            entry: None,
+            article: None,
             files: paths.iter().map(|p| entry(p)).collect(),
         }
     }

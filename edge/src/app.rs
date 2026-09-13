@@ -13,7 +13,8 @@ use axum::Router;
 use percent_encoding::percent_decode_str;
 use playtest_common::api::ErrorCode;
 use playtest_common::follow::{root_paths, FollowTarget};
-use playtest_common::manifest::{GateMode, Manifest};
+use playtest_common::limits::MAX_ARTICLE_HTML_BYTES;
+use playtest_common::manifest::{GateMode, Manifest, WorkKind};
 use playtest_common::store::Store;
 use playtest_common::{GATE_COOKIE, ME_COOKIE, SESSION_COOKIE};
 use rand::RngCore;
@@ -222,7 +223,7 @@ async fn root(
 }
 
 /// 主域作品邀请函（DESIGN §3.1、§3.3）：`playtest.run/p/<slug>`。
-/// 承载作品门面、版本告示、名额、一键秒关与【开始试玩】。
+/// 承载作品门面、版本告示、名额、一键秒关，以及网页入口 / 文章正文 / 视频播放器。
 async fn project_door(
     app: &App,
     authority: &str,
@@ -260,9 +261,17 @@ async fn project_door(
     let site_url = format!("{scheme}://{slug}.{suffix}{port_part}/");
     let origin = format!("{scheme}://{slug}.{suffix}{port_part}");
 
+    if parts.method == Method::POST && manifest.kind != WorkKind::Web {
+        return method_not_allowed("GET, HEAD");
+    }
+
     let me_token = identity::token(&parts.headers, app.config.public_scheme == "https")
         .filter(|v| is_me_token(v))
         .map(str::to_string);
+    let existing_sid = cookie_value(&parts.headers, SESSION_COOKIE)
+        .filter(|value| is_session_id(value))
+        .map(str::to_string);
+    let sid = existing_sid.clone().unwrap_or_else(new_session_id);
 
     if parts.method == Method::POST {
         let form = read_form(body).await;
@@ -274,14 +283,9 @@ async fn project_door(
         let ua = header_str(&parts.headers, "user-agent")
             .unwrap_or_default()
             .to_string();
-        let sid = cookie_value(&parts.headers, SESSION_COOKIE)
-            .filter(|s| is_session_id(s))
-            .map(str::to_string)
-            .unwrap_or_else(new_session_id);
-
         let visitor = Visitor {
             wechat: is_wechat(&ua),
-            sid,
+            sid: sid.clone(),
             ua,
             referer,
             from: source,
@@ -301,6 +305,19 @@ async fn project_door(
         let mut headers = base_headers();
         put(&mut headers, "location", &site_url);
         put(&mut headers, "cache-control", "no-store");
+        if existing_sid.is_none() {
+            append(
+                &mut headers,
+                "set-cookie",
+                &cookie(
+                    SESSION_COOKIE,
+                    &sid,
+                    Some(SESSION_MAX_AGE),
+                    app.config.public_scheme == "https",
+                    None,
+                ),
+            );
+        }
         return (StatusCode::SEE_OTHER, headers).into_response();
     }
 
@@ -338,6 +355,37 @@ async fn project_door(
         None
     };
 
+    let article_html = if manifest.kind == WorkKind::Article {
+        let Some(artifact) = manifest.article.as_ref() else {
+            tracing::warn!(slug, version = manifest.version, "文章清单缺少展示产物");
+            return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None);
+        };
+        match app
+            .sites
+            .store()
+            .get_blob_bytes(&artifact.hash, MAX_ARTICLE_HTML_BYTES)
+            .await
+        {
+            Ok(Some(bytes)) => match String::from_utf8(bytes) {
+                Ok(html) => Some(html),
+                Err(_) => {
+                    tracing::warn!(slug, version = manifest.version, "文章展示产物不是 UTF-8");
+                    return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None);
+                }
+            },
+            Ok(None) => {
+                tracing::warn!(slug, version = manifest.version, "文章展示产物不存在");
+                return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None);
+            }
+            Err(error) => {
+                tracing::warn!(slug, version = manifest.version, %error, "读取文章展示产物失败");
+                return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None);
+            }
+        }
+    } else {
+        None
+    };
+
     let nonce = new_nonce();
     let html = GatePage {
         manifest: &manifest,
@@ -356,13 +404,14 @@ async fn project_door(
         already_followed,
         is_root: true,
         nonce: Some(&nonce),
+        article_html: article_html.as_deref(),
     }
     .render();
 
     if parts.method == Method::GET {
         let visitor = Visitor {
             wechat: is_wechat(ua),
-            sid: String::new(),
+            sid: sid.clone(),
             ua: ua.to_string(),
             referer: referer.to_string(),
             from,
@@ -394,7 +443,20 @@ async fn project_door(
     } else {
         html.replacen("</main>", &format!("</main>{context}"), 1).replacen("</head>", "<style>.collection-context{display:flex;justify-content:space-between;gap:24px;max-width:640px;margin:12px auto;padding:0 24px;font:13px/1.6 system-ui}.collection-context a{color:#c0c4d1;text-decoration:none;min-height:44px;display:flex;align-items:center}</style></head>", 1)
     };
-    let headers = root_headers(app, authority, &nonce);
+    let mut headers = root_headers(app, authority, &nonce);
+    if existing_sid.is_none() {
+        append(
+            &mut headers,
+            "set-cookie",
+            &cookie(
+                SESSION_COOKIE,
+                &sid,
+                Some(SESSION_MAX_AGE),
+                app.config.public_scheme == "https",
+                None,
+            ),
+        );
+    }
     (StatusCode::OK, headers, html).into_response()
 }
 
@@ -522,19 +584,20 @@ async fn root_follow(app: &App, authority: &str, me: Option<&str>, body: Body) -
     } else {
         &submission.to
     };
-    if me.is_some() && matches!(submission.request.target, FollowTarget::Site { .. }) {
-        if matches!(
+    if me.is_some()
+        && matches!(submission.request.target, FollowTarget::Site { .. })
+        && matches!(
             outcome,
             follow::Outcome::Answered(playtest_common::follow::FollowResponse::Subscribed)
                 | follow::Outcome::Answered(
                     playtest_common::follow::FollowResponse::AlreadyFollowing
                 )
-        ) {
-            let mut headers = base_headers();
-            put(&mut headers, "location", back);
-            put(&mut headers, "cache-control", "no-store");
-            return (StatusCode::SEE_OTHER, headers).into_response();
-        }
+        )
+    {
+        let mut headers = base_headers();
+        put(&mut headers, "location", back);
+        put(&mut headers, "cache-control", "no-store");
+        return (StatusCode::SEE_OTHER, headers).into_response();
     }
     let (status, html) = follow::result_page(&outcome, &submission, back);
     root_html(app, authority, status, html)
@@ -714,7 +777,7 @@ fn root_headers(app: &App, authority: &str, nonce: &str) -> HeaderMap {
         &mut headers,
         "content-security-policy",
         &format!(
-            "default-src 'none'; img-src {img_src} https://avatars.githubusercontent.com; \
+            "default-src 'none'; img-src {img_src} https://avatars.githubusercontent.com; media-src {img_src}; \
 style-src 'unsafe-inline'; script-src 'nonce-{nonce}'; connect-src 'self'; worker-src 'self'; \
 base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
         ),
@@ -815,6 +878,13 @@ async fn site(
     };
 
     let ctx = Ctx::new(&parts, authority, slug, &app.config);
+    if manifest.kind != WorkKind::Web && parts.uri.path() == "/" && ctx.navigation {
+        let target = format!("{}p/{}", ctx.root_url, manifest.slug);
+        let mut headers = base_headers();
+        put(&mut headers, "location", &target);
+        put(&mut headers, "cache-control", "no-store");
+        return (StatusCode::SEE_OTHER, headers).into_response();
+    }
     match tail {
         Some(tail) => reserved(app, &manifest, &ctx, &tail, parts, body).await,
         None => serve_file(app, slug, authority, &manifest, &ctx, parts, body).await,
@@ -1052,19 +1122,19 @@ async fn site_follow(app: &App, manifest: &Manifest, ctx: &Ctx, body: Body) -> R
     };
     let outcome =
         follow::register(app.config.api_internal_url.as_deref(), &submission.request).await;
-    if ctx.me_token.is_some() {
-        if matches!(
+    if ctx.me_token.is_some()
+        && matches!(
             outcome,
             follow::Outcome::Answered(playtest_common::follow::FollowResponse::Subscribed)
                 | follow::Outcome::Answered(
                     playtest_common::follow::FollowResponse::AlreadyFollowing
                 )
-        ) {
-            let mut headers = base_headers();
-            put(&mut headers, "location", &invite_target);
-            put(&mut headers, "cache-control", "no-store");
-            return (StatusCode::SEE_OTHER, headers).into_response();
-        }
+        )
+    {
+        let mut headers = base_headers();
+        put(&mut headers, "location", &invite_target);
+        put(&mut headers, "cache-control", "no-store");
+        return (StatusCode::SEE_OTHER, headers).into_response();
     }
     let (status, html) = follow::result_page(&outcome, &submission, &invite_target);
     page(status, html, isolated)
@@ -1343,6 +1413,13 @@ async fn serve_file(
     let Some(norm) = paths::normalize(parts.uri.path()) else {
         return page(StatusCode::NOT_FOUND, pages::file_not_found(), isolated);
     };
+    // 文章原稿作为可回滚的版本原件保存，但阅读路径只公开安全渲染产物与显式配图。
+    // 不能因为原稿也在清单里，就让猜到文件名的人从作品子域下载 Markdown。
+    if manifest.kind == WorkKind::Article
+        && manifest.entry.as_deref() == Some(norm.candidate.as_str())
+    {
+        return page(StatusCode::NOT_FOUND, pages::file_not_found(), isolated);
+    }
 
     // 先查清单再看方法：清单里没有的路径在混合模式下归后端，POST 也要过去。
     match paths::resolve(manifest, &norm, ctx.accept_encoding, ctx.navigation) {

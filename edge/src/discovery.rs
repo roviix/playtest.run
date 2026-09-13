@@ -45,10 +45,8 @@ impl Query {
                 "model" => query.model = decoded,
                 "sort" => query.hot = decoded == "hot",
                 "page" => query.page = decoded.parse::<usize>().unwrap_or(1).clamp(1, 10000),
-                "join" => {
-                    if playtest_common::slug::validate(&decoded).is_ok() {
-                        query.join = decoded;
-                    }
+                "join" if playtest_common::slug::validate(&decoded).is_ok() => {
+                    query.join = decoded;
                 }
                 _ => {}
             }

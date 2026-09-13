@@ -9,7 +9,7 @@ import type { FeedbackItem, FeedbackStatus, Site } from "../api";
 import { api, ApiError } from "../api";
 import { useLoad } from "../load";
 import { href } from "../router";
-import { label, moment, seconds } from "../words";
+import { audience, label, moment, seconds } from "../words";
 import { Empty, Failed, Loading } from "./status";
 
 const STATUS_TEXT: Record<FeedbackStatus, string> = {
@@ -65,7 +65,7 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
               <p class="quote">{item.text}</p>
               <p class="muted quote-meta">
                 {/* 没留名字的人也是一个人，不显示会话 id——那是给点名册对行用的。 */}
-                <b class="who">{item.name ?? "一位试玩者"}</b> · v{item.version} · {moment(item.ts)} ·{" "}
+                <b class="who">{item.name ?? `一位${audience(site.kind)}`}</b> · v{item.version} · {moment(item.ts)} ·{" "}
                 {label(item.device)} {label(item.browser)}
                 {item.seconds_in !== undefined ? ` · 进入 ${seconds(item.seconds_in)}` : ""}
               </p>
@@ -106,4 +106,3 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
     </>
   );
 }
-

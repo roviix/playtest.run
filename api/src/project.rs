@@ -14,6 +14,7 @@
 
 use playtest_common::api::{Listing, Site};
 use playtest_common::boost::Boost;
+use playtest_common::manifest::WorkKind;
 use playtest_common::plan::Plan;
 use playtest_common::project::{
     Access, DeliveryMode, Owner, OwnerKind, Project, ProjectLive, PublicNote,
@@ -90,6 +91,7 @@ pub fn compose(
         last_seen: extras.last_seen,
 
         title: site.title,
+        kind: site.work_kind.parse::<WorkKind>().unwrap_or_default(),
         summary: listing.summary,
         // 「这版改了什么」和「想让人看什么」是同一句话（REWRITE §9.6）。库里这一列
         // 现在叫 `seek_note`，CLI 那一侧的 `--seek` 在 M1 并进 `--note`。
@@ -137,6 +139,7 @@ pub fn site_view(project: &Project) -> Site {
         slug: project.slug.clone(),
         url: project.url.clone(),
         title: project.title.clone(),
+        kind: project.kind,
         current_version: project.current_version,
         created_at: project.created_at.clone(),
         expires_at: project.expires_at.clone(),
@@ -169,6 +172,7 @@ mod tests {
             created_at: "2026-09-08T00:00:00Z".into(),
             expires_at: None,
             current_version: Some(7),
+            work_kind: "web".into(),
             listing: db::ListingRow {
                 public: true,
                 seeking: true,

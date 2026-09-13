@@ -44,6 +44,13 @@ pub const MAX_SEATS: u32 = 500;
 /// `--community` 链接的长度上限。
 pub const MAX_COMMUNITY_URL_CHARS: usize = 300;
 
+/// Markdown 原稿上限。正文要在提交时读进内存做安全渲染；1 MiB 已远超一篇可读文章，
+/// 同时把这一步的内存边界写死（DESIGN §3.16）。
+pub const MAX_ARTICLE_SOURCE_BYTES: u64 = MIB;
+
+/// 安全渲染后的 HTML 上限。它通常和原稿同量级，留一倍空间给标签与转义。
+pub const MAX_ARTICLE_HTML_BYTES: u64 = 2 * MIB;
+
 // ------------------------------------------------------------------ 带宽配额
 //
 // 两个时间尺度，缺一不可（DESIGN §4.8「额度是双重上限」）：月配额挡长期滥用，

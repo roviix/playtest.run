@@ -115,6 +115,7 @@ fn gallery(now: OffsetDateTime) -> Plaza {
                     .then(|| "想知道第一次打开时，能不能自然找到下一步。".into()),
                 engine: is_game.then(|| "godot".into()),
                 is_game,
+                kind: Default::default(),
                 cover_hash: (index == 0).then(|| "a".repeat(64)),
                 version: index as u32 + 1,
                 updated_at: (now - Duration::hours(index as i64 + 1))
@@ -225,6 +226,9 @@ fn main() -> std::io::Result<()> {
         isolated: false,
         spa: false,
         engine: sample.engine.clone(),
+        kind: Default::default(),
+        entry: None,
+        article: None,
         files: vec![],
     };
     let mut live = SiteLive::empty(&sample.slug);
@@ -254,6 +258,7 @@ fn main() -> std::io::Result<()> {
             already_followed,
             is_root: true,
             nonce: Some(NONCE),
+            article_html: None,
         }
         .render();
         std::fs::write(directory.join(filename), enhance(html, NONCE))?;

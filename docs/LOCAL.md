@@ -54,6 +54,7 @@ cargo build -p playtest-api -p playtest-edge -p playtest
 PLAYTEST_DATA_DIR=.data \
 PLAYTEST_EMAIL_PROVIDER=log \
 PLAYTEST_ADMIN_TOKEN=dev \
+PLAYTEST_EDGE_INGEST_TOKEN=dev-edge-ingest-token-0000000000 \
 PLAYTEST_SITE_URL_TEMPLATE='http://{slug}.localhost:8443' \
 PLAYTEST_PUBLIC_ROOT_URL=http://localhost:8443 \
 ./target/debug/playtest-api
@@ -68,6 +69,7 @@ PLAYTEST_DATA_DIR=.data \
 PLAYTEST_HOST_SUFFIX=localhost \
 PLAYTEST_EDGE_LISTEN=127.0.0.1:8443 \
 PLAYTEST_API_INTERNAL_URL=http://127.0.0.1:8787 \
+PLAYTEST_EDGE_INGEST_TOKEN=dev-edge-ingest-token-0000000000 \
 PLAYTEST_API_PUBLIC_URL=http://127.0.0.1:8787 \
 ./target/debug/playtest-edge
 ```

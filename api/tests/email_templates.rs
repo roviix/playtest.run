@@ -108,7 +108,7 @@ fn developer_text_is_not_html_and_tracking_parameters_survive() {
     assert!(content.text.contains("<script>alert('hello')</script>"));
     assert!(content.html.contains("?from=notice&amp;version=8"));
     assert!(content.text.contains("?from=notice&version=8"));
-    assert!(content.html.contains("试玩新版本&nbsp; →"));
+    assert!(content.html.contains("查看新版本&nbsp; →"));
     assert!(content.html.contains("同一作品 24 小时内最多一封"));
 }
 

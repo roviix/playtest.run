@@ -25,8 +25,8 @@ pub fn render(runtime: &Runtime, row: &NotificationRow) -> Content {
         ),
         KIND_SITE_VERSION => (
             "作品更新",
-            "你关注的作品有新版本了。打开邀请函，就能再玩一次。",
-            "试玩新版本",
+            "你关注的作品有新版本了。打开邀请函，就能看到这一版。",
+            "查看新版本",
             "你关注了这个作品，因此收到更新通知。同一作品 24 小时内最多一封。",
         ),
         KIND_DIGEST => (

@@ -29,6 +29,7 @@ use serde::Serialize;
 use tower::ServiceExt;
 
 const INDEX_HTML: &[u8] = b"<!doctype html><meta charset=utf-8><canvas id=game></canvas>";
+const EDGE_TOKEN: &str = playtest_api::config::TEST_EDGE_INGEST_TOKEN;
 /// 微信里打开的那种 UA：拿来验证 `from=card` 压得过它。
 const WECHAT_UA: &str =
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 \
@@ -158,6 +159,8 @@ impl Harness {
                     isolated: false,
                     spa: false,
                     engine: None,
+                    kind: Default::default(),
+                    entry: None,
                 }),
             )
             .await
@@ -195,6 +198,7 @@ impl Harness {
                 .method("POST")
                 .uri(ingest_paths::EDGE)
                 .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, format!("Bearer {EDGE_TOKEN}"))
                 .body(Body::from(
                     serde_json::to_vec(&EdgeBatch { events }).unwrap(),
                 ))

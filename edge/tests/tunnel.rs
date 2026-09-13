@@ -98,6 +98,7 @@ impl Edge {
             host_suffix: "localhost".into(),
             public_scheme: "http".into(),
             api_internal_url: None,
+            edge_ingest_token: None,
         }));
         let service = router(app.clone());
         tokio::spawn(async move {
@@ -144,6 +145,9 @@ impl Edge {
             isolated: false,
             spa: false,
             engine: None,
+            kind: Default::default(),
+            entry: None,
+            article: None,
             files,
         };
         store.put_manifest(&manifest).await.unwrap();
@@ -966,6 +970,7 @@ async fn without_a_verifying_key_the_edge_says_so_instead_of_guessing() {
             host_suffix: "localhost".into(),
             public_scheme: "http".into(),
             api_internal_url: None,
+            edge_ingest_token: None,
         }));
         let service = router(app.clone());
         tokio::spawn(async move {

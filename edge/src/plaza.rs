@@ -72,7 +72,7 @@ pub fn render(view: &View<'_>) -> String {
     let head =
         "<meta name=\"description\" content=\"正在找人试玩的作品。点开玩一会儿，不用注册。\">\n\
 <meta property=\"og:title\" content=\"playtest.run\">\n\
-<meta property=\"og:description\" content=\"开发者把手上能玩的版本放到这里，路过的人点开就玩。\">\n\
+<meta property=\"og:description\" content=\"创作者把作品放到这里，路过的人可以体验、阅读或观看。\">\n\
 <meta property=\"og:type\" content=\"website\">\n";
 
     wrap("playtest.run", head, Here::Plaza, &wall(view))
@@ -152,14 +152,15 @@ fn rail(here: Here) -> String {
 <div>\
 <a class=\"brand\" href=\"/\" aria-label=\"playtest.run 首页\">\
 <span class=\"mark\" aria-hidden=\"true\">{mark}</span>\
-<span class=\"wordmark\">playtest<span class=\"tld\">.run</span></span></a>\n\
+{wordmark}</a>\n\
 <nav class=\"nav\" aria-label=\"页面\">{plaza}{collections}{mine}</nav>\
 </div>\n\
 <div class=\"sidebar-footer\">\
 <a class=\"publish\" href=\"{publish_link}\">{plus}发布作品</a>\
 </div>\n\
 </aside>\n",
-        mark = icon("mark"),
+        mark = crate::html::MARK,
+        wordmark = crate::html::WORDMARK,
         plus = icon("plus"),
     )
 }
@@ -217,7 +218,7 @@ pub(crate) fn tile(item: &PlazaItem, on_slot: bool, now: OffsetDateTime) -> Stri
         &item.slug,
     ));
     let title = esc(&item.title);
-    let verb = if item.is_game { "试玩" } else { "体验" };
+    let verb = playtest_common::wording::action_verb(item.kind, item.is_game);
 
     let art = match &item.cover_url() {
         Some(cover) => format!(
@@ -333,52 +334,59 @@ fn fact_hint(item: &PlazaItem) -> String {
         String::new()
     }
 }
-
 fn publish_sheet() -> String {
     format!(
         "<dialog id=\"publish-dialog\" class=\"overlay\" aria-labelledby=\"publish-title\">\n\
 <a class=\"overlay-back\" href=\"#\" tabindex=\"-1\" aria-label=\"关闭\"></a>\n\
 <div class=\"sheet publish-sheet\">\n\
-<div class=\"dialog-head\"><h2 id=\"publish-title\">发布作品</h2>\
+<div class=\"dialog-head\">\
+<div class=\"dialog-title-wrap\"><span class=\"dialog-mark\" aria-hidden=\"true\">{mark}</span><h2 id=\"publish-title\">发布作品</h2></div>\
 <a class=\"close\" href=\"#\" autofocus aria-label=\"关闭\">{close}</a></div>\n\
 <div class=\"pub\">\n\
-<div class=\"cli\">\n\
-<div class=\"cli-bar\"><div class=\"publish-tabs\" role=\"group\" aria-label=\"发布方式\">\n\
+<div class=\"publish-tabs\" role=\"group\" aria-label=\"发布方式\">\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-static\" checked>\n\
 <label for=\"tab-static\">导出目录</label>\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-local\">\n\
 <label for=\"tab-local\">本地端口</label>\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-backend\">\n\
-<label for=\"tab-backend\">带后端</label>\n\
-</div><button class=\"copy-command\" type=\"button\" aria-label=\"复制命令\" title=\"复制命令\" data-copy-command hidden>\
+<label for=\"tab-backend\">带后端服务</label>\n\
+</div>\n\
+<div class=\"cli\">\n\
+<div class=\"cli-bar\"><div class=\"cli-info\"><span class=\"cli-dots\" aria-hidden=\"true\"></span><span class=\"cli-meta\">bash · 命令行发布</span></div>\
+<button class=\"copy-command\" type=\"button\" aria-label=\"复制命令\" title=\"复制命令\" data-copy-command hidden>\
 <svg class=\"icon copy-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"8\" y=\"8\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3\"/></svg>\
-<svg class=\"icon copied-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg></button></div>\n\
-<div class=\"codebox\" id=\"panel-static\" tabindex=\"0\" role=\"region\" aria-label=\"发布命令\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span> <span class=\"f\">--public</span> <span class=\"f\">-m</span> <span class=\"s\">\"想让人看什么\"</span></code></div>\n\
-<div class=\"codebox\" id=\"panel-local\" tabindex=\"0\" role=\"region\" aria-label=\"发布命令\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">5173</span></code></div>\n\
-<div class=\"codebox\" id=\"panel-backend\" tabindex=\"0\" role=\"region\" aria-label=\"发布命令\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span> <span class=\"f\">--backend</span> <span class=\"a\">3000</span> <span class=\"f\">--public</span> <span class=\"f\">-m</span> <span class=\"s\">\"想让人看什么\"</span></code></div>\n\
-<p class=\"leg\" id=\"leg-static\">先构建项目，将 ./dist 换成导出目录。</p>\n\
-<p class=\"leg\" id=\"leg-local\">先启动本地服务，并保持终端运行。</p>\n\
-<p class=\"leg\" id=\"leg-backend\">先启动后端，发布期间保持终端运行。</p>\n\
+<svg class=\"icon copied-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg><span class=\"copy-text\">复制</span></button></div>\n\
+<div class=\"codebox\" id=\"panel-static\" tabindex=\"0\" role=\"region\" aria-label=\"发布命令\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span></code></div>\n\
+<div class=\"codebox\" id=\"panel-local\" tabindex=\"0\" role=\"region\" aria-label=\"发布命令\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">3000</span></code></div>\n\
+<div class=\"codebox\" id=\"panel-backend\" tabindex=\"0\" role=\"region\" aria-label=\"发布命令\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span> <span class=\"f\">--backend</span> <span class=\"a\">8000</span></code></div>\n\
+<p class=\"leg\" id=\"leg-static\">{info}<span>先构建项目，将 <code>./dist</code> 换成你的游戏打包导出目录。</span></p>\n\
+<p class=\"leg\" id=\"leg-local\">{info}<span>先启动本地服务，并在分享期间保持终端运行。</span></p>\n\
+<p class=\"leg\" id=\"leg-backend\">{info}<span>静态目录照常发布，未匹配的请求转到本地后端。</span></p>\n\
 </div>\n\
 <p class=\"pub-status\" role=\"status\"></p>\n\
-<details class=\"pub-details\" id=\"detail-static\"><summary>参数说明{chevron}</summary><dl><div><dt><code>./dist</code></dt><dd>项目构建后的导出目录。</dd></div><div><dt><code>--public</code></dt><dd>将作品放到广场。</dd></div><div><dt><code>-m</code></dt><dd>写下想听的反馈。</dd></div><div><dt>再次发布</dt><dd>原作品有效时，同一目录更新沿用链接。</dd></div></dl></details>\n\
-<details class=\"pub-details\" id=\"detail-local\"><summary>参数说明{chevron}</summary><dl><div><dt><code>5173</code></dt><dd>本地服务的端口。</dd></div><div><dt>临时链接</dt><dd>关闭终端后就不能访问。</dd></div></dl></details>\n\
-<details class=\"pub-details\" id=\"detail-backend\"><summary>参数说明{chevron}</summary><dl><div><dt><code>./dist</code></dt><dd>项目构建后的导出目录。</dd></div><div><dt><code>--backend 3000</code></dt><dd>后端端口，发布期间保持服务运行。</dd></div><div><dt>请求转发</dt><dd>静态文件直接发布，未匹配的请求转到后端；SPA 导航回退优先。</dd></div><div><dt><code>--public</code></dt><dd>将作品放到广场。</dd></div><div><dt><code>-m</code></dt><dd>写下想听的反馈。</dd></div></dl></details>\n\
 </div>\n\
-<div class=\"pub-foot\"><a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">下载 playtest{out}</a>\
-<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">打开控制台{out}</a></div>\n\
+<div class=\"pub-foot\">\
+<a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">{dl}下载 playtest CLI</a>\
+<a href=\"{usage}\" target=\"_blank\" rel=\"noopener\">{book}使用方法</a>\
+<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">打开网页控制台{out}</a>\
+</div>\n\
 </div>\n\
 </dialog>\n",
         close = icon("close"),
-        chevron = r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>"#,
+        mark = crate::html::MARK,
+        info = icon("info"),
+        dl = icon("download"),
+        book = icon("book"),
         out = icon("out"),
         releases = RELEASES_URL,
+        usage = USAGE_URL,
         dev = DEVELOPER_API_URL,
     )
 }
 
 /// CLI 的下载处。它不是开发者域（AGENTS 第 7 条管的是登录、令牌、控制台），是公开的发布页。
 const RELEASES_URL: &str = "https://github.com/roviix/playtest.run/releases";
+const USAGE_URL: &str = "https://github.com/roviix/playtest.run#readme";
 
 /// 页面上的几个图标，画在页面里：不靠外部字体、也不靠 `<use href>`
 /// （CSP `default-src 'none'` 会把同页 fragment 的引用挡掉）。都是 24 格里的几笔线。
@@ -399,9 +407,16 @@ pub(crate) fn icon(name: &str) -> &'static str {
         "plus" => {
             r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>"#
         }
-        "mark" => {
-            r#"<svg class="mark-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M4 16v3a1 1 0 0 0 1 1h3M16 20h3a1 1 0 0 0 1-1v-3"/><circle class="dot" cx="12" cy="12" r="2.2"/></svg>"#
+        "info" => {
+            r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>"#
         }
+        "download" => {
+            r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0-4-4m4 4 4-4M4 20h16"/></svg>"#
+        }
+        "book" => {
+            r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15Z"/></svg>"#
+        }
+        "mark" => crate::html::MARK,
         _ => "",
     }
 }
@@ -416,6 +431,7 @@ mod tests {
             slug: slug.into(),
             url: format!("http://{slug}.localhost:8443"),
             title: "小球大冒险".into(),
+            kind: playtest_common::manifest::WorkKind::Web,
             developer: "某某".into(),
             summary: Some("三关，五分钟，手机上也能玩。".into()),
             engine: Some("godot".into()),
@@ -531,27 +547,28 @@ mod tests {
         assert!(!html.contains("链接可以直接分享，玩家不用注册。"));
         assert!(html.contains("class=\"mark-svg\""));
         assert!(html.contains("class=\"sidebar\""));
-        assert!(html.contains("playtest<span class=\"tld\">.run</span>"));
+        assert!(html.contains(crate::html::WORDMARK));
+        assert!(html.contains("aria-label=\"playtest.run 首页\""));
         assert!(!html.contains("<span class=\"mark\" aria-hidden=\"true\">p"));
         assert!(!html.contains("class=\"steps\""));
         assert!(!html.contains("--seek"));
         assert!(!html.contains("class=\"dialog-foot\""));
-        assert!(html.contains("class=\"pub-details\" id=\"detail-static\""));
+        assert!(!html.contains("class=\"pub-details\""));
+        assert!(!html.contains("CLI 模式"));
+        assert!(html.contains(crate::html::MARK));
         assert!(html.contains("class=\"cli-bar\""));
         assert!(
-            html.find("class=\"cli\"").unwrap() < html.find("class=\"publish-tabs\"").unwrap(),
-            "三个词在终端舱顶栏里"
+            html.find("class=\"publish-tabs\"").unwrap() < html.find("class=\"cli\"").unwrap(),
+            "Tab 在终端舱上方"
         );
         assert!(html.contains("class=\"pub-foot\""));
-        assert!(html.contains(">下载 playtest"));
+        assert!(html.contains(">下载 playtest CLI</a>"));
+        assert!(html.contains(">使用方法</a>"));
         assert!(html.contains("for=\"tab-static\">导出目录</label>"));
-        assert!(html.contains(
-            "<span class=\"k\">playtest</span> <span class=\"a\">./dist</span> <span class=\"f\">--public</span> <span class=\"f\">-m</span>"
-        ));
-        assert!(
-            html.contains("<span class=\"k\">playtest</span> <span class=\"a\">5173</span></code>")
-        );
-        assert!(html.contains("<dt><code>--public</code></dt><dd>将作品放到广场。</dd>"));
+        assert!(html
+            .contains("<span class=\"k\">playtest</span> <span class=\"a\">./dist</span></code>"));
+        assert!(html.contains("<span class=\"k\">playtest</span> <span class=\"a\">3000</span>"));
+        assert!(html.contains("<span class=\"f\">--backend</span> <span class=\"a\">8000</span>"));
         assert!(
             html.contains("aria-label=\"复制命令\" title=\"复制命令\" data-copy-command hidden>")
         );

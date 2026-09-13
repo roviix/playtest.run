@@ -7,7 +7,9 @@ use axum::body::{Body, Bytes};
 use axum::http::{HeaderMap, Request, StatusCode};
 use http_body_util::BodyExt;
 use playtest_common::hash::hash_bytes;
-use playtest_common::manifest::{validate_manifest, FileEntry, GateMode, Manifest, SCHEMA};
+use playtest_common::manifest::{
+    validate_manifest, ArticleArtifact, FileEntry, GateMode, Manifest, WorkKind, SCHEMA,
+};
 use playtest_common::store::{Current, FsStore};
 use playtest_edge::{router, App, Config};
 use tower::ServiceExt;
@@ -23,6 +25,10 @@ const WASM: &[u8] = b"\0asm\x01\0\0\0not-a-real-module";
 const WASM_BR: &[u8] = b"<pretend brotli stream for game.wasm>";
 const DATA_BR: &[u8] = b"<pretend brotli stream for Unity .data>";
 const SUB_HTML: &str = "<!doctype html><title>子目录</title>";
+const ARTICLE_MD: &str = "# 一篇文章\n\n正文与一张图。\n\n![](images/cover.png)";
+const ARTICLE_HTML: &str = "<h1>一篇文章</h1><p>正文与一张图。</p><p><img src=\"http://brisk-otter-41.localhost:8443/images/cover.png\" alt=\"\"></p>";
+const ARTICLE_IMAGE: &[u8] = b"\x89PNG\r\n\x1a\npretend article image";
+const VIDEO_MP4: &[u8] = b"pretend mp4 bytes served by the edge";
 // 只有 PNG 的魔数，边缘不解码图片，够用了。
 const COVER_PNG: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR pretend cover";
 
@@ -51,6 +57,9 @@ impl Site {
             ("game.wasm", WASM.to_vec()),
             ("game.wasm.br", WASM_BR.to_vec()),
             ("index.html", INDEX_HTML.as_bytes().to_vec()),
+            ("post.md", ARTICLE_MD.as_bytes().to_vec()),
+            ("images/cover.png", ARTICLE_IMAGE.to_vec()),
+            ("clip.mp4", VIDEO_MP4.to_vec()),
             ("sub/index.html", SUB_HTML.as_bytes().to_vec()),
         ];
 
@@ -67,6 +76,13 @@ impl Site {
         // 封面的 blob 也放进去，但不在 files 里——它是清单单独的一条引用（DESIGN §3.3）。
         store
             .put_blob(&hash_bytes(COVER_PNG), COVER_PNG)
+            .await
+            .unwrap();
+        store
+            .put_blob(
+                &hash_bytes(ARTICLE_HTML.as_bytes()),
+                ARTICLE_HTML.as_bytes(),
+            )
             .await
             .unwrap();
 
@@ -87,6 +103,9 @@ impl Site {
             spa: false,
             // 夹具是一个 Phaser 形状的导出物，门禁页上说「邀请你试玩」。
             engine: Some("phaser".into()),
+            kind: Default::default(),
+            entry: None,
+            article: None,
             files,
         };
         shape(&mut manifest);
@@ -122,6 +141,7 @@ impl Site {
             host_suffix: "localhost".into(),
             public_scheme: "http".into(),
             api_internal_url: None,
+            edge_ingest_token: None,
         };
         Site {
             app: Arc::new(App::new(config)),
@@ -323,6 +343,92 @@ async fn wechat_gets_the_open_in_browser_tip() {
     assert!(html.contains("在浏览器中打开"));
     assert!(html.contains("需要系统浏览器"));
     assert_eq!(site.events()[0]["wechat"], true);
+}
+
+#[tokio::test]
+async fn article_body_is_on_the_root_invitation_and_assets_stay_on_the_work_origin() {
+    let site = Site::build(|m| {
+        m.kind = WorkKind::Article;
+        m.engine = None;
+        m.entry = Some("post.md".into());
+        m.article = Some(ArticleArtifact {
+            hash: hash_bytes(ARTICLE_HTML.as_bytes()),
+            size: ARTICLE_HTML.len() as u64,
+        });
+        m.files
+            .retain(|file| matches!(file.path.as_str(), "post.md" | "images/cover.png"));
+    })
+    .await;
+
+    let root = site.get_root(&format!("/p/{SLUG}")).await;
+    assert_eq!(root.status, StatusCode::OK);
+    let html = root.text();
+    assert!(html.contains("某某 邀请你阅读"));
+    assert!(html.contains(ARTICLE_HTML));
+    assert!(!html.contains("class=\"start\""));
+    assert!(root
+        .header("content-security-policy")
+        .is_some_and(|value| value.contains("img-src http://*.localhost:8443")));
+    assert!(root
+        .cookies()
+        .iter()
+        .any(|cookie| cookie.starts_with("pt_sid=")));
+    let events = site.events();
+    assert_eq!(events[0]["type"], "gate_view");
+    assert!(playtest_common::ingest::is_session_id(
+        events[0]["sid"].as_str().unwrap_or_default()
+    ));
+
+    let subdomain_root = site.get("/").await;
+    assert_eq!(subdomain_root.status, StatusCode::SEE_OTHER);
+    assert_eq!(
+        subdomain_root.header("location"),
+        Some(format!("http://localhost:8443/p/{SLUG}").as_str())
+    );
+    let image = site
+        .send(asset("/images/cover.png").body(Body::empty()).unwrap())
+        .await;
+    assert_eq!(image.status, StatusCode::OK);
+    assert_eq!(image.body.as_ref(), ARTICLE_IMAGE);
+    let source = site
+        .send(asset("/post.md").body(Body::empty()).unwrap())
+        .await;
+    assert_eq!(source.status, StatusCode::NOT_FOUND);
+    assert!(!source.text().contains(ARTICLE_MD));
+}
+
+#[tokio::test]
+async fn video_uses_native_player_and_the_original_file_keeps_range_support() {
+    let site = Site::build(|m| {
+        m.kind = WorkKind::Video;
+        m.engine = None;
+        m.entry = Some("clip.mp4".into());
+        m.files.retain(|file| file.path == "clip.mp4");
+    })
+    .await;
+
+    let root = site.get_root(&format!("/p/{SLUG}")).await;
+    assert_eq!(root.status, StatusCode::OK);
+    let html = root.text();
+    assert!(html.contains("某某 邀请你观看"));
+    assert!(html.contains("<video controls preload=\"metadata\" playsinline"));
+    assert!(html.contains(&format!("http://{HOST}/clip.mp4")));
+    assert!(!html.contains("autoplay"));
+    assert!(root
+        .header("content-security-policy")
+        .is_some_and(|value| value.contains("media-src http://*.localhost:8443")));
+
+    let part = site
+        .send(
+            asset("/clip.mp4")
+                .header("range", "bytes=8-16")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(part.status, StatusCode::PARTIAL_CONTENT);
+    assert_eq!(part.header("accept-ranges"), Some("bytes"));
+    assert_eq!(part.body.as_ref(), &VIDEO_MP4[8..=16]);
 }
 
 // ------------------------------------------------------------------ 响应头
@@ -807,7 +913,7 @@ async fn the_real_referrer_survives_the_gate() {
         .send(
             Request::builder()
                 .method("POST")
-                .uri(&format!("/p/{SLUG}"))
+                .uri(format!("/p/{SLUG}"))
                 .header("host", "localhost:8443")
                 .header("referer", format!("http://localhost:8443/p/{SLUG}"))
                 .header("origin", "http://localhost:8443")
@@ -833,7 +939,7 @@ async fn the_real_referrer_survives_the_gate() {
         .send(
             Request::builder()
                 .method("POST")
-                .uri(&format!("/p/{SLUG}"))
+                .uri(format!("/p/{SLUG}"))
                 .header("host", "localhost:8443")
                 .header("origin", "http://localhost:8443")
                 .header("referer", format!("http://localhost:8443/p/{SLUG}"))

@@ -93,6 +93,9 @@ mod tests {
             isolated: false,
             spa: false,
             engine: Some("godot".into()),
+            kind: playtest_common::manifest::WorkKind::Web,
+            entry: None,
+            article: None,
             files: vec![],
         }
     }

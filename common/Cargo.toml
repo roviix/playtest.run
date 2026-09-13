@@ -57,7 +57,14 @@ futures-util = { version = "0.3", default-features = false, features = ["alloc"]
 # HTTP 栈共用 ring。
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+# 文章只接受 CommonMark 事件，再由我们过滤原生 HTML、危险链接与远程图片；不执行用户代码。
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+# 只解析 MP4 的轨道与编码，不调用系统 ffmpeg，也不在服务端执行用户上传的程序。
+mp4parse = "0.17"
+percent-encoding = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread", "net", "time"] }
 tempfile = "3"
+# 测试里生成一份最小 H.264/AAC MP4；产品代码不靠它转码。
+mp4 = "0.14"

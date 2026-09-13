@@ -751,6 +751,9 @@ impl Store {
             if let Some(cover) = manifest.cover {
                 out.insert(cover.hash);
             }
+            if let Some(article) = manifest.article {
+                out.insert(article.hash);
+            }
             out.extend(manifest.files.into_iter().map(|entry| entry.hash));
         }
         Ok(out)
@@ -956,6 +959,9 @@ mod tests {
             isolated: false,
             spa: false,
             engine: None,
+            kind: crate::manifest::WorkKind::Web,
+            entry: None,
+            article: None,
             files: vec![FileEntry {
                 path: "index.html".into(),
                 hash: hash_bytes(b"<h1>hi</h1>"),

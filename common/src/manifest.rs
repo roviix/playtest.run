@@ -11,6 +11,39 @@ use crate::limits;
 /// 当前清单格式的版本号。不兼容的改动才加一。
 pub const SCHEMA: u32 = 1;
 
+/// 作品怎样被体验。旧清单没有这一项，必须继续按网页读取。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkKind {
+    #[default]
+    Web,
+    Article,
+    Video,
+}
+
+impl WorkKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Web => "web",
+            Self::Article => "article",
+            Self::Video => "video",
+        }
+    }
+}
+
+impl std::str::FromStr for WorkKind {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "web" => Ok(Self::Web),
+            "article" => Ok(Self::Article),
+            "video" => Ok(Self::Video),
+            other => Err(format!("不认识的作品形态：{other}")),
+        }
+    }
+}
+
 /// 门禁页出现的策略（DESIGN §3.3）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "lowercase")]
@@ -60,6 +93,14 @@ pub struct Cover {
     pub mime: String,
 }
 
+/// 文章在控制面提交时生成的安全 HTML。它不是作者上传目录的一部分，也没有可猜的公开路径；
+/// 根域邀请函按当前清单读这一个内容哈希。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ArticleArtifact {
+    pub hash: String,
+    pub size: u64,
+}
+
 /// 封面认这三种。SVG 不收：它能带脚本，而封面会被贴到根域那一页上。
 pub const COVER_MIMES: &[&str] = &["image/png", "image/jpeg", "image/webp"];
 
@@ -103,6 +144,8 @@ pub fn sniff_image_mime(head: &[u8]) -> Option<&'static str> {
         Some("image/jpeg")
     } else if head.len() >= 12 && &head[0..4] == b"RIFF" && &head[8..12] == b"WEBP" {
         Some("image/webp")
+    } else if head.starts_with(b"GIF87a") || head.starts_with(b"GIF89a") {
+        Some("image/gif")
     } else {
         None
     }
@@ -148,8 +191,21 @@ pub struct Manifest {
     /// 已知值见 [`GAME_ENGINES`] 与 `vite`。旧清单没有这个字段，按 `None` 解析。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub engine: Option<String>,
+    /// 网页 / 文章 / 视频。旧清单没有，按网页处理。
+    #[serde(default, skip_serializing_if = "is_web")]
+    pub kind: WorkKind,
+    /// 文章原稿或视频文件在 `files` 里的路径。网页没有固定入口，仍按 `index.html`。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<String>,
+    /// 只有文章有：控制面从 Markdown 重新生成的安全展示产物。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub article: Option<ArticleArtifact>,
     /// 按 `path` 排序，路径唯一。
     pub files: Vec<FileEntry>,
+}
+
+fn is_web(kind: &WorkKind) -> bool {
+    *kind == WorkKind::Web
 }
 
 /// 认出这些就把作品当游戏说（DESIGN §3.3）。
@@ -193,7 +249,11 @@ pub fn clean_engine(raw: Option<&str>) -> Option<String> {
 
 impl Manifest {
     pub fn total_bytes(&self) -> u64 {
-        self.files.iter().map(|f| f.size).sum()
+        self.files
+            .iter()
+            .map(|f| f.size)
+            .sum::<u64>()
+            .saturating_add(self.article.as_ref().map(|a| a.size).unwrap_or_default())
     }
 
     /// 这份作品该不该用「试玩」这个词。见 [`GAME_ENGINES`]。
@@ -274,6 +334,8 @@ pub enum ManifestError {
     VersionTooLarge { total: u64, max: u64 },
     #[error("清单格式版本 {0} 不认识")]
     UnknownSchema(u32),
+    #[error("作品形态与文件对不上：{0}")]
+    BadPresentation(String),
 }
 
 /// 校验一组文件条目：路径形态、唯一性、哈希形态、数量与体积。
@@ -318,7 +380,61 @@ pub fn validate_manifest(m: &Manifest, max_total: u64) -> Result<(), ManifestErr
     if m.schema != SCHEMA {
         return Err(ManifestError::UnknownSchema(m.schema));
     }
-    validate_files(&m.files, max_total)
+    validate_files(&m.files, max_total)?;
+    match m.kind {
+        WorkKind::Web => {
+            if m.entry.is_some() || m.article.is_some() {
+                return Err(ManifestError::BadPresentation(
+                    "网页作品不能带文章或视频入口".into(),
+                ));
+            }
+        }
+        WorkKind::Article => {
+            let entry = m.entry.as_deref().ok_or_else(|| {
+                ManifestError::BadPresentation("文章缺少 Markdown 原稿入口".into())
+            })?;
+            if !entry.to_ascii_lowercase().ends_with(".md") || m.find(entry).is_none() {
+                return Err(ManifestError::BadPresentation(
+                    "文章入口必须指向这一版里的 .md 文件".into(),
+                ));
+            }
+            let article = m
+                .article
+                .as_ref()
+                .ok_or_else(|| ManifestError::BadPresentation("文章缺少安全渲染产物".into()))?;
+            if !crate::hash::is_valid_hex(&article.hash)
+                || article.size == 0
+                || article.size > limits::MAX_ARTICLE_HTML_BYTES
+            {
+                return Err(ManifestError::BadPresentation(
+                    "文章安全渲染产物的哈希或大小不合法".into(),
+                ));
+            }
+        }
+        WorkKind::Video => {
+            let entry = m
+                .entry
+                .as_deref()
+                .ok_or_else(|| ManifestError::BadPresentation("视频缺少 MP4 入口".into()))?;
+            if !entry.to_ascii_lowercase().ends_with(".mp4") || m.find(entry).is_none() {
+                return Err(ManifestError::BadPresentation(
+                    "视频入口必须指向这一版里的 .mp4 文件".into(),
+                ));
+            }
+            if m.files.len() != 1 || m.article.is_some() {
+                return Err(ManifestError::BadPresentation(
+                    "首批视频作品只接受一个 MP4 文件，封面另传".into(),
+                ));
+            }
+        }
+    }
+    if m.total_bytes() > max_total {
+        return Err(ManifestError::VersionTooLarge {
+            total: m.total_bytes(),
+            max: max_total,
+        });
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -407,6 +523,9 @@ mod tests {
             isolated: false,
             spa: false,
             engine: None,
+            kind: WorkKind::Web,
+            entry: None,
+            article: None,
             files: vec![],
         };
         assert!(!m.is_game(), "认不出引擎时说「体验」");
@@ -503,7 +622,7 @@ mod tests {
             Some("image/webp")
         );
         assert_eq!(sniff_image_mime(b"<svg xmlns"), None);
-        assert_eq!(sniff_image_mime(b"GIF89a"), None);
+        assert_eq!(sniff_image_mime(b"GIF89a"), Some("image/gif"));
         assert_eq!(sniff_image_mime(b""), None);
     }
 

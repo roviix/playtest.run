@@ -1,16 +1,15 @@
 //! 玩家浏览器写进来的事件：SDK 的一批，边缘补送的一批（DESIGN §3.4）。
 //!
-//! 这两个端点和这个进程里其它端点最大的不同是**没有令牌**——玩家不登录、不装东西，
-//! 浏览器直连（DESIGN §3.1 玩家侧零门槛）。所以这里做的每一件事都假设请求是伪造的：
+//! SDK 端点没有令牌——玩家不登录、不装东西，浏览器直连（DESIGN §3.1 玩家侧零门槛）。
+//! 边缘批量端点只接受部署时配置的共享凭据。两条路径仍都把事件内容当作不可信输入：
 //!
 //! - 版本号不看客户端说什么，用 `sites` 表里的当前版本；
 //! - 类型是白名单，条数、字数、字节数都有上限；
 //! - `Origin` 必须是玩家域下的一页，否则连一行都不写；
 //! - 按会话和按 slug 各一个令牌桶。
 //!
-//! CORS 挡的是「哪一页能往这里写」，不是「谁能往这里写」——不带浏览器的客户端随时能伪造
-//! 一个 Origin。真正的防线是上面那几条形状约束和令牌桶：最坏情况是有人往自己的 slug 里
-//! 灌垃圾事件，而不是别人的作品被污染或者库被撑爆。
+//! CORS 只约束 SDK 的浏览器调用，不是身份校验；边缘入口必须另带凭据，不能靠伪造得出的
+//! `Origin` 区分服务器。形状约束与令牌桶继续限制受信边缘自身的坏数据或失控循环。
 //!
 //! **不记 IP**，和边缘一样（DESIGN §3.4，`edge/src/events.rs` 的注释说了为什么）。
 
@@ -155,19 +154,16 @@ async fn sdk_batch(
     Ok(Json(Accepted { accepted }))
 }
 
-/// 边缘那边现在把这些行写在自己盘上的 JSONL 里（`edge/src/events.rs`）。
-/// **谁把它们送过来还没定**（第三周的事），这里只是先把收的一侧准备好；
-/// 那一步落地时这个端点要换成边缘的签名令牌，现在它和 SDK 的端点一样是敞开的。
+/// 边缘先把行写在自己盘上的 JSONL，再携带部署共享凭据批量送来（`edge/src/ship.rs`）。
 pub async fn from_edge(
     State(state): State<AppState>,
     Extension(limiter): Extension<Limiter>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    let origin = match check_origin(&state, &headers) {
-        Origin::Denied => return denied_origin(),
-        other => other.allowed(),
-    };
+    if !edge_is_authorized(&state, &headers) {
+        return ApiError::unauthorized("这条入口只接收受信边缘上报。").into_response();
+    }
     let done = edge_batch(&state, &limiter, &body).await;
     // 这一批里有举报：立刻重算一次广场，够数的当场撤下（DESIGN §3.8），不等 5 分钟那一轮。
     if matches!(&done, Ok((_, true, _))) {
@@ -178,7 +174,17 @@ pub async fn from_edge(
         crate::live::publish_all(&state, named).await;
     }
     let done = done.map(|(accepted, _, _)| accepted);
-    with_cors(done.into_response(), origin.as_deref())
+    done.into_response()
+}
+
+fn edge_is_authorized(state: &AppState, headers: &HeaderMap) -> bool {
+    let Some(token) = state.edge_ingest_token() else {
+        return false;
+    };
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value == format!("Bearer {token}"))
 }
 
 /// 返回收下了几条、这批里有没有举报、哪些作品有人留了名。

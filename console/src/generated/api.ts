@@ -471,9 +471,13 @@ export type PrepareUploadRequest = {
   cover?: Cover;
   /** CLI 上传时认出来的引擎，见 [`crate::manifest::Manifest::engine`]。认不出来就没有。 */
   engine?: string;
+  /** 文章原稿或视频文件在 `files` 里的路径；网页没有固定入口。 */
+  entry?: string;
   files: FileEntry[];
   gate?: GateMode;
   isolated?: boolean;
+  /** 单文件发布明确告诉控制面怎样验证和展示；旧 CLI 没有此字段，按网页处理。 */
+  kind?: WorkKind;
   note?: string;
   spa?: boolean;
   /** 一句话介绍（DESIGN §3.8）。没给就沿用这个作品上一版的。 */
@@ -527,6 +531,7 @@ export type Project = {
   isolated?: boolean;
   /** 已加入 = 点「开始」时留了名字的去重会话数（REWRITE §3.3）。 */
   joined?: number;
+  kind?: WorkKind;
   /** 隧道上一次在线是什么时候，RFC 3339。离线页上那一行。 */
   last_seen?: string;
   mode?: DeliveryMode;
@@ -582,6 +587,7 @@ export type ProjectCard = {
   /** 说「试玩」还是「体验」。控制面算好，边缘不再判。 */
   is_game: boolean;
   joined?: number;
+  kind?: WorkKind;
   /**
    * 这一版的话。正在找人测时卡上写它（「这次想测：…」），否则写 `summary`——
    * 哪一句由 [`ProjectCard::blurb`] 一处决定。
@@ -712,6 +718,8 @@ export type Site = {
   current_version?: number;
   /** 匿名作品的到期时间。 */
   expires_at?: string;
+  /** 网页 / 文章 / 视频。还没有版本以及旧控制面返回的作品按网页显示。 */
+  kind?: WorkKind;
   /** 广场上的状态（DESIGN §3.8）。旧控制面不返回这一段，按「不公开」解析。 */
   listing?: Listing;
   slug: string;
@@ -888,6 +896,9 @@ export type WebLoginExchange = {
   code: string;
   state: string;
 };
+
+/** 作品怎样被体验。旧清单没有这一项，必须继续按网页读取。 */
+export type WorkKind = "web" | "article" | "video";
 
 /** 控制面的路径。有参数的是函数，参数会做 URL 编码。 */
 export const paths = {

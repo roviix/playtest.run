@@ -199,6 +199,7 @@ mod tests {
             slug: slug.into(),
             url: format!("https://{slug}.playtest.run"),
             title: slug.into(),
+            kind: playtest_common::manifest::WorkKind::Web,
             developer: "某某".into(),
             summary: None,
             note: None,

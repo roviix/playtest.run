@@ -11,7 +11,7 @@ use anyhow::{bail, Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use playtest_common::api::{CreateSiteRequest, ErrorCode, PrepareUploadRequest, UpdateSiteRequest};
 use playtest_common::limits::{self, ANON_MAX_VERSION_BYTES};
-use playtest_common::manifest::{self, validate_files, Cover, FileEntry};
+use playtest_common::manifest::{self, validate_files, Cover, FileEntry, WorkKind};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
@@ -40,14 +40,34 @@ pub(crate) enum SlugSource {
     Fresh,
 }
 
+struct UploadInput {
+    root: PathBuf,
+    remember_key: String,
+    files: Vec<ScannedFile>,
+    kind: WorkKind,
+    entry: Option<String>,
+    title_hint: Option<String>,
+    checked: inspect::Report,
+}
+
 /// 做完了返回这一次的全部结果，由调用方决定说给谁听——终端、`--json`、还是 MCP 的对话框。
 pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     let mut timings = Timings::default();
 
-    let root = resolve_dir(shown).map_err(output::as_bad_input)?;
     let hashing = Instant::now();
-    let files = scan::scan_dir(&root).await.map_err(output::as_bad_input)?;
+    let input = prepare_input(shown, cli_args.backend.is_some())
+        .await
+        .map_err(output::as_bad_input)?;
     timings.hash_ms = output::ms_since(hashing);
+    let UploadInput {
+        root,
+        remember_key,
+        files,
+        kind,
+        entry,
+        title_hint,
+        mut checked,
+    } = input;
     if files.is_empty() {
         return Err(output::bad_input(format!(
             "{shown} 是空的，没有可以上传的文件。（以「.」开头的文件和目录不会上传。）"
@@ -64,7 +84,7 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     ));
 
     check_limits(&entries, &paths).map_err(output::as_bad_input)?;
-    let mut checked = inspect_dir(&root, &files, &entries, cli_args.backend.is_some());
+    check_kind_options(cli_args, kind).map_err(output::as_bad_input)?;
     // 「传上去一定打不开」的就别传了：匿名作品只有三个名额，一个 404 的链接会白占一个。
     // 拦下时只报这一条（它就是错误本身），别的发现留给下一次。
     if let Some(blocker) = checked
@@ -80,10 +100,17 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         return Err(output::bad_input_with_hint(blocker.message.clone(), hint));
     }
     output::say_findings(&checked.findings);
-    let isolated = choose_isolated(&mut checked, cli_args);
+    let isolated = if kind == WorkKind::Web {
+        choose_isolated(&mut checked, cli_args)
+    } else {
+        false
+    };
 
-    let title =
-        title_for(cli_args, &root, checked.page_title.as_deref()).map_err(output::as_bad_input)?;
+    let title = match kind {
+        WorkKind::Web => title_for(cli_args, &root, checked.page_title.as_deref()),
+        _ => title_for_file(cli_args, title_hint.as_deref()),
+    }
+    .map_err(output::as_bad_input)?;
     check_note(cli_args).map_err(output::as_bad_input)?;
     check_plaza_inputs(cli_args).map_err(output::as_bad_input)?;
     let cover = match &cli_args.cover {
@@ -98,28 +125,31 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     let mut client = Client::new(&api)?;
     ensure_token(&mut client, &mut config, &config_path, &api).await?;
 
-    let dir_key = root.to_string_lossy().into_owned();
     let (mut slug, source) = choose_site(
         &mut client,
         cli_args,
         &mut config,
         &config_path,
         &api,
-        &dir_key,
+        &remember_key,
         &title,
     )
     .await?;
 
     let request = PrepareUploadRequest {
         files: entries.clone(),
+        kind,
+        entry,
         title: Some(title.clone()),
         note: cli_args.note.clone(),
         summary: cli_args.summary.clone(),
         cover: cover.as_ref().map(|c| c.cover.clone()),
         gate: manifest::GateMode::Once,
         isolated,
-        spa: cli_args.spa,
-        engine: checked.manifest_engine(),
+        spa: kind == WorkKind::Web && cli_args.spa,
+        engine: (kind == WorkKind::Web)
+            .then(|| checked.manifest_engine())
+            .flatten(),
     };
 
     let prepared = match client.prepare_upload(&slug, &request).await {
@@ -137,7 +167,7 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
                 ui::say("上次的作品已经不在了（匿名作品只保留 24 小时），这是一个新链接。");
             }
             slug = create_site(&client, &title).await?;
-            config.remember(dir_key.clone(), slug.clone());
+            config.remember(remember_key.clone(), slug.clone());
             config::save(&config_path, &config)?;
             client.prepare_upload(&slug, &request).await?
         }
@@ -208,6 +238,7 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         qr_text,
         checked.findings,
     );
+    report.kind = kind;
     if wants_plaza {
         if let Some(site) = &updated {
             report.on_plaza(PlazaOut {
@@ -366,6 +397,181 @@ fn resolve_dir(shown: &str) -> Result<PathBuf> {
         );
     }
     std::fs::canonicalize(given).with_context(|| format!("看不了 {shown}"))
+}
+
+async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
+    let given = Path::new(shown);
+    let meta = match std::fs::symlink_metadata(given) {
+        Ok(meta) => meta,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            bail!("找不到 {shown}。检查一下路径；如果还没构建，先构建出要发布的内容。")
+        }
+        Err(error) => return Err(error).with_context(|| format!("看不了 {shown}")),
+    };
+    if meta.file_type().is_symlink() {
+        bail!("{shown} 是符号链接。请直接给真实的目录、Markdown 或 MP4 文件。")
+    }
+    if meta.is_dir() {
+        let root = resolve_dir(shown)?;
+        let files = scan::scan_dir(&root).await?;
+        let entries = files
+            .iter()
+            .map(|file| file.entry.clone())
+            .collect::<Vec<_>>();
+        let checked = inspect_dir(&root, &files, &entries, has_backend);
+        return Ok(UploadInput {
+            remember_key: root.to_string_lossy().into_owned(),
+            root,
+            files,
+            kind: WorkKind::Web,
+            entry: None,
+            title_hint: None,
+            checked,
+        });
+    }
+    if !meta.is_file() {
+        bail!("{shown} 不是普通文件或目录，不能发布。")
+    }
+
+    let source = std::fs::canonicalize(given).with_context(|| format!("看不了 {shown}"))?;
+    let root = source
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("{shown} 没有可用的所在目录"))?
+        .to_path_buf();
+    let entry = source
+        .file_name()
+        .ok_or_else(|| anyhow::anyhow!("{shown} 没有文件名"))?;
+    let entry = scan::manifest_path(Path::new(entry)).map_err(anyhow::Error::msg)?;
+    let extension = source
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let fallback = source
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .map(str::to_string);
+
+    let (kind, paths, title_hint, finding) = match extension.as_str() {
+        "md" => {
+            if meta.len() > limits::MAX_ARTICLE_SOURCE_BYTES {
+                bail!(
+                    "Markdown 原稿太大了：{}；首批文章上限是 {} MiB。",
+                    ui::bytes(meta.len()),
+                    limits::MAX_ARTICLE_SOURCE_BYTES / limits::MIB
+                );
+            }
+            let markdown = std::fs::read_to_string(&source)
+                .with_context(|| format!("{shown} 不是可读取的 UTF-8 Markdown"))?;
+            let article = playtest_common::article::inspect(&markdown, &entry)?;
+            let mut paths = Vec::with_capacity(article.images.len() + 1);
+            paths.push(entry.clone());
+            paths.extend(article.images);
+            (
+                WorkKind::Article,
+                paths,
+                article.title.or(fallback),
+                Finding::note("这是一篇 Markdown 文章；只会上传正文明确引用的本地图片"),
+            )
+        }
+        "mp4" => {
+            let check = source.clone();
+            let info = tokio::task::spawn_blocking(move || {
+                let mut file = std::fs::File::open(&check)
+                    .with_context(|| format!("读不了 {}", check.display()))?;
+                playtest_common::video::inspect(&mut file).map_err(anyhow::Error::from)
+            })
+            .await
+            .context("视频检查任务没跑完")??;
+            (
+                WorkKind::Video,
+                vec![entry.clone()],
+                fallback,
+                Finding::note(format!(
+                    "这是 H.264 视频{}；播放器按需读取，不会自动播放",
+                    if info.audio_tracks > 0 {
+                        "，带 AAC 音轨"
+                    } else {
+                        "，没有音轨"
+                    }
+                )),
+            )
+        }
+        _ => {
+            bail!(
+                "{shown} 是一个文件。首批单文件作品只接受 .md 文章和 H.264/AAC 的 .mp4 视频；网页作品请给包含 index.html 的目录。"
+            )
+        }
+    };
+    let files = scan::scan_selected(&root, &paths).await?;
+    if kind == WorkKind::Article {
+        for file in files.iter().filter(|file| file.entry.path != entry) {
+            let mut head = [0u8; 16];
+            let read = std::fs::File::open(&file.source)
+                .and_then(|mut source| source.read(&mut head))
+                .with_context(|| format!("读不了配图 {}", file.entry.path))?;
+            let actual = manifest::sniff_image_mime(&head[..read]);
+            let expected = playtest_common::article::image_mime(&file.entry.path);
+            if actual.is_none() || actual != expected {
+                bail!(
+                    "{} 的扩展名和实际图片格式对不上（实际是 {}），不能只改扩展名。",
+                    file.entry.path,
+                    actual.unwrap_or("无法识别的格式")
+                );
+            }
+        }
+    }
+    let mut checked = inspect::Report::default();
+    checked.findings.push(finding);
+    ui::say(match kind {
+        WorkKind::Article => "文章发布路径正在实现验证中；尚未完成真实手机验收。",
+        WorkKind::Video => "视频发布路径正在实现验证中；尚未完成真实手机与移动网络验收。",
+        WorkKind::Web => unreachable!(),
+    });
+    Ok(UploadInput {
+        remember_key: source.to_string_lossy().into_owned(),
+        root,
+        files,
+        kind,
+        entry: Some(entry),
+        title_hint,
+        checked,
+    })
+}
+
+fn check_kind_options(cli_args: &UploadArgs, kind: WorkKind) -> Result<()> {
+    if kind == WorkKind::Web {
+        return Ok(());
+    }
+    if cli_args.backend.is_some() {
+        bail!("--backend 只用于网页目录；文章和视频没有需要转发到本机的后端。")
+    }
+    if cli_args.spa {
+        bail!("--spa 只用于网页目录；文章和视频由平台的阅读器或播放器展示。")
+    }
+    if cli_args.isolated != Isolation::Auto {
+        bail!("--isolated 只用于网页目录；文章和视频不执行作者脚本。")
+    }
+    // `-y` 只跳过交互确认；文章与视频的格式、安全检查仍在上面无条件执行，控制面还会再查一次。
+    Ok(())
+}
+
+fn title_for_file(cli_args: &UploadArgs, hint: Option<&str>) -> Result<String> {
+    let title = match cli_args.name.as_deref() {
+        Some(name) => name.trim().to_string(),
+        None => hint
+            .map(str::trim)
+            .filter(|title| !title.is_empty())
+            .unwrap_or("未命名")
+            .to_string(),
+    };
+    if title.is_empty() {
+        bail!("作品名不能是空的。");
+    }
+    if title.chars().count() > limits::MAX_TITLE_CHARS {
+        bail!("作品名太长了，最多 {} 个字。", limits::MAX_TITLE_CHARS);
+    }
+    Ok(title)
 }
 
 /// 本地先按匿名档的配额拦一道，把服务器会说的话提前说了，省一次往返。
@@ -842,5 +1048,47 @@ mod tests {
         );
         let err = check_plaza_inputs(&args_with(None, Some(&long))).unwrap_err();
         assert!(err.to_string().contains("太长"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn markdown_input_only_collects_the_source_and_explicit_images() {
+        let dir = tempfile::tempdir().unwrap();
+        let images = dir.path().join("images");
+        std::fs::create_dir_all(&images).unwrap();
+        let article = dir.path().join("post.md");
+        std::fs::write(
+            &article,
+            "# 一篇文章\n\n![配图](images/inside.png)\n\n[外链](https://example.com)",
+        )
+        .unwrap();
+        std::fs::write(images.join("inside.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
+        std::fs::write(dir.path().join("private.txt"), b"do not upload").unwrap();
+
+        let input = prepare_input(article.to_str().unwrap(), false)
+            .await
+            .unwrap();
+        assert_eq!(input.kind, WorkKind::Article);
+        assert_eq!(input.entry.as_deref(), Some("post.md"));
+        assert_eq!(input.title_hint.as_deref(), Some("一篇文章"));
+        assert_eq!(
+            input
+                .files
+                .iter()
+                .map(|file| file.entry.path.as_str())
+                .collect::<Vec<_>>(),
+            ["images/inside.png", "post.md"]
+        );
+    }
+
+    #[tokio::test]
+    async fn markdown_native_html_is_rejected_before_networking() {
+        let dir = tempfile::tempdir().unwrap();
+        let article = dir.path().join("unsafe.md");
+        std::fs::write(&article, "# 标题\n\n<script>alert(1)</script>").unwrap();
+        let error = match prepare_input(article.to_str().unwrap(), false).await {
+            Ok(_) => panic!("带原生 HTML 的文章不该通过"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("原生 HTML"), "{error}");
     }
 }
