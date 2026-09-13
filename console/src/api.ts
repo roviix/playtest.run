@@ -3,7 +3,7 @@
 
 import { paths } from "./generated/api";
 import type { Collection, CollectionDraft, EntryDraft } from "./generated/api";
-export type { Collection, CollectionDraft, EntryDraft, CreationMethod } from "./generated/api";
+export type { Collection, CollectionDraft, EntryDraft } from "./generated/api";
 import type {
   FeedbackItem,
   FeedbackList,

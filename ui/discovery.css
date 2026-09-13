@@ -79,9 +79,6 @@
 .search-clear:hover{background:#ffffff14;color:#fff}
 .discover-search button{display:grid;place-items:center;flex-shrink:0;width:36px;min-height:36px;height:36px;padding:0;border:0;border-radius:7px;background:none;color:#71717a;cursor:pointer;transition:color .15s}
 .discover-search button:hover,.discover-search button:focus-visible{color:var(--fg)}
-.discover-search .icon{width:14px;height:14px}
-.model-filter{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--soft);flex-shrink:0}
-.model-filter select{font:inherit;font-size:12.5px;color:var(--fg);background:#12141a;border:1px solid #ffffff18;border-radius:8px;padding:8px 10px;min-height:38px;cursor:pointer}
 .discover-toolbar{display:flex;align-items:center;gap:4px;margin-bottom:22px}
 .discover-tabs{display:flex;gap:16px;margin:0}
 .discover-tabs a{text-decoration:none;display:inline-flex;align-items:center;min-height:38px;padding:6px 0;border-bottom:2px solid transparent;color:var(--dim);font-size:13.5px;transition:color .15s}
@@ -114,13 +111,10 @@
 .creation-summary{display:flex;align-items:center;gap:6px;padding:8px 12px;font-size:11.5px;color:var(--dim);cursor:pointer;list-style:none;user-select:none;background:#0f1218;border-top:1px solid #ffffff0a}
 .creation-summary::-webkit-details-marker{display:none}
 .creation-summary:hover{color:var(--soft);background:#131620}
-.model-tag{padding:2px 6px;border-radius:4px;background:#57ad9520;color:#71e8bf;font:500 11px var(--mono);border:1px solid #57ad9538;white-space:nowrap}
-.method-tag{padding:2px 6px;border-radius:4px;background:#ffffff0a;color:var(--soft);font-size:11px;white-space:nowrap}
+.note-tag{padding:2px 6px;border-radius:4px;background:#57ad9520;color:#71e8bf;font:500 11px var(--mono);border:1px solid #57ad9538;white-space:nowrap}
 .version-tag{margin-left:auto;font:11px var(--mono);color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
 .creation-body{padding:12px 14px;font-size:12px;line-height:1.65;border-top:1px solid #ffffff0a;background:#08090d}
-.creation-disclaimer{color:var(--dim);font-size:11px;margin:0 0 4px}
 .creation-time{color:var(--soft);font-size:11.5px;margin:0 0 8px;font-variant-numeric:tabular-nums}
-.empty-prompt{color:var(--dim);font-size:11.5px;margin:4px 0 0}
 .prompt-box{background:#040507;border:1px solid #ffffff0d;border-radius:6px;padding:8px 10px;margin-top:6px}
 .prompt-box .box-label{display:block;font-size:10px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
 .prompt-box pre{margin:0;font:11.5px/1.6 var(--mono);color:#c4d3ce;white-space:pre-wrap;overflow-wrap:anywhere;max-height:160px;overflow-y:auto}

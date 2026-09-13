@@ -20,9 +20,7 @@ CREATE TABLE collection_entries (
   user_id TEXT NOT NULL REFERENCES users(id),
   submitted_version INTEGER NOT NULL,
   submitted_at TEXT NOT NULL,
-  model TEXT NOT NULL DEFAULT '',
-  prompt TEXT NOT NULL DEFAULT '',
-  method TEXT NOT NULL DEFAULT 'unspecified',
+  note TEXT NOT NULL DEFAULT '',
   blocked INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(collection_slug, site_slug)
 );

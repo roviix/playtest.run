@@ -227,6 +227,7 @@ impl Harness {
                     engine: None,
                     kind: Default::default(),
                     entry: None,
+                    chapters: vec![],
                 },
             )
             .await

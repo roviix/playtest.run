@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { api, AUTH_REQUEST_EVENT, type Collection, type CollectionDraft, type CreationMethod, type EntryDraft, type Me, type Site } from "../api";
+import { api, AUTH_REQUEST_EVENT, type Collection, type CollectionDraft, type EntryDraft, type Me, type Site } from "../api";
 import { href } from "../router";
 import "../collections.css";
 
@@ -73,7 +73,7 @@ export function CollectionsPage({ slug, sites, me, plazaUrl }: { slug?: string; 
     {selected ? <>
       {owner ? <details class="collection-panel"><summary>编辑资料与公开状态</summary><Editor key={`${selected.slug}-${selected.updated_at}`} collection={selected} onSave={async draft => { await api.updateCollection(selected.slug, draft); setNotice("合集资料已保存。"); refresh(); }} /></details> : <section class="collection-panel"><p>{selected.summary}</p><h2>这次做什么</h2><pre>{selected.prompt}</pre>{selected.rules ? <details><summary>投稿规则</summary><p class="collection-preserve">{selected.rules}</p></details> : null}</section>}
       {!selected.hidden && !closed && authenticated && (owner || selected.kind === "challenge") ? <Submission collection={selected} sites={sites} onSubmit={async draft => { await api.submitCollection(selected.slug, draft); setNotice("作品已加入。玩家页面可能需要最多 30 秒刷新。"); refresh(); }} /> : <p class="collection-callout">{closed ? "已经截止，不能新增或替换投稿。已有作品仍可观看，也可以撤回。" : "当前不能投稿；你的原作品不受影响。"}</p>}
-      <section class="collection-panel"><h2>合集里的作品</h2>{(selected.entries ?? []).length ? <ul class="collection-entry-list">{(selected.entries ?? []).map(entry => <li key={entry.slug}><div><a href={`${plazaUrl.replace(/\/+$/, "")}/p/${entry.slug}?collection=${selected.slug}`} target="_blank" rel="noreferrer">{entry.title}</a><p>投稿 v{entry.submitted_version} · {entry.model || "模型未填写"} · 作者自述</p></div>{owner || memberSlugs.has(entry.slug) ? <button disabled={busy} type="button" onClick={() => {
+      <section class="collection-panel"><h2>合集里的作品</h2>{(selected.entries ?? []).length ? <ul class="collection-entry-list">{(selected.entries ?? []).map(entry => <li key={entry.slug}><div><a href={`${plazaUrl.replace(/\/+$/, "")}/p/${entry.slug}?collection=${selected.slug}`} target="_blank" rel="noreferrer">{entry.title}</a><p>投稿 v{entry.submitted_version}{entry.note ? ` · ${entry.note}` : ""}</p></div>{owner || memberSlugs.has(entry.slug) ? <button disabled={busy} type="button" onClick={() => {
         const ownEntry = memberSlugs.has(entry.slug);
         if (confirm(ownEntry ? "从这个合集撤回？原作品和分享链接不受影响。" : "移除这件投稿并阻止反复重投？原作品不会被删除。")) void act(() => api.withdrawCollection(selected.slug, entry.slug), "已从合集中移除，原作品未删除。");
       }}>{memberSlugs.has(entry.slug) ? "撤回" : "移除"}</button> : null}</li>)}</ul> : <p class="muted">还没有有效的公开作品。被设为不公开、到期或隐藏的作品不会展示。</p>}</section>
@@ -98,7 +98,7 @@ function Editor({ collection, onSave }: { collection?: Collection; onSave: (draf
       <label>名字<input required maxLength={80} value={draft.title} onInput={event => setDraft({ ...draft, title: event.currentTarget.value })} placeholder="例如：鹈鹕骑单车" /></label>
       {!collection ? <label>合集地址 · 选填<input pattern="[a-z0-9-]{3,63}" maxLength={63} value={draft.slug ?? ""} onInput={event => setDraft({ ...draft, slug: event.currentTarget.value || undefined })} placeholder="pelican-bicycle；留空自动生成" /></label> : null}
       <label>一句话介绍<textarea rows={2} maxLength={280} value={draft.summary} onInput={event => setDraft({ ...draft, summary: event.currentTarget.value })} /></label>
-      {draft.kind === "challenge" ? <><label>创作题目<textarea rows={5} maxLength={6000} required={draft.public} disabled={locked} value={draft.prompt} onInput={event => setDraft({ ...draft, prompt: event.currentTarget.value })} placeholder="让参与者知道要做什么，也可以直接复制给模型。" /></label><label>投稿规则 · 选填<textarea rows={3} maxLength={3000} disabled={locked} value={draft.rules} onInput={event => setDraft({ ...draft, rules: event.currentTarget.value })} /></label><label>截止时间 · 选填，按你的本地时区<input type="datetime-local" value={deadline} disabled={locked} onInput={event => setDraft({ ...draft, closes_at: event.currentTarget.value ? new Date(event.currentTarget.value).toISOString() : undefined })} /></label>{locked ? <p class="muted">已有投稿后不再修改题目、规则与截止时间，避免改变大家参加时的约定。</p> : null}</> : null}
+      {draft.kind === "challenge" ? <><label>创作题目<textarea rows={5} maxLength={6000} required={draft.public} disabled={locked} value={draft.prompt} onInput={event => setDraft({ ...draft, prompt: event.currentTarget.value })} placeholder="让参与者知道要做什么。" /></label><label>投稿规则 · 选填<textarea rows={3} maxLength={3000} disabled={locked} value={draft.rules} onInput={event => setDraft({ ...draft, rules: event.currentTarget.value })} /></label><label>截止时间 · 选填，按你的本地时区<input type="datetime-local" value={deadline} disabled={locked} onInput={event => setDraft({ ...draft, closes_at: event.currentTarget.value ? new Date(event.currentTarget.value).toISOString() : undefined })} /></label>{locked ? <p class="muted">已有投稿后不再修改题目、规则与截止时间，避免改变大家参加时的约定。</p> : null}</> : null}
       <label class="collection-check"><input type="checkbox" checked={draft.public} onChange={event => setDraft({ ...draft, public: event.currentTarget.checked })} />公开展示到合集页和搜索中</label>
       <p class="muted">默认是草稿。合集公开不会自动公开你的任何作品。</p>
       {error ? <p role="alert" class="collection-error">{error}</p> : null}
@@ -108,7 +108,7 @@ function Editor({ collection, onSave }: { collection?: Collection; onSave: (draf
 }
 
 function Submission({ collection, sites, onSubmit }: { collection: Collection; sites: Site[]; onSubmit: (draft: EntryDraft) => Promise<void> }) {
-  const [draft, setDraft] = useState<EntryDraft>({ slug: "", model: "", prompt: "", method: "unspecified" });
+  const [draft, setDraft] = useState<EntryDraft>({ slug: "", note: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const eligible = sites.filter(site => site.current_version != null && site.listing?.public && !site.listing.hidden && !site.expires_at);
@@ -119,12 +119,10 @@ function Submission({ collection, sites, onSubmit }: { collection: Collection; s
   }}><fieldset disabled={busy}><legend class="sr-only">投稿</legend>
     <label>选择已发布的公开作品<select required value={draft.slug} onChange={event => {
       const slug = event.currentTarget.value; const entry = (collection.entries ?? []).find(entry => entry.slug === slug);
-      setDraft({ slug, model: entry?.model ?? "", prompt: entry?.prompt ?? "", method: entry?.method ?? "unspecified" });
+      setDraft({ slug, note: entry?.note ?? "" });
     }}><option value="">选择一件作品</option>{eligible.map(site => <option key={site.slug} value={site.slug}>{site.title} · v{site.current_version}</option>)}</select></label>
-    <label>模型名称与版本 · 选填<input maxLength={120} value={draft.model} placeholder="按实际使用填写，不知道可以不填" onInput={event => setDraft({ ...draft, model: event.currentTarget.value })} /></label>
-    <label>创作过程<select value={draft.method} onChange={event => setDraft({ ...draft, method: event.currentTarget.value as CreationMethod })}><option value="unspecified">未说明</option><option value="one_shot">一次生成</option><option value="iterated">多轮修改</option><option value="edited">人工修改</option></select></label>
-    <label>公开提示词 · 选填<textarea rows={3} maxLength={6000} value={draft.prompt} placeholder="会公开展示；不要包含密钥、个人信息或私密对话。" onInput={event => setDraft({ ...draft, prompt: event.currentTarget.value })} /></label>
-    <p class="muted">创作说明由你填写，不代表平台认证。记录本次投稿版本；以后更新作品，玩家会打开当前版本，页面会标明版本变化。</p>
+    <label>作者附言 · 选填<textarea rows={3} maxLength={6000} value={draft.note ?? ""} placeholder="关于这件作品的说明或留言，会公开展示。" onInput={event => setDraft({ ...draft, note: event.currentTarget.value })} /></label>
+    <p class="muted">附言由你填写。记录本次投稿版本；以后更新作品，玩家会打开当前版本，页面会标明版本变化。</p>
     {error ? <p role="alert" class="collection-error">{error}</p> : null}
     <button type="submit">{busy ? "正在提交…" : existing ? "更新这件投稿" : "加入合集"}</button>
   </fieldset></form> : <p class="collection-callout">先发布并公开一件长期作品，再回来选择。已有作品不需要重复上传。<a href={href({ name: "sites" })}>回到我的作品 →</a></p>}</section>;

@@ -50,6 +50,19 @@ export type Capabilities = {
   schema?: number;
 };
 
+/** 连载小说的有序章节（DESIGN §3.17）。 */
+export type ChapterEntry = {
+  /** 章节生成的安全展示产物哈希。 */
+  hash: string;
+  /** 稳定章节标识（如 `c1`、`c2`），在作品生命周期内不可变。 */
+  id: string;
+  /** 原稿文件在 `files` 里的路径（如 `01-wake.md`）。 */
+  path: string;
+  size: number;
+  /** 章节标题（如「第一章：沉睡的三百年」）。 */
+  title: string;
+};
+
 export type Collection = {
   blocked_slugs?: string[];
   closes_at?: string;
@@ -79,9 +92,7 @@ export type CollectionDraft = {
 };
 
 export type CollectionEntry = {
-  method: CreationMethod;
-  model: string;
-  prompt: string;
+  note?: string;
   slug: string;
   submitted_at: string;
   submitted_version: number;
@@ -127,8 +138,6 @@ export type CreateSiteRequest = {
   title?: string;
 };
 
-export type CreationMethod = "unspecified" | "one_shot" | "iterated" | "edited";
-
 /** 这个作品的字节从哪来（REWRITE §2.1「交付」）。切换对玩家透明，同一个 slug。 */
 export type DeliveryMode = "upload" | "tunnel" | "hybrid";
 
@@ -150,9 +159,7 @@ export type DeviceLoginStart = {
 };
 
 export type EntryDraft = {
-  method?: CreationMethod;
-  model?: string;
-  prompt?: string;
+  note?: string;
   slug: string;
 };
 
@@ -464,6 +471,8 @@ export type Plaza = {
 };
 
 export type PrepareUploadRequest = {
+  /** 连载小说的章节列表（DESIGN §3.17）。 */
+  chapters?: ChapterEntry[];
   /**
    * 封面。CLI 先把它当普通 blob 传上来（`PUT /v1/blobs/{hash}`），提交时服务端检查它在不在。
    * 没给就沿用上一版的封面。

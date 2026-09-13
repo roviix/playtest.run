@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use playtest_common::capabilities::Capabilities;
 use playtest_common::collection::{Collection, CollectionKind};
 use playtest_common::follow::{FollowTarget, MeView};
@@ -19,7 +17,6 @@ fn wrap(title: &str, head: &str, here: Here, body: &str) -> String {
 #[derive(Default, Clone)]
 pub struct Query {
     pub search: String,
-    pub model: String,
     pub hot: bool,
     pub page: usize,
     pub join: String,
@@ -42,7 +39,6 @@ impl Query {
                 .collect::<String>();
             match key {
                 "q" => query.search = decoded.trim().to_string(),
-                "model" => query.model = decoded,
                 "sort" => query.hot = decoded == "hot",
                 "page" => query.page = decoded.parse::<usize>().unwrap_or(1).clamp(1, 10000),
                 "join" if playtest_common::slug::validate(&decoded).is_ok() => {
@@ -56,9 +52,8 @@ impl Query {
 
     fn link(&self, base: &str, hot: bool, page: usize) -> String {
         format!(
-            "{base}?q={}&model={}&sort={}&page={page}",
+            "{base}?q={}&sort={}&page={page}",
             encode(&self.search),
-            encode(&self.model),
             if hot { "hot" } else { "latest" }
         )
     }
@@ -98,35 +93,14 @@ fn collection_matches(collection: &Collection, query: &str) -> bool {
         .all(|word| text.contains(word))
 }
 
-fn search(query: &Query, base: &str, collection: Option<&Collection>) -> String {
-    let mut models = String::new();
-    if let Some(collection) = collection {
-        let names: BTreeSet<&str> = collection
-            .entries
-            .iter()
-            .map(|entry| entry.model.as_str())
-            .filter(|name| !name.is_empty())
-            .collect();
-        if !names.is_empty() {
-            models.push_str("<label class=\"model-filter\">模型<select name=\"model\"><option value=\"\">所有模型</option>");
-            for name in names {
-                models.push_str(&format!(
-                    "<option value=\"{}\"{}>{}</option>",
-                    esc(name),
-                    if query.model == name { " selected" } else { "" },
-                    esc(name)
-                ));
-            }
-            models.push_str("</select></label>");
-        }
-    }
+fn search(query: &Query, base: &str) -> String {
     let clear = if !query.search.is_empty() {
         let clear_target = if query.hot { format!("{base}?sort=hot") } else { base.to_string() };
         format!("<a class=\"search-clear\" href=\"{}\" aria-label=\"清空搜索\" title=\"清空搜索\">×</a>", esc(&clear_target))
     } else {
         String::new()
     };
-    format!("<form class=\"discover-search\" method=\"get\" action=\"{}\" role=\"search\"><div class=\"search-box\"><label class=\"search-field\"><span class=\"sr-only\">搜索作品与合集</span><input type=\"search\" name=\"q\" maxlength=\"280\" placeholder=\"搜索作品、作者…\" value=\"{}\"></label>{clear}<button type=\"submit\" aria-label=\"搜索\" title=\"搜索\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"/><path d=\"m16 16 4 4\"/></svg></button></div>{models}<input type=\"hidden\" name=\"sort\" value=\"{}\"></form>", esc(base), esc(&query.search), if query.hot { "hot" } else { "latest" })
+    format!("<form class=\"discover-search\" method=\"get\" action=\"{}\" role=\"search\"><div class=\"search-box\"><label class=\"search-field\"><span class=\"sr-only\">搜索作品与合集</span><input type=\"search\" name=\"q\" maxlength=\"280\" placeholder=\"搜索作品、作者…\" value=\"{}\"></label>{clear}<button type=\"submit\" aria-label=\"搜索\" title=\"搜索\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"/><path d=\"m16 16 4 4\"/></svg></button></div><input type=\"hidden\" name=\"sort\" value=\"{}\"></form>", esc(base), esc(&query.search), if query.hot { "hot" } else { "latest" })
 }
 
 fn tabs(query: &Query, base: &str) -> String {
@@ -238,7 +212,7 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
     let mut body = format!(
         "<div class=\"content discovery\"><header class=\"workspace-head\"><h1>{}</h1>{}</header>",
         if index { "合集与挑战" } else { "广场" },
-        search(query, base, None)
+        search(query, base)
     );
     let collections: Vec<_> = view
         .plaza
@@ -416,7 +390,7 @@ pub fn collection(
         if is_open_challenge {
             guide_sections.push_str(&format!(
                 "<div class=\"guide-section\"><h3>如何参与</h3>\
-<p>把题目交给你喜欢的模型，做一个浏览器里能打开的作品。已有作品也可以投稿，不用重复上传。</p>\
+<p>围绕题目动手创作，做一个浏览器里能打开的作品。已有作品也可以投稿，不用重复上传。</p>\
 <div class=\"command-pill\"><code>playtest ./dist --public</code></div>\
 <p class=\"guide-subtext\">发布后到控制台的「合集与挑战」，选择这个题目和自己的公开作品。临时隧道与到期链接不能留作投稿。</p>\
 <a class=\"guide-cta\" href=\"/?join={}#publish-dialog\">发布说明与投稿入口 →</a>\
@@ -475,7 +449,7 @@ pub fn collection(
         esc(&collection.summary),
     );
     body.push_str("<div class=\"collection-gallery-bar\">");
-    body.push_str(&search(query, &base, Some(collection)));
+    body.push_str(&search(query, &base));
     body.push_str(&tabs(query, &base));
     body.push_str("</div>");
     let mut entries: Vec<_> = collection
@@ -485,9 +459,6 @@ pub fn collection(
             let item = view.plaza.items.iter().find(|item| {
                 item.slug == entry.slug && visible(item, &now) && matches(item, &query.search)
             })?;
-            if !query.model.is_empty() && entry.model != query.model {
-                return None;
-            }
             Some((entry, item))
         })
         .collect();
@@ -504,15 +475,15 @@ pub fn collection(
     if entries.is_empty() {
         body.push_str(&format!(
             "<section class=\"discovery-empty\"><h2>{}</h2><p>{}</p></section>",
-            if query.search.is_empty() && query.model.is_empty() {
+            if query.search.is_empty() {
                 "还没有作品"
             } else {
                 "没有符合条件的作品"
             },
-            if query.search.is_empty() && query.model.is_empty() {
+            if query.search.is_empty() {
                 "作品投稿后会显示在这里。".to_string()
             } else {
-                format!("<a href=\"{}\">清空条件</a>，看看其他答案。", esc(&base))
+                format!("<a href=\"{}\">清空条件</a>，看看其他作品。", esc(&base))
             }
         ));
     } else {
@@ -526,36 +497,33 @@ pub fn collection(
                 ),
                 1,
             );
-            let model_name = if entry.model.is_empty() {
-                "模型未填写"
-            } else {
-                &entry.model
-            };
             let version_diff = if entry.submitted_version != item.version {
                 format!(" · 当前 v{}（作品已更新，打开的是当前版本）", item.version)
             } else {
                 String::new()
             };
-            let prompt_box = if entry.prompt.is_empty() {
-                "<p class=\"empty-prompt\">作者没有公开提示词。</p>".to_string()
+            let note_tag = if !entry.note.is_empty() {
+                "<span class=\"note-tag\">附言</span>"
             } else {
-                format!("<div class=\"prompt-box\"><span class=\"box-label\">公开提示词</span><pre>{}</pre></div>", esc(&entry.prompt))
+                ""
+            };
+            let note_box = if entry.note.is_empty() {
+                String::new()
+            } else {
+                format!("<div class=\"prompt-box\"><span class=\"box-label\">作者附言</span><pre>{}</pre></div>", esc(&entry.note))
             };
             body.push_str(&format!(
                 "<article class=\"collection-entry\">{tile}\
 <details class=\"creation-note\">\
-<summary class=\"creation-summary\"><span class=\"model-tag\">{}</span><span class=\"method-tag\">{}</span><span class=\"version-tag\">投稿 v{}{}</span></summary>\
+<summary class=\"creation-summary\">{note_tag}<span class=\"version-tag\">投稿 v{}{}</span></summary>\
 <div class=\"creation-body\">\
-<p class=\"creation-disclaimer\">作者填写，未经平台认证。</p>\
 <p class=\"creation-time\">投稿时间 · {}</p>\
 {}\
 </div></details></article>",
-                esc(model_name),
-                entry.method.label(),
                 entry.submitted_version,
                 version_diff,
                 esc(&entry.submitted_at),
-                prompt_box
+                note_box
             ));
         }
         body.push_str("</section>");
@@ -567,38 +535,22 @@ pub fn collection(
 }
 
 pub fn context(plaza: &Plaza, slug: &str, collection_slug: Option<&str>) -> String {
+    let now = time::OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .unwrap_or_default();
     let Some(collection) = plaza.collections.iter().find(|collection| {
         collection.public
             && !collection.hidden
             && collection_slug.is_none_or(|wanted| wanted == collection.slug)
-            && collection.entries.iter().any(|entry| entry.slug == slug)
+            && collection.entries.iter().any(|entry| {
+                entry.slug == slug
+                    && plaza
+                        .items
+                        .iter()
+                        .any(|item| item.slug == entry.slug && visible(item, &now))
+            })
     }) else {
         return String::new();
     };
-    let now = time::OffsetDateTime::now_utc()
-        .format(&Rfc3339)
-        .unwrap_or_default();
-    let entries: Vec<_> = collection
-        .entries
-        .iter()
-        .filter(|entry| {
-            plaza
-                .items
-                .iter()
-                .any(|item| item.slug == entry.slug && visible(item, &now))
-        })
-        .collect();
-    let Some(position) = entries.iter().position(|entry| entry.slug == slug) else {
-        return String::new();
-    };
-    let next = if entries.len() > 1 {
-        format!(
-            "<a href=\"/p/{}?collection={}&amp;from=collection\">下一件 →</a>",
-            entries[(position + 1) % entries.len()].slug,
-            collection.slug
-        )
-    } else {
-        String::new()
-    };
-    format!("<nav class=\"collection-context\" aria-label=\"同合集作品\"><a href=\"{}\">← {}</a>{next}</nav>", esc(&collection.path()), esc(&collection.title))
+    format!("<a class=\"invitation-back collection-context\" href=\"{}\">‹ 返回 {}</a>", esc(&collection.path()), esc(&collection.title))
 }

@@ -26,6 +26,7 @@ pub mod cache;
 pub mod capabilities;
 pub mod card;
 pub mod config;
+pub mod presentation;
 pub mod discovery;
 pub mod events;
 pub mod follow;

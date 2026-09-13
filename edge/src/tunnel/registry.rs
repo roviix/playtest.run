@@ -157,6 +157,7 @@ pub fn synthetic_manifest(claims: &Claims, connected_at: OffsetDateTime) -> Mani
         kind: playtest_common::manifest::WorkKind::Web,
         entry: None,
         article: None,
+        chapters: Vec::new(),
         files: Vec::new(),
     }
 }

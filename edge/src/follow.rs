@@ -186,6 +186,26 @@ pub async fn push_off(api_base: Option<&str>, me_token: &str) -> Mine {
     into_mine(post(api_base, routes::ME_PUSH_OFF, &request).await)
 }
 
+/// 门禁页即时提交一句话体验反馈。
+pub async fn submit_feedback(api_base: Option<&str>, slug: &str, session: &str, text: &str) -> Result<(), u16> {
+    let req = playtest_common::ingest::FeedbackRequest {
+        session: session.to_string(),
+        slug: slug.to_string(),
+        text: text.to_string(),
+        seconds_in: None,
+    };
+    match post::<_, playtest_common::ingest::FeedbackAccepted>(
+            api_base,
+            playtest_common::ingest::routes::FEEDBACK,
+            &req,
+        )
+        .await {
+        Call::Ok(_) => Ok(()),
+        Call::Rejected(status) => Err(status),
+        Call::Unavailable => Err(503),
+    }
+}
+
 fn into_mine(call: Call<MeView>) -> Mine {
     match call {
         Call::Ok(view) => Mine::View(view),

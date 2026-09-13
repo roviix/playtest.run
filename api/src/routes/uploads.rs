@@ -225,6 +225,7 @@ pub async fn commit(
         kind: requested_kind,
         entry: request.entry,
         article,
+        chapters: request.chapters,
         files,
     };
     let max_total = if caller.kind.is_anon() {
@@ -389,27 +390,43 @@ async fn render_article(
         .map_err(|_| ApiError::invalid("Markdown 原稿不是 UTF-8 文本，请另存为 UTF-8 后重试。"))?;
     let inspected = playtest_common::article::inspect(markdown, &source.path)
         .map_err(|error| ApiError::invalid(error.to_string()))?;
-    let expected: HashSet<&str> = std::iter::once(source.path.as_str())
-        .chain(inspected.images.iter().map(String::as_str))
-        .collect();
-    let supplied: HashSet<&str> = request
-        .files
-        .iter()
-        .map(|file| file.path.as_str())
-        .collect();
-    if expected != supplied {
-        let extra = supplied.difference(&expected).next().copied();
-        let missing = expected.difference(&supplied).next().copied();
-        let message = match (missing, extra) {
-            (Some(path), _) => format!("文章引用了 {path}，但这张图片没有随原稿上传。"),
-            (_, Some(path)) => format!(
-                "{path} 没有被文章引用。文章发布只收原稿和明确引用的本地图片，不会顺手上传整个目录。"
-            ),
-            _ => "文章文件清单与正文引用对不上。".to_string(),
-        };
-        return Err(ApiError::invalid(message));
+    let mut all_images = Vec::new();
+    if request.chapters.is_empty() {
+        let expected: HashSet<&str> = std::iter::once(source.path.as_str())
+            .chain(inspected.images.iter().map(String::as_str))
+            .collect();
+        let supplied: HashSet<&str> = request
+            .files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect();
+        if expected != supplied {
+            let extra = supplied.difference(&expected).next().copied();
+            let missing = expected.difference(&supplied).next().copied();
+            let message = match (missing, extra) {
+                (Some(path), _) => format!("文章引用了 {path}，但这张图片没有随原稿上传。"),
+                (_, Some(path)) => format!(
+                    "{path} 没有被文章引用。文章发布只收原稿和明确引用的本地图片，不会顺手上传整个目录。"
+                ),
+                _ => "文章文件清单与正文引用对不上。".to_string(),
+            };
+            return Err(ApiError::invalid(message));
+        }
+        all_images.extend(inspected.images);
+    } else {
+        let supplied: HashSet<&str> = request
+            .files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect();
+        for ch in &request.chapters {
+            if !supplied.contains(ch.path.as_str()) {
+                return Err(ApiError::invalid(format!("章节 {} 的文件 {} 缺失", ch.id, ch.path)));
+            }
+        }
+        all_images.extend(inspected.images);
     }
-    for path in &inspected.images {
+    for path in &all_images {
         let image = request
             .files
             .iter()

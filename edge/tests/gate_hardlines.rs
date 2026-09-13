@@ -93,6 +93,7 @@ impl Site {
             kind: Default::default(),
             entry: None,
             article: None,
+            chapters: vec![],
             files,
         };
         shape(&mut manifest);

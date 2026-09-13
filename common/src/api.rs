@@ -13,7 +13,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::manifest::{Cover, FileEntry, GateMode, WorkKind};
+use crate::manifest::{ChapterEntry, Cover, FileEntry, GateMode, WorkKind};
 
 pub mod routes {
     pub const HEALTH: &str = "/healthz";
@@ -382,6 +382,9 @@ pub struct PrepareUploadRequest {
     /// CLI 上传时认出来的引擎，见 [`crate::manifest::Manifest::engine`]。认不出来就没有。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub engine: Option<String>,
+    /// 连载小说的章节列表（DESIGN §3.17）。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub chapters: Vec<ChapterEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

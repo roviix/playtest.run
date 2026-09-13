@@ -535,3 +535,41 @@ fn the_server_cannot_be_reached() {
     assert!(stderr.contains("连不上服务器"), "{stderr}");
     assert!(stderr.contains("--api"), "{stderr}");
 }
+
+#[test]
+fn uploads_a_directory_of_markdown_chapters_as_a_serialized_article() {
+    let home = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let novel_dir = work.path().join("my-novel");
+    std::fs::create_dir_all(&novel_dir).unwrap();
+    write(
+        &novel_dir.join("01-intro.md"),
+        b"# \xe7\xac\xac\xe4\xb8\x80\xe7\xab\xa0\xef\xbc\x9a\xe6\xb2\x89\xe7\x9d\xa1\n\n\xe7\xac\xac\xe4\xb8\x80\xe7\xab\xa0\xe5\x86\x85\xe5\xae\xb9\xe3\x80\x82\n",
+    );
+    write(
+        &novel_dir.join("02-echo.md"),
+        b"# \xe7\xac\xac\xe4\xba\x8c\xe7\xab\xa0\xef\xbc\x9a\xe5\x9b\x9e\xe5\xa3\xb0\n\n\xe7\xac\xac\xe4\xba\x8c\xe7\xab\xa0\xe5\x86\x85\xe5\xae\xb9\xe3\x80\x82\n",
+    );
+
+    let (api, fake) = start_fake(Behaviour::default(), HashSet::new());
+    let output = run_cli(
+        home.path(),
+        &api,
+        &[novel_dir.to_str().unwrap(), "--no-qr", "-n", "星海漫游"],
+    );
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    assert!(stderr_of(&output).contains("连载作品：包含 2 个章节"));
+
+    let prepared = fake.log.lock().unwrap().prepared.clone();
+    assert_eq!(prepared.len(), 1);
+    let req = &prepared[0];
+    assert_eq!(req.kind, playtest_common::manifest::WorkKind::Article);
+    assert_eq!(req.title.as_deref(), Some("星海漫游"));
+    assert_eq!(req.chapters.len(), 2);
+    assert_eq!(req.chapters[0].title, "第一章：沉睡");
+    assert_eq!(req.chapters[0].path, "01-intro.md");
+    assert_eq!(req.chapters[1].title, "第二章：回声");
+    assert_eq!(req.chapters[1].path, "02-echo.md");
+    assert_eq!(req.entry.as_deref(), Some("01-intro.md"));
+}
+

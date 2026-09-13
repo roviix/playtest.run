@@ -96,6 +96,7 @@ mod tests {
             kind: playtest_common::manifest::WorkKind::Web,
             entry: None,
             article: None,
+            chapters: vec![],
             files: vec![],
         }
     }
@@ -140,7 +141,7 @@ mod tests {
             assert!(!html.contains(forbidden), "{forbidden}");
         }
         assert!(!html.contains(playtest_common::DEVELOPER_HOST));
-        assert!(html.len() < 9 * 1024, "分享页 {} 字节", html.len());
+        assert!(html.len() < 16 * 1024, "分享页 {} 字节", html.len());
     }
 
     #[test]

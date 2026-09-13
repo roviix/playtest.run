@@ -2,6 +2,21 @@
    本文件只保留控制台的结果、表单与设置布局；状态色表达实际事实。 */
 
 :root {
+  --bg: #09090b;
+  --rail: #0c0c0e;
+  --card: #121216;
+  --card2: #17181d;
+  --fg: #f4f4f5;
+  --soft: #d4d4d8;
+  --dim: #a1a1aa;
+  --faint: #71717a;
+  --line: #ffffff14;
+  --line2: #ffffff20;
+  --accent: #75cdb5;
+  --accent-ink: #101e19;
+  --accent-soft: #57ad9526;
+  --accent-line: #57ad954d;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --warn: #f0a86a;
   --warn-bg: #2a1f14;
   --warn-line: #5a3d22;
@@ -10,6 +25,7 @@
   --danger-line: #5a2f2a;
   --surface: inset 0 0 0 1px var(--line), inset 0 1px 0 #ffffff0c;
   --surface-raised: inset 0 0 0 1px var(--line2), inset 0 1px 0 #ffffff14, 0 24px 48px -24px #000, 0 8px 18px -10px #000c;
+  --rail-w: 224px;
   color-scheme: dark;
 }
 

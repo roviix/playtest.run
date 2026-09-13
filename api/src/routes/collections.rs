@@ -215,8 +215,7 @@ pub async fn submit(
     JsonBody(draft): JsonBody<EntryDraft>,
 ) -> ApiResult<Json<Collection>> {
     require_account(&caller)?;
-    let model = text(&draft.model, 120, "模型名称与版本")?;
-    let prompt = text(&draft.prompt, 6000, "公开提示词")?;
+    let note = text(&draft.note, 500, "创作说明")?;
     let now = clock::now_string();
     {
         let conn = state.db().lock().await;
@@ -279,14 +278,10 @@ pub async fn submit(
                 "这个合集已满 200 件作品，先联系组织者整理。",
             ));
         }
-        let method = serde_json::to_value(draft.method)?
-            .as_str()
-            .unwrap()
-            .to_string();
-        conn.execute("INSERT INTO collection_entries(collection_slug,site_slug,user_id,submitted_version,submitted_at,model,prompt,method)
-            VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(collection_slug,site_slug) DO UPDATE SET
-            submitted_version=excluded.submitted_version,model=excluded.model,prompt=excluded.prompt,method=excluded.method",
-            params![slug,draft.slug,caller.user_id,site.current_version,now,model,prompt,method])?;
+        conn.execute("INSERT INTO collection_entries(collection_slug,site_slug,user_id,submitted_version,submitted_at,note)
+            VALUES(?1,?2,?3,?4,?5,?6) ON CONFLICT(collection_slug,site_slug) DO UPDATE SET
+            submitted_version=excluded.submitted_version,note=excluded.note",
+            params![slug,draft.slug,caller.user_id,site.current_version,now,note])?;
     }
     plaza::publish(&state).await;
     show(State(state), caller, Path(slug)).await
@@ -311,7 +306,7 @@ pub async fn withdraw(
             )?;
         } else {
             owned(&conn, &slug, &caller)?;
-            conn.execute("UPDATE collection_entries SET blocked=1,model='',prompt='' WHERE collection_slug=?1 AND site_slug=?2", params![slug,site])?;
+            conn.execute("UPDATE collection_entries SET blocked=1,note='' WHERE collection_slug=?1 AND site_slug=?2", params![slug,site])?;
         }
     }
     plaza::publish(&state).await;

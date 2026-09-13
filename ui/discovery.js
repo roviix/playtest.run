@@ -6,7 +6,7 @@
     button.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(prompt.textContent);
-        status.textContent = '题目已复制，交给你喜欢的模型试试。';
+        status.textContent = '题目已复制，随时可以开始创作。';
       } catch {
         status.textContent = '无法自动复制，请选中题目手动复制。';
       }

@@ -36,6 +36,7 @@ use crate::state::AppState;
 pub fn app(state: AppState) -> Router {
     let router = Router::new()
         .route(paths::HEALTH, get(health))
+        .route("/health", get(health))
         // 给 AI 助手读的那几个文件（REWRITE §3.2）。不带令牌、不带用户数据。
         .route(paths::LLMS_TXT, get(agents::llms_txt))
         .route(paths::LLMS_FULL_TXT, get(agents::llms_full_txt))

@@ -199,6 +199,7 @@ fn prepare_request(files: Vec<FileEntry>) -> PrepareUploadRequest {
         engine: None,
         kind: Default::default(),
         entry: None,
+        chapters: vec![],
     }
 }
 

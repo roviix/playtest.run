@@ -11,7 +11,7 @@ use anyhow::{bail, Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use playtest_common::api::{CreateSiteRequest, ErrorCode, PrepareUploadRequest, UpdateSiteRequest};
 use playtest_common::limits::{self, ANON_MAX_VERSION_BYTES};
-use playtest_common::manifest::{self, validate_files, Cover, FileEntry, WorkKind};
+use playtest_common::manifest::{self, validate_files, ChapterEntry, Cover, FileEntry, WorkKind};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
@@ -48,6 +48,7 @@ struct UploadInput {
     entry: Option<String>,
     title_hint: Option<String>,
     checked: inspect::Report,
+    chapters: Vec<ChapterEntry>,
 }
 
 /// 做完了返回这一次的全部结果，由调用方决定说给谁听——终端、`--json`、还是 MCP 的对话框。
@@ -67,6 +68,7 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         entry,
         title_hint,
         mut checked,
+        chapters,
     } = input;
     if files.is_empty() {
         return Err(output::bad_input(format!(
@@ -150,6 +152,7 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         engine: (kind == WorkKind::Web)
             .then(|| checked.manifest_engine())
             .flatten(),
+        chapters,
     };
 
     let prepared = match client.prepare_upload(&slug, &request).await {
@@ -418,6 +421,104 @@ async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
             .iter()
             .map(|file| file.entry.clone())
             .collect::<Vec<_>>();
+
+        let has_any_html = entries
+            .iter()
+            .any(|e| e.path == "index.html" || e.path.ends_with("/index.html") || e.path.ends_with(".htm") || e.path.ends_with("/index.htm"));
+        let has_web_assets = entries.iter().any(|e| {
+            e.path.ends_with(".js")
+                || e.path.ends_with(".mjs")
+                || e.path.ends_with(".wasm")
+                || e.path.ends_with(".pck")
+                || e.path.ends_with(".unityweb")
+                || e.path == "package.json"
+                || e.path == "Cargo.toml"
+                || e.path.starts_with("node_modules/")
+                || e.path.starts_with("src/")
+        });
+        let mut md_files: Vec<&ScannedFile> = files
+            .iter()
+            .filter(|f| f.entry.path.ends_with(".md"))
+            .collect();
+
+        if !has_any_html && !has_web_assets && !md_files.is_empty() {
+            md_files.sort_by(|a, b| a.entry.path.cmp(&b.entry.path));
+            let mut chapters = Vec::new();
+            let mut book_title = None;
+
+            for (idx, sf) in md_files.iter().enumerate() {
+                let content = std::fs::read_to_string(&sf.source).unwrap_or_default();
+                let inspected = playtest_common::article::inspect(&content, &sf.entry.path).ok();
+                let title = inspected
+                    .as_ref()
+                    .and_then(|i| i.title.clone())
+                    .unwrap_or_else(|| {
+                        Path::new(&sf.entry.path)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("未命名章节")
+                            .to_string()
+                    });
+
+                let stem = Path::new(&sf.entry.path)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("");
+
+                if (stem.eq_ignore_ascii_case("readme") || stem.eq_ignore_ascii_case("index"))
+                    && book_title.is_none()
+                {
+                    if let Some(ref ins) = inspected {
+                        if ins.title.is_some() {
+                            book_title = ins.title.clone();
+                        }
+                    }
+                }
+
+                let chapter_id = if !stem.is_empty()
+                    && stem
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                {
+                    stem.to_string()
+                } else {
+                    format!("c{}", idx + 1)
+                };
+
+                chapters.push(ChapterEntry {
+                    id: chapter_id,
+                    title,
+                    path: sf.entry.path.clone(),
+                    hash: sf.entry.hash.clone(),
+                    size: sf.entry.size,
+                });
+            }
+
+            let entry = chapters.first().map(|c| c.path.clone());
+            let fallback_title = root
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.to_string());
+            let title_hint = book_title.or(fallback_title);
+
+            let mut checked = inspect::Report::default();
+            checked.findings.push(Finding::note(format!(
+                "这是一部连载作品：包含 {} 个章节，按文件名自然序编排",
+                chapters.len()
+            )));
+
+            return Ok(UploadInput {
+                remember_key: root.to_string_lossy().into_owned(),
+                root,
+                files,
+                kind: WorkKind::Article,
+                entry,
+                title_hint,
+                checked,
+                chapters,
+            });
+        }
+
         let checked = inspect_dir(&root, &files, &entries, has_backend);
         return Ok(UploadInput {
             remember_key: root.to_string_lossy().into_owned(),
@@ -427,6 +528,7 @@ async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
             entry: None,
             title_hint: None,
             checked,
+            chapters: vec![],
         });
     }
     if !meta.is_file() {
@@ -536,6 +638,7 @@ async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
         entry: Some(entry),
         title_hint,
         checked,
+        chapters: vec![],
     })
 }
 

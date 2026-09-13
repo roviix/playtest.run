@@ -962,6 +962,7 @@ mod tests {
             kind: crate::manifest::WorkKind::Web,
             entry: None,
             article: None,
+            chapters: vec![],
             files: vec![FileEntry {
                 path: "index.html".into(),
                 hash: hash_bytes(b"<h1>hi</h1>"),

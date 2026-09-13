@@ -67,6 +67,7 @@ impl Site {
             kind: Default::default(),
             entry: None,
             article: None,
+            chapters: vec![],
             files,
         };
         shape(&mut manifest);
@@ -376,6 +377,7 @@ async fn the_limit_matches_what_the_manifest_says() {
         kind: Default::default(),
         entry: None,
         article: None,
+        chapters: vec![],
         files: vec![],
     };
     assert_eq!(breaker::limit_for(&m), limits::SLUG_HOURLY_BYTES);

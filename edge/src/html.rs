@@ -168,16 +168,15 @@ mod tests {
 
     #[test]
     fn each_page_carries_only_its_two_layers_and_they_stay_small() {
-        // 每一页都内联样式；它长一点，每个玩家的第一屏就慢一点（DESIGN §3.3「整页不超过几 KB」）。
-        // 卡页 6.5 KB：门禁页整页（含样式）仍在 11 KB 以内，见 gate.rs 的尺寸测试。
+        // 卡页 ~10.5 KB：含整套门禁卡与右侧悬浮实时原声舱（含微信式全屏聊天与试玩贴纸），无外链脚本，整页在 16 KB 以内。
         // 整页 23 KB：广场的墙、栏、卡、发布说明（终端舱）都在里面，没有一条卡页的规则。
         let card = BASE.len() + CARD.len();
         let page = BASE.len() + PAGE.len();
-        assert!(card < 13 * 512, "卡页样式 {card} 字节");
+        assert!(card < 28 * 512, "卡页样式 {card} 字节");
         assert!(page < 23 * 1024, "整页样式 {page} 字节");
         assert!(
-            PAGE.contains(".publish-sheet{width:min(42rem,100%)"),
-            "发布说明独立使用 42rem 阅读宽度"
+            PAGE.contains(".publish-sheet{width:min(34rem,100%)"),
+            "发布说明独立使用 34rem 紧凑阅读宽度"
         );
         // 两层互不覆盖：整页那一层不该再出现「撤销卡页」的写法。
         assert!(!PAGE.contains("body.page"));

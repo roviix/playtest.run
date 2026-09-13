@@ -241,6 +241,7 @@ mod tests {
             kind: playtest_common::manifest::WorkKind::Web,
             entry: None,
             article: None,
+            chapters: vec![],
             files: vec![],
         }
     }

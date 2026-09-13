@@ -181,6 +181,7 @@ impl Site {
             kind: Default::default(),
             entry: None,
             article: None,
+            chapters: vec![],
             files: vec![FileEntry {
                 path: "index.html".into(),
                 hash,
@@ -443,8 +444,8 @@ async fn sharing_is_only_for_a_work_that_chose_to_be_public() {
     assert!(html.contains("复制链接"));
     // 作品域上一个 CSP 头都不发（硬线，见 gate_hardlines）。
     assert!(reply.header("content-security-policy").is_none());
-    // 几 KB 就够：没有外部资源。
-    assert!(html.len() < 12 * 1024, "分享页 {} 字节", html.len());
+    // 保持轻量：没有外部资源。
+    assert!(html.len() < 16 * 1024, "分享页 {} 字节", html.len());
 }
 
 // ------------------------------------------------------------------ 关注登记

@@ -166,8 +166,8 @@ try {
     const cover = await command("Page.captureScreenshot", { format: "png" });
     await publish(work, Buffer.from(cover.data, "base64"));
   }
-  const challenge = await api("POST", "/v1/collections", tokens[0], { slug: "pelican-bicycle", title: "鹈鹕骑单车", kind: "challenge", summary: "同一道题，看看大家能骑出多少种答案。这里的数据仅供本地演示。", prompt: "请用一个 HTML 文件做一只鹈鹕骑单车的动画。让轮子转起来，让它像真的在骑。你也可以加入自己的小巧思。", rules: "只提交自己有权发布的浏览器作品。\n请如实填写创作过程；不设模型名次。\n本地演示作品不是模型能力测试样本。", public: true });
-  for (const work of works.slice(0, 5)) await api("POST", `/v1/collections/${challenge.slug}/entries`, work.token, { slug: work.slug, model: "本地演示 · 非模型输出", method: "edited", prompt: "用于验证平台体验的原创演示素材。" });
+  const challenge = await api("POST", "/v1/collections", tokens[0], { slug: "pelican-bicycle", title: "鹈鹕骑单车", kind: "challenge", summary: "同一道题，看看大家能骑出多少种答案。这里的数据仅供本地演示。", prompt: "请用一个 HTML 文件做一只鹈鹕骑单车的动画。让轮子转起来，让它像真的在骑。你也可以加入自己的小巧思。", rules: "只提交自己有权发布的浏览器作品。\n本地演示作品仅供验证平台体验。", public: true });
+  for (const work of works.slice(0, 5)) await api("POST", `/v1/collections/${challenge.slug}/entries`, work.token, { slug: work.slug, note: "用于验证平台体验的原创演示素材。" });
   await api("POST", "/v1/collections", tokens[1], { slug: "weekend-collection", title: "周末做的两个小东西", kind: "collection", summary: "一个人的创意编程练习。本地演示作品集。", public: true });
   await api("POST", "/v1/collections/weekend-collection/entries", tokens[1], { slug: works[2].slug });
   await api("POST", "/v1/collections/weekend-collection/entries", tokens[1], { slug: works[3].slug });
@@ -227,13 +227,64 @@ try {
   assert.ok(await evaluate("location.search.includes('q=')"));
   await click('.collection-entries .tile');
   await until(() => evaluate("!!document.querySelector('.collection-context')"), "邀请函合集上下文");
-  assert.ok(await evaluate("document.querySelector('.collection-context').innerText.includes('下一件')"));
+  assert.ok(await evaluate("document.querySelector('.collection-context').innerText.includes('返回')"));
   shots.push(await screenshot("invitation-desktop"));
+  for (const [width, height] of [[1920, 1080], [960, 800], [860, 800], [390, 844], [320, 740]]) {
+    await viewport(width, height);
+    await evaluate('new Promise(accept => requestAnimationFrame(() => requestAnimationFrame(accept)))');
+    const layout = await evaluate(`(() => {
+      const card = document.querySelector('main.card').getBoundingClientRect();
+      const header = document.querySelector('.invitation-header').getBoundingClientRect();
+      const panel = document.querySelector('.chat-panel');
+      const chat = panel.getBoundingClientRect();
+      const input = document.querySelector('.chat-input').getBoundingClientRect();
+      return { cardLeft: card.left, cardWidth: card.width, headerLeft: header.left,
+        chatRight: chat.right, chatLeft: chat.left, inputBottom: input.bottom,
+        chatVisible: getComputedStyle(panel).display !== 'none', overflow: document.documentElement.scrollWidth > innerWidth };
+    })()`);
+    assert.equal(layout.overflow, false, `${width}px 横向溢出`);
+    if (width >= 960) {
+      assert.ok(layout.cardLeft < 70, `${width}px 卡片应贴齐页面左侧`);
+      assert.equal(layout.cardLeft, layout.headerLeft);
+      assert.ok(layout.cardWidth >= 380 && layout.cardWidth <= 480);
+      assert.ok(layout.chatVisible && layout.chatLeft > layout.cardLeft + layout.cardWidth);
+      assert.ok(layout.chatRight > width - 70 && layout.inputBottom <= height, `${width}px ${JSON.stringify(layout)}`);
+    } else {
+      assert.equal(layout.chatVisible, false);
+    }
+    shots.push(await screenshot(`invitation-layout-${width}`));
+  }
+  await viewport(1920, 1080);
+  await evaluate(`(() => {
+    const stream = document.querySelector('.chat-stream');
+    const message = document.createElement('div');
+    message.className = 'chat-msg';
+    message.innerHTML = '<div class="chat-content"><div class="chat-bubble">' + '长反馈用于检查换行与滚动。'.repeat(40) + '</div></div>';
+    for (let index = 0; index < 30; index++) stream.append(message.cloneNode(true));
+    stream.scrollTop = stream.scrollHeight;
+  })()`);
+  assert.ok(await evaluate(`(() => {
+    const stream = document.querySelector('.chat-stream');
+    return stream.scrollHeight > stream.clientHeight && stream.scrollTop > 0 && document.querySelector('.chat-input').getBoundingClientRect().bottom <= innerHeight;
+  })()`), '长消息只滚动消息流，输入区仍在视口内');
+  shots.push(await screenshot('invitation-long-stream-desktop'));
+  await viewport(1440, 1040);
   await navigate(`${playerBase}/p/local-pelican-0`);
   await until(() => evaluate("!!document.querySelector('main.card')"), "独立邀请函页面");
   shots.push(await screenshot("invitation-standalone-desktop"));
+  await fill('.chat-input', '骑自行车的动画太丝滑了！天空颜色很赞。');
+  await click('.chat-send');
+  await until(() => evaluate("document.body.innerText.includes('骑自行车的动画太丝滑了')"), "原声流即时上屏");
+  await click('[data-sticker="🎨 美术惊艳"]');
+  await until(() => evaluate("document.body.innerText.includes('美术惊艳')"), "贴纸点击即时上屏");
+  shots.push(await screenshot("invitation-chat-submitted-desktop"));
   await viewport(390, 844);
   shots.push(await screenshot("invitation-standalone-mobile"));
+  await click('a.btn-chat');
+  await until(() => evaluate("location.hash==='#chat-panel'"), "移动端微信式聊天面板");
+  shots.push(await screenshot("invitation-chat-mobile"));
+  await click('.chat-back');
+  await until(() => evaluate("location.hash==='' || location.hash==='#'"), "返回邀请卡");
   await viewport(1440, 1040);
   await navigate(`${playerBase}/c/pelican-bicycle`); await viewport(390, 844);
   assert.ok(await evaluate("document.documentElement.scrollWidth<=innerWidth+1"), "挑战页手机布局溢出");
@@ -275,7 +326,7 @@ try {
   await until(() => evaluate("document.body.innerText.includes('已关注')"), "已关注状态");
   shots.push(await screenshot("subscribed-mobile"));
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  const report = { date: new Date().toISOString(), data, playerBase, consoleBase, shots, checks: ["真实数据库迁移与上传", "合集聚合与基础搜索", "桌面与 390px 布局", "关闭 JavaScript 后搜索", "复制题目与反馈", "邀请函返回合集和下一件", "控制台真实投稿", "邮箱确认与根域关注状态"], exceptions };
+  const report = { date: new Date().toISOString(), data, playerBase, consoleBase, shots, checks: ["真实数据库迁移与上传", "合集聚合与基础搜索", "桌面与 390px 布局", "关闭 JavaScript 后搜索", "复制题目与反馈", "邀请函返回合集", "控制台真实投稿", "邮箱确认与根域关注状态"], exceptions };
   writeFileSync(resolve(data, "report.json"), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   if (keep) {

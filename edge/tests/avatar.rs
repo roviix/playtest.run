@@ -62,6 +62,7 @@ impl Fixture {
             kind: Default::default(),
             entry: None,
             article: None,
+            chapters: vec![],
             files: vec![FileEntry {
                 path: "index.html".into(),
                 hash,

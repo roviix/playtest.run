@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use playtest_common::collection::{Collection, CollectionEntry, CollectionKind, CreationMethod};
+use playtest_common::collection::{Collection, CollectionEntry, CollectionKind};
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::{clock, db};
@@ -60,23 +60,19 @@ pub fn list(conn: &Connection, user: Option<&str>, now: &str) -> rusqlite::Resul
         .collect::<rusqlite::Result<_>>()?;
     for collection in &mut collections {
         let mut entries = conn.prepare(
-            "SELECT site_slug, submitted_version, submitted_at, model, prompt, method, blocked, sites.title
+            "SELECT site_slug, submitted_version, submitted_at, note, blocked, sites.title
              FROM collection_entries JOIN sites ON sites.slug=site_slug WHERE collection_slug = ?1 ORDER BY submitted_at DESC, site_slug",
         )?;
         let rows = entries.query_map([&collection.slug], |row| {
-            let method: String = row.get(5)?;
             Ok((
                 CollectionEntry {
                     slug: row.get(0)?,
                     submitted_version: row.get(1)?,
                     submitted_at: row.get(2)?,
-                    title: row.get(7)?,
-                    model: row.get(3)?,
-                    prompt: row.get(4)?,
-                    method: serde_json::from_value(serde_json::Value::String(method))
-                        .unwrap_or(CreationMethod::Unspecified),
+                    title: row.get(5)?,
+                    note: row.get(3)?,
                 },
-                row.get::<_, bool>(6)?,
+                row.get::<_, bool>(4)?,
             ))
         })?;
         for row in rows {

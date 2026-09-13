@@ -13,7 +13,7 @@ use axum::Router;
 use percent_encoding::percent_decode_str;
 use playtest_common::api::ErrorCode;
 use playtest_common::follow::{root_paths, FollowTarget};
-use playtest_common::limits::MAX_ARTICLE_HTML_BYTES;
+use playtest_common::limits::{MAX_ARTICLE_HTML_BYTES, MAX_ARTICLE_SOURCE_BYTES};
 use playtest_common::manifest::{GateMode, Manifest, WorkKind};
 use playtest_common::store::Store;
 use playtest_common::{GATE_COOKIE, ME_COOKIE, SESSION_COOKIE};
@@ -165,7 +165,7 @@ async fn root(
     if !allow.permits(&parts.method) {
         return method_not_allowed(allow.header());
     }
-    let mut response = match door {
+    let response = match door {
         Root::Plaza => {
             discovery_page(
                 app,
@@ -208,17 +208,6 @@ async fn root(
         Root::ServiceWorker => service_worker(parts.method == Method::HEAD),
         Root::Llms => llms_pointer(),
     };
-    append(
-        response.headers_mut(),
-        "set-cookie",
-        &cookie(
-            ME_COOKIE,
-            "",
-            Some(0),
-            app.config.public_scheme == "https",
-            Some(&app.config.cookie_domain()),
-        ),
-    );
     response
 }
 
@@ -261,10 +250,6 @@ async fn project_door(
     let site_url = format!("{scheme}://{slug}.{suffix}{port_part}/");
     let origin = format!("{scheme}://{slug}.{suffix}{port_part}");
 
-    if parts.method == Method::POST && manifest.kind != WorkKind::Web {
-        return method_not_allowed("GET, HEAD");
-    }
-
     let me_token = identity::token(&parts.headers, app.config.public_scheme == "https")
         .filter(|v| is_me_token(v))
         .map(str::to_string);
@@ -275,6 +260,55 @@ async fn project_door(
 
     if parts.method == Method::POST {
         let form = read_form(body).await;
+        if field(&form, "action").as_deref() == Some("feedback") || field(&form, "feedback").is_some() {
+            let text = field(&form, "feedback").unwrap_or_default().trim().to_string();
+            let chapter_id = field(&form, "chapter").map(|c| c.trim().to_string()).filter(|c| !c.is_empty());
+            let feedback_text = if let Some(ref cid) = chapter_id {
+                format!("[{cid}] {text}")
+            } else {
+                text.clone()
+            };
+            let root_origin = format!("{scheme}://{suffix}{port_part}");
+            let result = if header_str(&parts.headers, "origin").is_some_and(|origin| origin != root_origin) {
+                Err(403)
+            } else if text.is_empty() || text.chars().count() > 200 {
+                Err(400)
+            } else {
+                follow::submit_feedback(
+                    app.config.api_internal_url.as_deref(),
+                    &manifest.slug,
+                    &sid,
+                    &feedback_text,
+                )
+                .await
+            };
+            let (status, message) = match result {
+                Ok(()) => (StatusCode::OK, "反馈已送达。是否公开由作者决定。"),
+                Err(400) => (StatusCode::BAD_REQUEST, "请填写 1–200 字的反馈。"),
+                Err(403) => (StatusCode::FORBIDDEN, "请在作品页面提交反馈。"),
+                Err(429) => (StatusCode::TOO_MANY_REQUESTS, "本次反馈已达上限，或提交过于频繁，请稍后再试。"),
+                Err(_) => (StatusCode::SERVICE_UNAVAILABLE, "反馈未送达，请稍后重试；你的文字仍保留在这里。"),
+            };
+            let mut headers = base_headers();
+            put(&mut headers, "cache-control", "no-store");
+            if existing_sid.is_none() {
+                append(&mut headers, "set-cookie", &cookie(SESSION_COOKIE, &sid, Some(SESSION_MAX_AGE), app.config.public_scheme == "https", None));
+            }
+            if header_str(&parts.headers, "accept").is_some_and(|accept| accept.contains("application/json")) {
+                return (status, headers, axum::Json(serde_json::json!({"ok": result.is_ok(), "message": message}))).into_response();
+            }
+            let action = crate::html::esc(parts.uri.path());
+            let retry = if result.is_err() {
+                format!("<form method=\"post\" action=\"{action}\"><input type=\"hidden\" name=\"action\" value=\"feedback\"><label>你的反馈<textarea name=\"feedback\" maxlength=\"200\">{}</textarea></label><button type=\"submit\">重新发送</button></form>", crate::html::esc(&text))
+            } else { String::new() };
+            let html = crate::html::shell("作品反馈", "", &format!("<h1>{message}</h1>{retry}<a href=\"{action}#chat-panel\">返回作品</a>"));
+            return (status, headers, html).into_response();
+        }
+
+        if manifest.kind != WorkKind::Web {
+            return method_not_allowed("GET, HEAD, POST");
+        }
+
         let source = gate::known_source(field(&form, gate::field::FROM).as_deref());
         let name = field(&form, gate::field::NAME).and_then(|raw| gate::clean_name(&raw));
         let referer = field(&form, gate::field::REFERER)
@@ -346,6 +380,12 @@ async fn project_door(
             .and_then(|q| field(q, playtest_common::FROM_PARAM))
             .as_deref(),
     );
+    let collection_slug = parts
+        .uri
+        .query()
+        .and_then(|q| field(q, "collection"));
+    let plaza = app.plaza.get().await;
+    let collection_context = crate::discovery::context(&plaza, slug, collection_slug.as_deref());
     let to_path = format!("{}{slug}", root_paths::PROJECT_PREFIX);
 
     let is_tunnel = app.tunnels.get(slug).is_some_and(|s| !s.claims.hybrid);
@@ -355,31 +395,84 @@ async fn project_door(
         None
     };
 
+    let requested_chapter_id = parts
+        .uri
+        .query()
+        .and_then(|q| field(q, "chapter"));
+    let (current_chapter, current_chapter_index) = if manifest.is_serial() {
+        if let Some(cid) = requested_chapter_id.as_deref() {
+            if let Some((idx, ch)) = manifest.chapters.iter().enumerate().find(|(_, c)| c.id == cid) {
+                (Some(ch), Some(idx))
+            } else {
+                (None, None)
+            }
+        } else {
+            (manifest.chapters.first(), Some(0))
+        }
+    } else {
+        (None, None)
+    };
+
     let article_html = if manifest.kind == WorkKind::Article {
-        let Some(artifact) = manifest.article.as_ref() else {
-            tracing::warn!(slug, version = manifest.version, "文章清单缺少展示产物");
-            return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None);
-        };
-        match app
-            .sites
-            .store()
-            .get_blob_bytes(&artifact.hash, MAX_ARTICLE_HTML_BYTES)
-            .await
-        {
-            Ok(Some(bytes)) => match String::from_utf8(bytes) {
-                Ok(html) => Some(html),
-                Err(_) => {
-                    tracing::warn!(slug, version = manifest.version, "文章展示产物不是 UTF-8");
+        if manifest.is_serial() {
+            if let Some(chapter) = current_chapter {
+                match app
+                    .sites
+                    .store()
+                    .get_blob_bytes(&chapter.hash, MAX_ARTICLE_SOURCE_BYTES)
+                    .await
+                {
+                    Ok(Some(bytes)) => {
+                        let text = String::from_utf8(bytes).ok();
+                        if let Some(content) = text {
+                            if content.trim_start().starts_with('<') {
+                                Some(content)
+                            } else {
+                                playtest_common::article::render(&content, &chapter.path, &origin).ok()
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                }
+            } else if requested_chapter_id.is_some() {
+                Some(format!(
+                    "<div class=\"chapter-missing\">\
+                     <h2>未找到指定章节</h2>\
+                     <p>你访问的章节可能已下架或链接有误。</p>\
+                     <p><a class=\"media-control\" href=\"/p/{slug}\">返回作品起始页</a></p>\
+                     </div>"
+                ))
+            } else {
+                None
+            }
+        } else {
+            let Some(artifact) = manifest.article.as_ref() else {
+                tracing::warn!(slug, version = manifest.version, "文章清单缺少展示产物");
+                return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None);
+            };
+            match app
+                .sites
+                .store()
+                .get_blob_bytes(&artifact.hash, MAX_ARTICLE_HTML_BYTES)
+                .await
+            {
+                Ok(Some(bytes)) => match String::from_utf8(bytes) {
+                    Ok(html) => Some(html),
+                    Err(_) => {
+                        tracing::warn!(slug, version = manifest.version, "文章展示产物不是 UTF-8");
+                        return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None);
+                    }
+                },
+                Ok(None) => {
+                    tracing::warn!(slug, version = manifest.version, "文章展示产物不存在");
                     return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None);
                 }
-            },
-            Ok(None) => {
-                tracing::warn!(slug, version = manifest.version, "文章展示产物不存在");
-                return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None);
-            }
-            Err(error) => {
-                tracing::warn!(slug, version = manifest.version, %error, "读取文章展示产物失败");
-                return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None);
+                Err(error) => {
+                    tracing::warn!(slug, version = manifest.version, %error, "读取文章展示产物失败");
+                    return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None);
+                }
             }
         }
     } else {
@@ -405,6 +498,13 @@ async fn project_door(
         is_root: true,
         nonce: Some(&nonce),
         article_html: article_html.as_deref(),
+        current_chapter,
+        current_chapter_index,
+        collection_context: if collection_context.is_empty() {
+            None
+        } else {
+            Some(&collection_context)
+        },
     }
     .render();
 
@@ -429,20 +529,6 @@ async fn project_door(
             .await;
     }
 
-    let context = crate::discovery::context(
-        app.plaza.get().await.as_ref(),
-        slug,
-        parts
-            .uri
-            .query()
-            .and_then(|query| field(query, "collection"))
-            .as_deref(),
-    );
-    let html = if context.is_empty() {
-        html
-    } else {
-        html.replacen("</main>", &format!("</main>{context}"), 1).replacen("</head>", "<style>.collection-context{display:flex;justify-content:space-between;gap:24px;max-width:640px;margin:12px auto;padding:0 24px;font:13px/1.6 system-ui}.collection-context a{color:#c0c4d1;text-decoration:none;min-height:44px;display:flex;align-items:center}</style></head>", 1)
-    };
     let mut headers = root_headers(app, authority, &nonce);
     if existing_sid.is_none() {
         append(
@@ -694,6 +780,17 @@ async fn confirm(app: &App, authority: &str, token: &str) -> Response {
     let mut headers = base_headers();
     put(&mut headers, "location", root_paths::ME);
     put(&mut headers, "cache-control", "no-store");
+    append(
+        &mut headers,
+        "set-cookie",
+        &cookie(
+            ME_COOKIE,
+            "",
+            Some(0),
+            app.config.public_scheme == "https",
+            Some(&app.config.cookie_domain()),
+        ),
+    );
     append(
         &mut headers,
         "set-cookie",

@@ -148,6 +148,7 @@ impl Edge {
             kind: Default::default(),
             entry: None,
             article: None,
+            chapters: vec![],
             files,
         };
         store.put_manifest(&manifest).await.unwrap();

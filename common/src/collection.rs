@@ -24,27 +24,6 @@ pub enum CollectionKind {
     Challenge,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum CreationMethod {
-    #[default]
-    Unspecified,
-    OneShot,
-    Iterated,
-    Edited,
-}
-
-impl CreationMethod {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Unspecified => "未说明",
-            Self::OneShot => "一次生成",
-            Self::Iterated => "多轮修改",
-            Self::Edited => "人工修改",
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct CollectionDraft {
     #[serde(default)]
@@ -68,11 +47,7 @@ pub struct CollectionDraft {
 pub struct EntryDraft {
     pub slug: String,
     #[serde(default)]
-    pub model: String,
-    #[serde(default)]
-    pub prompt: String,
-    #[serde(default)]
-    pub method: CreationMethod,
+    pub note: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -81,9 +56,8 @@ pub struct CollectionEntry {
     pub title: String,
     pub submitted_version: u32,
     pub submitted_at: String,
-    pub model: String,
-    pub prompt: String,
-    pub method: CreationMethod,
+    #[serde(default)]
+    pub note: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

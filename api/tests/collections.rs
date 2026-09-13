@@ -252,18 +252,18 @@ async fn challenge_accepts_only_owned_public_long_lived_uploads() {
             StatusCode::NOT_FOUND,
         )
         .await;
-    harness.call("POST", "/v1/collections/pelican/entries", &author, json!({"slug":slug,"model":"Example 1","method":"one_shot","prompt":"<script>alert(1)</script>"}), StatusCode::OK).await;
+    harness.call("POST", "/v1/collections/pelican/entries", &author, json!({"slug":slug,"note":"<script>alert(1)</script>"}), StatusCode::OK).await;
     let result = harness
         .call(
             "POST",
             "/v1/collections/pelican/entries",
             &author,
-            json!({"slug":slug,"model":"Example 2","method":"iterated"}),
+            json!({"slug":slug,"note":"Example 2"}),
             StatusCode::OK,
         )
         .await;
     assert_eq!(result["entries"].as_array().unwrap().len(), 1);
-    assert_eq!(result["entries"][0]["model"], "Example 2");
+    assert_eq!(result["entries"][0]["note"], "Example 2");
     harness
         .call(
             "PATCH",

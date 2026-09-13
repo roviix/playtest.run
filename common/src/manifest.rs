@@ -101,6 +101,20 @@ pub struct ArticleArtifact {
     pub size: u64,
 }
 
+/// 连载小说的有序章节（DESIGN §3.17）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ChapterEntry {
+    /// 稳定章节标识（如 `c1`、`c2`），在作品生命周期内不可变。
+    pub id: String,
+    /// 章节标题（如「第一章：沉睡的三百年」）。
+    pub title: String,
+    /// 原稿文件在 `files` 里的路径（如 `01-wake.md`）。
+    pub path: String,
+    /// 章节生成的安全展示产物哈希。
+    pub hash: String,
+    pub size: u64,
+}
+
 /// 封面认这三种。SVG 不收：它能带脚本，而封面会被贴到根域那一页上。
 pub const COVER_MIMES: &[&str] = &["image/png", "image/jpeg", "image/webp"];
 
@@ -200,6 +214,9 @@ pub struct Manifest {
     /// 只有文章有：控制面从 Markdown 重新生成的安全展示产物。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub article: Option<ArticleArtifact>,
+    /// 连载小说的有序章节列表（DESIGN §3.17）。为空表示普通单篇文章。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub chapters: Vec<ChapterEntry>,
     /// 按 `path` 排序，路径唯一。
     pub files: Vec<FileEntry>,
 }
@@ -254,6 +271,20 @@ impl Manifest {
             .map(|f| f.size)
             .sum::<u64>()
             .saturating_add(self.article.as_ref().map(|a| a.size).unwrap_or_default())
+            .saturating_add(self.chapters.iter().map(|c| c.size).sum::<u64>())
+    }
+
+    /// 是否为连载多章作品。
+    pub fn is_serial(&self) -> bool {
+        self.kind == WorkKind::Article && !self.chapters.is_empty()
+    }
+
+    /// 按章节 id 查找章节及其在目录中的顺序。
+    pub fn find_chapter(&self, chapter_id: &str) -> Option<(usize, &ChapterEntry)> {
+        self.chapters
+            .iter()
+            .enumerate()
+            .find(|(_, c)| c.id == chapter_id)
     }
 
     /// 这份作品该不该用「试玩」这个词。见 [`GAME_ENGINES`]。
@@ -526,6 +557,7 @@ mod tests {
             kind: WorkKind::Web,
             entry: None,
             article: None,
+            chapters: vec![],
             files: vec![],
         };
         assert!(!m.is_game(), "认不出引擎时说「体验」");
@@ -634,5 +666,59 @@ mod tests {
         );
         assert_eq!("never".parse::<GateMode>(), Ok(GateMode::Never));
         assert!("Sometimes".parse::<GateMode>().is_err());
+    }
+
+    #[test]
+    fn chapters_serialize_and_detect_serial_works() {
+        let mut m = Manifest {
+            schema: SCHEMA,
+            slug: "star-pilot".into(),
+            version: 1,
+            title: "星轨漫游".into(),
+            developer: "探险家".into(),
+            note: None,
+            summary: None,
+            cover: None,
+            created_at: "2026-09-13T00:00:00Z".into(),
+            expires_at: None,
+            badge: false,
+            gate: GateMode::Once,
+            isolated: false,
+            spa: false,
+            engine: None,
+            kind: WorkKind::Web,
+            entry: None,
+            article: None,
+            chapters: vec![],
+            files: vec![],
+        };
+        assert!(!m.is_serial());
+        m.kind = WorkKind::Article;
+        m.chapters = vec![
+            ChapterEntry {
+                id: "c1".into(),
+                title: "第一章：起航".into(),
+                path: "01.md".into(),
+                hash: "0000000000000000000000000000000000000000000000000000000000000001".into(),
+                size: 100,
+            },
+            ChapterEntry {
+                id: "c2".into(),
+                title: "第二章：迷途".into(),
+                path: "02.md".into(),
+                hash: "0000000000000000000000000000000000000000000000000000000000000002".into(),
+                size: 200,
+            },
+        ];
+        assert!(m.is_serial());
+        assert_eq!(m.find_chapter("c2").unwrap().0, 1);
+        assert_eq!(m.find_chapter("c2").unwrap().1.title, "第二章：迷途");
+        assert!(m.find_chapter("c3").is_none());
+
+        let json = serde_json::to_string(&m).unwrap();
+        assert!(json.contains("\"chapters\":["));
+        let parsed: Manifest = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.chapters.len(), 2);
+        assert_eq!(parsed.chapters[0].title, "第一章：起航");
     }
 }

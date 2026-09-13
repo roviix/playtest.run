@@ -106,6 +106,7 @@ impl Site {
             kind: Default::default(),
             entry: None,
             article: None,
+            chapters: vec![],
             files,
         };
         shape(&mut manifest);
@@ -363,8 +364,8 @@ async fn article_body_is_on_the_root_invitation_and_assets_stay_on_the_work_orig
     let root = site.get_root(&format!("/p/{SLUG}")).await;
     assert_eq!(root.status, StatusCode::OK);
     let html = root.text();
-    assert!(html.contains("某某 邀请你阅读"));
-    assert!(html.contains(ARTICLE_HTML));
+    assert!(html.contains("<article class=\"article-body\" id=\"article-content\""));
+    assert!(html.contains("<p>正文与一张图。</p><p><img src=\"http://brisk-otter-41.localhost:8443/images/cover.png\" alt=\"\"></p>"));
     assert!(!html.contains("class=\"start\""));
     assert!(root
         .header("content-security-policy")

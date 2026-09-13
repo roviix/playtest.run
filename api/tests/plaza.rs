@@ -163,6 +163,7 @@ impl Harness {
             engine: Some("phaser".into()),
             kind: Default::default(),
             entry: None,
+            chapters: vec![],
         };
         let prepared: PrepareUploadResponse = self
             .call(
@@ -546,6 +547,7 @@ async fn the_cover_is_a_blob_like_any_other_and_is_checked() {
         engine: None,
         kind: Default::default(),
         entry: None,
+        chapters: vec![],
     };
     let prepared: PrepareUploadResponse = h
         .call(

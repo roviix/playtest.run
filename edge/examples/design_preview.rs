@@ -229,6 +229,7 @@ fn main() -> std::io::Result<()> {
         kind: Default::default(),
         entry: None,
         article: None,
+        chapters: vec![],
         files: vec![],
     };
     let mut live = SiteLive::empty(&sample.slug);
@@ -259,6 +260,9 @@ fn main() -> std::io::Result<()> {
             is_root: true,
             nonce: Some(NONCE),
             article_html: None,
+            current_chapter: None,
+            current_chapter_index: None,
+            collection_context: None,
         }
         .render();
         std::fs::write(directory.join(filename), enhance(html, NONCE))?;

@@ -11,8 +11,8 @@ fn fixture() -> Plaza {
         {"slug":"first-pelican","url":"https://first-pelican.playtest.run","title":"红色鹈鹕","developer":"小雨","summary":"骑单车","version":2,"updated_at":"2026-09-12T00:00:00Z","players":1,"is_game":false},
         {"slug":"second-pelican","url":"https://second-pelican.playtest.run","title":"蓝色鹈鹕","developer":"阿木","version":1,"updated_at":"2026-09-11T00:00:00Z","players":20,"is_game":false}
     ],"collections":[{"slug":"pelican","title":"鹈鹕骑单车","summary":"一起创作","kind":"challenge","prompt":"<script>unsafe()</script>","rules":"只提交自己的作品","closes_at":null,"public":true,"hidden":false,"creator":"组织者","created_at":"2026-09-11T00:00:00Z","updated_at":"2026-09-11T00:00:00Z","entries":[
-        {"slug":"first-pelican","title":"红色鹈鹕","submitted_version":1,"submitted_at":"2026-09-12T00:00:00Z","model":"Model A","prompt":"original","method":"one_shot"},
-        {"slug":"second-pelican","title":"蓝色鹈鹕","submitted_version":1,"submitted_at":"2026-09-11T00:00:00Z","model":"Model B","prompt":"","method":"edited"}
+        {"slug":"first-pelican","title":"红色鹈鹕","submitted_version":1,"submitted_at":"2026-09-12T00:00:00Z","note":"<script>unsafe()</script>"},
+        {"slug":"second-pelican","title":"蓝色鹈鹕","submitted_version":1,"submitted_at":"2026-09-11T00:00:00Z","note":""}
     ]}]})).unwrap()
 }
 
@@ -67,21 +67,21 @@ fn collection_explains_provenance_and_keeps_player_paths_on_player_domain() {
     let html = discovery::collection(
         &view,
         &plaza.collections[0],
-        &Query::parse("model=Model+A"),
+        &Query::parse("q=红色"),
         &Capabilities::default(),
         None,
     );
     assert!(html.contains("红色鹈鹕"));
     assert!(!html.contains("<h2>蓝色鹈鹕</h2>"));
     assert!(html.contains("投稿 v1 · 当前 v2"));
-    assert!(html.contains("未经平台认证"));
     assert!(!html.contains("<script>unsafe()"));
     assert!(html.contains("&lt;script&gt;unsafe()"));
     assert!(!html.contains("playtest.roviix.com"));
     assert!(!html.contains("<iframe"));
     assert!(html.contains("?collection=pelican&amp;from=collection"));
     let context = discovery::context(&plaza, "first-pelican", Some("pelican"));
-    assert!(context.contains("/p/second-pelican?collection=pelican"));
+    assert!(context.contains("/c/pelican"));
+    assert!(context.contains("返回"));
     assert!(discovery::context(&plaza, "first-pelican", Some("missing")).is_empty());
 }
 

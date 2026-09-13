@@ -10,7 +10,7 @@ use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use playtest_common::capabilities::Capabilities;
 use playtest_common::limits::MAX_PLAYER_NAME_CHARS;
 use playtest_common::live::{SiteLive, PUBLIC_FEEDBACK_ON_GATE};
-use playtest_common::manifest::{GateMode, Manifest, WorkKind};
+use playtest_common::manifest::{ChapterEntry, GateMode, Manifest, WorkKind};
 use playtest_common::{
     CARD_WIDE_HEIGHT, CARD_WIDE_PATH, CARD_WIDE_WIDTH, RESERVED_PATH_PREFIX, SHARE_PATH,
 };
@@ -36,6 +36,7 @@ pub const COVER_PATH: &str = "/_playtest/cover";
 
 const BELL_ICON: &str = "<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 13.5h12l-1.5-2.2V8a4.5 4.5 0 0 0-9 0v3.3L4 13.5ZM8 16a2.2 2.2 0 0 0 4 0\"/></svg>";
 const SHARE_ICON: &str = "<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M10 12V2.5m-3.2 3.2L10 2.5l3.2 3.2M5.5 8H4v8.5h12V8h-1.5\"/></svg>";
+const CHAT_ICON: &str = "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\"/></svg>";
 const CLOCK_ICON: &str = "<svg width=\"13\" height=\"13\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"7\"/><path d=\"M10 6v4l2.5 1.5\"/></svg>";
 const PRESENTATION_CSS: &str = include_str!("../../ui/presentation.css");
 
@@ -208,6 +209,8 @@ pub struct GatePage<'a> {
     pub nonce: Option<&'a str>,
     /// 文章在控制面提交时生成的安全 HTML。只有 `Article` 使用；原始 Markdown 不进根域。
     pub article_html: Option<&'a str>,
+    pub current_chapter: Option<&'a ChapterEntry>,
+    pub current_chapter_index: Option<usize>,
     /// 如果是从合集跳过来的，在邀请函顶上显示返回合集与下一件作品（DESIGN §3.1）。
     pub collection_context: Option<&'a str>,
 }
@@ -251,9 +254,6 @@ impl GatePage<'_> {
         // 假截图，它和玩家点开后看到的是同一个物件（DESIGN §3.3、§3.4）。
         let hue = crate::html::hue(&m.slug);
         head.push_str(&format!("<style>:root{{--h:{hue}}}</style>\n"));
-        if self.collection_context.is_some() {
-            head.push_str("<style>.collection-context{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:400px;margin:0 0 10px;font-size:13px}.collection-context a{color:var(--soft);text-decoration:none;padding:6px 12px;border-radius:8px;background:#ffffff0a;border:1px solid #ffffff12;transition:all .15s}.collection-context a:hover{color:var(--fg);background:#ffffff14;border-color:#ffffff24}</style>\n");
-        }
         if m.kind != WorkKind::Web {
             head.push_str(&format!("<style>{PRESENTATION_CSS}</style>\n"));
         }
@@ -410,11 +410,25 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
                 name_field = field::NAME,
                 max_name = MAX_PLAYER_NAME_CHARS,
             ),
-            WorkKind::Article => format!(
-                "<article class=\"article-body\">{}</article>\n",
-                self.article_html
-                    .unwrap_or("<p class=\"tip\">文章正文暂时取不到，请稍后再试。</p>")
-            ),
+            WorkKind::Article => {
+                let toc = if let Some(ch) = self.current_chapter {
+                    crate::presentation::chapter_toc(&m.chapters, &ch.id, &m.slug)
+                } else {
+                    self.article_html.map(|html| crate::presentation::article_view(html, &m.title).contents).unwrap_or_default()
+                };
+                let chapter_attr = self.current_chapter.map(|c| format!(" data-reader-chapter=\"{}\"", esc(&c.id))).unwrap_or_default();
+                let heading_title = self.current_chapter.map(|c| c.title.as_str()).unwrap_or(&m.title);
+                let body = self.article_html.map(|html| crate::presentation::article_view(html, heading_title).body).unwrap_or_else(|| format!("<p class=\"tip\">文章正文暂时取不到。<a href=\"{}\">重新加载</a></p>", esc(self.page_url)));
+                let pagination = if let Some(idx) = self.current_chapter_index {
+                    crate::presentation::chapter_pagination(&m.chapters, idx, &m.slug)
+                } else {
+                    String::new()
+                };
+                format!(
+                    "{toc}<article class=\"article-body\" id=\"article-content\" data-reader-slug=\"{}\" data-reader-version=\"{}\"{chapter_attr}>{body}</article>\n{pagination}",
+                    esc(&m.slug), m.version
+                )
+            },
             WorkKind::Video => {
                 let src = m
                     .entry
@@ -422,27 +436,64 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
                     .map(|path| public_file_url(self.origin, path))
                     .unwrap_or_default();
                 format!(
-                    "<div class=\"video-body\"><video controls preload=\"metadata\" playsinline src=\"{}\">你的浏览器不能播放这个视频。</video></div>\n",
-                    esc(&src)
+                    "<div class=\"video-body\"><video controls preload=\"metadata\" playsinline aria-label=\"{}\" src=\"{}\"{}>你的浏览器不能播放这个视频。</video><p class=\"video-status\" role=\"status\" hidden></p><button type=\"button\" class=\"media-control video-retry\" hidden>重试播放</button></div>\n",
+                    title, esc(&src),
+                    if m.cover.is_some() { format!(" poster=\"{}{COVER_PATH}\"", esc(self.origin)) } else { String::new() }
                 )
             }
         };
 
-        let body = format!(
+        let mut body = format!(
             "<div class=\"ticket-head\">\n\
 <p class=\"by\">{avatar}{developer} {invite}</p>\n\
 </div>\n\
 <h1>{title}</h1>\n\
 {summary_html}<div class=\"edition\"><p class=\"stamp\">{stamp}</p>{expires}</div>\n{note}\
 {seats}{tips}{presentation}\
-{capability}{voices}\
+{capability}\
 <footer>{tools}<a href=\"{report_href}\" class=\"report\">举报</a></footer>{badge}\n{mobile_script}",
             avatar = self.avatar(),
             seats = self.seats(),
             tools = self.tools(),
             capability = self.capability_note(),
-            voices = self.voices(),
         );
+
+        if m.kind != WorkKind::Web {
+            let tag = match m.kind {
+                WorkKind::Article if !m.chapters.is_empty() => {
+                    format!("<div class=\"media-tag\">连载小说 · 共 {} 章</div>", m.chapters.len())
+                }
+                WorkKind::Article => "<div class=\"media-tag\">文章 · 深度阅读</div>".to_string(),
+                WorkKind::Video => "<div class=\"media-tag\">视频 · 实机演示</div>".to_string(),
+                WorkKind::Web => String::new(),
+            };
+            let metadata = if let Some(ch) = self.current_chapter {
+                let total = m.chapters.len();
+                let ch_title = esc(&ch.title);
+                format!(
+                    "<header class=\"media-heading serial-heading\">{tag}<p class=\"serial-book-title\">《{title}》</p><h1>{ch_title}</h1><div class=\"media-byline\">{}{developer} 连载中 · 共 {total} 章 · {stamp}{expires}</div>{summary_html}</header>",
+                    self.avatar()
+                )
+            } else {
+                format!(
+                    "<header class=\"media-heading\">{tag}<h1>{title}</h1><div class=\"media-byline\">{}{developer} {invite} · {stamp}{expires}</div>{summary_html}</header>",
+                    self.avatar()
+                )
+            };
+            let resume = if m.kind == WorkKind::Article && self.article_html.is_some() {
+                "<div class=\"reader-resume\" hidden><button type=\"button\" class=\"reader-continue-btn\" hidden>‹ 回到上次阅读位置</button><button type=\"button\" class=\"reader-clear-btn\" title=\"清除位置记忆\" hidden aria-label=\"清除位置记忆\">×</button></div>"
+            } else { "" };
+            let feedback_link = if self.live.feedback_public || self.live.listed {
+                "<a class=\"media-control\" href=\"#chat-panel\">留一句反馈</a>"
+            } else { "" };
+            let content = if m.kind == WorkKind::Article {
+                let end_text = if self.current_chapter.is_some() { "本章结束" } else { "正文结束" };
+                format!("{metadata}{resume}{presentation}<div class=\"media-end\"><span>{end_text}</span>{feedback_link}</div>")
+            } else {
+                format!("{presentation}{metadata}<div class=\"media-end\">{feedback_link}</div>")
+            };
+            body = format!("{content}<footer>{}<a href=\"{report_href}\" class=\"report\">举报</a></footer>{badge}", self.tools());
+        }
 
         let hero = hero.replacen(
             '>',
@@ -455,24 +506,48 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
         let rendered = shell_hero(
             &format!("{} {invite}《{}》", m.developer, m.title),
             &head,
-            &hero,
+            if m.kind == WorkKind::Web { &hero } else { "" },
             &body,
         );
-        let mark = crate::plaza::icon("mark").replacen("<svg ", "<svg width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" ", 1).replace("<circle ", "<circle fill=\"currentColor\" stroke=\"none\" ");
-        let navigation = format!("<nav class=\"invitation-nav\" aria-label=\"返回广场\"><a href=\"{}\" aria-label=\"playtest.run · 返回广场\">{mark}{wordmark}</a></nav>", esc(self.root_url), wordmark = crate::html::WORDMARK);
+        let mark = crate::plaza::icon("mark").replacen("<svg ", "<svg width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" ", 1);
+        let wordmark = crate::html::WORDMARK;
+        let brand_link = format!("<a href=\"{}\" class=\"brand-link\" aria-label=\"playtest.run · 返回广场\">{mark}{wordmark}</a>", esc(self.root_url));
+        let back_action = if let Some(context) = self.collection_context.filter(|c| !c.is_empty()) {
+            format!("<span class=\"nav-sep\">/</span>{context}")
+        } else {
+            String::new()
+        };
+        let has_chat = self.live.feedback_public || self.live.listed;
+        let media_controls = if m.kind != WorkKind::Web && has_chat {
+            format!("<div class=\"media-navigation\"><button type=\"button\" class=\"media-control media-focus\" aria-pressed=\"false\" hidden><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3\"/></svg><span>专注{verb}</span></button><a class=\"media-control media-feedback\" href=\"#chat-panel\">反馈</a></div>")
+        } else { String::new() };
+        let header = format!("<header class=\"invitation-header\"><nav class=\"invitation-nav\" aria-label=\"返回广场\">{brand_link}{back_action}{media_controls}</nav></header>");
         let card_class = if m.kind == WorkKind::Web {
             "card"
         } else {
             "card media-card"
         };
-        let context_bar = self.collection_context.unwrap_or_default();
-        let rendered = rendered.replacen(
+        let chat_panel = if has_chat {
+            self.chat_panel()
+        } else {
+            String::new()
+        };
+        let body_class = match m.kind {
+            WorkKind::Web => "invitation-page",
+            WorkKind::Article => "invitation-page media-page article-page",
+            WorkKind::Video => "invitation-page media-page video-page",
+        };
+        let rendered = rendered.replacen("<body>", &format!("<body class=\"{body_class}\">"), 1).replacen(
             "<main class=\"card\">",
-            &format!("{context_bar}{navigation}<main class=\"{card_class}\">"),
+            &format!("<div class=\"invitation-stage\">{header}<div class=\"invitation-layout\"><main class=\"{card_class}\">"),
+            1,
+        ).replacen(
+            "</main>",
+            &format!("</main>\n{chat_panel}</div></div>"),
             1,
         );
         let dialog = self.follow_dialog();
-        let script = if dialog.is_empty() {
+        let script = if dialog.is_empty() && (!has_chat || self.nonce.is_none()) {
             String::new()
         } else {
             format!(
@@ -480,7 +555,10 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
                 include_str!("../../ui/dialog.js")
             )
         };
-        rendered.replacen("</body>", &format!("{dialog}{script}</body>"), 1)
+        let media_script = if m.kind != WorkKind::Web && self.nonce.is_some() {
+            format!("<script{nonce_attr}>{}</script>", include_str!("../../ui/presentation.js"))
+        } else { String::new() };
+        rendered.replacen("</body>", &format!("{dialog}{script}{media_script}</body>"), 1)
     }
 
     /// 无封面时按作品 slug 色相算法生成的几何星轨艺术图案，作为邀请函头图（DESIGN §3.3）。
@@ -644,6 +722,22 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
             };
             rows.push(format!("<a class=\"share\" href=\"{share_href}\" aria-label=\"分享作品\" title=\"分享作品\">{SHARE_ICON}</a>"));
         }
+        if self.live.feedback_public || self.live.listed {
+            let count = if self.live.feedback_public {
+                self.live
+                    .public_feedback
+                    .iter()
+                    .take(PUBLIC_FEEDBACK_ON_GATE)
+                    .filter(|i| !i.text.trim().is_empty())
+                    .count()
+            } else {
+                0
+            };
+            let chat_badge = if count > 0 { format!(" {count}") } else { String::new() };
+            rows.push(format!(
+                "<a class=\"btn-chat\" href=\"#chat-panel\" aria-label=\"体验原声与反馈\" title=\"体验原声与反馈\">{CHAT_ICON}<span>原声{chat_badge}</span></a>"
+            ));
+        }
         if rows.is_empty() && follow.is_empty() {
             return String::new();
         }
@@ -655,47 +749,175 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         format!("<div class=\"invitation-tools\">{follow}{more}</div>\n")
     }
 
-    /// 体验者的话（DESIGN §3.5）：社会证明，不是讨论区——没有回复、没有点赞、没有楼层。
-    fn voices(&self) -> String {
-        if !self.live.feedback_public {
-            return String::new();
-        }
-        let mut items = String::new();
-        for item in self
-            .live
-            .public_feedback
-            .iter()
-            .take(PUBLIC_FEEDBACK_ON_GATE)
-        {
-            let text = item.text.trim();
-            if text.is_empty() {
-                continue;
+    /// 体验原声与即时反馈舱（DESIGN §3.5、§3.13）：类似直播聊天室的侧边/全屏流，社会证明，不设回复与楼层。
+    fn chat_panel(&self) -> String {
+        let count = if self.live.feedback_public {
+            self.live
+                .public_feedback
+                .iter()
+                .take(PUBLIC_FEEDBACK_ON_GATE)
+                .filter(|i| !i.text.trim().is_empty())
+                .count()
+        } else {
+            0
+        };
+        let mut messages = String::new();
+        let m = self.manifest;
+        let (topic, hint, role_noun, default_placeholder) = match m.kind {
+            WorkKind::Web => ("体验原声", "试玩交流", "试玩者", "发一句体验感受或选贴纸…"),
+            WorkKind::Article => {
+                let h = if self.current_chapter.is_some() { "章节交流" } else { "读者交流" };
+                let p = if self.current_chapter.is_some() { "对本章的感受或选贴纸…" } else { "发一句阅读感受或选贴纸…" };
+                ("读者反馈", h, "读者", p)
             }
-            let who = item
-                .name
-                .as_deref()
-                .map(str::trim)
-                .filter(|n| !n.is_empty())
-                .unwrap_or_else(|| {
-                    match audience_noun(self.manifest.kind, self.manifest.is_game()) {
-                        "读者" => "一位读者",
-                        "观众" => "一位观众",
-                        "试玩者" => "一位试玩者",
-                        _ => "一位体验者",
-                    }
-                });
-            items.push_str(&format!(
-                "<p class=\"voice\">「{}」<cite>{} · v{}</cite></p>\n",
-                esc(text),
-                esc(who),
-                item.version
-            ));
+            WorkKind::Video => ("观看反馈", "观影交流", "观众", "发一句观看感受或选贴纸…"),
+        };
+
+        let prompt_card = if let Some(note) = self.manifest.note.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+            format!(
+                "<div class=\"chat-prompt\"><span class=\"prompt-tag\">作者想听</span><p class=\"prompt-text\">{}</p></div>\n",
+                esc(note)
+            )
+        } else {
+            String::new()
+        };
+
+        if self.live.feedback_public {
+            for item in self
+                .live
+                .public_feedback
+                .iter()
+                .take(PUBLIC_FEEDBACK_ON_GATE)
+            {
+                let text = item.text.trim();
+                if text.is_empty() {
+                    continue;
+                }
+                let who = item
+                    .name
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|n| !n.is_empty())
+                    .unwrap_or_else(|| {
+                        match role_noun {
+                            "读者" => "一位读者",
+                            "观众" => "一位观众",
+                            "试玩者" => "一位试玩者",
+                            _ => "一位体验者",
+                        }
+                    });
+                let initial = who.chars().next().unwrap_or('客');
+                let is_sticker = text.starts_with("🎮")
+                    || text.starts_with("🎨")
+                    || text.starts_with("🎵")
+                    || text.starts_with("💡")
+                    || text.starts_with("🐛")
+                    || text.starts_with("☕")
+                    || text.starts_with("📚")
+                    || text.starts_with("🧠")
+                    || text.starts_with("🔥")
+                    || text.starts_with("✨")
+                    || text.starts_with("🔍")
+                    || text.starts_with("💭")
+                    || text.starts_with("🎬")
+                    || text.starts_with("🍿")
+                    || text.starts_with("👏");
+                let bubble_class = if is_sticker {
+                    "chat-bubble sticker-bubble"
+                } else {
+                    "chat-bubble"
+                };
+                let cite = match m.kind {
+                    WorkKind::Web => format!("{who} · v{}", item.version),
+                    WorkKind::Article => format!("{who} · 读者 · v{}", item.version),
+                    WorkKind::Video => format!("{who} · 观众 · v{}", item.version),
+                };
+                messages.push_str(&format!(
+                    "<div class=\"chat-msg\"><div class=\"chat-avatar\">{initial}</div><div class=\"chat-content\"><div class=\"voice\"><p class=\"{bubble_class}\">「{text}」<cite>{cite}</cite></p></div></div></div>\n",
+                    initial = initial,
+                    text = esc(text),
+                    cite = esc(&cite),
+                    bubble_class = bubble_class,
+                ));
+            }
         }
-        if items.is_empty() {
-            return String::new();
+        if messages.is_empty() {
+            let tip = if self.live.feedback_public {
+                match m.kind {
+                    WorkKind::Web => "还没有公开的原声。<br>体验之后，在下方发一条吧！",
+                    WorkKind::Article => "还没有公开的读者反馈。<br>阅读之后，在下方发一条吧！",
+                    WorkKind::Video => "还没有公开的观看反馈。<br>观看之后，在下方发一条吧！",
+                }
+            } else {
+                match m.kind {
+                    WorkKind::Web => "体验原声暂未公开。<br>可在下方直接向创作者留言。",
+                    WorkKind::Article => "读者反馈暂未公开。<br>可在下方直接向创作者留言。",
+                    WorkKind::Video => "观看反馈暂未公开。<br>可在下方直接向创作者留言。",
+                }
+            };
+            messages = format!("<div class=\"chat-empty\"><p>{tip}</p></div>\n");
         }
-        let audience = audience_noun(self.manifest.kind, self.manifest.is_game());
-        format!("<section class=\"voices\">\n<h2>{audience}的话</h2>\n{items}</section>\n")
+        let feedback_action = if self.is_root {
+            format!("/p/{}", esc(&self.manifest.slug))
+        } else {
+            String::new()
+        };
+        let chapter_input = if let Some(ch) = self.current_chapter {
+            format!("<input type=\"hidden\" name=\"chapter\" value=\"{}\">\n", esc(&ch.id))
+        } else {
+            String::new()
+        };
+        let stickers = match m.kind {
+            WorkKind::Web => concat!(
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎮 手感绝了\" title=\"手感绝了\">🎮 手感绝了</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎨 美术惊艳\" title=\"美术惊艳\">🎨 美术惊艳</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎵 配乐神作\" title=\"配乐神作\">🎵 配乐神作</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"💡 脑洞大开\" title=\"脑洞大开\">💡 脑洞大开</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🐛 抓个Bug\" title=\"抓个Bug\">🐛 抓个Bug</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"☕ 治愈满分\" title=\"治愈满分\">☕ 治愈满分</button>\n"
+            ),
+            WorkKind::Article => concat!(
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"📚 文笔惊艳\" title=\"文笔惊艳\">📚 文笔惊艳</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🧠 设定硬核\" title=\"设定硬核\">🧠 设定硬核</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🔥 催更追更\" title=\"催更追更\">🔥 催更追更</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"✨ 意境深远\" title=\"意境深远\">✨ 意境深远</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🔍 抓个错字\" title=\"抓个错字\">🔍 抓个错字</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"☕ 沉浸阅读\" title=\"沉浸阅读\">☕ 沉浸阅读</button>\n"
+            ),
+            WorkKind::Video => concat!(
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎬 剪辑封神\" title=\"剪辑封神\">🎬 剪辑封神</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎵 视听盛宴\" title=\"视听盛宴\">🎵 视听盛宴</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🍿 期待正片\" title=\"期待正片\">🍿 期待正片</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"💡 细节满满\" title=\"细节满满\">💡 细节满满</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎨 美术惊艳\" title=\"美术惊艳\">🎨 美术惊艳</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"👏 催更催更\" title=\"催更催更\">👏 催更催更</button>\n"
+            ),
+        };
+        let back_label = if m.kind == WorkKind::Web { "返回作品卡片" } else { "返回正文" };
+        let rendered = format!(
+            "<aside class=\"chat-panel\" id=\"chat-panel\" aria-label=\"{topic}与交流\">\n\
+<header class=\"chat-head\">\n\
+<a href=\"#\" class=\"chat-back\" aria-label=\"{back_label}\">‹ 返回</a>\n\
+<div class=\"chat-title\"><span class=\"chat-dot\"></span><span class=\"chat-topic\">{topic}</span><span class=\"chat-count\">{count}</span></div>\n\
+<span class=\"chat-hint\">{hint}</span>\n\
+</header>\n\
+{prompt_card}\
+<div class=\"chat-stream\" id=\"chat-stream\">\n{messages}</div>\n\
+<div class=\"chat-stickers\" id=\"chat-stickers\" role=\"toolbar\" aria-label=\"快捷贴纸\">\n\
+{stickers}\
+</div>\n\
+<form class=\"chat-bar\" method=\"post\" action=\"{feedback_action}\" id=\"chat-form\">\n\
+<input type=\"hidden\" name=\"action\" value=\"feedback\">\n\
+{chapter_input}\
+<input type=\"text\" name=\"feedback\" class=\"chat-input\" placeholder=\"{default_placeholder}\" maxlength=\"200\" autocomplete=\"off\">\n\
+<button type=\"submit\" class=\"chat-send\" aria-label=\"发送反馈\">\
+<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"22\" y1=\"2\" x2=\"11\" y2=\"13\"/><polygon points=\"22 2 15 22 11 13 2 9 22 2\"/></svg>\
+</button>\n\
+</form>\n\
+<p class=\"feedback-status\" role=\"status\" hidden></p>\n\
+</aside>\n"
+        );
+        rendered
     }
 
     /// 跨源隔离的作品在能力不足的浏览器里跑不起来（Godot 4 的线程导出没有
@@ -787,6 +1009,7 @@ mod tests {
             kind: playtest_common::manifest::WorkKind::Web,
             entry: None,
             article: None,
+            chapters: vec![],
             files: vec![],
         }
     }
@@ -812,6 +1035,8 @@ mod tests {
             is_root: false,
             nonce: None,
             article_html: None,
+            current_chapter: None,
+            current_chapter_index: None,
             collection_context: None,
         }
     }
@@ -851,7 +1076,7 @@ mod tests {
         ));
         // 有封面就不拿卡去顶替它：玩家看到的第一眼应该是这个作品。
         assert!(!html.contains(CARD_WIDE_PATH));
-        assert!(html.len() < 16 * 1024, "门禁页 {} 字节", html.len());
+        assert!(html.len() < 24 * 1024, "门禁页 {} 字节", html.len());
     }
 
     #[test]
@@ -967,6 +1192,8 @@ mod tests {
         let html = page(&m, false).render();
         assert!(html.starts_with("<!doctype html>\n<html lang=\"zh-CN\">"));
         assert!(html.contains("<meta name=\"viewport\""));
+        assert!(html.contains("<body class=\"invitation-page\">"));
+        assert!(!html.contains("id=\"chat-panel\""));
         assert!(html.contains("某某 邀请你试玩"));
         assert!(html.contains("《小球大冒险》"));
         assert!(html.contains("· v7"));
@@ -992,8 +1219,8 @@ mod tests {
         assert!(!html.contains("required"));
         // 玩家页面上不出现品牌域名。
         assert!(!html.contains(playtest_common::DEVELOPER_HOST));
-        // 整页要小（DESIGN §3.3：内联矢量头像后保持在十几 KB，秒出）。
-        assert!(html.len() < 16 * 1024, "门禁页 {} 字节", html.len());
+        // 整页要小（DESIGN §3.3：内联矢量头像与实时原声舱后保持在二十几 KB，秒出）。
+        assert!(html.len() < 24 * 1024, "门禁页 {} 字节", html.len());
     }
 
     #[test]
@@ -1221,9 +1448,49 @@ mod tests {
 
         assert!(html.contains("某某 邀请你阅读"));
         assert!(html.contains("class=\"card media-card\""));
-        assert!(html.contains("<article class=\"article-body\"><h2>第一节</h2>"));
+        assert!(html.contains("<article class=\"article-body\" id=\"article-content\""));
+        assert!(html.contains(">第一节</h2>"));
+        assert!(html.contains("id=\"section-"));
+        assert!(html.contains("class=\"article-toc\""));
         assert!(!html.contains("class=\"start\""));
         assert!(!html.contains("开始阅读"));
+    }
+
+    #[test]
+    fn a_serial_novel_renders_chapters_toc_and_pagination() {
+        let mut m = manifest();
+        m.kind = WorkKind::Article;
+        m.title = "深空信标".into();
+        m.chapters = vec![
+            ChapterEntry {
+                id: "c1".into(),
+                title: "第一章：沉睡的三百年".into(),
+                path: "01.md".into(),
+                hash: "h1".into(),
+                size: 100,
+            },
+            ChapterEntry {
+                id: "c2".into(),
+                title: "第二章：奥尔特云的谐波".into(),
+                path: "02.md".into(),
+                hash: "h2".into(),
+                size: 200,
+            },
+        ];
+        let mut p = page(&m, false);
+        p.current_chapter = Some(&m.chapters[0]);
+        p.current_chapter_index = Some(0);
+        p.article_html = Some("<p>陆巡睁开眼时……</p>");
+        let html = p.render();
+
+        assert!(html.contains("《深空信标》"));
+        assert!(html.contains("第一章：沉睡的三百年"));
+        assert!(html.contains("连载中 · 共 2 章"));
+        assert!(html.contains("class=\"chapter-toc\""));
+        assert!(html.contains("data-reader-chapter=\"c1\""));
+        assert!(html.contains("class=\"chapter-pagination\""));
+        assert!(html.contains("下一章：第二章：奥尔特云的谐波 ›"));
+        assert!(html.contains("<span>本章结束</span>"));
     }
 
     #[test]
@@ -1353,8 +1620,8 @@ mod tests {
         ] {
             assert!(!html.contains(forbidden), "{forbidden}");
         }
-        // 最胖的一页也要小（内联头像后保持在十几 KB）。
-        assert!(html.len() < 18 * 1024, "门禁页 {} 字节", html.len());
+        // 最胖的一页也要小（内联头像与实时原声舱后保持在二十几 KB，秒出）。
+        assert!(html.len() < 26 * 1024, "门禁页 {} 字节", html.len());
     }
 
     #[test]

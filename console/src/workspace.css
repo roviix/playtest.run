@@ -17,7 +17,7 @@
 .identity .chip{border-radius:6px;font-size:12px;box-shadow:none;background:#ffffff05;color:var(--soft)}
 .identity .chip.good{color:var(--accent);background:#57ad9514}
 .now{margin-top:8px;padding:8px 0;background:none;box-shadow:none;border-radius:0;color:var(--dim);font-size:14px;min-height:44px}
-.now-dot{width:5px;height:5px;box-shadow:none;background:var(--cool)}
+.now-dot{width:5px;height:5px;box-shadow:none;background:var(--accent)}
 .tabs{gap:22px;margin-top:12px;overflow-y:hidden;border-bottom:1px solid var(--line)}
 .tab{padding:0 2px 12px;min-height:44px;font-size:14px;font-weight:500;border-bottom:2px solid transparent}
 .tab.active{border-bottom-color:var(--accent);color:var(--accent)}
