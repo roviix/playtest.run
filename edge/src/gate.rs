@@ -486,7 +486,30 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
             .next()
             .map(|c| esc(&c.to_string()))
             .unwrap_or_else(|| "P".into());
-        format!("<div class=\"hero word\"><b>{initial}</b></div>\n")
+        let slug = esc(&m.slug);
+        let version_tag = match self.version_label {
+            Some(label) => esc(label),
+            None => format!("#{}", m.version),
+        };
+        format!(
+            "<div class=\"hero word\"><svg viewBox=\"0 0 400 300\" fill=\"none\" aria-hidden=\"true\">\
+<defs><radialGradient id=\"p-sky\" cx=\"50%\" cy=\"45%\" r=\"70%\">\
+<stop offset=\"0%\" stop-color=\"#131a29\"/>\
+<stop offset=\"100%\" stop-color=\"#08090d\"/>\
+</radialGradient></defs>\
+<rect width=\"400\" height=\"300\" fill=\"url(#p-sky)\"/>\
+<path d=\"M0 100h400M0 200h400M133 0v300M267 0v300\" stroke=\"#ffffff0a\"/>\
+<circle cx=\"200\" cy=\"140\" r=\"72\" stroke=\"#bed7ff1f\" stroke-dasharray=\"2 6\"/>\
+<circle cx=\"200\" cy=\"140\" r=\"42\" stroke=\"#bed7ff38\" stroke-dasharray=\"4 4\"/>\
+<circle cx=\"200\" cy=\"140\" r=\"18\" stroke=\"#bed7ff59\"/>\
+<circle cx=\"200\" cy=\"140\" r=\"5\" fill=\"#67e8f9\"/>\
+<circle cx=\"200\" cy=\"140\" r=\"2\" fill=\"#fff\"/>\
+<text x=\"24\" y=\"34\" font-size=\"9\" font-weight=\"700\" letter-spacing=\"1.5\" fill=\"#ffffff8c\" font-family=\"sans-serif\">PLAYTEST PASS</text>\
+<text x=\"376\" y=\"34\" text-anchor=\"end\" font-size=\"9\" font-family=\"monospace\" fill=\"#ffffff4d\">{version_tag}</text>\
+<text x=\"24\" y=\"276\" font-size=\"64\" font-weight=\"800\" fill=\"#ffffff1f\" font-family=\"sans-serif\">{initial}</text>\
+<text x=\"376\" y=\"276\" text-anchor=\"end\" font-size=\"9.5\" font-family=\"monospace\" fill=\"#ffffff59\">{slug}</text>\
+</svg></div>\n"
+        )
     }
 
     /// 关注与分享在同一工具行；首次填写邮箱只在自愿展开后出现。

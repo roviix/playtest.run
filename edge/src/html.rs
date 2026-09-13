@@ -68,8 +68,7 @@ pub fn hue(slug: &str) -> u32 {
 /// - 发布说明桌面居中 42rem、手机贴近底部；原生 dialog 增强焦点与关闭，无脚本时保留 `:target`。
 pub const BASE: &str = concat!("\
 :root{color-scheme:dark;--bg:#09090b;--card:#121215;--card2:#18181c;--fg:#f4f4f5;--soft:#d4d4d8;--dim:#a1a1aa;\
---line:#ffffff12;--line2:#ffffff1f;--action-bg:radial-gradient(ellipse at 50% -65%,#18c99c40,transparent 72%),linear-gradient(180deg,#191b20,#101115);--action-shadow:inset 0 1px #b5f7df12,0 4px 10px -5px #000c,0 0 12px -5px #19c79b45;--action-edge:#71e8bf99;\
---accent:#75cdb5;--accent-ink:#101e19;--warn:#f0dcac;--warn-bg:#1f1a10;--warn-line:#443a1e;\
+--line:#ffffff12;--line2:#ffffff1f;--accent:#75cdb5;--accent-ink:#101e19;--warn:#f0dcac;--warn-bg:#1f1a10;--warn-line:#443a1e;\
 --mono:ui-monospace,Menlo,monospace}\
 *{box-sizing:border-box}\
 html,body{margin:0;padding:0;background:var(--bg)}\
