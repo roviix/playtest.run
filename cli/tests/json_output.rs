@@ -557,8 +557,8 @@ fn an_explicit_card_download_saves_the_file_and_reports_its_path() {
         "{console}"
     );
     assert!(
-        !console.contains("playtest.run"),
-        "控制台在开发者域上：{console}"
+        console.starts_with("https://playtest.run/"),
+        "管理入口在产品主域上：{console}"
     );
 
     assert!(!value["findings"]

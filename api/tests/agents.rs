@@ -164,10 +164,8 @@ async fn the_discovery_manifest_points_at_the_rest() {
     assert_eq!(manifest["mcp"]["command"], "playtest");
 }
 
-/// 它们不该出现在玩家域上。玩家域只放玩家看的东西（AGENTS 第 7 条）；
-/// 这一条守的是「控制面自己不越界」，边缘那一侧另有测试。
 #[tokio::test]
-async fn these_live_on_the_developer_domain() {
+async fn agent_documents_live_on_the_platform_root_not_work_subdomains() {
     let manifest: Value = serde_json::from_str(&get(paths::AGENT_JSON).await.body).unwrap();
     for key in ["documentation", "openapi", "skill"] {
         let url = manifest[key].as_str().unwrap();
@@ -176,8 +174,8 @@ async fn these_live_on_the_developer_domain() {
             "{key} 指到了别的域：{url}"
         );
         assert!(
-            !url.contains("playtest.run/"),
-            "{key} 不该在玩家域上：{url}"
+            url.starts_with("https://playtest.run/"),
+            "{key} 应在平台根域：{url}"
         );
     }
 }

@@ -2,7 +2,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-API="${PLAYTEST_API:-https://playtest.roviix.com}"
+API="${PLAYTEST_API:-https://playtest.run}"
 FAILURES=0
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

@@ -495,7 +495,7 @@ async fn a_player_plays_what_is_running_on_the_developers_machine() {
         assert!(gate.text().contains("《小球大冒险》"));
         assert!(gate.text().contains("· 在线"), "版本位置该是「在线」");
         assert!(!gate.text().contains("v0"), "玩家不该看到合成清单里那个 v0");
-        assert!(!gate.text().contains(playtest_common::DEVELOPER_HOST));
+        assert!(!gate.text().contains("roviix.com"));
         // 门禁页是我们渲染的，开发者的 HTML 一个字节都还没出去。
         assert!(!gate.text().contains("开发者机器上的那一版"));
 

@@ -145,7 +145,7 @@ export type DeviceLoginPoll = {
   device_code: string;
 };
 
-/** GitHub 设备码流程的第一步：CLI 把 `user_code` 和 `verification_uri` 打给人看，然后拿 `device_code` 轮询。 */
+/** 平台设备授权的第一步：CLI 显示 `user_code` 和 `verification_uri`，然后拿 `device_code` 轮询。 */
 export type DeviceLoginStart = {
   device_code: string;
   /** 这个码还能用几秒。 */
@@ -913,8 +913,8 @@ export type WorkKind = "web" | "article" | "video";
 export const paths = {
   health: "/healthz",
   anonSessions: "/v1/anon/sessions",
-  loginDeviceStart: "/v1/login/github/device",
-  loginDevicePoll: "/v1/login/github/device/poll",
+  loginDeviceStart: "/v1/login/device",
+  loginDevicePoll: "/v1/login/device/poll",
   loginWebStart: "/v1/login/github/start",
   loginWebExchange: "/v1/login/github/exchange",
   me: "/v1/me",

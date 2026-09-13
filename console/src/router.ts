@@ -19,7 +19,8 @@ export type Route =
   | { name: "collections"; slug?: string }
   | { name: "docs"; section: DocSection }
   | { name: "site"; slug: string; tab: Tab; version?: number }
-  | { name: "token" };
+  | { name: "token" }
+  | { name: "device" };
 
 const TABS: readonly Tab[] = ["results", "roster", "feedback", "card", "settings"];
 
@@ -37,6 +38,7 @@ export function parse(hash: string): Route {
   }
 
   if (parts[0] === "token") return { name: "token" };
+  if (parts[0] === "device") return { name: "device" };
   if (parts[0] === "collections") return { name: "collections", slug: parts[1] };
   if (parts[0] === "docs") return { name: "docs", section: DOC_SECTIONS.find((section) => section === parts[1]) ?? "start" };
   if (parts[0] === "s" && parts[1]) {
@@ -71,6 +73,8 @@ export function href(route: Route): string {
       return "#/";
     case "token":
       return "#/token";
+    case "device":
+      return "#/device";
     case "site": {
       const base = `#/s/${encodeURIComponent(route.slug)}`;
       if (route.tab === "results") return base;

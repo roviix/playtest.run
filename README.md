@@ -12,20 +12,20 @@
 - `playtest ./dist --backend 3000` —— 带后端的小应用：目录里有的文件上传，目录里没有的路径（`/api/…`、WebSocket）走隧道到你电脑上的 3000 端口。
 - `playtest ./dist --public --seats 10` —— 顺手放到广场（`playtest.run` 首页）上，标「正在找 10 位试玩者」，路过的人点开就玩；`playtest unlist` 拿下来。
 - `playtest files <slug>` —— 线上这一版到底是哪些文件：路径、大小、内容哈希。换台电脑也知道现在发出去的是什么。
-- 给 AI 助手：`playtest mcp` 起一个 MCP server；没装的助手可以读 [`/llms.txt`](https://playtest.roviix.com/llms.txt)、[`/skill.md`](https://playtest.roviix.com/skill.md)、[`/openapi.json`](https://playtest.roviix.com/openapi.json)。
+- 给 AI 助手：`playtest mcp` 起一个 MCP server；没装的助手可以读 [`/llms.txt`](https://playtest.run/llms.txt)、[`/skill.md`](https://playtest.run/skill.md)、[`/openapi.json`](https://playtest.run/openapi.json)。
 - 玩家点开就玩：不登录、不装东西、微信里能开。
 - 开发者知道结果：谁开了、什么设备、加载成没成、报了什么错、说了什么、有几个人是从广场来的。
 
 ## 域名
 
-- `*.playtest.run` 只放玩家看的东西（作品、门禁页、隧道转发），没有登录。根域是广场：开发者主动公开的、正在找人测的作品，按时间排，没有点赞和评论。
-- `playtest.roviix.com` 开发者控制台、API、文档。
+- `playtest.run` 是同一个产品入口：广场、关注、账号、作品与合集管理、API 和文档。浏览和体验不要求登录，邮箱或 GitHub 登录后可关注与发布。
+- `<slug>.playtest.run` 是作品独立运行源，不承载平台登录。平台会话只发给根域，写操作校验精确 Origin；同站子域不是完整安全隔离，暂不另设运行域。
 
 ## 怎么活
 
 开发者对免费工具最怕的是它某天消失——SIMMER.io 是被一笔 DDoS 账单打死的，Glitch 停了托管。所以先把账算给你看（推导在 [`docs/DESIGN.md`](docs/DESIGN.md) §6）：
 
-- 固定成本是一台香港边缘、控制面、对象存储和两个域名，每月百美元量级；变动成本是带宽，约 $0.1 / GB。
+- 固定成本是一台香港边缘、控制面、对象存储和域名，每月百美元量级；变动成本是带宽，约 $0.1 / GB。
 - 免费档有硬上限：登录账号每月 10 GB、3 个活跃作品；匿名链接 1 GB / 24 小时。到上限硬停，玩家看到一页说明，**不会产生账单**。我们不做后付费——链接发出去之后你控制不了有多少人点开，任何后付费都会把「分享」变成财务风险。
 - 收钱的对象是「认真做测试的人」：固定可改的 slug、去角标、口令与邀请名单、更长的结果留存、版本比较。更多流量只卖预付包。
 - v0.1 不收钱，先验证 §8 的假设；有人主动问价再接支付。
@@ -42,7 +42,7 @@ Rust 一个 Cargo workspace（`cargo test --workspace`），控制台与 SDK 是
 | `edge/` | 边缘：泛域名入口、门禁页、按清单分发、隧道接入、熔断、第一层事件与上报、同源 SDK | AGPL-3.0 | 可用；TLS 由前置 Caddy 做 |
 | `api/` | 控制面：匿名令牌与 GitHub 登录、slug、版本、隧道令牌、事件与反馈写入、结果读取、给助手读的 `llms.txt` / `skill.md` / `openapi.json` | AGPL-3.0 | 可用；令牌撤销、配额未做 |
 | `sdk/` | `playtest.js`：JS 错误、加载用时、自定义事件、反馈按钮；由边缘在 `/_playtest/sdk.js` 提供 | Apache-2.0 | 可用；上传时自动注入未做 |
-| `console/` | 控制台（Preact）：作品列表、时间线、点名册、反馈流，手机可看 | AGPL-3.0 | 在线：`playtest.roviix.com/console/` |
+| `console/` | 控制台（Preact）：作品列表、时间线、点名册、反馈流，手机可看 | AGPL-3.0 | 在线：`playtest.run/console/` |
 | `deploy/` | 一台机器跑通：compose、Caddy（DNS-01 泛域名证书）、服务器上构建与发布脚本 | — | 香港在用 |
 | `fixtures/` | 测试用的真实导出物（Vite、Phaser、响应头自检页、socket.io 联机房间、门禁页音频测试台） | — | 缺 Godot、Unity |
 | `scripts/` | 开发用脚本（无头 Chrome 走一遍玩家路径） | — | — |
@@ -72,7 +72,7 @@ playtest 5173         # 或者把正在跑的本地开发服务器接出去
 找试玩者只写 `playtest ./dist --seats 10`，不必重复 `--public`。
 本地端口分享不能带封面、发布说明、上广场等仅用于目录发布的选项；CLI 会报错而不是忽略它们。
 
-结果在 [`playtest.roviix.com/console/`](https://playtest.roviix.com/console/)，令牌在 `~/.config/playtest/config.json` 里。
+结果在 [`playtest.run/console/`](https://playtest.run/console/)，令牌在 `~/.config/playtest/config.json` 里。
 
 ## 本机跑一遍
 

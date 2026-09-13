@@ -18,7 +18,7 @@ const MISSING: &str = "没有这个合集，或者你不能管理它。";
 fn require_account(caller: &Caller) -> ApiResult<()> {
     if caller.kind.is_anon() {
         return Err(ApiError::quota(
-            "合集要能持续打开。先用 GitHub 登录并接管作品，再创建合集或投稿。",
+            "请先登录并保留作品，再创建合集或投稿。",
         ));
     }
     Ok(())

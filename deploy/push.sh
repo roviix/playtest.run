@@ -91,7 +91,7 @@ set -a; . ./.env; set +a
 # 只把 .env 里配齐了的站点放进 sites.active/，Caddy 不会因为缺令牌起不来。
 rm -f sites.active/*.caddy
 if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then cp sites/content.caddy sites.active/; echo "启用 playtest.run + *.playtest.run（DNS-01）"; else echo "未启用玩家域名：.env 里 CLOUDFLARE_API_TOKEN 为空"; fi
-if [[ -n "${API_HOST:-}" ]]; then cp sites/api.caddy sites.active/; echo "启用控制面与控制台 $API_HOST"; else echo "未对公网暴露控制面：.env 里 API_HOST 为空（CLI 走 ssh 隧道，控制台不上线）"; fi
+echo "平台与 API 统一使用 playtest.run；作品仍由独立子域交付"
 
 # 没重建的镜像沿用正在跑的标签；第一次没有旧容器就用本次 TAG。
 current_tag() { docker inspect --format '{{.Config.Image}}' "$1" 2>/dev/null | sed 's/.*://' || true; }

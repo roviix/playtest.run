@@ -60,7 +60,7 @@ pub async fn run(api_flag: Option<&str>) -> Result<()> {
     if !machine {
         ui::say(&format!("在浏览器里打开 {}", start.verification_uri));
         ui::say(&format!("输入这个码：{}", start.user_code));
-        ui::say("等你在 GitHub 上确认……（Ctrl-C 取消）");
+        ui::say("登录 playtest 后，确认连接这台命令行。（Ctrl-C 取消）");
         sites::launch_browser(&start.verification_uri);
     } else {
         // 机器模式下 stdout 只能有最后那个对象，码和网址走 stderr，让调用方能转给人。
@@ -101,8 +101,8 @@ pub async fn run(api_flag: Option<&str>) -> Result<()> {
     }
 
     ui::say(&format!(
-        "已登录：@{}（{}）。",
-        login.login, login.display_name
+        "已登录：{}。",
+        login.display_name
     ));
     match login.migrated_sites {
         0 => {}
@@ -112,7 +112,7 @@ pub async fn run(api_flag: Option<&str>) -> Result<()> {
         )),
     }
     ui::say(&format!(
-        "控制台用同一个 GitHub 账号登录：{DEVELOPER_API_URL}/console/"
+        "作品与关注使用同一个账号：{DEVELOPER_API_URL}/console/"
     ));
     Ok(())
 }

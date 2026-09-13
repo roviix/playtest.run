@@ -157,7 +157,7 @@ Base URL: ",
     out.push_str(
         "
 Auth: `Authorization: Bearer <token>`. Get an anonymous token from `POST /v1/anon/sessions`
-(the link it makes expires; see the ceilings below). Long-lived tokens come from GitHub login,
+(the link it makes expires; see the ceilings below). Long-lived tokens come from playtest login (email or GitHub),
 which is a device-code flow a human has to finish in a browser.
 
 ### Publishing is three steps
@@ -356,7 +356,7 @@ say what to change. Fix the build; retrying the same bytes will fail the same wa
 
 ## What to tell the user honestly
 
-- Without logging in, the link expires in {hours} hours. `playtest login` (GitHub) keeps it, and
+- Without logging in, the link expires in {hours} hours. `playtest login` (email or GitHub) keeps it, and
   adopts links they already made anonymously.
 - We never run their code and never rewrite their bytes.
 - Players never need an account. First play is zero-friction by design.

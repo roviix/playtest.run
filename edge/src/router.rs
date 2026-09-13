@@ -128,11 +128,12 @@ pub fn root(path: &str) -> Option<(Root<'_>, Allow)> {
         | Root::Collections
         | Root::Collection(_)
         | Root::Me
+        | Root::Confirm(_)
+        | Root::Unsubscribe(_)
         | Root::ServiceWorker
         | Root::Llms => Allow::Read,
         Root::Project(_) => Allow::ReadOrPost,
         Root::Follow | Root::MeAction => Allow::Post,
-        Root::Confirm(_) | Root::Unsubscribe(_) => Allow::Read,
     };
     Some((hit, allow))
 }

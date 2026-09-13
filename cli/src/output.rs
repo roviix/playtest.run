@@ -18,7 +18,7 @@
 //!  "card_url":"https://brisk-otter-41.playtest.run/_playtest/card.png",
 //!  "card_path":"./小球-邀请卡.png","seats":10,
 //!  "plaza_url":"https://playtest.run/",
-//!  "console_url":"https://playtest.roviix.com/console/#/s/brisk-otter-41",
+//!  "console_url":"https://playtest.run/console/#/s/brisk-otter-41",
 //!  "findings":[{"level":"warn","message":"这个导出用到了 SharedArrayBuffer（线程）","hint":"加 --isolated"}]}
 //! {"ok":true,"action":"list","elapsed_ms":120,
 //!  "sites":[{"slug":"brisk-otter-41","url":"…","title":"小球","version":7,"followers":12,"expires_at":"…"}]}

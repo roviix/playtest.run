@@ -3,8 +3,5 @@
 	email {$ACME_EMAIL}
 }
 
-# 站点块按 .env 里有没有对应配置由 push.sh 放进 sites.active/：
-#   sites/content.caddy —— playtest.run 与 *.playtest.run → edge，需要 CLOUDFLARE_API_TOKEN
-#   sites/api.caddy     —— 控制面与控制台 → api，需要 API_HOST（playtest.roviix.com）
-# 两个都没有时 Caddy 只监听不服务，不会因为缺令牌起不来。
+# 平台与作品由 content.caddy 按精确根域和独立作品源分流。
 import sites.active/*.caddy

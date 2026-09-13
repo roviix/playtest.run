@@ -1218,7 +1218,7 @@ mod tests {
         assert!(html.contains("maxlength=\"24\""));
         assert!(!html.contains("required"));
         // 玩家页面上不出现品牌域名。
-        assert!(!html.contains(playtest_common::DEVELOPER_HOST));
+        assert!(!html.contains("playtest.roviix.com"));
         // 整页要小（DESIGN §3.3：内联矢量头像与实时原声舱后保持在二十几 KB，秒出）。
         assert!(html.len() < 24 * 1024, "门禁页 {} 字节", html.len());
     }

@@ -268,8 +268,8 @@ async fn navigation_without_cookie_gets_the_gate_page() {
     assert!(html.contains(&format!("action=\"/p/{SLUG}\"")));
     // 门禁页出的不是作品的 index.html。
     assert!(!html.contains("<canvas"));
-    // 玩家页面上不出现品牌域名。
-    assert!(!html.contains(playtest_common::DEVELOPER_HOST));
+    // 弃用的旧域名不得出现。
+    assert!(!html.contains("roviix.com"));
 
     let events = site.events();
     assert_eq!(events.len(), 2);

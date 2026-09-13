@@ -49,7 +49,7 @@ const MAX_FORM_BYTES: usize = 16 * 1024;
 /// 所以可以放心缓存一天；直接打 `/_playtest/cover` 不带 `?v=` 的也只是最多旧一天。
 const COVER_MAX_AGE: u64 = 24 * 60 * 60;
 /// `pt_me` 活一年（DESIGN §3.6：换设备是再点一次链接，不是重新注册）。
-const ME_MAX_AGE: u64 = 365 * 24 * 60 * 60;
+const ME_MAX_AGE: u64 = 30 * 24 * 60 * 60;
 /// 封面超过这么大就不往邀请卡上嵌了——base64 之后还要涨三分之一，
 /// 而卡上那一块只有 1080 像素宽，一张 8 MB 的原图在上面看不出区别。
 const CARD_COVER_MAX_BYTES: u64 = 8 * 1024 * 1024;
@@ -702,7 +702,14 @@ async fn mine(app: &App, authority: &str, me: Option<&str>) -> Response {
                 stale = true;
                 None
             }
-            follow::Mine::Unavailable => None,
+            follow::Mine::Unavailable => {
+                let html = crate::plaza::wrap("关注", "", crate::plaza::Here::Mine,
+                    "<div class=\"drawer\"><h1>暂时无法读取关注</h1><p>服务连接失败，关注记录没有改变。请稍后重试。</p><a class=\"button\" href=\"/me\">重试</a></div>");
+                let html = crate::html::enhance(html, &nonce);
+                let mut headers = root_headers(app, authority, &nonce);
+                put(&mut headers, "cache-control", "no-store");
+                return (StatusCode::SERVICE_UNAVAILABLE, headers, html).into_response();
+            }
         },
         None => None,
     };
@@ -802,6 +809,17 @@ async fn confirm(app: &App, authority: &str, token: &str) -> Response {
             None,
         ),
     );
+    append(
+        &mut headers,
+        "set-cookie",
+        &cookie(
+            if app.config.public_scheme == "https" { "__Host-pt_session" } else { "pt_session" },
+            &answer.me_token,
+            Some(ME_MAX_AGE),
+            app.config.public_scheme == "https",
+            None,
+        ),
+    );
     (StatusCode::SEE_OTHER, headers).into_response()
 }
 
@@ -822,6 +840,17 @@ async fn unsubscribe(app: &App, authority: &str, token: &str) -> Response {
             "set-cookie",
             &cookie(
                 identity::cookie_name(app.config.public_scheme == "https"),
+                "",
+                Some(0),
+                app.config.public_scheme == "https",
+                None,
+            ),
+        );
+        append(
+            response.headers_mut(),
+            "set-cookie",
+            &cookie(
+                if app.config.public_scheme == "https" { "__Host-pt_session" } else { "pt_session" },
                 "",
                 Some(0),
                 app.config.public_scheme == "https",

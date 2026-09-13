@@ -19,11 +19,6 @@ a{color:inherit;text-underline-offset:3px}
 .nav-dot{display:none}
 .nav-count,.nav-arrow{margin-left:auto;color:var(--dim);font:12px var(--mono)}
 .sidebar .nav-count{padding:3px 6px;background:#ffffff06;border-radius:5px}
-.sidebar .rail-sites{display:flex;flex-direction:column;gap:2px;list-style:none;margin:18px 0 0;padding:14px 0 0;border-top:1px solid var(--line);max-height:42vh;overflow:auto;scrollbar-width:thin}
-.sidebar .rail-site{display:flex;align-items:center;gap:10px;min-height:40px;padding:8px 13px;border-radius:8px;color:var(--dim);font-size:13px}
-.sidebar .rail-site:hover,.sidebar .rail-site.active{color:var(--fg);background:#ffffff06}
-.sidebar .dot{width:5px;height:5px;box-shadow:none;background:#616675}
-.sidebar .dot.on{background:var(--accent)}
 .sidebar .rail-bottom,.sidebar-footer{display:flex;flex-direction:column;gap:8px;margin-top:auto;padding-top:24px}
 .sidebar .account{margin-top:8px;padding-top:12px;border-top:1px solid var(--line)}
 .sidebar .account-name{display:inline;font-size:12px}
@@ -137,3 +132,4 @@ a{color:inherit;text-underline-offset:3px}
 @media(max-width:400px){.sidebar .mark{display:none}.sidebar .wordmark{width:118px}.sidebar .brand{gap:0}.sidebar .publish{padding-inline:10px}}
 .dialog-mark{display:grid;place-items:center;width:28px;height:28px;color:var(--fg);flex-shrink:0}
 .dialog-mark .mark-svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.dialog-mark .dot{fill:var(--accent,#75cdb5);stroke:none}
+.discovery-kinds{display:flex;gap:24px;margin:0 0 26px;border-bottom:1px solid var(--line)}.discovery-kinds a{padding:12px 0;border-bottom:2px solid transparent;text-decoration:none;color:var(--dim)}.discovery-kinds a[aria-current=page]{border-color:var(--accent);color:var(--fg)}.account-github{display:flex;align-items:center;justify-content:center;min-height:44px;margin-top:12px;border:1px solid var(--line2);border-radius:8px;text-decoration:none;font-size:14px}.account-github:hover{background:var(--card2)}

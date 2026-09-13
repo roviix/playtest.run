@@ -211,9 +211,10 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
     let searching = !query.search.is_empty();
     let mut body = format!(
         "<div class=\"content discovery\"><header class=\"workspace-head\"><h1>{}</h1>{}</header>",
-        if index { "合集与挑战" } else { "广场" },
+        "广场",
         search(query, base)
     );
+    body.push_str(&format!("<nav class=\"discovery-kinds\" aria-label=\"发现方式\"><a href=\"/\"{}>作品</a><a href=\"/collections\"{}>合集</a></nav>", if index { "" } else { " aria-current=\"page\"" }, if index { " aria-current=\"page\"" } else { "" }));
     let collections: Vec<_> = view
         .plaza
         .collections
@@ -222,7 +223,7 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
             collection.public && !collection.hidden && collection_matches(collection, &query.search)
         })
         .filter(|_| {
-            index || searching
+            index
         })
         .collect();
     if !collections.is_empty() {
@@ -245,7 +246,7 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
         body.push_str("</section>");
         body.push_str(&navigation);
     } else if index {
-        body.push_str(if searching { "<section class=\"discovery-empty\"><h2>没有找到合集</h2><p>换个词，或者 <a href=\"/collections\">看看所有合集</a>。</p></section>" } else { "<section class=\"discovery-empty\"><h2>还没有公开合集</h2><p>发布作品后，可在控制台创建合集。</p><a href=\"/#publish-dialog\">发布作品 →</a></section>" });
+        body.push_str(if searching { "<section class=\"discovery-empty\"><h2>没有找到合集</h2><p>换个词，或者 <a href=\"/collections\">看看所有合集</a>。</p></section>" } else { "<section class=\"discovery-empty\"><h2>把作品放在一个主题里</h2><p>整理自己的创作，或者邀请大家一起做同一道题。</p><a href=\"/console/#/collections\" data-manage>创建第一个合集 →</a></section>" });
     }
     if !index {
         body.push_str(&tabs(query, base));
@@ -392,8 +393,8 @@ pub fn collection(
                 "<div class=\"guide-section\"><h3>如何参与</h3>\
 <p>围绕题目动手创作，做一个浏览器里能打开的作品。已有作品也可以投稿，不用重复上传。</p>\
 <div class=\"command-pill\"><code>playtest ./dist --public</code></div>\
-<p class=\"guide-subtext\">发布后到控制台的「合集与挑战」，选择这个题目和自己的公开作品。临时隧道与到期链接不能留作投稿。</p>\
-<a class=\"guide-cta\" href=\"/?join={}#publish-dialog\">发布说明与投稿入口 →</a>\
+<p class=\"guide-subtext\">选择自己的公开作品投稿。还没有作品？先发布，再回来参与。</p>\
+<a class=\"guide-cta\" href=\"/console/#/collections/{}\" data-manage>选择作品投稿 →</a>\
 </div>",
                 esc(&collection.slug)
             ));

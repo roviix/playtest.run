@@ -4,7 +4,7 @@
 CREATE TABLE users (
     id            TEXT PRIMARY KEY,
     -- anon：匿名 24 小时链接；github：登录用户。v0.1 只签发 anon。
-    kind          TEXT NOT NULL CHECK (kind IN ('anon', 'github')),
+    kind          TEXT NOT NULL CHECK (kind IN ('anon', 'github', 'email')),
     display_name  TEXT NOT NULL,
     created_at    TEXT NOT NULL,
     -- 只有匿名用户有到期时间，到点连人带作品一起失效。

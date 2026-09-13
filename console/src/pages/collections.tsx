@@ -54,8 +54,8 @@ export function CollectionsPage({ slug, sites, me, plazaUrl }: { slug?: string; 
   const list = (section === "mine" ? mine ?? [] : available.filter(collection => collection.kind === "challenge"))
     .filter(collection => `${collection.title} ${collection.summary}`.toLowerCase().includes(search.toLowerCase()));
   return <div class="collection-workspace">
-    {slug ? <a class="collection-back" href={collectionLink()}>← 合集与挑战</a> : null}
-    <header class="workspace-head"><div><h1>{selected?.title ?? "合集与挑战"}</h1><p>{selected ? stateOf(selected) : "把作品放在一起，让一个题目带来下一位创作者。"}</p></div>
+    {slug ? <a class="collection-back" href={collectionLink()}>← 我的合集</a> : null}
+    <header class="workspace-head"><div><h1>{selected?.title ?? "我的合集"}</h1><p>{selected ? stateOf(selected) : "整理自己的创作，或邀请大家一起做一道题。"}</p></div>
       {selected?.public && !selected.hidden ? <a class="button" href={publicUrl} target="_blank" rel="noreferrer">打开玩家页面 ↗</a> : !slug && authenticated ? <button type="button" onClick={() => setCreating(value => !value)}>{creating ? "收起" : "新建合集"}</button> : null}
     </header>
     {error ? <div class="collection-error" role="alert">{error}<button type="button" onClick={refresh}>重新读取</button></div> : null}

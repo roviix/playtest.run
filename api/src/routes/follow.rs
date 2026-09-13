@@ -235,7 +235,8 @@ pub async fn confirm(
 
         // 同一个人换了设备再确认一次，就换一把新的：旧设备上的那一把随之失效。
         // 这是「换设备」唯一的路，也是撤销一台丢失设备的路（DESIGN §3.10）。
-        let me_token = new_token();
+        let user_id = crate::account::user_for_player(&conn, &taken.player_id)?;
+        let me_token = crate::account::create_session(&conn, &user_id)?;
         db::set_player_me_token(
             &conn,
             &taken.player_id,
@@ -249,6 +250,14 @@ pub async fn confirm(
         crate::live::publish(&state, &slug).await;
     }
     Ok(Json(ConfirmResponse { me_token, me }))
+}
+
+pub async fn preview(State(state): State<AppState>, JsonBody(request): JsonBody<ConfirmRequest>) -> ApiResult<Json<serde_json::Value>> {
+    use rusqlite::OptionalExtension;
+    let conn = state.db().read().await;
+    let email: Option<String> = conn.query_row("SELECT p.email FROM follow_tokens t JOIN players p ON p.id=t.player_id WHERE t.token_hash=?1 AND t.used_at IS NULL AND t.expires_at>?2",rusqlite::params![hash::hash_bytes(request.token.as_bytes()),clock::now_string()],|row|row.get(0)).optional()?;
+    let email = email.ok_or_else(||ApiError::not_found(BAD_CONFIRM))?;
+    Ok(Json(serde_json::json!({"email":mask_email(&email)})))
 }
 
 /// `POST /v1/follow/unsubscribe`：每封信底部那个链接。点了就退，不问为什么。
@@ -379,14 +388,19 @@ fn new_token() -> String {
 }
 
 fn player_by_me_token(conn: &Connection, me_token: &str) -> ApiResult<db::PlayerRow> {
-    let player = db::find_player_by_me_token(conn, &hash::hash_bytes(me_token.trim().as_bytes()))?;
-    // 401 而不是 404：边缘据此把 `pt_me` 这个 cookie 清掉。
+    let player = if let Some(identity) = crate::account::session_owner(conn, me_token)? {
+        use rusqlite::OptionalExtension;
+        let player_id: Option<String> = conn.query_row("SELECT id FROM players WHERE user_id=?1", rusqlite::params![identity.user_id], |row| row.get(0)).optional()?;
+        player_id.and_then(|id| db::find_player(conn, &id).ok().flatten())
+    } else {
+        db::find_player_by_me_token(conn, &hash::hash_bytes(me_token.trim().as_bytes()))?
+    };
     player
         .filter(|p| p.unsubscribed_at.is_none())
         .ok_or_else(|| ApiError::unauthorized(BAD_ME_TOKEN))
 }
 
-fn find_or_create_by_email(
+pub(crate) fn find_or_create_by_email(
     conn: &Connection,
     email: &str,
     now: OffsetDateTime,
@@ -481,7 +495,7 @@ fn view_of(state: &AppState, conn: &Connection, player: &db::PlayerRow) -> ApiRe
 ///
 /// 复用 `events` 那个令牌桶的实现。IP 那把挡「一台机器狂刷」，邮箱那把挡
 /// 「同一个邮箱被反复轰确认信」——后者更重要，被拿来轰炸的是别人的信箱。
-fn spend(limiter: &Limiter, headers: &HeaderMap, email: Option<&str>) -> ApiResult<()> {
+pub(crate) fn spend(limiter: &Limiter, headers: &HeaderMap, email: Option<&str>) -> ApiResult<()> {
     // 调用方是边缘，它把玩家 IP 放在 `x-forwarded-for` 里；没有这个头就退回
     // 一个共用的桶——宁可整条内网链路共享额度，也不要限速悄悄失效。
     let ip = header_str(headers, "x-forwarded-for")

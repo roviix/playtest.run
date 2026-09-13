@@ -170,8 +170,8 @@ pub fn enqueue_send_link(
     now: OffsetDateTime,
 ) -> rusqlite::Result<()> {
     let body = format!(
-        "在你自己的浏览器中打开这个链接，即可找回已关注的作品。\n\n\
-         打开后，这台设备可以直接管理关注，无需密码。\n\n{link}"
+        "打开下面的链接登录 playtest，继续关注与创作。\n\n\
+         登录不会替你订阅任何内容。如果不是你发起的操作，请忽略这封邮件。\n\n{link}"
     );
     let now = clock::format(now);
     db::enqueue_notification(
@@ -180,7 +180,7 @@ pub fn enqueue_send_link(
             player_id,
             kind: KIND_SEND_LINK,
             target_slug: None,
-            subject: "找回你关注的作品",
+            subject: "登录 playtest",
             body: &body,
             url: Some(link),
             channel: CHANNEL_EMAIL,

@@ -23,6 +23,7 @@ pub mod routes {
     pub const FOLLOW: &str = "/v1/follow";
     /// `POST` [`super::ConfirmRequest`] → 200 [`super::ConfirmResponse`]：确认信里的令牌换 `me_token`
     pub const CONFIRM: &str = "/v1/follow/confirm";
+    pub const PREVIEW: &str = "/v1/follow/preview";
     /// `POST` [`super::UnsubscribeRequest`] → 200 [`super::MeView`]：信底那个一键退订
     pub const UNSUBSCRIBE: &str = "/v1/follow/unsubscribe";
     /// `POST` [`super::MeRequest`] → 200 [`super::MeView`]：关注页要显示的东西

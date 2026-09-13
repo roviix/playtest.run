@@ -583,12 +583,12 @@ async fn me_without_a_key_is_this_device_not_a_login_wall() {
     assert!(html.contains("href=\"/\""));
     assert!(html.contains("广场</a>"));
     assert!(!html.contains("看看有什么新东西"));
-    // 没有「登录」「注册」「账号」这些词（DESIGN §3.10）。
-    for word in [">登录<", ">注册<", "账号", "密码"] {
+    // 没有「注册」「账号」这些词（DESIGN §3.10）。
+    for word in [">注册<", "昵称", "创建账号", "密码"] {
         assert!(!html.contains(word), "「{word}」不该出现");
     }
-    // 找回关注与订阅周报分别提交，找回不自动订阅。
-    assert!(html.contains("value=\"send_link\""));
+    // 找回与登录入口通过统一账号弹窗提供。
+    assert!(html.contains("placeholder=\"你的邮箱\""));
     assert!(html.contains(&format!("action=\"{}\"", root_paths::FOLLOW)));
     assert!(html.contains("value=\"plaza\""));
 }
@@ -605,7 +605,7 @@ async fn me_with_a_key_lists_what_this_person_follows() {
     assert!(html.contains("z***@example.com"));
     assert!(html.contains("小球大冒险"));
     assert!(html.contains("aria-label=\"取消关注小球大冒险\">取消关注</button>"));
-    assert!(html.contains("邮箱登录"));
+    assert!(html.contains("切换邮箱"));
     // 拿钥匙去问控制面，不是拿邮箱。
     let (_, body) = api.last();
     assert_eq!(body["me_token"], ME_TOKEN);
@@ -887,8 +887,9 @@ async fn the_wall_is_one_grid_with_a_rail_and_says_which_card_is_paid_for() {
         .unwrap();
     let html = signed.get_root_as_me("/").await.text();
     // 有没有钥匙，这一页都一样：关注只在关注页里办。墙上不另写介绍。
+    let main = html.split("<main").nth(1).unwrap().split("</main>").next().unwrap();
     assert!(!html.contains("有新东西时告诉我"));
-    assert!(!html.contains("type=\"email\""));
+    assert!(!main.contains("type=\"email\""));
     assert!(!html.contains("class=\"intro\""));
     assert!(html.contains("class=\"tile\""));
     assert!(!html.contains("来玩点，还没定稿的"));

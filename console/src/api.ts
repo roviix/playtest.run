@@ -7,7 +7,6 @@ export type { Collection, CollectionDraft, EntryDraft } from "./generated/api";
 import type {
   FeedbackItem,
   FeedbackList,
-  LoginResponse,
   Me,
   RosterSort,
   Site,
@@ -49,7 +48,6 @@ export type {
 // 开发时 Vite 把 /v1 代理到本机的控制面，见 vite.config.ts。
 const API_BASE = import.meta.env.VITE_PLAYTEST_API ?? "";
 
-const TOKEN_KEY = "playtest.token";
 export const AUTH_EXPIRED_EVENT = "playtest:auth-expired";
 export const AUTH_REQUEST_EVENT = "playtest:auth-request";
 
@@ -107,47 +105,19 @@ export class ApiError extends Error {
   }
 }
 
-export function readToken(): string {
-  return localStorage.getItem(TOKEN_KEY) ?? "";
-}
-
-export function saveToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token.trim());
-}
-
-export function forgetToken(): void {
-    localStorage.removeItem(TOKEN_KEY);
-}
-
-export async function revokeToken(): Promise<void> {
-  try {
-    await call<void>("/v1/me/token", { method: "DELETE" }, readToken(), false);
-  } catch (error) {
-    if (!(error instanceof ApiError && error.needsToken)) throw error;
-  }
-  forgetToken();
-}
-
-export const validateToken = (token: string) => call<Me>(paths.me, {}, token, false);
-
-async function call<T>(path: string, init: RequestInit = {}, token = readToken(), notifyExpired = true): Promise<T> {
-  if (!token) {
-    throw new ApiError(401, "unauthorized", "请先登录。");
-  }
-
+async function call<T>(path: string, init: RequestInit = {}, notifyExpired = true): Promise<T> {
   const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${token}`);
   if (init.body) headers.set("Content-Type", "application/json");
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+    response = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: "same-origin" });
   } catch {
     // 断网、控制面没起、代理没配都会走到这里。说清楚下一步做什么。
     throw new ApiError(0, "offline", "暂时连接不上，请检查网络后重试。");
   }
 
-  if (response.status === 401 && notifyExpired && token === readToken()) {
+  if (response.status === 401 && notifyExpired) {
     window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
   }
   if (response.status === 204) return undefined as T;
@@ -174,36 +144,24 @@ async function call<T>(path: string, init: RequestInit = {}, token = readToken()
 /** 浏览器直接访问这个地址就被送到 GitHub；回来时 GitHub 把 code 和 state 挂在控制台地址上。 */
 export const githubLoginUrl = `${API_BASE}${paths.loginWebStart}`;
 
-/**
- * 网页登录的最后一步：把 GitHub 回传的 code 与 state 交给控制面换令牌。
- * 手里若有一个匿名令牌就一起带上——那个身份下的作品会归到账号里。这里不走 call()，
- * 因为没有令牌也得能调。
- */
-export async function exchangeGitHubCode(code: string, state: string): Promise<LoginResponse> {
-  const headers = new Headers({ "Content-Type": "application/json" });
-  const anon = readToken();
-  if (anon) headers.set("Authorization", `Bearer ${anon}`);
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}${paths.loginWebExchange}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ code, state }),
-    });
-  } catch {
-    throw new ApiError(0, "offline", "暂时连接不上，请检查网络后重试。");
-  }
-  const body = (await response.json().catch(() => null)) as
-    | (LoginResponse & { code?: string; message?: string })
-    | null;
-  if (!response.ok || !body?.token) {
-    throw new ApiError(
-      response.status,
-      body?.code ?? "internal",
-      body?.message ?? `控制面返回了 ${response.status}。`,
-    );
-  }
-  return body;
+export type AccountState = { account: { me: Me; email: string | null } | null; email_available: boolean; github_available: boolean };
+export type AccessToken = { id: string; created_at: string; expires_at: string | null };
+export const account = {
+  view: () => call<AccountState>("/v1/account", {}, false),
+  logout: () => call<void>("/v1/account/logout", { method: "POST" }),
+  email: (email: string, return_to: string, link = false) => call<{ message: string }>("/v1/account/email", { method: "POST", body: JSON.stringify({ email, return_to, link }) }, false),
+  confirmEmail: (token: string) => call<{ return_to: string }>("/v1/account/email/confirm", { method: "POST", body: JSON.stringify({ token }) }, false),
+  createToken: () => call<{ token: string }>("/v1/account/tokens", { method: "POST" }),
+  tokens: () => call<AccessToken[]>("/v1/account/tokens"),
+  revokeToken: (id: string) => call<void>(`/v1/account/tokens/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  profile: (display_name: string) => call<void>("/v1/account", { method: "PATCH", body: JSON.stringify({ display_name }) }),
+  previewEmail: (token: string) => call<{ email: string; link: boolean }>("/v1/account/email/preview", { method: "POST", body: JSON.stringify({ token }) }, false),
+  previewDevice: (user_code: string) => call<{ anonymous_works: number }>("/v1/account/device", { method: "POST", body: JSON.stringify({ user_code }) }),
+  approveDevice: (user_code: string) => call<{ message: string }>("/v1/account/device/approve", { method: "POST", body: JSON.stringify({ user_code }) }),
+};
+
+export function exchangeGitHubCode(code: string, state: string) {
+  return call<{ return_to: string }>(paths.loginWebExchange, { method: "POST", body: JSON.stringify({ code, state }) }, false);
 }
 
 export const api = {

@@ -92,8 +92,9 @@ pub fn wrap(title: &str, head: &str, here: Here, main: &str) -> String {
         title,
         head,
         &format!(
-            "{rail}<main class=\"main\">\n{main}</main>\n{publish}",
+            "{rail}<main class=\"main\">\n{main}</main>\n{publish}{account}",
             rail = rail(here),
+            account = include_str!("../../ui/account.html"),
             publish = if matches!(here, Here::Collections) {
                 String::new()
             } else {
@@ -107,11 +108,11 @@ pub fn wrap(title: &str, head: &str, here: Here, main: &str) -> String {
 /// 手机上自适应为顶部紧凑条。
 fn rail(here: Here) -> String {
     let plaza = match here {
-        Here::Plaza => format!(
+        Here::Plaza | Here::Collections => format!(
             "<a class=\"nav-item active\" href=\"/\" aria-current=\"page\">{icon}广场<span class=\"nav-dot\"></span></a>",
             icon = icon("grid")
         ),
-        Here::Mine | Here::Collections => format!(
+        Here::Mine => format!(
             "<a class=\"nav-item\" href=\"/\">{icon}广场</a>",
             icon = icon("grid")
         ),
@@ -128,20 +129,7 @@ fn rail(here: Here) -> String {
             icon = icon("bell")
         ),
     };
-    let collections = format!(
-        "<a class=\"nav-item{}\" href=\"/collections\"{}>{}合集</a>",
-        if matches!(here, Here::Collections) {
-            " active"
-        } else {
-            ""
-        },
-        if matches!(here, Here::Collections) {
-            " aria-current=\"page\""
-        } else {
-            ""
-        },
-        icon("grid")
-    );
+    let management = format!("<a class=\"nav-item\" href=\"/console/#/\" data-manage>{}我的作品</a><a class=\"nav-item\" href=\"/console/#/collections\" data-manage>{}我的合集</a>", icon("grid"), icon("grid"));
     let publish_link = if matches!(here, Here::Collections) {
         "/#publish-dialog"
     } else {
@@ -153,15 +141,18 @@ fn rail(here: Here) -> String {
 <a class=\"brand\" href=\"/\" aria-label=\"playtest.run 首页\">\
 <span class=\"mark\" aria-hidden=\"true\">{mark}</span>\
 {wordmark}</a>\n\
-<nav class=\"nav\" aria-label=\"页面\">{plaza}{collections}{mine}</nav>\
+<nav class=\"nav\" aria-label=\"页面\">{plaza}{mine}{management}</nav>\
 </div>\n\
 <div class=\"sidebar-footer\">\
 <a class=\"publish\" href=\"{publish_link}\">{plus}发布作品</a>\
+<a class=\"nav-item\" href=\"/console/#/docs/start\">{book}使用文档</a>\
+<a class=\"nav-item account\" href=\"/console/?login=1\" data-account-login><span class=\"account-name\">登录</span></a>\
 </div>\n\
 </aside>\n",
         mark = crate::html::MARK,
         wordmark = crate::html::WORDMARK,
         plus = icon("plus"),
+        book = icon("grid"),
     )
 }
 

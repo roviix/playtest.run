@@ -144,6 +144,13 @@ pub async fn confirm(api_base: Option<&str>, token: &str) -> Option<ConfirmRespo
     }
 }
 
+pub async fn preview(api_base: Option<&str>, token: &str) -> Option<String> {
+    match post::<_,serde_json::Value>(api_base,routes::PREVIEW,&ConfirmRequest { token:token.to_string() }).await {
+        Call::Ok(value) => value.get("email").and_then(|email|email.as_str()).map(str::to_string),
+        _ => None,
+    }
+}
+
 /// 信底那个一键退订。点了就退，不问为什么。
 pub async fn unsubscribe(api_base: Option<&str>, token: &str) -> bool {
     let request = UnsubscribeRequest {
@@ -559,16 +566,6 @@ pub fn email_form_with_placeholder(
     )
 }
 
-fn restore_form() -> String {
-    email_form_with_placeholder(
-        root_paths::ME_ACTION,
-        &format!("<input type=\"hidden\" name=\"action\" value=\"{ACTION_SEND_LINK}\">"),
-        "发送登录链接",
-        "",
-        "输入曾用于关注的邮箱",
-    )
-}
-
 const BELL: &str = "<svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4\"/></svg>";
 
 fn heading(channel: Option<&str>) -> String {
@@ -676,12 +673,8 @@ fn signed_in(view: &MeView, caps: &Capabilities) -> String {
         out.push_str("</ul>");
     }
     out.push_str(&weekly_settings(Some(view), caps));
-    if caps.email {
-        out.push_str(&notification_dialog(
-            "follow-login",
-            "邮箱登录",
-            &restore_form(),
-        ));
+    if view.email_masked.is_none() {
+        out.push_str("<p class=\"notice-note\">关注已保存在账号里。<a href=\"/console/#/token\">关联邮箱</a>后，可以接收更新通知。</p>");
     }
     out
 }
@@ -689,20 +682,9 @@ fn signed_in(view: &MeView, caps: &Capabilities) -> String {
 fn signed_out(caps: &Capabilities) -> String {
     let mut out = heading(None);
     out.push_str("<div class=\"follow-empty\"><span class=\"follow-empty-icon\" aria-hidden=\"true\"><svg class=\"icon\" viewBox=\"0 0 24 24\"><path d=\"M6 4h12v17l-6-4-6 4Z\"/></svg></span><h2>登录后查看关注</h2>");
-    if caps.email {
-        out.push_str("<a class=\"restore-follow\" href=\"#follow-login\" data-dialog=\"follow-login\">邮箱登录</a>");
-    } else {
-        out.push_str("<p class=\"summary\">邮箱登录暂不可用。</p>");
-    }
+    out.push_str("<a class=\"restore-follow\" href=\"/console/?login=1&amp;return_to=%2Fme\" data-account-login>登录</a>");
     out.push_str("</div>");
     out.push_str(&weekly_settings(None, caps));
-    if caps.email {
-        out.push_str(&notification_dialog(
-            "follow-login",
-            "邮箱登录",
-            &restore_form(),
-        ));
-    }
     out
 }
 
@@ -889,18 +871,17 @@ mod tests {
         });
         assert!(html.contains("<h1>关注</h1>"));
         assert!(html.contains("每周一封"));
-        assert!(html.contains(">发送登录链接</button>"));
-        // 恢复已有关注不是创建账号；这一句提示自然融入输入框 placeholder。
-        assert!(html.contains("placeholder=\"输入曾用于关注的邮箱\""));
+        assert!(html.contains(">用邮箱继续</button>"));
+        assert!(html.contains("placeholder=\"你的邮箱\""));
         let restore = html
-            .split("id=\"follow-login\"")
+            .split("id=\"account-login\"")
             .nth(1)
             .unwrap()
             .split("</dialog>")
             .next()
             .unwrap();
-        assert!(restore.contains("action=\"/me/action\""));
-        assert!(restore.contains("value=\"send_link\""));
+        assert!(restore.contains("data-account-email"));
+        assert!(restore.contains("data-account-github"));
         assert!(!restore.contains("value=\"plaza\""));
         assert!(html.contains("登录后查看关注"));
         let visible = html.split("<dialog").next().unwrap();
@@ -919,7 +900,7 @@ mod tests {
         // 没有推送能力时这一页一行脚本都没有：邮箱是原生表单。
         assert!(!html.contains("<script"));
         // 这一页不是个人主页：没有这些东西（DESIGN §3.10）。
-        for word in [">登录<", ">注册<", "昵称", "创建账号"] {
+        for word in [">注册<", "昵称", "创建账号"] {
             assert!(!html.contains(word), "「{word}」不该出现");
         }
     }
@@ -981,7 +962,7 @@ mod tests {
         assert_eq!(html.matches(">取消关注</button>").count(), 1);
         assert!(html.contains(">退订周报</button>"));
         assert!(html.contains("value=\"site:brisk-otter-41\""));
-        assert!(html.contains("发送登录链接"));
+        assert!(html.contains("data-account-login"));
         assert!(!html.contains("还没有关注作品"));
     }
 

@@ -11,28 +11,42 @@ pub fn cookie_name(secure: bool) -> &'static str {
     }
 }
 
-pub fn token(headers: &HeaderMap, secure: bool) -> Option<&str> {
-    let name = cookie_name(secure);
-    let mut found = None;
-    for header in headers.get_all(header::COOKIE) {
-        for part in header.to_str().ok()?.split(';') {
-            if let Some((key, value)) = part.trim().split_once('=') {
-                if key.trim() == name {
-                    if found.is_some() {
-                        return None;
+pub fn token<'a>(headers: &'a HeaderMap, secure: bool) -> Option<&'a str> {
+    let names = if secure {
+        [SECURE_ME_COOKIE, "__Host-pt_session"]
+    } else {
+        [ME_COOKIE, "pt_session"]
+    };
+    for name in names {
+        let mut found = None;
+        let mut ambiguous = false;
+        for header in headers.get_all(header::COOKIE) {
+            let Ok(raw) = header.to_str() else { continue };
+            for part in raw.split(';') {
+                if let Some((key, value)) = part.trim().split_once('=') {
+                    if key.trim() == name {
+                        if found.is_some() {
+                            ambiguous = true;
+                        }
+                        found = Some(value.trim());
                     }
-                    found = Some(value.trim());
                 }
             }
         }
+        if ambiguous {
+            return None;
+        }
+        if found.is_some() {
+            return found;
+        }
     }
-    found
+    None
 }
 
 fn reserved(name: &str) -> bool {
     matches!(
         name,
-        ME_COOKIE | SECURE_ME_COOKIE | GATE_COOKIE | SESSION_COOKIE
+        ME_COOKIE | SECURE_ME_COOKIE | GATE_COOKIE | SESSION_COOKIE | "pt_session" | "__Host-pt_oauth" | "pt_oauth" | "__Host-pt_session"
     )
 }
 

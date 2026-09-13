@@ -2,7 +2,7 @@
 # 运营者的手动闸门（DESIGN §3.11、§4.5）：赠送推广、放行或拒掉、撤下作品、看通知队列。
 #
 # 只有一个运营者，所以这里不做后台界面，只有一层 curl 包装。
-#   ADMIN_TOKEN=... API=https://playtest.roviix.com scripts/admin.sh boosts
+#   ADMIN_TOKEN=... API=https://playtest.run scripts/admin.sh boosts
 # API 默认本机 8787。出错时原样打印控制面的中文 message，不另编一套话。
 set -euo pipefail
 

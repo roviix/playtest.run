@@ -90,7 +90,7 @@ pub async fn grant(
         let conn = state.db().lock().await;
         let owner = db::site_owner(&conn, &request.slug)?
             .ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?;
-        if owner.kind != "github" {
+        if owner.kind == "anon" {
             return Err(ApiError::invalid(ANON_CANNOT_BOOST));
         }
         let window = boosts::window(&conn, request.kind, requested, now)?;

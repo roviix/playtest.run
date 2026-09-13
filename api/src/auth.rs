@@ -33,6 +33,7 @@ pub enum UserKind {
     Anon,
     /// GitHub 登录（[`crate::routes::login`]）。
     GitHub,
+    Email,
 }
 
 impl UserKind {
@@ -40,12 +41,14 @@ impl UserKind {
         match self {
             Self::Anon => "anon",
             Self::GitHub => "github",
+            Self::Email => "email",
         }
     }
 
-    fn from_db(s: &str) -> Self {
+    pub(crate) fn from_db(s: &str) -> Self {
         match s {
             "github" => Self::GitHub,
+            "email" => Self::Email,
             _ => Self::Anon,
         }
     }
@@ -76,7 +79,10 @@ impl FromRequestParts<AppState> for Caller {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let token = bearer_token(parts).ok_or_else(|| ApiError::unauthorized(NO_TOKEN))?;
+        let Some(token) = bearer_token(parts) else {
+            return crate::account::caller(state, &parts.headers).await?
+                .ok_or_else(|| ApiError::unauthorized(NO_TOKEN));
+        };
         let token_hash = hash::hash_bytes(token.as_bytes());
 
         let owner = {

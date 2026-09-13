@@ -1,0 +1,11 @@
+<dialog id="account-login" class="account-dialog" aria-labelledby="account-login-title">
+  <div class="notice-head"><h2 id="account-login-title">登录 playtest</h2><button type="button" class="dialog-close-btn" data-close-dialog aria-label="关闭登录">×</button></div>
+  <form class="notice-form" data-account-email>
+    <label class="sr-only" for="account-email">邮箱</label>
+    <input id="account-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="你的邮箱" required>
+    <button type="submit">用邮箱继续</button>
+  </form>
+  <a class="account-github" data-account-github href="/v1/login/github/start">使用 GitHub 继续</a>
+  <p class="notice-note">一个账号，关注与创作。不会自动订阅任何内容。</p>
+  <p class="notice-note" data-account-message role="status" aria-live="polite"></p>
+</dialog>

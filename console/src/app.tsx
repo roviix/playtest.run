@@ -1,75 +1,63 @@
-// 控制台外壳统一处理导航、身份与登录，页面只负责自己的内容（DESIGN §3.13）。
-
 import mark from "../../ui/mark.svg?raw";
 import wordmark from "../../ui/wordmark.svg?raw";
-
 import { useEffect, useState } from "preact/hooks";
-
-import { api, AUTH_EXPIRED_EVENT, AUTH_REQUEST_EVENT, exchangeGitHubCode, forgetToken, readToken, saveToken, type Me, type Site } from "./api";
+import { account, api, AUTH_EXPIRED_EVENT, AUTH_REQUEST_EVENT, exchangeGitHubCode, type AccountState, type Me, type Site } from "./api";
 import { useLoad } from "./load";
-import { go, href, useRoute, type Route } from "./router";
+import { href, useRoute, type Route } from "./router";
 import { HomePage } from "./pages/home";
 import { SitePage } from "./pages/site";
 import { TokenPage } from "./pages/token";
 import { Publish } from "./publish";
 import { CollectionsPage } from "./pages/collections";
 import { DocsPage } from "./pages/docs";
-import { LoginDialog, LoginRequired, takeLoginReturn, type AuthRequest } from "./auth";
-
-/** GitHub 授权完回到这里时地址上挂着的两样东西。 */
-function callbackParams(): { code: string; state: string } | null {
-  const query = new URLSearchParams(location.search);
-  const code = query.get("code");
-  const state = query.get("state");
-  return code && state ? { code, state } : null;
-}
+import { DevicePage } from "./pages/device";
+import { BrandMark, LoginDialog, LoginRequired, type AuthRequest } from "./auth";
 
 export function App() {
   const route = useRoute();
-  const [token, setToken] = useState(readToken());
-  const [me, setMe] = useState<Me | null>(null);
-  const [meError, setMeError] = useState("");
-  const [meAttempt, setMeAttempt] = useState(0);
-  const [exchanging, setExchanging] = useState(() => !!callbackParams());
+  const [identity, setIdentity] = useState<AccountState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [login, setLogin] = useState<AuthRequest | null>(null);
+  const [emailToken, setEmailToken] = useState(() => new URLSearchParams(location.search).get("email_token"));
+  const [confirming, setConfirming] = useState(false);
+  const [emailPreview, setEmailPreview] = useState<{ email: string; link: boolean } | null>(null);
+  const [exchanging, setExchanging] = useState(() => new URLSearchParams(location.search).has("code"));
+  const me = identity?.account?.me ?? null;
 
-  function authenticated(token: string, identity: Me | null, target: Route) {
-    saveToken(token);
-    setToken(token);
-    setMe(identity);
-    setMeError("");
-    setLogin(null);
-    setExchanging(false);
-    go(target);
-  }
-
-  function logout() {
-    forgetToken();
-    setToken("");
-    setMe(null);
+  async function refresh() {
+    setError("");
+    try { setIdentity(await account.view()); }
+    catch (error) { setError(error instanceof Error ? error.message : "暂时无法连接，请重试。"); }
+    finally { setLoading(false); }
   }
 
   useEffect(() => {
-    const params = callbackParams();
-    if (!params) return;
-    const target = takeLoginReturn();
-    // 授权码只使用一次，也不让刷新重复交换。
+    const query = new URLSearchParams(location.search);
+    const code = query.get("code");
+    const state = query.get("state");
+    const returnTo = query.get("return_to") ?? undefined;
     history.replaceState(null, "", `${location.pathname}${location.hash}`);
-    exchangeGitHubCode(params.code, params.state)
-      .then((result) => authenticated(result.token, null, target))
-      .catch((err: Error) => {
+    if (code && state) {
+      exchangeGitHubCode(code, state).then((result) => location.replace(result.return_to)).catch((error: Error) => {
         setExchanging(false);
-        setLogin({ target, error: `登录失败：${err.message}` });
+        setLogin({ target: route, error: error.message });
+        void refresh();
       });
+    } else {
+      setExchanging(false);
+      void refresh();
+      if (query.has("login") || query.has("error")) setLogin({ target: route, returnTo, error: query.has("error") ? "GitHub 登录未完成，可以重试或使用邮箱。" : undefined });
+    }
   }, []);
 
   useEffect(() => {
-    if (!token && route.name !== "docs" && !exchanging) setLogin({ target: route });
-  }, [route]);
+    if (emailToken) account.previewEmail(emailToken).then(setEmailPreview).catch((error: Error) => setError(error.message));
+  }, [emailToken]);
 
   useEffect(() => {
     const expired = () => {
-      logout();
+      setIdentity((previous) => previous ? { ...previous, account: null } : null);
       setLogin({ target: route, error: "登录已失效，请重新登录。" });
     };
     const requested = () => setLogin({ target: route });
@@ -81,133 +69,73 @@ export function App() {
     };
   }, [route]);
 
-  useEffect(() => {
-    let alive = true;
-    setMeError("");
-    if (!token) { setMe(null); return; }
-    api.me().then((identity) => { if (alive) setMe(identity); }).catch((err: Error) => {
-      if (alive) { setMe(null); setMeError(err.message); }
-    });
-    return () => { alive = false; };
-  }, [token, meAttempt]);
+  const sites = useLoad(() => me ? api.sites() : Promise.resolve([] as Site[]), [me]);
 
-  const hasToken = token !== "";
-  const sites = useLoad(() => (hasToken ? api.sites() : Promise.resolve([] as Site[])), [token]);
-  const plazaUrl = plazaOf(sites.data);
+  async function confirmEmail() {
+    if (!emailToken || confirming) return;
+    setConfirming(true);
+    setError("");
+    try { const result = await account.confirmEmail(emailToken); location.replace(result.return_to); }
+    catch (error) { setError(error instanceof Error ? error.message : "登录未完成，请重试。"); }
+    finally { setConfirming(false); }
+  }
+
+  async function logout() {
+    setError("");
+    try { await account.logout(); setIdentity((previous) => previous ? { ...previous, account: null } : null); }
+    catch (error) { setError(error instanceof Error ? error.message : "退出失败，请重试。"); }
+  }
 
   function navigate(event: MouseEvent, target: Route) {
-    if (hasToken || target.name === "docs" || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (me || target.name === "docs" || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     setLogin({ target });
+    if (!identity) void refresh();
   }
 
   let content;
-  if (exchanging) content = <p class="muted stage-note" role="status">正在登录…</p>;
+  if (emailToken) content = <section class="auth-empty"><BrandMark /><h1>{emailPreview?.link ? "关联邮箱" : "继续登录 playtest"}</h1><p class="muted">{emailPreview ? `${emailPreview.email} · 确认后返回刚才的页面。` : "正在检查登录链接…"}</p><button class="button primary" disabled={confirming || !emailPreview} onClick={confirmEmail}>{confirming ? "正在确认…" : emailPreview?.link ? "确认关联" : "确认登录"}</button><button class="button quiet" onClick={() => { setEmailToken(null); setError(""); setLogin({ target: route }); }}>重新发送登录链接</button></section>;
+  else if (exchanging || loading && route.name !== "docs") content = <p class="muted stage-note" role="status">正在连接…</p>;
   else if (route.name === "docs") content = <DocsPage section={route.section} />;
-  else if (!hasToken) content = <LoginRequired route={route} onLogin={() => setLogin({ target: route })} />;
-  else if (route.name === "token") content = <TokenPage me={me} error={meError} onRetry={() => setMeAttempt((n) => n + 1)} onLogin={() => setLogin({ target: route })} onLogout={logout} />;
-  else if (route.name === "collections") content = <CollectionsPage key={route.slug ?? "index"} slug={route.slug} sites={sites.data ?? []} me={me} plazaUrl={plazaUrl} />;
+  else if (!me) content = <LoginRequired route={route} onLogin={() => { setLogin({ target: route }); if (!identity) void refresh(); }} />;
+  else if (route.name === "token") content = <TokenPage identity={identity!} onRefresh={refresh} onLogout={logout} />;
+  else if (route.name === "device") content = <DevicePage />;
+  else if (route.name === "collections") content = <CollectionsPage key={route.slug ?? "index"} slug={route.slug} sites={sites.data ?? []} me={me} plazaUrl="/" />;
   else if (route.name === "sites") content = <HomePage sites={sites} me={me} />;
-  else content = <SitePage key={route.slug} slug={route.slug} initialSite={sites.data?.find((site) => site.slug === route.slug)} tab={route.tab} version={route.version} plazaUrl={plazaUrl} onSiteChanged={sites.reload} />;
+  else content = <SitePage key={route.slug} slug={route.slug} initialSite={sites.data?.find((site) => site.slug === route.slug)} tab={route.tab} version={route.version} plazaUrl="/" onSiteChanged={sites.reload} />;
 
   return <div class="shell">
-    <Rail route={route} me={me} hasToken={hasToken} sites={hasToken ? sites.data ?? [] : []} plazaUrl={plazaUrl} onNavigate={navigate} />
+    <Rail route={route} me={me} onNavigate={navigate} />
     <a class="skip-link" href="#main-content" onClick={(event) => { event.preventDefault(); document.getElementById("main-content")?.focus(); }}>跳到内容</a>
-    <main class="stage" id="main-content" tabIndex={-1} key={token}>{content}</main>
-    {login ? <LoginDialog request={login} onClose={() => setLogin(null)} onAuthenticated={authenticated} /> : null}
+    <main class="stage" id="main-content" tabIndex={-1}>
+      {error ? <p class="notice" role="alert">{error} {!emailToken ? <button class="button quiet" onClick={refresh}>重试</button> : null}</p> : null}
+      {content}
+    </main>
+    {login ? <LoginDialog request={login} available={identity} onClose={() => setLogin(null)} /> : null}
   </div>;
 }
 
-// ------------------------------------------------------------------ 栏
-
-function Rail({
-  route,
-  me,
-  hasToken,
-  sites,
-  plazaUrl,
-  onNavigate,
-}: {
-  route: Route;
-  me: Me | null;
-  hasToken: boolean;
-  sites: Site[];
-  plazaUrl: string;
-  onNavigate: (event: MouseEvent, route: Route) => void;
-}) {
-  const who = me?.kind === "github" ? `@${me.login ?? me.display_name}` : null;
-  const currentSlug = route.name === "site" ? route.slug : null;
-
-  return (
-    <aside class="rail sidebar">
-      <a class="brand" href={href({ name: "sites" })} onClick={(event) => onNavigate(event, { name: "sites" })} aria-label="playtest.run 控制台">
-        <span class="mark" aria-hidden="true" dangerouslySetInnerHTML={{ __html: mark }} />
-        <span class="brand-text">
-          <span class="brand-wordmark" dangerouslySetInnerHTML={{ __html: wordmark }} />
-        </span>
+function Rail({ route, me, onNavigate }: { route: Route; me: Me | null; onNavigate: (event: MouseEvent, target: Route) => void }) {
+  const mine = route.name === "sites" || route.name === "site";
+  return <aside class="sidebar">
+    <a class="brand" href="/" aria-label="playtest 首页"><span class="mark" aria-hidden="true" dangerouslySetInnerHTML={{ __html: mark }} /><span dangerouslySetInnerHTML={{ __html: wordmark }} /></a>
+    <nav class="rail-nav" aria-label="页面">
+      <a class="nav-item" href="/"><NavIcon kind="grid" />广场</a>
+      <a class="nav-item" href="/me"><NavIcon kind="bell" />关注</a>
+      <a class={`nav-item ${mine ? "active" : ""}`} aria-current={mine ? "page" : undefined} href={href({ name: "sites" })} onClick={(event) => onNavigate(event, { name: "sites" })}><NavIcon kind="grid" />我的作品</a>
+      <a class={`nav-item ${route.name === "collections" ? "active" : ""}`} aria-current={route.name === "collections" ? "page" : undefined} href={href({ name: "collections" })} onClick={(event) => onNavigate(event, { name: "collections" })}><NavIcon kind="folder" />我的合集</a>
+    </nav>
+    <div class="rail-bottom">
+      <Publish />
+      <a class={`nav-item ${route.name === "docs" ? "active" : ""}`} href={href({ name: "docs", section: "start" })} aria-current={route.name === "docs" ? "page" : undefined}><NavIcon kind="book" />使用文档</a>
+      <a class={`nav-item account ${route.name === "token" ? "active" : ""}`} href={href({ name: "token" })} onClick={(event) => onNavigate(event, { name: "token" })}>
+        {me?.avatar_url ? <img class="avatar" src={me.avatar_url} alt="" /> : <NavIcon kind="person" />}
+        <span class="account-name">{me?.display_name ?? "登录"}</span>
       </a>
-
-      <nav class="rail-nav">
-        <a class={`nav-item ${route.name === "collections" ? "active" : ""}`} href={href({ name: "collections" })} onClick={(event) => onNavigate(event, { name: "collections" })} aria-current={route.name === "collections" ? "page" : undefined}>
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5a1 1 0 0 1 1-1h5l2 3h7a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7Z"/></svg>合集与挑战
-        </a>
-        <a class={`nav-item docs-nav-link ${route.name === "docs" ? "active" : ""}`} href={href({ name: "docs", section: "start" })} aria-current={route.name === "docs" ? "page" : undefined}>
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z"/><path d="M5 16h14M9 8h6M9 11h4"/></svg>使用文档
-        </a>
-        <a class={`nav-item ${route.name === "sites" ? "active" : ""}`} href={href({ name: "sites" })} onClick={(event) => onNavigate(event, { name: "sites" })} aria-current={route.name === "sites" ? "page" : undefined}>
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg>我的作品
-          {sites.length > 0 ? <span class="nav-count">{sites.length}</span> : null}
-        </a>
-        {sites.length > 0 ? (
-          <ul class="rail-sites">
-            {sites.map((site) => (
-              <li key={site.slug}>
-                <a
-                  class={`rail-site ${site.slug === currentSlug ? "active" : ""}`}
-                  href={href({ name: "site", slug: site.slug, tab: "results" })}
-                  title={site.slug}
-                >
-                  <span class={`dot ${dotOf(site)}`} />
-                  <span class="rail-site-title">{site.title}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </nav>
-
-      <div class="rail-bottom">
-        <Publish />
-        <a class="nav-item" href={plazaUrl} target="_blank" rel="noreferrer">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="m15 9-2 4-4 2 2-4Z"/></svg>探索广场
-          <span class="nav-arrow">↗</span>
-        </a>
-        <a class={`nav-item account ${route.name === "token" ? "active" : ""}`} href={href({ name: "token" })} onClick={(event) => onNavigate(event, { name: "token" })} aria-label={hasToken ? "账号与访问令牌" : "登录控制台"}>
-          {me?.avatar_url ? <img class="avatar" src={me.avatar_url} alt="" /> : <span class="avatar blank" />}
-          <span class="account-name">{who ?? (hasToken ? me?.kind === "anon" ? "匿名" : "账号" : "登录")}</span>
-        </a>
-      </div>
-    </aside>
-  );
+    </div>
+  </aside>;
 }
 
-/** 栏上每个作品前面那个点：在广场上是绿的，匿名快到期是橙的，其余是灰的。只说事实，不做按钮。 */
-function dotOf(site: Site): string {
-  if (site.listing?.public && !site.listing.hidden) return "on";
-  if (site.expires_at) return "soon";
-  return "";
-}
-
-
-/** 玩家链接去掉 slug 那一级就是广场：`https://brisk-otter-41.playtest.run` → `https://playtest.run/`。 */
-function plazaOf(sites: Site[] | undefined): string {
-  const sample = sites?.[0]?.url;
-  if (!sample) return "https://playtest.run/";
-  try {
-    const url = new URL(sample);
-    const host = url.host.split(".").slice(1).join(".");
-    return host ? `${url.protocol}//${host}/` : "https://playtest.run/";
-  } catch {
-    return "https://playtest.run/";
-  }
+function NavIcon({ kind }: { kind: string }) {
+  return <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">{kind === "folder" ? <path d="M3 7V5a1 1 0 0 1 1-1h5l2 3h9v13H3Z" /> : kind === "bell" ? <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /> : kind === "book" ? <path d="M5 4h14v17H8a3 3 0 0 1-3-3V4Zm0 13h14M9 8h6M9 11h4" /> : kind === "person" ? <><circle cx="12" cy="8" r="4" /><path d="M4 21v-2a8 8 0 0 1 16 0v2" /></> : <><rect x="4" y="4" width="6" height="6" rx="1.5" /><rect x="14" y="4" width="6" height="6" rx="1.5" /><rect x="4" y="14" width="6" height="6" rx="1.5" /><rect x="14" y="14" width="6" height="6" rx="1.5" /></>}</svg>;
 }

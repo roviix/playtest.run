@@ -49,19 +49,13 @@ pub mod routes {
     /// `GET` → 200 [`super::VersionFiles`]：这一版里到底有哪些文件。
     pub const SITE_VERSION_FILES: &str = "/v1/projects/{slug}/versions/{version}/files";
 
-    // ---- 登录（DESIGN §3.2：`playtest login`，GitHub，一次之后不再问） ----
-    //
-    // 两条路进同一个账号：终端走 GitHub 的设备码流程（不用回调端口，也不用 client secret），
-    // 控制台走网页授权码流程。两条路的最后一步都可以顺带带上手里的匿名令牌，
-    // 那个匿名身份下的作品会一起归到账号里、不再 24 小时后失效。
-
-    /// `POST` → 200 [`super::DeviceLoginStart`]：向 GitHub 要一个设备码。控制面代为请求，CLI 不用知道 client_id。
-    pub const LOGIN_DEVICE_START: &str = "/v1/login/github/device";
-    /// `POST` [`super::DeviceLoginPoll`] → 200 [`super::LoginPollResponse`]。可带 `Authorization: Bearer <匿名令牌>`。
-    pub const LOGIN_DEVICE_POLL: &str = "/v1/login/github/device/poll";
+    /// `POST` → 200 [`super::DeviceLoginStart`]：平台签发设备码；此步可带匿名令牌，授权后保留作品。
+    pub const LOGIN_DEVICE_START: &str = "/v1/login/device";
+    /// `POST` [`super::DeviceLoginPoll`] → 200 [`super::LoginPollResponse`]：等待浏览器用邮箱或 GitHub 登录并授权。
+    pub const LOGIN_DEVICE_POLL: &str = "/v1/login/device/poll";
     /// `GET` → 302 到 GitHub 的授权页。浏览器直接访问；回来时 GitHub 把 `code` 和 `state` 挂在控制台地址上。
     pub const LOGIN_WEB_START: &str = "/v1/login/github/start";
-    /// `POST` [`super::WebLoginExchange`] → 200 [`super::LoginResponse`]。可带 `Authorization: Bearer <匿名令牌>`。
+    /// `POST` [`super::WebLoginExchange`] → 200 `{return_to}` 与 host-only 会话 Cookie；必须匹配发起浏览器与 Origin，不返回 CLI 令牌。
     pub const LOGIN_WEB_EXCHANGE: &str = "/v1/login/github/exchange";
     /// `GET` → 200 [`super::Me`]：这个令牌是谁。
     pub const ME: &str = "/v1/me";
@@ -151,7 +145,7 @@ pub struct AnonSessionResponse {
     pub expires_at: String,
 }
 
-/// GitHub 设备码流程的第一步：CLI 把 `user_code` 和 `verification_uri` 打给人看，然后拿 `device_code` 轮询。
+/// 平台设备授权的第一步：CLI 显示 `user_code` 和 `verification_uri`，然后拿 `device_code` 轮询。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct DeviceLoginStart {
     pub device_code: String,

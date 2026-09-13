@@ -24,6 +24,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/005_club.sql"),
     include_str!("migrations/006_collections.sql"),
     include_str!("migrations/007_work_kind.sql"),
+    include_str!("migrations/008_accounts.sql"),
 ];
 
 /// 读连接的个数。控制面同一时刻在读的东西：几个请求、一次 `live.json` 重算、一次广场重算；
@@ -231,8 +232,8 @@ pub fn upsert_github_user(
         .optional()?;
     if let Some((id, was)) = existing {
         conn.execute(
-            "UPDATE users SET login = ?2, display_name = ?3, avatar_url = ?4 WHERE id = ?1",
-            params![id, login, display_name, avatar_url],
+            "UPDATE users SET login = ?2, avatar_url = ?3 WHERE id = ?1",
+            params![id, login, avatar_url],
         )?;
         return Ok((id, was.as_deref() != avatar_url));
     }

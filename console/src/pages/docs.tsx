@@ -238,8 +238,8 @@ export function DocsPage({ section }: { section: DocSection }) {
             </div>
 
             <h3>随时绑定账号保留作品</h3>
-            <p>当需要长期保留作品或跨设备管理时，在终端运行 <code>playtest login</code>，按提示在 GitHub 网页上完成一次授权绑定即可。绑定后作品不再受 24 小时有效期限制。</p>
-            <p><strong>注意</strong>：浏览器控制台与终端 CLI 分别独立保存身份，终端登录不会自动同步到浏览器。网页端支持 GitHub 快捷登录，也可以在登录弹窗选择输入访问令牌（可在本机 <code>~/.config/playtest/config.json</code> 中找到）。访问令牌属于管理凭据，切勿发给玩家。</p>
+            <p>当需要长期保留作品或跨设备管理时，在终端运行 <code>playtest login</code>，打开提示的 playtest 页面，用邮箱或 GitHub 登录，核对终端代码后授权。授权时会将这台设备上尚未到期的匿名作品归入账号。</p>
+            <p>浏览器、终端、关注与发布使用同一个账号，但各自保存独立凭据。退出浏览器不会退出终端；浏览器不需要粘贴令牌。自动化所需的访问令牌可在「账号」中创建或撤销，切勿发给玩家。</p>
           </Chapter>
 
           <Chapter name="publish">
@@ -454,7 +454,7 @@ export function DocsPage({ section }: { section: DocSection }) {
               <details>
                 <summary>匿名链接到期，或登录身份失效？</summary>
                 <div class="doc-faq-content">
-                  <p>匿名作品通常在 24 小时后到期失效。失效后重新发布可能会分配全新的作品标识与链接，旧链接不会因此复活。如需长期保留，请在有效期内运行 <code>playtest login</code> 绑定 GitHub 账号。浏览器与 CLI 身份各自独立，终端身份状态可用 <code>playtest whoami</code> 查看。</p>
+                  <p>匿名作品通常在 24 小时后到期失效。失效后重新发布可能会分配全新的作品标识与链接，旧链接不会因此复活。如需长期保留，请在有效期内运行 <code>playtest login</code>，用邮箱或 GitHub 登录并授权这台设备。终端身份状态可用 <code>playtest whoami</code> 查看。</p>
                 </div>
               </details>
 

@@ -12,10 +12,52 @@ playtest.run, *.playtest.run {
 		-Server
 	}
 
-	# 不在这里做 encode：edge 自己按目录里的 .br/.gz 预压缩文件发 Content-Encoding，
-	# 并负责 ETag、Range、Content-Length；再叠一层实时压缩会破坏 Range 语义。
-	reverse_proxy edge:8443 {
-		# 大文件下载与将来的 WebSocket 都是长连接，不做缓冲。
-		flush_interval -1
+	@console host playtest.run
+	@console_paths {
+		host playtest.run
+		path /console/*
+	}
+	@console_root {
+		host playtest.run
+		path /console
+	}
+	@api {
+		host playtest.run
+		path /v1/* /healthz /health /llms.txt /llms-full.txt /skill.md /openapi.json /.well-known/agent.json
+	}
+	@install {
+		host playtest.run
+		path /install.sh
+	}
+
+	header @console {
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
+	redir @console_root /console/ permanent
+	handle @console_paths {
+		uri strip_prefix /console
+		root * /srv/console
+		encode zstd gzip
+		header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+	handle @api {
+		reverse_proxy api:8787 {
+			flush_interval -1
+		}
+	}
+	handle @install {
+		root * /srv/site
+		header Content-Type "text/plain; charset=utf-8"
+		file_server
+	}
+	handle {
+		reverse_proxy edge:8443 {
+			flush_interval -1
+		}
 	}
 }

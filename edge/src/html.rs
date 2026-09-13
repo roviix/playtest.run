@@ -95,10 +95,11 @@ pub fn enhance(html: String, nonce: &str) -> String {
         ""
     };
     let script = format!(
-        "<script nonce=\"{}\">{}\n{}\n{}</script>",
+        "<script nonce=\"{}\">{}\n{}\n{}\n{}</script>",
         esc(nonce),
         include_str!("../../ui/dialog.js"),
         include_str!("../../ui/player.js"),
+        include_str!("../../ui/account.js"),
         discovery
     );
     html.replacen("</body>", &format!("{script}</body>"), 1)

@@ -10,6 +10,7 @@
 //! - **文件内容不经过数据库，也不整包进内存**：`PUT /v1/blobs/{hash}` 边收边写临时文件、
 //!   边算 SHA-256，哈希对上才分段提交进对象存储，数据库里只留一行「这个哈希有了」。
 
+pub mod account;
 pub mod auth;
 pub mod boosts;
 pub mod capabilities;
@@ -17,6 +18,7 @@ pub mod clock;
 pub mod collections;
 pub mod config;
 pub mod db;
+pub mod device;
 pub mod error;
 pub mod live;
 pub mod notify;

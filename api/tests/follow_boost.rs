@@ -20,9 +20,8 @@ use axum::{Json, Router};
 use playtest_api::config::GitHubApp;
 use playtest_api::{app, boosts, clock, db, live, notify, plaza, scheduler, AppState, Config};
 use playtest_common::api::{
-    routes as paths, CommitUploadResponse, CreateSiteRequest, DeviceLoginPoll, DeviceLoginStart,
-    ErrorBody, ErrorCode, LoginPollResponse, Me, PrepareUploadRequest, PrepareUploadResponse, Site,
-    UpdateSiteRequest,
+    routes as paths, CommitUploadResponse, CreateSiteRequest, ErrorBody, ErrorCode, Me,
+    PrepareUploadRequest, PrepareUploadResponse, Site, UpdateSiteRequest,
 };
 use playtest_common::boost::{
     routes as admin_paths, Boost, BoostKind, BoostStatus, GrantBoostRequest, JobStatus,
@@ -196,30 +195,35 @@ impl Harness {
 
     /// 登录一个 GitHub 账号，返回开发者令牌。
     async fn login(&self) -> String {
-        let start: DeviceLoginStart = self
-            .call(
-                "POST",
-                paths::LOGIN_DEVICE_START,
-                None,
-                Some(&serde_json::json!({})),
-            )
-            .await
-            .json();
-        let polled: LoginPollResponse = self
-            .call(
-                "POST",
-                paths::LOGIN_DEVICE_POLL,
-                None,
-                Some(&DeviceLoginPoll {
-                    device_code: start.device_code,
-                }),
-            )
-            .await
-            .json();
-        match polled {
-            LoginPollResponse::Ok(login) => login.token,
-            other => panic!("该登录成功的：{other:?}"),
-        }
+        let user_id = format!("gh-{}", playtest_api::auth::new_token());
+        let token = playtest_api::auth::new_token();
+        let conn = self.state.db().lock().await;
+        let now = clock::now_string();
+        db::insert_user(
+            &conn,
+            &db::NewUser {
+                id: &user_id,
+                kind: "github",
+                display_name: "Octo Cat",
+                created_at: &now,
+                expires_at: None,
+            },
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE users SET login = ?1, avatar_url = ?2 WHERE id = ?3",
+            rusqlite::params!["octo", AVATAR, &user_id],
+        )
+        .unwrap();
+        db::insert_token(
+            &conn,
+            &hash::hash_bytes(token.as_bytes()),
+            &user_id,
+            &now,
+            None,
+        )
+        .unwrap();
+        token
     }
 
     /// 一个有主人、发过一版、在广场上的作品。
