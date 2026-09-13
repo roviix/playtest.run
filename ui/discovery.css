@@ -152,7 +152,5 @@
 .discover-search input{min-height:40px;height:40px;font-size:14px}
 .discover-search button{width:40px;min-height:40px;height:40px}
 .discover-search{max-width:none}
-.model-filter{width:100%}
-.model-filter select{flex:1}
 }
 
