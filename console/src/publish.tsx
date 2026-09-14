@@ -5,25 +5,21 @@ import { BrandMark } from "./auth";
 const modes = [
   {
     label: "Export Folder",
-    meta: "bash · CLI Publish",
     command: "playtest ./dist",
     hint: "Build your project first, then replace ./dist with your build output folder.",
   },
   {
     label: "Local Port",
-    meta: "bash · CLI Publish",
     command: "playtest 3000",
     hint: "Start your local dev server, and keep your terminal open during sharing.",
   },
   {
     label: "Static + Backend",
-    meta: "bash · CLI Publish",
     command: "playtest ./dist --backend 8000",
     hint: "Proxies unmatched routes to your local backend.",
   },
   {
     label: "Install CLI",
-    meta: "curl · One-line Install",
     command: "curl -fsSL https://playtest.run/install.sh | bash",
     hint: "macOS & Linux · Installs to ~/.local/bin",
   },
@@ -81,7 +77,6 @@ export function Publish() {
             <div class="cli-bar">
               <div class="cli-info">
                 <span class="cli-dots" aria-hidden="true"></span>
-                <span class="cli-meta">{selected.meta}</span>
               </div>
               <button class="copy-command" type="button" aria-label={copied ? "Command copied" : "Copy command"} title={copied ? "Copied" : "Copy command"} data-copied={copied || undefined} onClick={copy}>
                 <svg class="icon copy-glyph" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></svg>
@@ -98,14 +93,6 @@ export function Publish() {
           <p class="pub-status" role="status" data-state={copied ? "success" : "error"}>{message}</p>
         </div>
         <div class="pub-foot">
-          <button
-            type="button"
-            class={`foot-install-btn ${mode === 3 ? "active" : ""}`}
-            onClick={() => { setMode(3); resetCopy(); }}
-          >
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0-4-4m4 4 4-4M4 20h16" /></svg>
-            Install CLI (curl)
-          </button>
           <a href={href({ name: "docs", section: "publish" })} onClick={() => dialog.current?.close()}>
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15Z" /></svg>
             Documentation

@@ -22,8 +22,12 @@ export function HomePage({ sites, me }: { sites: Loaded<Site[]>; me: Me | null }
   return (
     <>
       <header class="workspace-head">
-        <h1>My Projects</h1>
-        <span class="workspace-count">{count} {count === 1 ? "project" : "projects"}</span>
+        <div>
+          <h1>
+            My Projects
+            <span class="workspace-count" style={{ marginLeft: "8px" }}>{count}</span>
+          </h1>
+        </div>
       </header>
       {!data || data.length === 0 ? (
         <EmptyHome me={me} />

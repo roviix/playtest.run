@@ -52,6 +52,13 @@ export function CollectionsPage({
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"entries" | "prompt">("entries");
   const [copied, setCopied] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 2800);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     let current = true;
@@ -114,6 +121,7 @@ export function CollectionsPage({
       await navigator.clipboard.writeText(publicUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      setNotice("合集链接已复制到剪贴板。");
     } catch {
       setNotice(`公开链接：${publicUrl}`);
     }
@@ -145,11 +153,6 @@ export function CollectionsPage({
               重新读取
             </button>
           </div>
-        ) : null}
-        {notice ? (
-          <p class="collection-notice" role="status">
-            {notice}
-          </p>
         ) : null}
 
         <header class="collection-identity">
@@ -187,23 +190,61 @@ export function CollectionsPage({
           </div>
 
           <div class="collection-header-actions">
+            {selected.public ? (
+              <button
+                class={`collection-action-btn ${copied ? "copied" : ""}`}
+                type="button"
+                onClick={copyPublicUrl}
+                title="复制合集公开访问链接"
+              >
+                {copied ? (
+                  <>
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style={{ width: "13px", height: "13px" }} aria-hidden="true">
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                    <span>已复制链接</span>
+                  </>
+                ) : (
+                  <>
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ width: "13px", height: "13px" }} aria-hidden="true">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                    </svg>
+                    <span>复制链接</span>
+                  </>
+                )}
+              </button>
+            ) : null}
+
+            {selected.public && !selected.hidden ? (
+              <a
+                class="collection-action-btn"
+                href={publicUrl}
+                target="_blank"
+                rel="noreferrer"
+                title="在新标签页中以玩家视角查看此合集"
+              >
+                <span>打开玩家页面</span>
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ width: "13px", height: "13px" }} aria-hidden="true">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </a>
+            ) : null}
+
             {owner ? (
-              <button class="button quiet" type="button" onClick={() => setEditing(true)}>
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ width: "14px", height: "14px", marginRight: "5px" }}>
+              <button
+                class="collection-action-btn"
+                type="button"
+                onClick={() => setEditing(true)}
+                title="修改合集资料、开放范围或删除合集"
+              >
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ width: "13px", height: "13px" }} aria-hidden="true">
                   <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
                   <circle cx="12" cy="12" r="3" />
                 </svg>
-                设置
-              </button>
-            ) : null}
-            {selected.public && !selected.hidden ? (
-              <a class="button primary" href={publicUrl} target="_blank" rel="noreferrer">
-                打开玩家页面 ↗
-              </a>
-            ) : null}
-            {selected.public ? (
-              <button class="button quiet" type="button" onClick={copyPublicUrl}>
-                {copied ? "已复制链接 ✓" : "复制链接"}
+                <span>设置</span>
               </button>
             ) : null}
           </div>
@@ -261,7 +302,7 @@ export function CollectionsPage({
                     type="button"
                     onClick={() => setAddingWork(true)}
                   >
-                    + 添加作品
+                    {owner ? "+ 添加作品" : "+ 投稿作品"}
                   </button>
                 ) : null}
               </div>
@@ -332,15 +373,19 @@ export function CollectionsPage({
                       <path d="M3 9h18M9 21V9" />
                     </svg>
                   </div>
-                  <h2>还没有收录任何公开作品</h2>
-                  <p>把已发布的作品汇聚在一起，让玩家一口气体验完整系列。</p>
+                  <h2>{isChallenge ? "还没有收到任何公开投稿" : "还没有收录任何公开作品"}</h2>
+                  <p>
+                    {isChallenge
+                      ? "参与本次创作挑战，将你已发布的公开作品投递进来。"
+                      : "把已发布的作品汇聚在一起，让玩家一口气体验完整系列。"}
+                  </p>
                   {!selected.hidden && !closed && authenticated && (owner || isChallenge) ? (
                     <button
                       class="button primary"
                       type="button"
                       onClick={() => setAddingWork(true)}
                     >
-                      + 添加作品
+                      {owner ? "+ 添加作品" : "+ 投稿我的作品"}
                     </button>
                   ) : null}
                 </div>
@@ -356,18 +401,35 @@ export function CollectionsPage({
               <div class="collection-prompt-canvas-head">
                 <h3>创作题目</h3>
                 <button
-                  class="button small quiet"
+                  class={`collection-action-btn small ${promptCopied ? "copied" : ""}`}
                   type="button"
                   onClick={async () => {
                     try {
                       await navigator.clipboard.writeText(selected.prompt);
+                      setPromptCopied(true);
+                      setTimeout(() => setPromptCopied(false), 2000);
                       setNotice("题目已复制到剪贴板。");
                     } catch {
                       setNotice("复制失败，请手动选取题目文本。");
                     }
                   }}
                 >
-                  复制题目
+                  {promptCopied ? (
+                    <>
+                      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style={{ width: "12px", height: "12px" }} aria-hidden="true">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                      <span>已复制</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ width: "12px", height: "12px" }} aria-hidden="true">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                      <span>复制题目</span>
+                    </>
+                  )}
                 </button>
               </div>
               <p class="collection-prompt-text">{selected.prompt}</p>
@@ -417,6 +479,15 @@ export function CollectionsPage({
             onClose={() => setAddingWork(false)}
           />
         ) : null}
+
+        {notice ? (
+          <div class="collection-toast" role="status" aria-live="polite">
+            <svg class="collection-toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+            <span>{notice}</span>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -432,7 +503,7 @@ export function CollectionsPage({
       <header class="workspace-head">
         <div>
           <h1>
-            My Collections
+            我的合集
             {mine ? <span class="workspace-count" style={{ marginLeft: "8px" }}>{mine.length}</span> : null}
           </h1>
         </div>
@@ -440,11 +511,11 @@ export function CollectionsPage({
         <div>
           {authenticated ? (
             <button
-              class={`button ${creating ? "quiet" : "primary"}`}
+              class="button primary"
               type="button"
-              onClick={() => setCreating((value) => !value)}
+              onClick={() => setCreating(true)}
             >
-              {creating ? "Collapse" : "+ New Collection"}
+              + 新建合集
             </button>
           ) : null}
         </div>
@@ -454,14 +525,9 @@ export function CollectionsPage({
         <div class="collection-error" role="alert">
           <span>{error}</span>
           <button class="button small" type="button" onClick={refresh}>
-            Retry
+            重新读取
           </button>
         </div>
-      ) : null}
-      {notice ? (
-        <p class="collection-notice" role="status">
-          {notice}
-        </p>
       ) : null}
 
       {!authenticated && me ? (
@@ -604,6 +670,15 @@ export function CollectionsPage({
           ) : null}
         </section>
       )}
+
+      {notice ? (
+        <div class="collection-toast" role="status" aria-live="polite">
+          <svg class="collection-toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          <span>{notice}</span>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -899,7 +974,7 @@ function CollectionDialog({
                 <button class="button quiet" type="button" onClick={onClose}>
                   取消
                 </button>
-                <button class="button primary" type="submit" disabled={busy}>
+                <button class="button titanium" type="submit" disabled={busy}>
                   {busy ? "保存中…" : collection ? "保存设置" : "创建合集"}
                 </button>
               </div>
@@ -1022,7 +1097,7 @@ function WorkSubmitDialog({
               <button class="button quiet" type="button" onClick={onClose}>
                 取消
               </button>
-              <button class="button primary" type="submit" disabled={busy}>
+              <button class="button titanium" type="submit" disabled={busy}>
                 {busy ? "添加中…" : "确认添加"}
               </button>
             </div>

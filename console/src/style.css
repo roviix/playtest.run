@@ -52,13 +52,30 @@ a {
   text-decoration: none;
 }
 
+::selection {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
 :focus {
   outline: none;
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid rgba(255, 255, 255, 0.45);
   outline-offset: 3px;
+}
+
+[tabindex="-1"]:focus,
+[tabindex="-1"]:focus-visible,
+h1:focus,
+h1:focus-visible,
+h2:focus,
+h2:focus-visible,
+h3:focus,
+h3:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 p {

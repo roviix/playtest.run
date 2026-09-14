@@ -383,7 +383,7 @@ fn publish_sheet() -> String {
 <label for=\"tab-install\">Install CLI</label>\n\
 </div>\n\
 <div class=\"cli\">\n\
-<div class=\"cli-bar\"><div class=\"cli-info\"><span class=\"cli-dots\" aria-hidden=\"true\"></span><span class=\"cli-meta\">CLI publish</span></div>\
+<div class=\"cli-bar\"><div class=\"cli-info\"><span class=\"cli-dots\" aria-hidden=\"true\"></span></div>\
 <button class=\"copy-command\" type=\"button\" aria-label=\"Copy command\" title=\"Copy command\" data-copy-command hidden>\
 <svg class=\"icon copy-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"8\" y=\"8\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3\"/></svg>\
 <svg class=\"icon copied-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg><span class=\"copy-text\">Copy</span></button></div>\n\
@@ -401,7 +401,7 @@ fn publish_sheet() -> String {
 <div class=\"pub-foot\">\
 <label for=\"tab-install\" class=\"foot-install-btn\">{dl}Install CLI (curl)</label>\
 <a href=\"{usage}\" target=\"_blank\" rel=\"noopener\">{book}Documentation</a>\
-<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">Developer Console{out}</a>\
+<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">Developer Console{out}</a>\n\
 </div>\n\
 </div>\n\
 </dialog>\n",
