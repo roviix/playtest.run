@@ -8,8 +8,8 @@
 .token-help-tip{display:inline-flex;align-items:center;gap:4px;color:var(--dim);font-size:12px;text-decoration:none;transition:color 140ms}
 .token-help-tip:hover{color:var(--accent)}
 .token-help-tip .help-icon{width:13px;height:13px}
-.login-dialog .notice-form .button-submit{min-height:44px;border-radius:8px;border:1px solid transparent;background:var(--accent);color:#08130f;font:600 14px system-ui;cursor:pointer;box-shadow:0 4px 16px var(--accent-soft);transition:all 140ms cubic-bezier(.16,1,.3,1);margin-top:6px}
-.login-dialog .notice-form .button-submit:hover:not(:disabled){background:#71e8bf;box-shadow:0 6px 20px var(--accent-soft);transform:translateY(-1px)}
+.login-dialog .notice-form .button-submit{min-height:44px;border-radius:8px;border:1px solid transparent;background:#ffffff;color:#09090b;font:600 14px system-ui;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.3);transition:all 140ms cubic-bezier(.16,1,.3,1);margin-top:6px}
+.login-dialog .notice-form .button-submit:hover:not(:disabled){background:#e4e4e7;transform:translateY(-1px)}
 .login-dialog .notice-form .button-submit:active:not(:disabled){transform:translateY(0)}
 .login-dialog .notice-form .button-submit:disabled{background:#ffffff06!important;border:1px solid var(--line)!important;color:var(--dim)!important;box-shadow:none!important;opacity:.65;cursor:not-allowed}
 .login-dialog input{width:100%;min-width:0;min-height:44px;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--fg);font:15px system-ui;transition:border-color 140ms,box-shadow 140ms}
@@ -74,7 +74,8 @@
 }
 
 .settings-card-head {
-  padding: 18px 22px 0;
+  padding: 15px 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .settings-card-head-row {
@@ -82,7 +83,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 22px;
+  min-height: 24px;
 }
 
 .settings-card-heading {
@@ -98,14 +99,6 @@
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--fg);
-}
-
-.settings-card-desc {
-  margin: 5px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--dim);
-  max-width: 58ch;
 }
 
 .settings-card-tip-btn {
@@ -301,17 +294,17 @@
   background: var(--faint);
 }
 .settings-chip--pos {
-  color: #34d399;
-  background: rgba(16, 185, 129, 0.08);
-  border-color: rgba(16, 185, 129, 0.24);
+  color: var(--soft);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 .settings-chip--pos .settings-chip-dot {
   background: #10b981;
 }
 .settings-chip--accent {
-  color: #75cdb5;
-  background: rgba(117, 205, 181, 0.08);
-  border-color: rgba(117, 205, 181, 0.24);
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 .settings-chip--accent .settings-chip-dot {
   background: #75cdb5;
@@ -381,12 +374,13 @@
   transition: all 120ms ease;
 }
 .settings-inline-btn.save {
-  background: var(--accent);
-  color: #08120e;
+  background: #ffffff;
+  color: #09090b;
   font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 .settings-inline-btn.save:hover:not(:disabled) {
-  background: #71e8bf;
+  background: #e4e4e7;
 }
 .settings-inline-btn.save:disabled {
   opacity: 0.5;
@@ -423,13 +417,14 @@
   border-color: rgba(255, 255, 255, 0.2);
 }
 .settings-action--primary {
-  border-color: transparent;
-  background: var(--accent);
-  color: #08120e;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: #ffffff;
+  color: #09090b;
   font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 .settings-action--primary:hover {
-  background: #71e8bf;
+  background: #e4e4e7;
 }
 .settings-action--danger {
   border-color: rgba(239, 68, 68, 0.25);
@@ -447,8 +442,8 @@
   margin: 10px 22px 14px;
   padding: 13px 16px;
   border-radius: 8px;
-  background: #071510;
-  border: 1px solid #134e3f;
+  background: #111417;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -461,10 +456,10 @@
 }
 .settings-token-box-badge {
   font-weight: 600;
-  color: #75cdb5;
+  color: #fff;
 }
 .settings-token-box-warn {
-  color: var(--warn, #fcd34d);
+  color: var(--dim);
 }
 .settings-token-box-row {
   display: flex;
@@ -475,10 +470,10 @@
   flex: 1;
   height: 34px;
   padding: 4px 10px;
-  background: #040d0a;
-  border: 1px solid #18604e;
+  background: #090a0d;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
-  color: #71e8bf;
+  color: #fff;
   font-family: var(--mono);
   font-size: 12px;
 }
@@ -487,15 +482,15 @@
   padding: 0 14px;
   border-radius: 6px;
   border: 0;
-  background: var(--accent);
-  color: #06110d;
+  background: #ffffff;
+  color: #09090b;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: background 120ms ease;
 }
 .settings-token-box-btn:hover {
-  background: #71e8bf;
+  background: #e4e4e7;
 }
 
 /* Token List */

@@ -25,7 +25,7 @@ export function TokenPage({
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState(profile.me.display_name);
 
-  // 展开说明提示
+  // 登录方式说明展开
   const [tipOpen, setTipOpen] = useState(false);
 
   const loadTokens = () =>
@@ -65,10 +65,10 @@ export function TokenPage({
       await account.profile(next);
       await onRefresh();
       setEditingName(false);
-      setMessage("创作者名称已更新。");
-      setTimeout(() => setMessage(""), 3000);
+      setMessage("已保存。");
+      setTimeout(() => setMessage(""), 2500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "保存名称失败，请稍后重试。");
+      setError(err instanceof Error ? err.message : "保存失败，请稍后重试。");
     } finally {
       setBusy(false);
     }
@@ -98,9 +98,9 @@ export function TokenPage({
       setRevokingId(null);
       await loadTokens();
       setMessage("令牌已撤销。");
-      setTimeout(() => setMessage(""), 3000);
+      setTimeout(() => setMessage(""), 2500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "撤销令牌失败。");
+      setError(err instanceof Error ? err.message : "撤销失败。");
     } finally {
       setBusy(false);
     }
@@ -118,8 +118,7 @@ export function TokenPage({
     <div class="account-page">
       <header class="stage-head">
         <div>
-          <h1>账号与设置</h1>
-          <p class="muted">管理你的创作者公开资料、登录方式及自动化开发者令牌。</p>
+          <h1>设置</h1>
         </div>
       </header>
 
@@ -146,7 +145,7 @@ export function TokenPage({
         </div>
       ) : null}
 
-      {/* 1. 创作者身份展台 (Identity Surface) */}
+      {/* 1. 创作者身份 (Identity Surface) */}
       <section class="settings-card">
         <div class="settings-identity">
           <div class="settings-identity-main">
@@ -165,12 +164,12 @@ export function TokenPage({
                   Creator
                 </span>
               </div>
-              <span>{profile.me.login ? `@${profile.me.login}` : (profile.email || "独立创作者")}</span>
+              <span>{profile.me.login ? `@${profile.me.login}` : (profile.email || "创作者")}</span>
             </div>
           </div>
 
           <div class="settings-identity-actions">
-            <a class="settings-action" href="/me" title="查看公开作品、动态与关注列表">
+            <a class="settings-action" href="/me" title="查看公开作品与动态">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                 <polyline points="15 3 21 3 21 9" />
@@ -178,7 +177,7 @@ export function TokenPage({
               </svg>
               公开主页
             </a>
-            <button class="settings-action settings-action--danger" type="button" onClick={onLogout} title="退出当前账号">
+            <button class="settings-action settings-action--danger" type="button" onClick={onLogout} title="退出登录">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
@@ -190,23 +189,20 @@ export function TokenPage({
         </div>
       </section>
 
-      {/* 2. 创作者资料 (Profile Card) */}
+      {/* 2. 资料 (Profile Card) */}
       <section class="settings-card">
         <header class="settings-card-head">
           <div class="settings-card-head-row">
             <div class="settings-card-heading">
-              <h2 class="settings-card-title">创作者资料</h2>
+              <h2 class="settings-card-title">资料</h2>
             </div>
           </div>
-          <p class="settings-card-desc">在作品门禁邀请函、广场署名与玩家反馈流中展示的公开身份。</p>
         </header>
 
         <div class="settings-card-body">
-          {/* 行内就地编辑展示名称 */}
           <div class="settings-row">
             <div class="settings-row-meta">
               <span class="settings-row-label">展示名称</span>
-              <span class="settings-row-hint">作品页和原声交流中呈现的称呼，支持中文与特殊字符</span>
             </div>
             <div class="settings-row-control">
               {editingName ? (
@@ -253,7 +249,7 @@ export function TokenPage({
                     setDraftName(profile.me.display_name);
                     setEditingName(true);
                   }}
-                  title="点击修改展示名称"
+                  title="点击修改"
                 >
                   <span>{profile.me.display_name}</span>
                   <svg class="pencil-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -266,8 +262,7 @@ export function TokenPage({
 
           <div class="settings-row">
             <div class="settings-row-meta">
-              <span class="settings-row-label">主账号邮箱</span>
-              <span class="settings-row-hint">接收动态推送与安全登录的邮箱地址</span>
+              <span class="settings-row-label">邮箱</span>
             </div>
             <div class="settings-row-control">
               <span class="settings-value settings-value--mono">{profile.email || "未绑定"}</span>
@@ -276,8 +271,7 @@ export function TokenPage({
 
           <div class="settings-row settings-row--last">
             <div class="settings-row-meta">
-              <span class="settings-row-label">平台身份</span>
-              <span class="settings-row-hint">已开通即时发布、合集归属与作者工作台管理权限</span>
+              <span class="settings-row-label">身份</span>
             </div>
             <div class="settings-row-control">
               <span class="settings-chip settings-chip--accent">
@@ -289,7 +283,7 @@ export function TokenPage({
         </div>
       </section>
 
-      {/* 3. 登录方式与安全凭据 (Sign-in Methods Card) */}
+      {/* 3. 登录方式 (Sign-in Methods Card) */}
       <section class="settings-card">
         <header class="settings-card-head">
           <div class="settings-card-head-row">
@@ -299,27 +293,24 @@ export function TokenPage({
                 type="button"
                 class={`settings-card-tip-btn ${tipOpen ? "is-open" : ""}`}
                 aria-expanded={tipOpen}
-                aria-label="查看登录方式机制说明"
+                aria-label="说明"
                 onClick={() => setTipOpen((v) => !v)}
               >
                 ?
               </button>
             </div>
           </div>
-          <p class="settings-card-desc">任何已绑定的登录通道均指向当前唯一账号，无缝切换设备无缝登录。</p>
           {tipOpen ? (
             <div class="settings-card-tip" role="note">
-              平台实行单账号统一体系：GitHub 授权与邮箱验证码登录双通道均指向同一作品库与开发者令牌，无论从哪一条路径进入，均不会产生分裂账号。
+              GitHub 授权与邮箱验证码登录双通道均指向当前唯一账户，作品与令牌保持同步。
             </div>
           ) : null}
         </header>
 
         <div class="settings-card-body">
-          {/* GitHub 账号 */}
           <div class="settings-row">
             <div class="settings-row-meta">
-              <span class="settings-row-label">GitHub 账号</span>
-              <span class="settings-row-hint">用于作品签名、身份识别与命令行授权</span>
+              <span class="settings-row-label">GitHub</span>
             </div>
             <div class="settings-row-control">
               {profile.me.login ? (
@@ -335,11 +326,9 @@ export function TokenPage({
             </div>
           </div>
 
-          {/* 邮箱登录 */}
           <div class="settings-row settings-row--last">
             <div class="settings-row-meta">
-              <span class="settings-row-label">邮箱 Magic Link 登录</span>
-              <span class="settings-row-hint">无需密码，向该邮箱发送一次性安全登录链接</span>
+              <span class="settings-row-label">邮箱登录</span>
             </div>
             <div class="settings-row-control">
               {profile.email && !showEmailInput ? (
@@ -358,7 +347,7 @@ export function TokenPage({
                     type="email"
                     class="settings-inline-input"
                     value={email}
-                    placeholder="输入新邮箱地址"
+                    placeholder="输入邮箱"
                     required
                     disabled={busy}
                     onInput={(e) => setEmail(e.currentTarget.value)}
@@ -378,7 +367,7 @@ export function TokenPage({
         </div>
       </section>
 
-      {/* 4. 开发者令牌管理 (Developer Tokens Card) */}
+      {/* 4. 开发者令牌 (Developer Tokens Card) */}
       <section class="settings-card">
         <header class="settings-card-head">
           <div class="settings-card-head-row">
@@ -394,19 +383,18 @@ export function TokenPage({
               + 生成新令牌
             </button>
           </div>
-          <p class="settings-card-desc">用于 playtest 命令行发布、CI/CD 自动化流水线及 AI 助手交互，拥有作品管理权限。</p>
         </header>
 
         {token ? (
           <div class="settings-token-box">
             <div class="settings-token-box-head">
-              <span class="settings-token-box-badge">✓ 新令牌已就绪</span>
-              <span class="settings-token-box-warn">离开本页后将不再完整呈现，请妥善保存</span>
+              <span class="settings-token-box-badge">新令牌已生成</span>
+              <span class="settings-token-box-warn">离开页面后将不再显示，请妥善保存</span>
             </div>
             <div class="settings-token-box-row">
               <input class="settings-token-box-input" value={token} readOnly onClick={(e) => e.currentTarget.select()} />
               <button type="button" class="settings-token-box-btn" onClick={copyToken}>
-                {copied ? "已复制 ✓" : "复制令牌"}
+                {copied ? "已复制 ✓" : "复制"}
               </button>
             </div>
           </div>
@@ -415,7 +403,7 @@ export function TokenPage({
         <div class="settings-card-body">
           {tokens.length === 0 ? (
             <div class="token-empty-state">
-              暂无生成的开发者令牌。点击右上角即可生成新令牌。
+              暂无开发者令牌
             </div>
           ) : (
             tokens.map((t) => (
@@ -423,24 +411,23 @@ export function TokenPage({
                 <div class="token-row-left">
                   <div class="token-row-info">
                     <span class="token-row-prefix">pt_{t.id.slice(0, 8)}••••••••</span>
-                    <span class="token-row-time">创建于 {new Date(t.created_at).toLocaleDateString()}</span>
+                    <span class="token-row-time">{new Date(t.created_at).toLocaleDateString()}</span>
                     <span class="settings-chip settings-chip--pos">
                       <span class="settings-chip-dot" />
-                      活跃中
+                      活跃
                     </span>
                   </div>
                 </div>
                 <div>
                   {revokingId === t.id ? (
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span style={{ fontSize: "12px", color: "var(--danger, #f87171)" }}>确认撤销？</span>
                       <button
                         type="button"
                         class="settings-action settings-action--danger"
                         disabled={busy}
                         onClick={() => void confirmRevoke(t.id)}
                       >
-                        确认
+                        确认撤销
                       </button>
                       <button
                         type="button"
