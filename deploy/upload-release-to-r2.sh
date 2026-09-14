@@ -71,7 +71,7 @@ FILES_TO_UPLOAD=()
 while IFS= read -r -d '' file; do
   name="$(basename "$file")"
   # 仅上传压缩归档与校验文件
-  if [[ "$name" =~ \.(tar\.gz|zip)$ || "$name" == "SHA256SUMS" ]]; then
+  if [[ "$name" =~ \.(tar\.gz|zip)$ || "$name" == "SHA256SUMS" || "$name" == "VERSION" ]]; then
     FILES_TO_UPLOAD+=("$file")
   fi
 done < <(find "$INPUT_DIR" -maxdepth 1 -type f -print0 | sort -z)
@@ -90,7 +90,7 @@ for file in "${FILES_TO_UPLOAD[@]}"; do
   name="$(basename "$file")"
   key="${KEY_PREFIX:+$KEY_PREFIX/}$name"
   cache_control="public, max-age=31536000, immutable"
-  if [[ "$name" == "SHA256SUMS" ]]; then
+  if [[ "$name" == "SHA256SUMS" || "$name" == "VERSION" ]]; then
     cache_control="public, max-age=300, must-revalidate"
   fi
 
@@ -111,7 +111,7 @@ for file in "${FILES_TO_UPLOAD[@]}"; do
   name="$(basename "$file")"
   target_url="$BASE_URL/$name"
   echo "    验证 $target_url ..."
-  status="$(curl -s -o "$TEMP_DIR/$name" -w "%{http_code}" "$target_url" || true)"
+  status="$(curl -s -o "$TEMP_DIR/$name" -w "%{http_code}" "$target_url?t=$(date +%s)" || true)"
   if [[ "$status" != "200" ]]; then
     echo "错误: CDN 回读失败，HTTP 状态码 $status ($target_url)" >&2
     exit 3

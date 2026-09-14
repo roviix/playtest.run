@@ -12,6 +12,12 @@ REPOSITORY="roviix/playtest.run"
 
 if [ -z "$VERSION" ]; then
   if command -v curl >/dev/null; then
+    REMOTE_VERSION="$(curl --silent --show-error --max-time 5 "${PLAYTEST_DOWNLOAD_BASE:-https://dl.roviix.com/files}/VERSION" 2>/dev/null | tr -d ' \r\n' || true)"
+    if [[ "$REMOTE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+      VERSION="$REMOTE_VERSION"
+    fi
+  fi
+  if [ -z "$VERSION" ] && command -v curl >/dev/null; then
     LATEST_REDIRECT="$(curl --silent --show-error --head --location --output /dev/null --write-out '%{url_effective}' "https://github.com/$REPOSITORY/releases/latest" 2>/dev/null || true)"
     if [[ "$LATEST_REDIRECT" =~ /tag/(v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?)$ ]]; then
       VERSION="${BASH_REMATCH[1]}"
@@ -24,11 +30,11 @@ if [ -z "$VERSION" ]; then
     fi
   fi
   if [ -z "$VERSION" ]; then
-    VERSION="v0.3.0"
+    VERSION="v0.2.0"
   fi
 fi
 
-[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]] || fail '未能确认有效的发布版本；可显式指定版本运行，例如 PLAYTEST_VERSION=v0.3.0 bash install.sh'
+[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]] || fail '未能确认有效的发布版本；可显式指定版本运行，例如 PLAYTEST_VERSION=v0.2.0 bash install.sh'
 [[ "$DESTINATION" = /* ]] || fail '安装目录必须是绝对路径。'
 for tool in uname tar mktemp; do command -v "$tool" >/dev/null || fail "缺少 $tool。"; done
 
@@ -43,27 +49,30 @@ esac
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 ARCHIVE="playtest-${VERSION#v}-${TARGET}.tar.gz"
-if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
-  gh release download "$VERSION" --repo "$REPOSITORY" --pattern "$ARCHIVE" --pattern SHA256SUMS --dir "$WORK" || fail '下载失败。私测版本需要仓库访问权限；请向邀请你的人确认版本和权限。'
-else
-  command -v curl >/dev/null || fail '缺少 curl。'
-  R2_BASE="${PLAYTEST_DOWNLOAD_BASE:-https://dl.roviix.com/files}"
-  DOWNLOADED=0
+command -v curl >/dev/null || fail '缺少 curl。'
+R2_BASE="${PLAYTEST_DOWNLOAD_BASE:-https://dl.roviix.com/files}"
+DOWNLOADED=0
 
-  # 1. 优先尝试 Cloudflare R2 / dl.roviix.com 高速分发（免代理、国内及全球 CDN 边缘直连）
-  if [ -n "$R2_BASE" ]; then
-    if curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 6 --max-time 60 "$R2_BASE/$ARCHIVE" --output "$WORK/$ARCHIVE" 2>/dev/null && \
-       curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 6 --max-time 15 "$R2_BASE/SHA256SUMS" --output "$WORK/SHA256SUMS" 2>/dev/null; then
-      DOWNLOADED=1
-    fi
+# 1. 优先尝试 Cloudflare R2 / dl.roviix.com 高速分发（免代理、国内及全球 CDN 边缘直连）
+if [ -n "$R2_BASE" ]; then
+  if curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 6 --max-time 60 "$R2_BASE/$ARCHIVE" --output "$WORK/$ARCHIVE" 2>/dev/null && \
+     curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 6 --max-time 15 "$R2_BASE/SHA256SUMS" --output "$WORK/SHA256SUMS" 2>/dev/null; then
+    DOWNLOADED=1
   fi
+fi
 
-  # 2. 若 CDN 镜像未命中或未上传，自动回退至 GitHub Releases
-  if [ "$DOWNLOADED" -eq 0 ]; then
-    BASE="https://github.com/$REPOSITORY/releases/download/$VERSION"
-    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 180 "$BASE/$ARCHIVE" --output "$WORK/$ARCHIVE" || fail '下载失败。当前版本未在加速线路或 GitHub Releases 公开；私测请先用 GitHub CLI 登录受邀账号。'
-    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 30 "$BASE/SHA256SUMS" --output "$WORK/SHA256SUMS" || fail '缺少校验文件，拒绝安装。'
+# 2. 若 CDN 镜像未命中，且本地已登录 GitHub CLI，尝试从仓库 Release 拉取
+if [ "$DOWNLOADED" -eq 0 ] && command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+  if gh release download "$VERSION" --repo "$REPOSITORY" --pattern "$ARCHIVE" --pattern SHA256SUMS --dir "$WORK" 2>/dev/null; then
+    DOWNLOADED=1
   fi
+fi
+
+# 3. 若仍未下载成功，自动回退至 GitHub Releases 公开直链
+if [ "$DOWNLOADED" -eq 0 ]; then
+  BASE="https://github.com/$REPOSITORY/releases/download/$VERSION"
+  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 180 "$BASE/$ARCHIVE" --output "$WORK/$ARCHIVE" || fail '下载失败。当前版本未在加速线路或 GitHub Releases 公开；请向邀请你的人确认版本和权限。'
+  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 30 "$BASE/SHA256SUMS" --output "$WORK/SHA256SUMS" || fail '缺少校验文件，拒绝安装。'
 fi
 
 EXPECTED="$(awk -v name="$ARCHIVE" '$2 == name || $2 == "*" name { print $1 }' "$WORK/SHA256SUMS")"
