@@ -108,13 +108,16 @@
 .collection-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:20px;margin-bottom:32px}
 .collection-card{display:flex;overflow:hidden;min-width:0;flex-direction:column;text-decoration:none;color:var(--fg);border:1px solid #ffffff12;border-radius:16px;background:linear-gradient(180deg,#13151b,#0d0e13);box-shadow:0 2px 8px #0004;transition:transform .2s var(--ease),border-color .2s,box-shadow .2s}
 .collection-card:hover{transform:translateY(-3px);border-color:#75cdb566;box-shadow:0 16px 36px -12px #000e,0 0 0 1px #75cdb526}
-.collection-art{height:160px;min-height:160px;position:relative;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 120%,#162a22 0%,#0c1015 85%);border-bottom:1px solid #ffffff0f;overflow:hidden}
+.collection-art{height:160px;min-height:160px;position:relative;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 120%,hsla(var(--h,160),65%,20%,.4) 0%,#0c1015 85%);border-bottom:1px solid #ffffff0f;overflow:hidden}
 .collection-art .collection-state{position:absolute;top:12px;left:12px;z-index:5;backdrop-filter:blur(10px);box-shadow:0 2px 8px #0008}
 .collection-art>img,.collection-art>span:not(.collection-state){width:92px;height:92px;object-fit:cover;border:1px solid #ffffff18;background:#181d24;border-radius:9px;display:grid;place-items:center;font-size:26px;font-family:var(--mono);color:var(--soft);box-shadow:0 6px 18px -2px #000a;transition:transform .2s ease}
 .collection-art>:nth-child(2){z-index:3}
 .collection-art>:nth-child(3){position:absolute;left:calc(50% - 92px - 14px);z-index:2;opacity:.75;transform:scale(.88)}
 .collection-art>:nth-child(4){position:absolute;right:calc(50% - 92px - 14px);z-index:2;opacity:.75;transform:scale(.88)}
 .collection-card:hover .collection-art>:nth-child(2){transform:scale(1.04)}
+.collection-empty-medallion{width:68px;height:68px;border-radius:18px;background:rgba(18,20,26,.85);backdrop-filter:blur(12px);border:1px solid hsla(var(--h,160),60%,55%,.35);display:grid;place-items:center;box-shadow:0 8px 24px #000a,inset 0 1px 1px #ffffff20;transition:transform .25s ease,border-color .25s ease}
+.collection-card:hover .collection-empty-medallion{transform:scale(1.08);border-color:hsla(var(--h,160),75%,65%,.6)}
+.collection-empty-medallion .medallion-glyph{font-size:28px;font-weight:800;color:#fff;line-height:1;font-family:var(--sans,system-ui);text-shadow:0 2px 8px #000b}
 .collection-card-body{padding:18px;display:flex;flex-direction:column;flex:1}
 .collection-card h2{font-size:18px;line-height:1.4;margin:0 0 8px;overflow-wrap:anywhere;font-weight:600}
 .collection-card p{color:var(--dim);font-size:13.5px;line-height:1.6;min-height:42px;margin:0 0 14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -156,6 +159,8 @@
 .collection-card{flex-direction:row}
 .collection-art{width:104px;min-width:104px;height:auto;padding:12px}
 .collection-art>img,.collection-art>span{width:100%;height:84px;min-width:100%}
+.collection-art>.collection-empty-medallion{width:64px;height:64px;border-radius:12px}
+.collection-art>.collection-empty-medallion .medallion-glyph{font-size:24px}
 .collection-art>:not(:first-child){display:none}
 .collection-card-body{min-width:0;padding:14px;flex:1}
 .collection-card h2{font-size:17px}

@@ -604,7 +604,7 @@ async fn me_with_a_key_lists_what_this_person_follows() {
     assert!(html.contains("z***@example.com"));
     assert!(html.contains("小球大冒险"));
     assert!(html.contains("aria-label=\"Unfollow 小球大冒险\">Unfollow</button>"));
-    assert!(html.contains("Switch email"));
+    assert!(html.contains("Change email"));
     // 拿钥匙去问控制面，不是拿邮箱。
     let (_, body) = api.last();
     assert_eq!(body["me_token"], ME_TOKEN);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { api, AUTH_REQUEST_EVENT, type Collection, type CollectionDraft, type EntryDraft, type Me, type Site } from "../api";
 import { href } from "../router";
+import { hue, monogram } from "../hue";
 import "../collections.css";
 
 function message(error: unknown): string {
@@ -125,7 +126,9 @@ export function CollectionsPage({
       <div class="collection-workspace">
         <nav class="collection-breadcrumb" aria-label="返回导航">
           <a class="back-link" href={collectionLink()}>
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
             <span>我的合集</span>
           </a>
           <span class="breadcrumb-sep" aria-hidden="true">/</span>
@@ -147,17 +150,9 @@ export function CollectionsPage({
         ) : null}
 
         <header class="collection-identity">
-          <div class="collection-emblem" aria-hidden="true">
-            {isChallenge ? (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-              </svg>
-            )}
+          <div class="collection-emblem" style={`--h: ${hue(selected.slug)}`} aria-hidden="true">
+            <span class="collection-emblem-glyph">{monogram(selected.title, selected.slug)}</span>
+            <span class="collection-emblem-sub">{isChallenge ? "🎯" : "📚"}</span>
           </div>
 
           <div class="collection-identity-body">
@@ -190,7 +185,7 @@ export function CollectionsPage({
 
           <div class="collection-header-actions">
             {selected.public && !selected.hidden ? (
-              <a class="button" href={publicUrl} target="_blank" rel="noreferrer">
+              <a class="button primary" href={publicUrl} target="_blank" rel="noreferrer">
                 打开玩家页面 ↗
               </a>
             ) : null}
@@ -338,14 +333,8 @@ export function CollectionsPage({
 
         {/* 选项卡二：资料与设置 (Owner Only) */}
         {tab === "settings" && owner ? (
-          <div>
+          <div class="collection-settings-container">
             <div class="collection-panel">
-              <div class="collection-panel-head">
-                <div>
-                  <h2>编辑合集资料与公开状态</h2>
-                  <p>管理合集的标题、一句话简介与发现状态。</p>
-                </div>
-              </div>
               <Editor
                 key={`${selected.slug}-${selected.updated_at}`}
                 collection={selected}
@@ -582,36 +571,33 @@ export function CollectionsPage({
             const isChallenge = item.kind === "challenge";
             return (
               <a class="collection-card" key={item.slug} href={collectionLink(item.slug)}>
-                <div class="collection-card-head">
-                  <span class="collection-card-type">
-                    {isChallenge ? (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-                      </svg>
-                    ) : (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-                      </svg>
-                    )}
-                    {isChallenge ? "创作挑战" : "作品集"}
+                <div class="collection-card-art" style={`--h: ${hue(item.slug)}`} aria-hidden="true">
+                  <div class="collection-card-art-bg" />
+                  <div class="collection-card-art-medallion">
+                    <span class="collection-card-glyph">{monogram(item.title, item.slug)}</span>
+                  </div>
+                  <span class="collection-card-badge-floating">
+                    {isChallenge ? "🎯 挑战" : "📚 作品集"}
                   </span>
-                  <span class={`collection-chip ${status.tone} ${status.pulse ? "pulse" : ""}`}>
+                  <span class={`collection-chip-floating ${status.tone} ${status.pulse ? "pulse" : ""}`}>
                     {status.text}
                   </span>
                 </div>
 
-                <h2>{item.title}</h2>
-                <p class="collection-card-summary">
-                  {item.summary || "把能打开的作品放在一起。"}
-                </p>
+                <div class="collection-card-body">
+                  <h2>{item.title}</h2>
+                  <p class="collection-card-summary">
+                    {item.summary || "把能打开的作品放在一起。"}
+                  </p>
 
-                {isChallenge && item.prompt ? (
-                  <div class="collection-card-prompt">{item.prompt}</div>
-                ) : null}
+                  {isChallenge && item.prompt ? (
+                    <div class="collection-card-prompt">{item.prompt}</div>
+                  ) : null}
 
-                <div class="collection-card-footer">
-                  <span class="creator">{item.creator}</span>
-                  <span class="count">{(item.entries ?? []).length} 件作品 →</span>
+                  <div class="collection-card-footer">
+                    <span class="creator">{item.creator}</span>
+                    <span class="count">{(item.entries ?? []).length} 件作品 →</span>
+                  </div>
                 </div>
               </a>
             );
@@ -757,7 +743,6 @@ function Editor({
         <div class="field">
           <label class="field-label">
             <span>合集名称</span>
-            <span class="field-hint">最多 80 字</span>
           </label>
           <input
             required
@@ -773,7 +758,6 @@ function Editor({
           <div class="field">
             <label class="field-label">
               <span>自定义地址</span>
-              <span class="field-hint">选填，3-63 位小写字母、数字及横杠</span>
             </label>
             <div class="collection-slug-preview">
               <span class="collection-slug-prefix">playtest.run/c/</span>
@@ -794,14 +778,13 @@ function Editor({
         <div class="field">
           <label class="field-label">
             <span>一句话介绍</span>
-            <span class="field-hint">介绍合集的亮点或主题</span>
           </label>
           <textarea
             rows={2}
             maxLength={280}
             value={draft.summary}
             onInput={(event) => setDraft({ ...draft, summary: event.currentTarget.value })}
-            placeholder="用简明的一两句话告诉读者这里收录了什么…"
+            placeholder="简要介绍这个合集收录了什么…"
           />
         </div>
 
@@ -811,10 +794,9 @@ function Editor({
             <div class="field">
               <label class="field-label">
                 <span>创作题目</span>
-                <span class="field-hint">公开展示前必填</span>
               </label>
               <textarea
-                rows={4}
+                rows={3}
                 maxLength={6000}
                 required={draft.public}
                 disabled={locked}
@@ -826,8 +808,7 @@ function Editor({
 
             <div class="field">
               <label class="field-label">
-                <span>投稿规则 · 选填</span>
-                <span class="field-hint">约定格式、限制或提交注意事项</span>
+                <span>投稿规则 (选填)</span>
               </label>
               <textarea
                 rows={2}
@@ -841,8 +822,7 @@ function Editor({
 
             <div class="field">
               <label class="field-label">
-                <span>截止时间 · 选填</span>
-                <span class="field-hint">按你的本地时区设置，截止后停止新增投稿</span>
+                <span>截止时间 (选填)</span>
               </label>
               <input
                 type="datetime-local"

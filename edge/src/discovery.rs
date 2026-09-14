@@ -241,8 +241,13 @@ fn collection_card(collection: &Collection, view: &View<'_>) -> String {
             }
         }
     }
+    let h = crate::html::hue(&collection.slug);
     if art.is_empty() {
-        art = "<span aria-hidden=\"true\">＋</span>".to_string();
+        let glyph = collection.title.chars().next().unwrap_or('★');
+        art = format!(
+            "<div class=\"collection-empty-medallion\"><span class=\"medallion-glyph\">{}</span></div>",
+            esc(&glyph.to_string())
+        );
     }
     let count = collection
         .entries
@@ -261,7 +266,7 @@ fn collection_card(collection: &Collection, view: &View<'_>) -> String {
     } else {
         "collection-regular"
     };
-    format!("<a class=\"collection-card\" href=\"{}\"><div class=\"collection-art\" aria-hidden=\"true\"><span class=\"collection-state {}\">{}</span>{art}</div><div class=\"collection-card-body\"><h2>{}</h2><p>{}</p><div class=\"collection-meta\"><span>{}</span><span class=\"count-badge\">{}</span></div></div></a>",
+    format!("<a class=\"collection-card\" href=\"{}\"><div class=\"collection-art\" style=\"--h:{h}\" aria-hidden=\"true\"><span class=\"collection-state {}\">{}</span>{art}</div><div class=\"collection-card-body\"><h2>{}</h2><p>{}</p><div class=\"collection-meta\"><span>{}</span><span class=\"count-badge\">{}</span></div></div></a>",
         esc(&collection.path()), state_class, esc(&status(collection, &now)), esc(&collection.title), esc(&collection.summary), esc(&collection.creator), if count == 0 { "Be the first to submit".to_string() } else if count == 1 { "1 project ↗".to_string() } else { format!("{count} projects ↗") })
 }
 
