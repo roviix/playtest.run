@@ -92,12 +92,25 @@ curl -sS https://paper-plane.playtest.run/favicon.svg | grep -E '18c99c|stroke-w
   <circle cx="16" cy="16" r="6" fill="#18c99c" fill-opacity="0.2"/>
   <circle cx="16" cy="16" r="3.5" fill="#18c99c"/>
 ```
-验证确认：线上运行的即为最新版本，具备 2.8 粗准星与 `#18c99c` 高亮冷翠绿微辉光核心。
+### 1.5 根域 CSP 放行 `'self'` 与 `data:` 实测（彻底解除浏览器拦截）
+此前控制台提示：
+`Loading the image 'https://playtest.run/favicon.ico' violates the following Content Security Policy directive: "img-src https://*.playtest.run https://avatars.githubusercontent.com". The action has been blocked.`
+根因：`img-src` 只配了通配子域 `https://*.playtest.run`，CSP 规范中通配子域不包含根域（Apex domain `playtest.run`），导致浏览器严格拦截根域 Favicon。
+修复后线上头部查询：
+```bash
+curl -sS -I https://playtest.run/ | grep -i content-security-policy
+```
+实测输出：
+```http
+content-security-policy: default-src 'none'; img-src https://*.playtest.run 'self' data: https://avatars.githubusercontent.com; media-src https://*.playtest.run 'self'; style-src 'unsafe-inline'; script-src 'nonce-f73ab583804f85348a7ecb5910c239e4'; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+```
+验证确认：`'self'` 已生效，浏览器对 `https://playtest.run/favicon.ico` 与 `/favicon.svg` 的加载彻底放行。
 
 ---
 
 ## 2. 自动化测试套件运行
 
+- 执行 `cargo test -p playtest-edge --test social`：22 passed，0 failed。
 - 执行 `cargo test -p playtest-edge --test serving`：33 passed，0 failed。
 - 执行 `cargo test -p playtest-common`：95 passed，0 failed。
 - 执行 `cargo check --workspace --locked`：通过。
