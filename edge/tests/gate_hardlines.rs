@@ -480,3 +480,19 @@ async fn unityweb_never_gets_a_content_encoding() {
     );
     assert_eq!(reply.body.as_ref(), UNITYWEB);
 }
+
+#[tokio::test]
+async fn test_chat_feedback_flow() {
+    let site = Site::plain().await;
+    let req = Request::builder()
+        .uri("/p/brisk-otter-41")
+        .method("POST")
+        .header("host", "localhost:8443")
+        .header("origin", "http://localhost:8443")
+        .header("accept", "application/json")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from("action=feedback&feedback=很好玩！"))
+        .unwrap();
+    let reply = site.send(req).await;
+    assert_eq!(reply.status, StatusCode::SERVICE_UNAVAILABLE); // Since Site::plain() has api_internal_url: None!
+}

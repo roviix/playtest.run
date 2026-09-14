@@ -26,8 +26,8 @@ TARGET="${TARGET:-all}"
 BUILD_ON="${BUILD_ON:-server}"
 PLATFORM="${PLATFORM:-linux/arm64}"
 TAG="${TAG:-$(date -u +%Y%m%d-%H%M%S)}"
-SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=5 "$HOST")
-RSYNC=(rsync -az -e "ssh -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=5")
+SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=5 -o ServerAliveInterval=15 -o ServerAliveCountMax=60 "$HOST")
+RSYNC=(rsync -az -e "ssh -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=5 -o ServerAliveInterval=15 -o ServerAliveCountMax=60")
 
 case "$TARGET" in all|server|caddy|console|none) ;; *) echo "TARGET 只能是 all / server / caddy / console / none，不是「$TARGET」" >&2; exit 2 ;; esac
 case "$BUILD_ON" in server|local) ;; *) echo "BUILD_ON 只能是 server 或 local，不是「$BUILD_ON」" >&2; exit 2 ;; esac
@@ -71,7 +71,7 @@ if [[ "$BUILD_ON" == server && "$TARGET" != none ]]; then
   if pgrep -f 'docker build' >/dev/null; then echo "主机上已有构建在跑，本次退出。" >&2; exit 3; fi
   if want server; then
     echo "-- docker build playtest-server:${TAG}（首次要编全部依赖，之后有缓存）"
-    time docker build --progress=plain -t "playtest-server:$TAG" -f Dockerfile . 2>&1 | grep -E '^#[0-9]+ [0-9.]+ +(Compiling|Finished|error|warning: unused)|ERROR|error\[|DONE [0-9]+\.[0-9]s$' | grep -vE 'DONE 0\.[0-9]s$' | tail -25
+    time docker build --progress=plain -t "playtest-server:$TAG" -f Dockerfile . 2>&1 | (grep -E '^#[0-9]+ [0-9.]+ +(Compiling|Finished|error|warning: unused)|ERROR|error\[|DONE [0-9]+\.[0-9]s$' || true) | (grep -vE 'DONE 0\.[0-9]s$' || true) | tail -25
   fi
   if want caddy; then
     echo "-- docker build playtest-caddy:${TAG}"
@@ -79,7 +79,7 @@ if [[ "$BUILD_ON" == server && "$TARGET" != none ]]; then
   fi
   if want console; then
     echo "-- docker build playtest-console:${TAG}"
-    time docker build -t "playtest-console:$TAG" -f deploy/console.Dockerfile . 2>&1 | grep -E 'error|Error|ERROR|built in|dist/' | tail -8
+    time docker build -t "playtest-console:$TAG" -f deploy/console.Dockerfile . 2>&1 | (grep -E 'error|Error|ERROR|built in|dist/' || true) | tail -8
   fi
 fi
 
