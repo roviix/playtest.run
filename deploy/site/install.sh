@@ -96,6 +96,8 @@ trap 'rm -rf "$WORK"; rm -f "${TEMPORARY:-}"' EXIT
 cat "$WORK/playtest" > "$TEMPORARY"
 chmod 755 "$TEMPORARY"
 mv -f "$TEMPORARY" "$DESTINATION/playtest"
-printf '已安装 %s 到 %s/playtest（SHA-256 校验通过）。\n' "$VERSION" "$DESTINATION"
-printf '把这个目录加入 PATH 后，运行 playtest --version，再运行 playtest ./dist。\n'
-printf '本脚本不改 shell 配置、不用 sudo、不关闭 macOS 安全检查；未签名版本可能需要在系统设置中手动放行。\n'
+printf '已安装 playtest %s 到 %s/playtest。\n' "$VERSION" "$DESTINATION"
+case ":$PATH:" in
+  *:"$DESTINATION":*) ;;
+  *) printf '提示: 请将 %s 加入 PATH 环境变量。\n' "$DESTINATION" ;;
+esac
