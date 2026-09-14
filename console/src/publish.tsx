@@ -19,13 +19,13 @@ const modes = [
     label: "Static + Backend",
     meta: "bash · CLI Publish",
     command: "playtest ./dist --backend 8000",
-    hint: "Serves static files as usual; unmatched requests forward to your local backend.",
+    hint: "Proxies unmatched routes to your local backend.",
   },
   {
     label: "Install CLI",
     meta: "curl · One-line Install",
     command: "curl -fsSL https://playtest.run/install.sh | bash",
-    hint: "Installs playtest into ~/.local/bin without sudo. Works on macOS & Linux. Windows users can run in WSL/Git Bash or download from Releases.",
+    hint: "macOS & Linux · Installs to ~/.local/bin",
   },
 ];
 

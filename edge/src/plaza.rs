@@ -393,8 +393,8 @@ fn publish_sheet() -> String {
 <div class=\"codebox\" id=\"panel-install\" tabindex=\"0\" role=\"region\" aria-label=\"Install command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">curl</span> <span class=\"f\">-fsSL</span> <span class=\"a\">https://playtest.run/install.sh</span> <span class=\"f\">|</span> <span class=\"k\">bash</span></code></div>\n\
 <p class=\"leg\" id=\"leg-static\">{info}<span>Build your project and replace <code>./dist</code> with your export folder.</span></p>\n\
 <p class=\"leg\" id=\"leg-local\">{info}<span>Start your local dev server and keep the terminal session open.</span></p>\n\
-<p class=\"leg\" id=\"leg-backend\">{info}<span>Static assets are cached on the edge; unmatched routes proxy to your backend.</span></p>\n\
-<p class=\"leg\" id=\"leg-install\">{info}<span>Single binary for macOS &amp; Linux (Apple Silicon / Intel / ARM). Run in terminal to install.</span></p>\n\
+<p class=\"leg\" id=\"leg-backend\">{info}<span>Proxies unmatched routes to your local backend.</span></p>\n\
+<p class=\"leg\" id=\"leg-install\">{info}<span>macOS &amp; Linux · Installs to ~/.local/bin</span></p>\n\
 </div>\n\
 <p class=\"pub-status\" role=\"status\"></p>\n\
 </div>\n\

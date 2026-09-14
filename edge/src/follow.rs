@@ -584,13 +584,26 @@ fn weekly_settings(view: Option<&MeView>, caps: &Capabilities) -> String {
     });
     let mut settings = String::new();
     if let Some(masked) = view.and_then(|view| view.email_masked.as_deref()) {
-        settings.push_str(&format!("<p class=\"notice-note\">{}</p>", esc(masked)));
+        let switch_btn = if caps.email {
+            format!("<a class=\"notice-switch-link\" href=\"#follow-login\" data-dialog=\"follow-login\">Switch</a>")
+        } else {
+            String::new()
+        };
+        settings.push_str(&format!(
+            "<div class=\"notice-account-bar\"><div class=\"notice-account-info\"><span class=\"notice-dot\" aria-hidden=\"true\"></span><span class=\"notice-account-label\">Email</span><span class=\"notice-email\">{}</span></div>{}</div>",
+            esc(masked),
+            switch_btn
+        ));
     }
+    settings.push_str("<div class=\"notice-group\">");
     if subscribed {
-        settings.push_str(&format!("<div class=\"notice-channel\"><span>Plaza Digest · Subscribed</span><form method=\"post\" action=\"{}\"><input type=\"hidden\" name=\"action\" value=\"{ACTION_UNFOLLOW}\"><input type=\"hidden\" name=\"target\" value=\"plaza\"><button class=\"ghost\" type=\"submit\">Unsubscribe</button></form></div>", root_paths::ME_ACTION));
+        settings.push_str(&format!(
+            "<div class=\"notice-channel subscribed\"><div class=\"notice-meta\"><span class=\"notice-title\">Weekly Digest</span><span class=\"notice-desc\">Curated projects & updates</span></div><div class=\"notice-actions\"><span class=\"notice-chip pos\"><span class=\"chip-dot\"></span>Subscribed</span><form method=\"post\" action=\"{}\"><input type=\"hidden\" name=\"action\" value=\"{ACTION_UNFOLLOW}\"><input type=\"hidden\" name=\"target\" value=\"plaza\"><button class=\"ghost action-btn\" type=\"submit\">Unsubscribe</button></form></div></div>",
+            root_paths::ME_ACTION
+        ));
     } else if view.is_some() {
         settings.push_str(&format!(
-            "<div class=\"notice-channel\"><span>Plaza Digest</span>{}</div>",
+            "<div class=\"notice-channel\"><div class=\"notice-meta\"><span class=\"notice-title\">Weekly Digest</span><span class=\"notice-desc\">Curated projects & updates</span></div>{}</div>",
             one_click(
                 root_paths::FOLLOW,
                 &FollowTarget::Plaza,
@@ -601,7 +614,7 @@ fn weekly_settings(view: Option<&MeView>, caps: &Capabilities) -> String {
             )
         ));
     } else if caps.email {
-        settings.push_str("<details class=\"weekly-subscribe\"><summary><span>Plaza Digest</span><span class=\"ghost\">Subscribe</span></summary>");
+        settings.push_str("<details class=\"weekly-subscribe\"><summary><div class=\"notice-meta\"><span class=\"notice-title\">Weekly Digest</span><span class=\"notice-desc\">Curated projects & updates</span></div><span class=\"ghost\">Subscribe</span></summary>");
         settings.push_str(&email_form(
             root_paths::FOLLOW,
             &hidden_fields(&FollowTarget::Plaza, root_paths::ME, FROM_ME),
@@ -615,15 +628,20 @@ fn weekly_settings(view: Option<&MeView>, caps: &Capabilities) -> String {
     if !push.is_empty() {
         // 首次开启推送现有接口同时关注广场；在控件旁说明实际目标。
         settings.push_str(&format!(
-            "<div class=\"notice-channel\"{}><span>{}</span>{push}</div>",
+            "<div class=\"notice-channel\"{}>\
+                <div class=\"notice-meta\"><span class=\"notice-title\">Desktop Push</span><span class=\"notice-desc\">{}</span></div>\
+                <div class=\"notice-actions\">{}{push}</div>\
+            </div>",
             if pushed { "" } else { " hidden" },
             if pushed {
-                "Browser notifications"
+                "System alerts when playtest is closed"
             } else {
                 "Receive Plaza digest via browser notifications"
-            }
+            },
+            if pushed { "<span class=\"notice-chip pos\"><span class=\"chip-dot\"></span>Active</span>" } else { "" }
         ));
     }
+    settings.push_str("</div>");
     if view.is_none() && !caps.email && caps.push_public_key.is_some() {
         settings.push_str(
             "<p id=\"pt-push-unavailable\" class=\"notice-note\">This browser does not support push notifications.</p>",
@@ -632,9 +650,7 @@ fn weekly_settings(view: Option<&MeView>, caps: &Capabilities) -> String {
     if settings.is_empty() {
         settings.push_str("<p class=\"notice-note\">Notifications currently unavailable.</p>");
     }
-    if caps.email && view.is_some() {
-        settings.push_str("<a class=\"notice-login\" href=\"#follow-login\" data-dialog=\"follow-login\">Switch email</a>");
-    }
+    settings.push_str("<p class=\"notice-foot-note\">No spam. Unsubscribe anytime with one click.</p>");
     notification_dialog("notification-settings", "Notification Settings", &settings)
 }
 

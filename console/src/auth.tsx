@@ -75,7 +75,6 @@ export function LoginDialog({ request, onClose, available }: {
       </a> : null}
       {available && !available.email_available && !available.github_available ? <p role="status">Sign in is temporarily unavailable. Works remain accessible. Please try again later.</p> : null}
       {!available ? <p role="status">Unable to load sign in methods right now. Please close and try again.</p> : null}
-      <p class="login-caption">One account for following and creating.</p>
     </>}
     {error ? <p class="login-error" role="alert">{error}</p> : null}
   </dialog>;
