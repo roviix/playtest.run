@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+fail() {
+  printf '错误: %s\n' "$1" >&2
+  exit 1
+}
+
 VERSION="${PLAYTEST_VERSION:-}"
 DESTINATION="${PLAYTEST_INSTALL_DIR:-$HOME/.local/bin}"
 REPOSITORY="roviix/playtest.run"
@@ -42,9 +47,23 @@ if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
   gh release download "$VERSION" --repo "$REPOSITORY" --pattern "$ARCHIVE" --pattern SHA256SUMS --dir "$WORK" || fail '下载失败。私测版本需要仓库访问权限；请向邀请你的人确认版本和权限。'
 else
   command -v curl >/dev/null || fail '缺少 curl。'
-  BASE="https://github.com/$REPOSITORY/releases/download/$VERSION"
-  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 180 "$BASE/$ARCHIVE" --output "$WORK/$ARCHIVE" || fail '这个版本暂不能公开下载。私测请先用 GitHub CLI 登录受邀账号；不会继续安装。'
-  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 30 "$BASE/SHA256SUMS" --output "$WORK/SHA256SUMS" || fail '缺少校验文件，拒绝安装。'
+  R2_BASE="${PLAYTEST_DOWNLOAD_BASE:-https://dl.roviix.com/files}"
+  DOWNLOADED=0
+
+  # 1. 优先尝试 Cloudflare R2 / dl.roviix.com 高速分发（免代理、国内及全球 CDN 边缘直连）
+  if [ -n "$R2_BASE" ]; then
+    if curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 6 --max-time 60 "$R2_BASE/$ARCHIVE" --output "$WORK/$ARCHIVE" 2>/dev/null && \
+       curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 6 --max-time 15 "$R2_BASE/SHA256SUMS" --output "$WORK/SHA256SUMS" 2>/dev/null; then
+      DOWNLOADED=1
+    fi
+  fi
+
+  # 2. 若 CDN 镜像未命中或未上传，自动回退至 GitHub Releases
+  if [ "$DOWNLOADED" -eq 0 ]; then
+    BASE="https://github.com/$REPOSITORY/releases/download/$VERSION"
+    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 180 "$BASE/$ARCHIVE" --output "$WORK/$ARCHIVE" || fail '下载失败。当前版本未在加速线路或 GitHub Releases 公开；私测请先用 GitHub CLI 登录受邀账号。'
+    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 30 "$BASE/SHA256SUMS" --output "$WORK/SHA256SUMS" || fail '缺少校验文件，拒绝安装。'
+  fi
 fi
 
 EXPECTED="$(awk -v name="$ARCHIVE" '$2 == name || $2 == "*" name { print $1 }' "$WORK/SHA256SUMS")"

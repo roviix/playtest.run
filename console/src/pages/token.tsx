@@ -12,13 +12,21 @@ export function TokenPage({
 }) {
   const profile = identity.account!;
   const [email, setEmail] = useState("");
+  const [showEmailInput, setShowEmailInput] = useState(!profile.email);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [token, setToken] = useState("");
   const [copied, setCopied] = useState(false);
-  const [name, setName] = useState(profile.me.display_name);
   const [tokens, setTokens] = useState<AccessToken[]>([]);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  // 行内编辑展示名
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState(profile.me.display_name);
+
+  // 展开说明提示
+  const [tipOpen, setTipOpen] = useState(false);
 
   const loadTokens = () =>
     account.tokens().then(setTokens).catch((err: Error) => setError(err.message));
@@ -29,32 +37,38 @@ export function TokenPage({
 
   async function linkEmail(event: Event) {
     event.preventDefault();
+    if (!email.trim()) return;
     setBusy(true);
     setError("");
     setMessage("");
     try {
-      const result = await account.email(email, "/console/#/token", true);
+      const result = await account.email(email.trim(), "/console/#/token", true);
       setMessage(result.message);
       setEmail("");
+      setShowEmailInput(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to link email, please try again.");
+      setError(err instanceof Error ? err.message : "绑定邮箱失败，请稍后重试。");
     } finally {
       setBusy(false);
     }
   }
 
-  async function saveName(event: Event) {
-    event.preventDefault();
-    if (!name.trim() || name.trim() === profile.me.display_name) return;
+  async function saveName() {
+    const next = draftName.trim();
+    if (!next || next === profile.me.display_name) {
+      setEditingName(false);
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      await account.profile(name.trim());
+      await account.profile(next);
       await onRefresh();
-      setMessage("Display name updated successfully.");
+      setEditingName(false);
+      setMessage("创作者名称已更新。");
       setTimeout(() => setMessage(""), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update display name.");
+      setError(err instanceof Error ? err.message : "保存名称失败，请稍后重试。");
     } finally {
       setBusy(false);
     }
@@ -69,335 +83,387 @@ export function TokenPage({
       setCopied(false);
       await loadTokens();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create token, please try again.");
+      setError(err instanceof Error ? err.message : "生成令牌失败，请稍后重试。");
     } finally {
       setBusy(false);
     }
   }
 
-  async function revokeToken(id: string) {
-    if (
-      !confirm(
-        "Revoke this access token? CLI and assistants using it will lose access to manage works. Web sign-in is unaffected."
-      )
-    ) {
-      return;
-    }
+  async function confirmRevoke(id: string) {
     setBusy(true);
+    setError("");
     try {
       await account.revokeToken(id);
       if (token) setToken("");
+      setRevokingId(null);
       await loadTokens();
+      setMessage("令牌已撤销。");
+      setTimeout(() => setMessage(""), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to revoke token.");
+      setError(err instanceof Error ? err.message : "撤销令牌失败。");
     } finally {
       setBusy(false);
     }
+  }
+
+  function copyToken() {
+    if (!token) return;
+    navigator.clipboard.writeText(token).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
   }
 
   return (
     <div class="account-page">
       <header class="stage-head">
         <div>
-          <h1>Account &amp; Settings</h1>
-          <p class="muted">Manage your public creator profile, connected credentials, and developer access tokens.</p>
+          <h1>账号与设置</h1>
+          <p class="muted">管理你的创作者公开资料、登录方式及自动化开发者令牌。</p>
         </div>
       </header>
 
       {error ? (
         <div class="account-notice error" role="alert">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           <span>{error}</span>
-          <button type="button" class="notice-dismiss" onClick={() => setError("")} aria-label="Dismiss">×</button>
+          <button type="button" class="notice-dismiss" onClick={() => setError("")} aria-label="关闭">×</button>
         </div>
       ) : null}
 
       {message ? (
         <div class="account-notice success" role="status">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
             <polyline points="22 4 12 14.01 9 11.01" />
           </svg>
           <span>{message}</span>
-          <button class="button quiet small" onClick={onRefresh}>Refresh</button>
+          <button type="button" class="notice-dismiss" onClick={() => setMessage("")} aria-label="关闭">×</button>
         </div>
       ) : null}
 
-      {/* Hero Profile Card */}
-      <section class="account-hero-card">
-        <div class="hero-identity">
-          <div class="hero-avatar-wrap">
+      {/* 1. 创作者身份展台 (Identity Surface) */}
+      <section class="settings-card">
+        <div class="settings-identity">
+          <div class="settings-identity-main">
             {profile.me.avatar_url ? (
-              <img class="hero-avatar" src={profile.me.avatar_url} alt="" />
+              <img class="settings-identity-avatar" src={profile.me.avatar_url} alt="" />
             ) : (
-              <div class="hero-avatar placeholder">
+              <div class="settings-identity-avatar placeholder">
                 {(profile.me.display_name || "P").charAt(0).toUpperCase()}
               </div>
             )}
-          </div>
-          <div class="hero-info">
-            <div class="hero-name-row">
-              <h2>{profile.me.display_name}</h2>
-              <span class="hero-badge">Creator</span>
-              {profile.me.login ? <span class="hero-handle">@{profile.me.login}</span> : null}
+            <div class="settings-identity-copy">
+              <div class="settings-identity-name-row">
+                <strong>{profile.me.display_name}</strong>
+                <span class="settings-chip settings-chip--pos">
+                  <span class="settings-chip-dot" />
+                  Creator
+                </span>
+              </div>
+              <span>{profile.me.login ? `@${profile.me.login}` : (profile.email || "独立创作者")}</span>
             </div>
-            <p class="hero-summary">One account across playing, publishing, and community engagement.</p>
           </div>
-        </div>
 
-        <div class="hero-actions">
-          <a class="button quiet hero-btn" href="/me">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-              <path d="M10 21h4" />
-            </svg>
-            Followed Works &amp; Feed
-          </a>
-          <button class="button quiet hero-btn signout" type="button" onClick={onLogout}>
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-            Sign Out
-          </button>
-        </div>
-      </section>
-
-      {/* Section 1: Public Profile */}
-      <section class="account-card">
-        <div class="account-card-head">
-          <div class="head-title-row">
-            <svg class="icon head-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
-            <h2>Public Profile</h2>
-          </div>
-          <p>Your display name shown on project invitation cards, player feedback streams, and collections.</p>
-        </div>
-
-        <form class="account-field-group" onSubmit={saveName}>
-          <div class="field-header">
-            <label for="display-name">Display Name</label>
-            <span class="field-counter">{name.length} / 40</span>
-          </div>
-          <div class="field-control-row">
-            <input
-              id="display-name"
-              class="account-input"
-              value={name}
-              maxLength={40}
-              required
-              placeholder="Your public name"
-              onInput={(event) => setName(event.currentTarget.value)}
-            />
-            <button
-              class="button primary"
-              type="submit"
-              disabled={busy || !name.trim() || name.trim() === profile.me.display_name}
-            >
-              {busy ? "Saving…" : "Save Name"}
+          <div class="settings-identity-actions">
+            <a class="settings-action" href="/me" title="查看公开作品、动态与关注列表">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+              公开主页
+            </a>
+            <button class="settings-action settings-action--danger" type="button" onClick={onLogout} title="退出当前账号">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              退出
             </button>
           </div>
-        </form>
+        </div>
       </section>
 
-      {/* Section 2: Sign-in Methods */}
-      <section class="account-card">
-        <div class="account-card-head">
-          <div class="head-title-row">
-            <svg class="icon head-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-            <h2>Sign-in Methods</h2>
-          </div>
-          <p>Both methods will access this account. Works and follows from other accounts are not merged.</p>
-        </div>
-
-        <div class="methods-grid">
-          {/* Email Method */}
-          <div class="method-box">
-            <div class="method-box-header">
-              <div class="method-title-wrap">
-                <svg class="icon method-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                  <polyline points="22,6 12,13 2,6" />
-                </svg>
-                <span class="method-name">Email</span>
-              </div>
-              {profile.email ? (
-                <span class="status-pill active">
-                  <span class="status-dot"></span> Linked
-                </span>
-              ) : (
-                <span class="status-pill idle">Unlinked</span>
-              )}
+      {/* 2. 创作者资料 (Profile Card) */}
+      <section class="settings-card">
+        <header class="settings-card-head">
+          <div class="settings-card-head-row">
+            <div class="settings-card-heading">
+              <h2 class="settings-card-title">创作者资料</h2>
             </div>
+          </div>
+          <p class="settings-card-desc">在作品门禁邀请函、广场署名与玩家反馈流中展示的公开身份。</p>
+        </header>
 
-            <div class="method-box-body">
-              {profile.email ? (
-                <div class="method-identity mono">{profile.email}</div>
-              ) : identity.email_available ? (
-                <form class="method-link-form" onSubmit={linkEmail}>
+        <div class="settings-card-body">
+          {/* 行内就地编辑展示名称 */}
+          <div class="settings-row">
+            <div class="settings-row-meta">
+              <span class="settings-row-label">展示名称</span>
+              <span class="settings-row-hint">作品页和原声交流中呈现的称呼，支持中文与特殊字符</span>
+            </div>
+            <div class="settings-row-control">
+              {editingName ? (
+                <div class="settings-inline-edit">
                   <input
-                    id="link-email"
-                    class="account-input"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="Enter email to link"
-                    required
-                    value={email}
-                    onInput={(event) => setEmail(event.currentTarget.value)}
+                    class="settings-inline-input"
+                    value={draftName}
+                    maxLength={40}
+                    autoFocus
+                    placeholder="输入展示名称"
+                    disabled={busy}
+                    onInput={(e) => setDraftName(e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void saveName();
+                      if (e.key === "Escape") setEditingName(false);
+                    }}
                   />
-                  <button class="button small" type="submit" disabled={busy || !email.trim()}>
-                    Link
+                  <span class="settings-inline-counter">{draftName.length}/40</span>
+                  <button
+                    type="button"
+                    class="settings-inline-btn cancel"
+                    disabled={busy}
+                    onClick={() => {
+                      setDraftName(profile.me.display_name);
+                      setEditingName(false);
+                    }}
+                  >
+                    取消
                   </button>
-                </form>
+                  <button
+                    type="button"
+                    class="settings-inline-btn save"
+                    disabled={busy || !draftName.trim() || draftName.trim() === profile.me.display_name}
+                    onClick={() => void saveName()}
+                  >
+                    保存
+                  </button>
+                </div>
               ) : (
-                <span class="muted text-sm">Email service currently unavailable</span>
+                <button
+                  type="button"
+                  class="settings-editable"
+                  onClick={() => {
+                    setDraftName(profile.me.display_name);
+                    setEditingName(true);
+                  }}
+                  title="点击修改展示名称"
+                >
+                  <span>{profile.me.display_name}</span>
+                  <svg class="pencil-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                  </svg>
+                </button>
               )}
             </div>
           </div>
 
-          {/* GitHub Method */}
-          <div class="method-box">
-            <div class="method-box-header">
-              <div class="method-title-wrap">
-                <svg class="icon method-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-                </svg>
-                <span class="method-name">GitHub</span>
-              </div>
+          <div class="settings-row">
+            <div class="settings-row-meta">
+              <span class="settings-row-label">主账号邮箱</span>
+              <span class="settings-row-hint">接收动态推送与安全登录的邮箱地址</span>
+            </div>
+            <div class="settings-row-control">
+              <span class="settings-value settings-value--mono">{profile.email || "未绑定"}</span>
+            </div>
+          </div>
+
+          <div class="settings-row settings-row--last">
+            <div class="settings-row-meta">
+              <span class="settings-row-label">平台身份</span>
+              <span class="settings-row-hint">已开通即时发布、合集归属与作者工作台管理权限</span>
+            </div>
+            <div class="settings-row-control">
+              <span class="settings-chip settings-chip--accent">
+                <span class="settings-chip-dot" />
+                独立创作者
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. 登录方式与安全凭据 (Sign-in Methods Card) */}
+      <section class="settings-card">
+        <header class="settings-card-head">
+          <div class="settings-card-head-row">
+            <div class="settings-card-heading">
+              <h2 class="settings-card-title">登录方式</h2>
+              <button
+                type="button"
+                class={`settings-card-tip-btn ${tipOpen ? "is-open" : ""}`}
+                aria-expanded={tipOpen}
+                aria-label="查看登录方式机制说明"
+                onClick={() => setTipOpen((v) => !v)}
+              >
+                ?
+              </button>
+            </div>
+          </div>
+          <p class="settings-card-desc">任何已绑定的登录通道均指向当前唯一账号，无缝切换设备无缝登录。</p>
+          {tipOpen ? (
+            <div class="settings-card-tip" role="note">
+              平台实行单账号统一体系：GitHub 授权与邮箱验证码登录双通道均指向同一作品库与开发者令牌，无论从哪一条路径进入，均不会产生分裂账号。
+            </div>
+          ) : null}
+        </header>
+
+        <div class="settings-card-body">
+          {/* GitHub 账号 */}
+          <div class="settings-row">
+            <div class="settings-row-meta">
+              <span class="settings-row-label">GitHub 账号</span>
+              <span class="settings-row-hint">用于作品签名、身份识别与命令行授权</span>
+            </div>
+            <div class="settings-row-control">
               {profile.me.login ? (
-                <span class="status-pill active">
-                  <span class="status-dot"></span> Connected
+                <span class="settings-chip settings-chip--pos">
+                  <span class="settings-chip-dot" />
+                  已连接 @{profile.me.login}
                 </span>
               ) : (
-                <span class="status-pill idle">Unconnected</span>
+                <a class="settings-action settings-action--primary" href={`${githubLoginUrl}?return_to=${encodeURIComponent("/console/#/token")}`}>
+                  连接 GitHub
+                </a>
               )}
             </div>
+          </div>
 
-            <div class="method-box-body">
-              {profile.me.login ? (
-                <div class="method-identity mono">@{profile.me.login}</div>
-              ) : identity.github_available ? (
-                <a
-                  class="button quiet small method-connect-btn"
-                  href={`${githubLoginUrl}?link=true&return_to=${encodeURIComponent("/console/#/token")}`}
-                >
-                  Connect GitHub
-                </a>
+          {/* 邮箱登录 */}
+          <div class="settings-row settings-row--last">
+            <div class="settings-row-meta">
+              <span class="settings-row-label">邮箱 Magic Link 登录</span>
+              <span class="settings-row-hint">无需密码，向该邮箱发送一次性安全登录链接</span>
+            </div>
+            <div class="settings-row-control">
+              {profile.email && !showEmailInput ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span class="settings-chip settings-chip--pos">
+                    <span class="settings-chip-dot" />
+                    已连接
+                  </span>
+                  <button type="button" class="settings-action" onClick={() => setShowEmailInput(true)}>
+                    更换
+                  </button>
+                </div>
               ) : (
-                <span class="muted text-sm">GitHub OAuth unavailable</span>
+                <form onSubmit={linkEmail} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <input
+                    type="email"
+                    class="settings-inline-input"
+                    value={email}
+                    placeholder="输入新邮箱地址"
+                    required
+                    disabled={busy}
+                    onInput={(e) => setEmail(e.currentTarget.value)}
+                  />
+                  <button type="submit" class="settings-inline-btn save" disabled={busy || !email.trim()}>
+                    发送链接
+                  </button>
+                  {profile.email ? (
+                    <button type="button" class="settings-inline-btn cancel" onClick={() => setShowEmailInput(false)}>
+                      取消
+                    </button>
+                  ) : null}
+                </form>
               )}
             </div>
           </div>
         </div>
       </section>
 
-      {/* Section 3: Developer Settings & Access Tokens */}
-      <section class="account-card developer-section">
-        <div class="account-card-head">
-          <div class="head-title-row">
-            <svg class="icon head-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M21 2l-2 2m-1.5 1.5L16 7m-1.5 1.5L13 10m-1.5 1.5L10 13m-1.5 1.5L7 16m-1.5 1.5L4 19m-2 2l2-2" />
-              <circle cx="7.5" cy="7.5" r="4.5" />
-            </svg>
-            <h2>Developer Settings</h2>
+      {/* 4. 开发者令牌管理 (Developer Tokens Card) */}
+      <section class="settings-card">
+        <header class="settings-card-head">
+          <div class="settings-card-head-row">
+            <div class="settings-card-heading">
+              <h2 class="settings-card-title">开发者令牌</h2>
+            </div>
+            <button
+              type="button"
+              class="settings-action settings-action--primary"
+              disabled={busy}
+              onClick={createToken}
+            >
+              + 生成新令牌
+            </button>
           </div>
-          <p>Personal access tokens allow CLI (<code>playtest login</code>) and AI assistants (Claude Code, Cursor, Windsurf) to publish and manage your projects.</p>
-        </div>
-
-        <div class="token-actions-bar">
-          <button class="button primary" type="button" disabled={busy} onClick={createToken}>
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            {busy ? "Creating…" : "Generate New Token"}
-          </button>
-        </div>
+          <p class="settings-card-desc">用于 playtest 命令行发布、CI/CD 自动化流水线及 AI 助手交互，拥有作品管理权限。</p>
+        </header>
 
         {token ? (
-          <div class="token-reveal-banner" role="region" aria-label="Newly generated token">
-            <div class="reveal-head">
-              <span class="reveal-badge">New Token Generated</span>
-              <span class="reveal-warning">Copy this token now. It will never be shown again.</span>
+          <div class="settings-token-box">
+            <div class="settings-token-box-head">
+              <span class="settings-token-box-badge">✓ 新令牌已就绪</span>
+              <span class="settings-token-box-warn">离开本页后将不再完整呈现，请妥善保存</span>
             </div>
-            <div class="reveal-control">
-              <input
-                id="created-token"
-                class="token-input mono"
-                type="text"
-                readOnly
-                value={token}
-                autoComplete="off"
-                onClick={(e) => (e.target as HTMLInputElement).select()}
-              />
-              <button
-                class="button copy-token-btn"
-                type="button"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(token);
-                    setCopied(true);
-                  } catch {
-                    setError("Failed to copy. Please select and copy manually.");
-                  }
-                }}
-              >
-                {copied ? "Copied ✓" : "Copy Token"}
+            <div class="settings-token-box-row">
+              <input class="settings-token-box-input" value={token} readOnly onClick={(e) => e.currentTarget.select()} />
+              <button type="button" class="settings-token-box-btn" onClick={copyToken}>
+                {copied ? "已复制 ✓" : "复制令牌"}
               </button>
             </div>
           </div>
         ) : null}
 
-        <div class="token-list-wrap">
-          <h3 class="token-list-title">Active Access Tokens ({tokens.length})</h3>
-          {tokens.length > 0 ? (
-            <ul class="token-list">
-              {tokens.map((item) => (
-                <li key={item.id} class="token-item">
-                  <div class="token-item-info">
-                    <span class="token-key-icon" aria-hidden="true">
-                      <svg class="icon" viewBox="0 0 24 24">
-                        <path d="M21 2l-2 2m-1.5 1.5L16 7m-1.5 1.5L13 10m-1.5 1.5L10 13" />
-                        <circle cx="7.5" cy="7.5" r="4.5" />
-                      </svg>
-                    </span>
-                    <div class="token-meta">
-                      <span class="token-date">
-                        Created on {new Date(item.created_at).toLocaleDateString()} at{" "}
-                        {new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                      <span class="token-active-badge">Active</span>
-                    </div>
-                  </div>
-                  <button
-                    class="button quiet danger small"
-                    type="button"
-                    disabled={busy}
-                    onClick={() => revokeToken(item.id)}
-                  >
-                    Revoke
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div class="empty-tokens-placeholder">
-              <svg class="icon empty-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              <p>No active personal access tokens.</p>
+        <div class="settings-card-body">
+          {tokens.length === 0 ? (
+            <div class="token-empty-state">
+              暂无生成的开发者令牌。点击右上角即可生成新令牌。
             </div>
+          ) : (
+            tokens.map((t) => (
+              <div class="token-row-item" key={t.id}>
+                <div class="token-row-left">
+                  <div class="token-row-info">
+                    <span class="token-row-prefix">pt_{t.id.slice(0, 8)}••••••••</span>
+                    <span class="token-row-time">创建于 {new Date(t.created_at).toLocaleDateString()}</span>
+                    <span class="settings-chip settings-chip--pos">
+                      <span class="settings-chip-dot" />
+                      活跃中
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  {revokingId === t.id ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ fontSize: "12px", color: "var(--danger, #f87171)" }}>确认撤销？</span>
+                      <button
+                        type="button"
+                        class="settings-action settings-action--danger"
+                        disabled={busy}
+                        onClick={() => void confirmRevoke(t.id)}
+                      >
+                        确认
+                      </button>
+                      <button
+                        type="button"
+                        class="settings-action"
+                        disabled={busy}
+                        onClick={() => setRevokingId(null)}
+                      >
+                        取消
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      class="settings-action settings-action--danger"
+                      disabled={busy}
+                      onClick={() => setRevokingId(t.id)}
+                    >
+                      撤销
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
           )}
         </div>
       </section>

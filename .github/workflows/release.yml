@@ -93,3 +93,14 @@ jobs:
 
             `SHA256SUMS` 用于下载完整性校验；每个压缩包包含 `build-info.json`，记录标签、源码提交和目标平台。
             尚未签名与公证，不把文件校验称为代码签名。私有仓库仍仅受邀账号可下载。
+
+      - name: 上传安装包到 Cloudflare R2 (dl.roviix.com)
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || 'nexus-desktop' }}
+          DOWNLOAD_BASE_URL: ${{ vars.DOWNLOAD_BASE_URL || 'https://dl.roviix.com/files' }}
+        run: |
+          deploy/upload-release-to-r2.sh --input dist
+
