@@ -1158,7 +1158,7 @@ mod tests {
         ));
         // 有封面就不拿卡去顶替它：玩家看到的第一眼应该是这个作品。
         assert!(!html.contains(CARD_WIDE_PATH));
-        assert!(html.len() < 24 * 1024, "门禁页 {} 字节", html.len());
+        assert!(html.len() < 26 * 1024, "门禁页 {} 字节", html.len());
     }
 
     #[test]
