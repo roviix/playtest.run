@@ -38,6 +38,6 @@
 .empty{padding:38px 24px;border:1px dashed var(--line2);border-radius:14px;background:#ffffff02;box-shadow:none;line-height:1.9}
 .notice{padding:16px 18px;border-radius:10px;font-size:14px;line-height:1.8}
 .cards-page{display:flex;flex-direction:column;gap:20px}.cards-row{gap:28px;padding:28px;background:var(--rail);border:1px solid var(--line);border-radius:16px}.card-figure{max-width:280px}.card-image{border-radius:10px;box-shadow:0 16px 32px #0005}.card-figure figcaption{margin-top:14px;font-size:12px}
-.account-page{max-width:880px}
+.account-page{max-width:860px;margin:0 auto}
 @media(max-width:767px){.identity{gap:16px;padding:12px 0 18px;align-items:flex-start}.identity .shot.small{width:76px}.identity .cover.word b{font-size:30px;left:10px;bottom:7px}.identity h1{font-size:22px}.identity .player-link{overflow-wrap:anywhere;line-height:1.8}.identity .chips{margin-left:-92px;margin-top:16px}.tabs{gap:20px}.tab{font-size:14px}.tab-body{padding-top:20px}.ver,.block{padding:20px}.figure{padding-inline:12px}.figure-n{font-size:28px}.cards-row{padding:20px}.now{font-size:14px}.stage>.back-link{margin-bottom:16px}}
 @media(max-width:400px){.figures{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:22px}.figure:nth-child(3){padding-left:.2rem;border:0}.sidebar .publish{font-size:14px;padding:8px 10px}.sidebar .account{padding-inline:4px}.sidebar .brand{gap:7px}}

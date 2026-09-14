@@ -25,9 +25,6 @@ export function TokenPage({
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState(profile.me.display_name);
 
-  // 登录方式说明展开
-  const [tipOpen, setTipOpen] = useState(false);
-
   const loadTokens = () =>
     account.tokens().then(setTokens).catch((err: Error) => setError(err.message));
 
@@ -289,22 +286,20 @@ export function TokenPage({
           <div class="settings-card-head-row">
             <div class="settings-card-heading">
               <h2 class="settings-card-title">登录方式</h2>
-              <button
-                type="button"
-                class={`settings-card-tip-btn ${tipOpen ? "is-open" : ""}`}
-                aria-expanded={tipOpen}
-                aria-label="说明"
-                onClick={() => setTipOpen((v) => !v)}
-              >
-                ?
-              </button>
+              <div class="settings-tip-anchor">
+                <button
+                  type="button"
+                  class="settings-card-tip-btn"
+                  aria-label="说明"
+                >
+                  ?
+                </button>
+                <div class="settings-tip-popover" role="tooltip">
+                  GitHub 授权与邮箱验证码登录双通道均指向当前唯一账户，作品与令牌保持同步。
+                </div>
+              </div>
             </div>
           </div>
-          {tipOpen ? (
-            <div class="settings-card-tip" role="note">
-              GitHub 授权与邮箱验证码登录双通道均指向当前唯一账户，作品与令牌保持同步。
-            </div>
-          ) : null}
         </header>
 
         <div class="settings-card-body">

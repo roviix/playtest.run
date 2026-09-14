@@ -1460,10 +1460,11 @@ code {
 
 .account-page {
   width: 100%;
-  max-width: 880px;
+  max-width: 860px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: 1.25rem;
 }
 
 .account-page .stage-head {
