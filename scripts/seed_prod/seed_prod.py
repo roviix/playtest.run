@@ -71,13 +71,13 @@ def main():
         pelican_html = f.read()
     pelican_hash = put_s3_blob(pelican_html, "text/html; charset=utf-8")
 
-    with open(os.path.join(ASSETS_DIR, "phaser.html"), "rb") as f:
-        phaser_html = f.read()
-    phaser_hash = put_s3_blob(phaser_html, "text/html; charset=utf-8")
+    with open(os.path.join(ASSETS_DIR, "rainy_store.html"), "rb") as f:
+        rainy_store_html = f.read()
+    rainy_store_hash = put_s3_blob(rainy_store_html, "text/html; charset=utf-8")
 
-    with open(os.path.join(ASSETS_DIR, "vite.html"), "rb") as f:
-        vite_html = f.read()
-    vite_hash = put_s3_blob(vite_html, "text/html; charset=utf-8")
+    with open(os.path.join(ASSETS_DIR, "paper_plane.html"), "rb") as f:
+        paper_plane_html = f.read()
+    paper_plane_hash = put_s3_blob(paper_plane_html, "text/html; charset=utf-8")
 
     with open(os.path.join(ASSETS_DIR, "cover_bike.png"), "rb") as f:
         cover_bike_bytes = f.read()
@@ -275,28 +275,28 @@ loop();
             "id": "usr-zhongshang",
             "name": "Zhongshang Wu",
             "login": "zhongshangwu",
-            "avatar": "https://avatars.githubusercontent.com/u/1024025?v=4",
+            "avatar": None,
             "github_id": 1024025
         },
         {
             "id": "usr-ayao",
             "name": "阿遥",
             "login": "ayao_studio",
-            "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=ayao",
+            "avatar": None,
             "github_id": 1024026
         },
         {
             "id": "usr-noriko",
             "name": "Noriko",
             "login": "noriko_pixel",
-            "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=noriko",
+            "avatar": None,
             "github_id": 1024027
         },
         {
             "id": "usr-star",
             "name": "星轨工坊",
             "login": "star_orbit",
-            "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=star",
+            "avatar": None,
             "github_id": 1024028
         }
     ]
@@ -314,7 +314,7 @@ loop();
             "slug": "lucky-robin-21",
             "user_id": "usr-zhongshang",
             "developer": "Zhongshang Wu",
-            "avatar": "https://avatars.githubusercontent.com/u/1024025?v=4",
+            "avatar": None,
             "title": "鹈鹕单车",
             "summary": "一辆穿梭在海港小镇的复古单车，收集风与信件。",
             "note": "重点测试第 2 关的惯性物理手感与雨水反光",
@@ -340,7 +340,7 @@ loop();
             "slug": "rainy-store",
             "user_id": "usr-noriko",
             "developer": "Noriko",
-            "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=noriko",
+            "avatar": None,
             "title": "雨夜便利店",
             "summary": "一间只在下雨时营业的街角便利店，倾听来往客人的心事与故事。",
             "note": "背景环境白噪音与收音机电台交互测试",
@@ -355,7 +355,7 @@ loop();
             "followers": 11,
             "cover": {"hash": cover_rain_hash, "size": len(cover_rain_bytes), "mime": "image/png"},
             "version": 1,
-            "files": [{"path": "index.html", "hash": phaser_hash, "size": len(phaser_html)}],
+            "files": [{"path": "index.html", "hash": rainy_store_hash, "size": len(rainy_store_html)}],
             "feedbacks": [
                 ("关门风铃的声音清脆，便利店货架交互很自然", "macOS · Safari", "鹿白", "seen"),
                 ("期待加入更多下雨天的随机客人对话！", "Windows · Edge", "木川", "new"),
@@ -365,7 +365,7 @@ loop();
             "slug": "paper-plane",
             "user_id": "usr-star",
             "developer": "星轨工坊",
-            "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=star",
+            "avatar": None,
             "title": "纸飞机",
             "summary": "用指尖滑动的风，把折叠的纸飞机送到最远的海边。",
             "note": "调整了触控灵敏度与迎风阻力模型，欢迎尝试大回旋动作",
@@ -380,7 +380,7 @@ loop();
             "followers": 29,
             "cover": None, # 纯粹展示 4:3 几何星轨画框
             "version": 1,
-            "files": [{"path": "index.html", "hash": vite_hash, "size": len(vite_html)}],
+            "files": [{"path": "index.html", "hash": paper_plane_hash, "size": len(paper_plane_html)}],
             "feedbacks": [
                 ("4:3 卡片撕票线太有实体质感了！按键对比度非常舒服", "macOS · Chrome", "Leo", "starred"),
                 ("风向变化时的气流粒子做得很有代入感", "iOS · Safari", "小树", "seen"),
@@ -391,7 +391,7 @@ loop();
             "slug": "ivory-beaver-33",
             "user_id": "usr-ayao",
             "developer": "阿遥",
-            "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=ayao",
+            "avatar": None,
             "title": "ODD FOLK — 原创头像工作室",
             "summary": "几百种手绘几何特征，拼出一张独一无二的像素头像。",
             "note": "新增冷萃绿调色板与高分辨率 SVG 矢量导出，看看导出按钮是否顺手",
@@ -416,7 +416,7 @@ loop();
             "slug": "design-notes",
             "user_id": "usr-zhongshang",
             "developer": "Zhongshang Wu",
-            "avatar": "https://avatars.githubusercontent.com/u/1024025?v=4",
+            "avatar": None,
             "title": "黑曜石与冷萃绿：Playtest 视觉设计手记",
             "summary": "关于 4:3 黄金凭证画框、物理撕票虚线与纯钛白高对比主按键的质感重构实践。",
             "note": "分享设计系统从 20:9 扁平压抑到实体收藏卡（Playtest Pass）的演进过程",
@@ -445,7 +445,7 @@ loop();
             "slug": "tiny-orbit",
             "user_id": "usr-star",
             "developer": "星轨工坊",
-            "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=star",
+            "avatar": None,
             "title": "Tiny Orbit",
             "summary": "用一根手指，把微型人造卫星留在引力轨道上。",
             "note": "测试引力弹弓与近地轨道减速手感",
@@ -470,7 +470,7 @@ loop();
             "slug": "deep-space-beacon",
             "user_id": "usr-star",
             "developer": "星轨工坊",
-            "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=star",
+            "avatar": None,
             "title": "深空信标",
             "summary": "在柯伊伯带边缘的第 07 号深空信标站，倾听来自奥尔特云彼端的神秘脉冲。",
             "note": "关于节奏与科幻设定的取舍，哪一段还没说清楚？欢迎在各章末尾留言探讨。",

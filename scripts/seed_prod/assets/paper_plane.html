@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>纸飞机 · Paper Plane</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0f19; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #f1f5f9; touch-action: none; user-select: none; }
+#canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hud { position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; z-index: 10; }
+.stats { display: flex; gap: 10px; flex-wrap: wrap; }
+.stat-pill { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; padding: 6px 14px; font-size: 13px; font-weight: 500; display: flex; align-items: baseline; gap: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.stat-pill .val { font-size: 16px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+.stat-pill .unit { font-size: 11px; color: #94a3b8; }
+.stat-pill.special { border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+.btn-sound { pointer-events: auto; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.12); color: #e2e8f0; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; transition: transform .15s, background .15s; }
+.btn-sound:active { transform: scale(0.92); }
+.hint-toast { position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.15); padding: 10px 20px; border-radius: 24px; font-size: 13.5px; color: #e2e8f0; pointer-events: none; transition: opacity .3s, transform .3s; white-space: nowrap; box-shadow: 0 8px 24px rgba(0,0,0,0.4); text-align: center; }
+.hint-toast.hide { opacity: 0; transform: translate(-50%, 10px); }
+.summary-modal { position: absolute; inset: 0; background: rgba(11, 15, 25, 0.75); backdrop-filter: blur(8px); display: none; place-items: center; z-index: 20; padding: 20px; }
+.summary-modal.show { display: grid; }
+.card { background: #131826; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 16px; padding: 28px 24px; max-width: 340px; width: 100%; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
+.card h2 { font-size: 20px; font-weight: 700; margin-bottom: 6px; color: #fff; }
+.card .sub { font-size: 12.5px; color: #94a3b8; margin-bottom: 22px; }
+.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+.metric { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 10px; }
+.metric .num { font-size: 20px; font-weight: 700; color: #75cdb5; font-variant-numeric: tabular-nums; }
+.metric .label { font-size: 11px; color: #64748b; margin-top: 2px; }
+.btn-launch { width: 100%; height: 44px; border: none; border-radius: 8px; background: #fff; color: #0f172a; font-size: 14.5px; font-weight: 600; cursor: pointer; transition: transform .15s, opacity .15s; }
+.btn-launch:hover { opacity: 0.95; }
+.btn-launch:active { transform: scale(0.97); }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div class="hud">
+  <div class="stats">
+    <div class="stat-pill">
+      <span class="val" id="hud-dist">0</span><span class="unit">m 距离</span>
+    </div>
+    <div class="stat-pill">
+      <span class="val" id="hud-alt">18</span><span class="unit">m 高度</span>
+    </div>
+    <div class="stat-pill" id="hud-loop-pill" style="display:none;">
+      <span class="val" id="hud-loop">0</span><span class="unit">次大回旋</span>
+    </div>
+  </div>
+  <button type="button" class="btn-sound" id="btn-sound" title="声音开/关" aria-label="声音开/关">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="sound-icon">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+    </svg>
+  </button>
+</div>
+
+<div class="hint-toast" id="hint-toast">向右上方滑动指尖 · 放飞纸飞机 ✈</div>
+
+<div class="summary-modal" id="summary-modal">
+  <div class="card">
+    <h2>纸飞机已降落海面</h2>
+    <p class="sub">微风渐息，纸飞机在海浪中安静停驻</p>
+    <div class="metrics">
+      <div class="metric">
+        <div class="num" id="sum-dist">0m</div>
+        <div class="label">航行距离</div>
+      </div>
+      <div class="metric">
+        <div class="num" id="sum-loop">0次</div>
+        <div class="label">特技大回旋</div>
+      </div>
+      <div class="metric">
+        <div class="num" id="sum-rings">0个</div>
+        <div class="label">穿透气流环</div>
+      </div>
+      <div class="metric">
+        <div class="num" id="sum-wind">0次</div>
+        <div class="label">指尖划风</div>
+      </div>
+    </div>
+    <button type="button" class="btn-launch" id="btn-restart">折好纸角，再次放飞</button>
+  </div>
+</div>
+
+<script>
+// --- 音效引擎 (Web Audio API 纯程序合成) ---
+let audioCtx = null;
+let soundEnabled = true;
+
+function initAudio() {
+  if (!audioCtx) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) audioCtx = new AudioContext();
+  }
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
+function playWhoosh(pitch = 280) {
+  if (!soundEnabled || !audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(pitch, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(pitch * 2, audioCtx.currentTime + 0.15);
+    osc.frequency.exponentialRampToValueAtTime(120, audioCtx.currentTime + 0.35);
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.35);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.36);
+  } catch(e) {}
+}
+
+function playChime(freq = 587.33) {
+  if (!soundEnabled || !audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.61);
+  } catch(e) {}
+}
+
+function playWindGust() {
+  if (!soundEnabled || !audioCtx) return;
+  try {
+    const bufferSize = audioCtx.sampleRate * 0.2;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(600, audioCtx.currentTime);
+    filter.Q.setValueAtTime(2, audioCtx.currentTime);
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioCtx.destination);
+    noise.start();
+  } catch(e) {}
+}
+
+// --- 游戏主逻辑 ---
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const hudDist = document.getElementById('hud-dist');
+const hudAlt = document.getElementById('hud-alt');
+const hudLoop = document.getElementById('hud-loop');
+const hudLoopPill = document.getElementById('hud-loop-pill');
+const hintToast = document.getElementById('hint-toast');
+const summaryModal = document.getElementById('summary-modal');
+const btnRestart = document.getElementById('btn-restart');
+const btnSound = document.getElementById('btn-sound');
+const soundIcon = document.getElementById('sound-icon');
+
+let W = window.innerWidth, H = window.innerHeight;
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.scale(dpr, dpr);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// 状态机: 'IDLE' | 'DRAGGING_LAUNCH' | 'FLYING' | 'LANDED'
+let state = 'IDLE';
+
+// 摄像机跟踪
+let camX = 0, camY = 0;
+
+// 飞机物理参数
+const plane = {
+  x: 100,
+  y: 0,
+  vx: 0,
+  vy: 0,
+  angle: -0.2, // 弧度
+  prevAngle: -0.2,
+  totalRot: 0,
+  loops: 0,
+  trail: [],
+  size: 24
+};
+
+// 划风交互记录
+let activeWindStroke = null;
+let windLines = [];
+let windDrawCount = 0;
+let ringsPassed = 0;
+
+// 气流环与环境元素
+let thermalRings = [];
+let clouds = [];
+let stars = [];
+
+function initWorld() {
+  plane.x = 100;
+  plane.y = H * 0.65;
+  plane.vx = 0;
+  plane.vy = 0;
+  plane.angle = -0.25;
+  plane.prevAngle = -0.25;
+  plane.totalRot = 0;
+  plane.loops = 0;
+  plane.trail = [];
+  windLines = [];
+  windDrawCount = 0;
+  ringsPassed = 0;
+  camX = 0;
+  camY = 0;
+  
+  // 生成星星
+  stars = [];
+  for (let i = 0; i < 90; i++) {
+    stars.push({
+      x: Math.random() * W * 3,
+      y: Math.random() * H * 0.6,
+      r: Math.random() * 1.5 + 0.5,
+      alpha: Math.random() * 0.7 + 0.3
+    });
+  }
+
+  // 生成云彩
+  clouds = [];
+  for (let i = 0; i < 20; i++) {
+    clouds.push({
+      x: i * 400 + Math.random() * 200,
+      y: Math.random() * H * 0.45 + 40,
+      w: Math.random() * 140 + 90,
+      h: Math.random() * 30 + 20,
+      alpha: Math.random() * 0.2 + 0.1
+    });
+  }
+
+  // 生成气流上升环
+  thermalRings = [];
+  for (let i = 1; i < 40; i++) {
+    thermalRings.push({
+      x: i * 380 + Math.random() * 180,
+      y: H * 0.3 + Math.random() * (H * 0.4),
+      r: 32,
+      hit: false,
+      pulse: 0
+    });
+  }
+
+  updateHUD();
+}
+
+function updateHUD() {
+  const dist = Math.max(0, Math.floor((plane.x - 100) / 10));
+  const alt = Math.max(0, Math.floor((seaLevel() - plane.y) / 8));
+  hudDist.textContent = dist;
+  hudAlt.textContent = alt;
+  if (plane.loops > 0) {
+    hudLoopPill.style.display = 'flex';
+    hudLoop.textContent = plane.loops;
+  } else {
+    hudLoopPill.style.display = 'none';
+  }
+}
+
+function seaLevel() {
+  return H * 0.82;
+}
+
+// --- 用户交互：放飞与划风 ---
+let pointerStartX = 0, pointerStartY = 0;
+let pointerCurrentX = 0, pointerCurrentY = 0;
+let isPointerDown = false;
+
+function getPos(e) {
+  if (e.touches && e.touches.length > 0) {
+    return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+  return { x: e.clientX, y: e.clientY };
+}
+
+window.addEventListener('pointerdown', (e) => {
+  initAudio();
+  if (state === 'LANDED') return;
+  const p = getPos(e);
+  pointerStartX = p.x;
+  pointerStartY = p.y;
+  pointerCurrentX = p.x;
+  pointerCurrentY = p.y;
+  isPointerDown = true;
+
+  if (state === 'IDLE') {
+    state = 'DRAGGING_LAUNCH';
+    hintToast.textContent = '拖拽蓄力 · 松手向前放飞 💨';
+  } else if (state === 'FLYING') {
+    // 划风模式
+    activeWindStroke = {
+      pts: [{ x: p.x + camX, y: p.y + camY, t: Date.now() }],
+      life: 1.0
+    };
+  }
+});
+
+window.addEventListener('pointermove', (e) => {
+  if (!isPointerDown) return;
+  const p = getPos(e);
+  pointerCurrentX = p.x;
+  pointerCurrentY = p.y;
+
+  if (state === 'FLYING' && activeWindStroke) {
+    activeWindStroke.pts.push({ x: p.x + camX, y: p.y + camY, t: Date.now() });
+    if (activeWindStroke.pts.length > 30) activeWindStroke.pts.shift();
+  }
+});
+
+window.addEventListener('pointerup', () => {
+  if (!isPointerDown) return;
+  isPointerDown = false;
+
+  if (state === 'DRAGGING_LAUNCH') {
+    const dx = pointerCurrentX - pointerStartX;
+    const dy = pointerCurrentY - pointerStartY;
+    const dist = Math.hypot(dx, dy);
+
+    // 如果滑动距离太短，给予默认适中初速度
+    let launchVx = 8.5;
+    let launchVy = -3.2;
+
+    if (dist > 25) {
+      launchVx = Math.min(18, Math.max(5, (pointerCurrentX - pointerStartX) * 0.12));
+      launchVy = Math.max(-14, Math.min(2, (pointerCurrentY - pointerStartY) * 0.12));
+      if (launchVx < 4) launchVx = 7.5;
+    }
+
+    plane.vx = launchVx;
+    plane.vy = launchVy;
+    plane.angle = Math.atan2(plane.vy, plane.vx);
+    state = 'FLYING';
+    playWhoosh(320);
+
+    hintToast.textContent = '在空中划出弧线 · 唤起上升气流与大回旋 ✨';
+    setTimeout(() => {
+      hintToast.classList.add('hide');
+    }, 4000);
+  } else if (state === 'FLYING' && activeWindStroke) {
+    // 完成一次划风
+    if (activeWindStroke.pts.length >= 2) {
+      applyWindForce(activeWindStroke);
+      windLines.push(activeWindStroke);
+      windDrawCount++;
+      playWindGust();
+    }
+    activeWindStroke = null;
+  }
+});
+
+function applyWindForce(stroke) {
+  const p0 = stroke.pts[0];
+  const p1 = stroke.pts[stroke.pts.length - 1];
+  const wx = (p1.x - p0.x);
+  const wy = (p1.y - p0.y);
+  const wdist = Math.hypot(wx, wy);
+  if (wdist < 10) return;
+
+  // 计算风向与飞机位置的距离
+  const strokeMidX = (p0.x + p1.x) / 2;
+  const strokeMidY = (p0.y + p1.y) / 2;
+  const distToPlane = Math.hypot(plane.x - strokeMidX, plane.y - strokeMidY);
+
+  if (distToPlane < 320) {
+    const strength = Math.min(1.2, 300 / (distToPlane + 80));
+    // 迎风施加加速度
+    plane.vx += (wx / wdist) * 6.5 * strength;
+    plane.vy += (wy / wdist) * 7.5 * strength;
+
+    // 强烈的向上划痕给予额外抬升
+    if (wy < -20) {
+      plane.vy -= 4.0 * strength;
+    }
+  }
+}
+
+// --- 物理更新 ---
+function updatePhysics() {
+  if (state !== 'FLYING') return;
+
+  // 空气动力学参数
+  const speed = Math.hypot(plane.vx, plane.vy);
+  const currentHeading = Math.atan2(plane.vy, plane.vx);
+
+  // 重力
+  const gravity = 0.16;
+  plane.vy += gravity;
+
+  // 空气阻力
+  plane.vx *= 0.992;
+  plane.vy *= 0.992;
+
+  // 升力模拟：迎角带来升力
+  const attackAngle = plane.angle - currentHeading;
+  const lift = Math.sin(attackAngle) * speed * 0.08;
+  plane.vx -= Math.sin(currentHeading) * lift;
+  plane.vy += Math.cos(currentHeading) * lift;
+
+  // 飞机机头自然朝向迎风速度方向（微阻尼）
+  const targetAngle = currentHeading;
+  let dAngle = targetAngle - plane.angle;
+  // 处理 [-PI, PI] 循环
+  dAngle = Math.atan2(Math.sin(dAngle), Math.cos(dAngle));
+  plane.angle += dAngle * 0.12;
+
+  // 检测大回旋 (Loop-the-loop)
+  let angleDelta = plane.angle - plane.prevAngle;
+  angleDelta = Math.atan2(Math.sin(angleDelta), Math.cos(angleDelta));
+  plane.totalRot += angleDelta;
+  plane.prevAngle = plane.angle;
+
+  if (Math.abs(plane.totalRot) >= Math.PI * 1.85) {
+    plane.loops++;
+    plane.totalRot = 0;
+    playChime(784); // G5 惊喜提示音
+    hintToast.textContent = `💫 特技大回旋成功！(${plane.loops}次) 推进 +15m`;
+    hintToast.classList.remove('hide');
+    setTimeout(() => hintToast.classList.add('hide'), 2500);
+    plane.vx += 3.5; // 回旋奖励加速
+  }
+
+  // 位置步进
+  plane.x += plane.vx;
+  plane.y += plane.vy;
+
+  // 记录航迹尾流
+  plane.trail.push({ x: plane.x, y: plane.y, alpha: 1.0 });
+  if (plane.trail.length > 55) plane.trail.shift();
+
+  // 穿越气流环判定
+  for (const ring of thermalRings) {
+    if (!ring.hit && Math.hypot(plane.x - ring.x, plane.y - ring.y) < ring.r + 14) {
+      ring.hit = true;
+      ringsPassed++;
+      plane.vy = Math.min(plane.vy - 5.5, -4.5);
+      plane.vx = Math.max(plane.vx + 2.0, 9.0);
+      playChime(880); // A5 穿环清脆提示
+      break;
+    }
+  }
+
+  // 触海着陆判定
+  if (plane.y >= seaLevel() - 4) {
+    plane.y = seaLevel() - 4;
+    plane.vx = 0;
+    plane.vy = 0;
+    state = 'LANDED';
+    playWhoosh(140);
+    showSummary();
+  }
+
+  updateHUD();
+}
+
+function showSummary() {
+  const dist = Math.max(0, Math.floor((plane.x - 100) / 10));
+  document.getElementById('sum-dist').textContent = `${dist}m`;
+  document.getElementById('sum-loop').textContent = `${plane.loops}次`;
+  document.getElementById('sum-rings').textContent = `${ringsPassed}个`;
+  document.getElementById('sum-wind').textContent = `${windDrawCount}次`;
+  summaryModal.classList.add('show');
+}
+
+btnRestart.addEventListener('click', () => {
+  summaryModal.classList.remove('show');
+  hintToast.textContent = '向右上方滑动指尖 · 放飞纸飞机 ✈';
+  hintToast.classList.remove('hide');
+  state = 'IDLE';
+  initWorld();
+});
+
+btnSound.addEventListener('click', () => {
+  soundEnabled = !soundEnabled;
+  btnSound.style.opacity = soundEnabled ? '1' : '0.4';
+});
+
+// --- 渲染管道 ---
+function render() {
+  // 摄像机平滑追踪
+  if (state === 'FLYING' || state === 'LANDED') {
+    const targetCamX = plane.x - W * 0.28;
+    const targetCamY = plane.y - H * 0.5;
+    camX += (targetCamX - camX) * 0.08;
+    camY += (targetCamY - camY) * 0.06;
+  } else {
+    camX += (0 - camX) * 0.05;
+    camY += (0 - camY) * 0.05;
+  }
+
+  // 1. 天空渐变（暮光紫夜）
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+  skyGrad.addColorStop(0, '#090d16');
+  skyGrad.addColorStop(0.45, '#161d2f');
+  skyGrad.addColorStop(0.75, '#2c223b');
+  skyGrad.addColorStop(1.0, '#38283a');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // 2. 星星 (远景视差)
+  ctx.fillStyle = '#ffffff';
+  for (const s of stars) {
+    const sx = (s.x - camX * 0.1) % (W * 2);
+    const sy = s.y - camY * 0.05;
+    if (sx >= -10 && sx <= W + 10 && sy >= -10 && sy <= H) {
+      ctx.globalAlpha = s.alpha * (0.8 + 0.2 * Math.sin(Date.now() * 0.002 + s.x));
+      ctx.beginPath();
+      ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1.0;
+
+  // 3. 云彩 (中景视差)
+  for (const c of clouds) {
+    const cx = c.x - camX * 0.25;
+    const cy = c.y - camY * 0.15;
+    if (cx + c.w > -100 && cx < W + 100) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${c.alpha})`;
+      ctx.beginPath();
+      ctx.roundRect(cx, cy, c.w, c.h, c.h / 2);
+      ctx.fill();
+    }
+  }
+
+  // 4. 远山剪影
+  ctx.fillStyle = '#111522';
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  const mountainBaseY = H * 0.72 - camY * 0.2;
+  ctx.lineTo(0, mountainBaseY);
+  for (let x = 0; x <= W; x += 60) {
+    const my = mountainBaseY - Math.sin((x + camX * 0.2) * 0.005) * 35 - Math.cos((x + camX * 0.2) * 0.012) * 20;
+    ctx.lineTo(x, my);
+  }
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // 5. 大海与粼粼波光
+  const seaY = seaLevel() - camY;
+  const seaGrad = ctx.createLinearGradient(0, seaY, 0, H);
+  seaGrad.addColorStop(0, '#102135');
+  seaGrad.addColorStop(0.3, '#0b1624');
+  seaGrad.addColorStop(1, '#050a12');
+  ctx.fillStyle = seaGrad;
+  ctx.fillRect(0, seaY, W, H - seaY);
+
+  // 海平面微波
+  ctx.strokeStyle = 'rgba(245, 158, 11, 0.25)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  const time = Date.now() * 0.003;
+  for (let x = 0; x <= W; x += 15) {
+    const wy = seaY + Math.sin(x * 0.03 + time) * 2.5;
+    if (x === 0) ctx.moveTo(x, wy); else ctx.lineTo(x, wy);
+  }
+  ctx.stroke();
+
+  // 6. 气流上升环
+  for (const ring of thermalRings) {
+    const rx = ring.x - camX;
+    const ry = ring.y - camY;
+    if (rx > -50 && rx < W + 50) {
+      ctx.save();
+      ctx.translate(rx, ry);
+      ring.pulse = (ring.pulse || 0) + 0.04;
+      const ringScale = 1 + Math.sin(ring.pulse) * 0.08;
+      ctx.scale(ringScale, ringScale);
+
+      ctx.beginPath();
+      ctx.arc(0, 0, ring.r, 0, Math.PI * 2);
+      ctx.strokeStyle = ring.hit ? 'rgba(117, 205, 181, 0.2)' : 'rgba(251, 191, 36, 0.75)';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([6, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 环内微弱光晕
+      if (!ring.hit) {
+        ctx.fillStyle = 'rgba(251, 191, 36, 0.08)';
+        ctx.fill();
+        // 向上箭头光标
+        ctx.fillStyle = 'rgba(251, 191, 36, 0.6)';
+        ctx.beginPath();
+        ctx.moveTo(0, -10);
+        ctx.lineTo(-6, 2);
+        ctx.lineTo(6, 2);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  // 7. 划风轨迹线 (风线粒子)
+  for (let i = windLines.length - 1; i >= 0; i--) {
+    const line = windLines[i];
+    line.life -= 0.025;
+    if (line.life <= 0) {
+      windLines.splice(i, 1);
+      continue;
+    }
+    drawWindStroke(line, line.life);
+  }
+  if (activeWindStroke) {
+    drawWindStroke(activeWindStroke, 1.0);
+  }
+
+  // 8. 飞机尾迹流线
+  if (plane.trail.length > 1) {
+    ctx.beginPath();
+    for (let i = 0; i < plane.trail.length; i++) {
+      const p = plane.trail[i];
+      const tx = p.x - camX;
+      const ty = p.y - camY;
+      if (i === 0) ctx.moveTo(tx, ty); else ctx.lineTo(tx, ty);
+    }
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // 9. 纸飞机本体 (精细折纸矢量多边形)
+  drawPaperPlane();
+
+  // 10. 拖拽放飞瞄准线
+  if (state === 'DRAGGING_LAUNCH') {
+    const px = plane.x - camX;
+    const py = plane.y - camY;
+    const dragDx = pointerCurrentX - pointerStartX;
+    const dragDy = pointerCurrentY - pointerStartY;
+
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(px + dragDx * 0.8, py + dragDy * 0.8);
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 瞄准光点
+    ctx.beginPath();
+    ctx.arc(px + dragDx * 0.8, py + dragDy * 0.8, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fbbf24';
+    ctx.fill();
+  }
+
+  updatePhysics();
+  requestAnimationFrame(render);
+}
+
+function drawWindStroke(stroke, alpha) {
+  if (stroke.pts.length < 2) return;
+  ctx.save();
+  ctx.beginPath();
+  for (let i = 0; i < stroke.pts.length; i++) {
+    const pt = stroke.pts[i];
+    const sx = pt.x - camX;
+    const sy = pt.y - camY;
+    if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+  }
+  ctx.strokeStyle = `rgba(117, 205, 181, ${alpha * 0.65})`;
+  ctx.lineWidth = 3.5;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // 风流粒子
+  const last = stroke.pts[stroke.pts.length - 1];
+  ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.8})`;
+  ctx.beginPath();
+  ctx.arc(last.x - camX, last.y - camY, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawPaperPlane() {
+  const px = plane.x - camX;
+  const py = plane.y - camY;
+
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(plane.angle);
+
+  const L = plane.size; // 24
+
+  // 左机翼 (向光亮面 #ffffff)
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(L, 0);       // 机头顶尖
+  ctx.lineTo(-L * 0.9, -L * 0.55); // 左翼末端
+  ctx.lineTo(-L * 0.45, 0); // 机尾内折点
+  ctx.closePath();
+  ctx.fill();
+
+  // 右机翼 (背光阴影面 #e2e8f0)
+  ctx.fillStyle = '#cbd5e1';
+  ctx.beginPath();
+  ctx.moveTo(L, 0);
+  ctx.lineTo(-L * 0.9, L * 0.55); // 右翼末端
+  ctx.lineTo(-L * 0.45, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // 中央折线脊梁骨 (#94a3b8)
+  ctx.fillStyle = '#94a3b8';
+  ctx.beginPath();
+  ctx.moveTo(L, 0);
+  ctx.lineTo(-L * 0.85, 0);
+  ctx.lineTo(-L * 0.45, L * 0.15);
+  ctx.closePath();
+  ctx.fill();
+
+  // 翼尖微型冷光涡流
+  ctx.fillStyle = 'rgba(117, 205, 181, 0.7)';
+  ctx.beginPath();
+  ctx.arc(-L * 0.9, -L * 0.55, 1.8, 0, Math.PI * 2);
+  ctx.arc(-L * 0.9, L * 0.55, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+initWorld();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
