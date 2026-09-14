@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>鹈鹕骑单车 · 本地演示</title>
+<style>
+:root{color-scheme:dark;--sky:#1c2930;--road:#293a3d;--accent:#f2bc79}*{box-sizing:border-box}body{margin:0;background:var(--sky);color:#faf4df;font-family:system-ui,sans-serif;min-height:100vh;display:grid;place-items:center}.scene{width:min(100%,800px);padding:24px 20px;text-align:center}h1{font-size:clamp(24px,4vw,38px);font-weight:550;margin:0 0 10px;letter-spacing:-.04em}.eyebrow{font:11px ui-monospace,monospace;letter-spacing:.17em;color:#bfccc6}.caption{font-size:13px;color:#bbc8c1;margin:0 0 8px}svg{width:100%;max-height:440px;overflow:visible}.wheel{transform-box:fill-box;transform-origin:center;animation:turn 2s linear infinite}.bird{animation:bob .7s ease-in-out infinite alternate;transform-origin:310px 200px}.road{stroke-dasharray:30 25;animation:road 1s linear infinite}.pause .wheel,.pause .bird,.pause .road{animation-play-state:paused}button{background:transparent;border:1px solid #bdcfc74a;border-radius:100px;padding:11px 19px;color:#fff6df;font:13px system-ui;cursor:pointer;min-height:44px;margin:0 5px}button:hover{background:#ffffff12}button:focus-visible{outline:2px solid #fff6df;outline-offset:3px}.demo{color:#8caaa1;font-size:11px;margin-top:20px}@keyframes turn{to{transform:rotate(360deg)}}@keyframes bob{to{transform:translateY(-4px) rotate(1deg)}}@keyframes road{to{stroke-dashoffset:55}}@media(prefers-reduced-motion:reduce){.wheel,.bird,.road{animation:none}}
+</style>
+<main class="scene"><p class="eyebrow">A SMALL BROWSER EXPERIMENT</p><h1>今天，骑去海边</h1><p class="caption">不用目的地，也能有一个好下午。</p>
+<svg viewBox="0 0 600 355" role="img" aria-label="一只鹈鹕骑着自行车，车轮旋转，前方有太阳与海岸">
+<circle cx="464" cy="65" r="33" fill="#efd6a1"/><path d="M0 239Q150 217 270 242T600 225V355H0Z" fill="var(--road)"/>
+<path d="M0 293H600" stroke="#617a70" stroke-width="2" class="road"/>
+<g fill="none" stroke="#a5bab0" stroke-width="2"><path d="M55 95q12-13 24 0q12-13 24 0M121 74q9-10 18 0q9-10 18 0"/></g>
+<g stroke="#102220" stroke-width="9" fill="none"><circle cx="209" cy="245" r="59"/><circle cx="403" cy="245" r="59"/></g>
+<g stroke="#9ba89a" stroke-width="1.7" fill="none"><g class="wheel"><circle cx="209" cy="245" r="51"/><path d="M158 245h102M209 194v102M173 209l72 72M173 281l72-72"/></g><g class="wheel"><circle cx="403" cy="245" r="51"/><path d="M352 245h102M403 194v102M367 209l72 72M367 281l72-72"/></g></g>
+<path d="M209 245l54-85 45 85H209l156-74 38 74M307 245l58-74-10-26h24" stroke="var(--accent)" fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M258 160l-7-18M236 140h33" fill="none" stroke="#13221e" stroke-width="8" stroke-linecap="round"/>
+<g class="bird"><path d="M253 141l-14 38 58 28 11 37M275 150l-5 37 23 38" stroke="#dda669" stroke-width="7" stroke-linecap="round" fill="none"/>
+<path d="M183 127l-18-11 54-3c31-45 61-62 88-26 14 27-18 65-47 72-23 2-61-7-77-32" fill="#e9e6d4"/>
+<path d="M208 122q59-28 69 1-12 23-43 18" fill="#c5cfbd"/>
+<path d="M286 103c-17-29-12-74 17-78 32-4 46 30 24 44-25 12-2 42-41 34" fill="#efedda"/>
+<path d="M316 53l92 17-91 11q-25-14-1-28" fill="#f0bd74"/>
+<path d="M317 60l91 10-88 3" fill="#db9962"/>
+<circle cx="309" cy="45" r="3" fill="#192824"/><path d="M310 35l9 3" stroke="#777e69" stroke-width="2" stroke-linecap="round"/>
+<path d="M296 100q29 31 59 43" stroke="#e9e6d4" stroke-width="9" stroke-linecap="round" fill="none"/>
+<path d="M289 88l-8 7 21 13 11-9" fill="#bd795c"/>
+<path d="M291 94q-29 14-44-4" stroke="#bd795c" stroke-width="9" stroke-linecap="round" fill="none"/></g>
+<path d="M304 247h25M284 224h18" stroke="#192824" stroke-width="5" stroke-linecap="round"/>
+</svg>
+<div><button type="button" id="pause" aria-pressed="false">停下来看看</button><button type="button" id="palette">换一片天空</button></div><p class="demo">本地原创演示素材 · 非模型评测结果</p></main>
+<script>
+const pauseButton=document.getElementById('pause');
+pauseButton.addEventListener('click',()=>{const paused=document.body.classList.toggle('pause');pauseButton.setAttribute('aria-pressed',String(paused));pauseButton.textContent=paused?'继续骑':'停下来看看';});
+const palettes=[['#1c2930','#293a3d','#f2bc79'],['#2d263b','#433748','#dda0a3'],['#2b3430','#3b4840','#d8d192']];
+let paletteIndex=0;
+document.getElementById('palette').addEventListener('click',()=>{paletteIndex=(paletteIndex+1)%palettes.length;['--sky','--road','--accent'].forEach((name,index)=>document.documentElement.style.setProperty(name,palettes[paletteIndex][index]));});
+</script>
+</html>

@@ -42,3 +42,17 @@
     resetCopy();
   }));
 })();
+
+(() => {
+  window.addEventListener('keydown', (e) => {
+    if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+      const searchInput = document.querySelector('.discover-search input[name="q"]');
+      if (searchInput) {
+        e.preventDefault();
+        searchInput.focus();
+        searchInput.select();
+      }
+    }
+  });
+})();
+

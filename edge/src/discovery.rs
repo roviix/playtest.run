@@ -95,23 +95,82 @@ fn collection_matches(collection: &Collection, query: &str) -> bool {
 
 fn search(query: &Query, base: &str) -> String {
     let clear = if !query.search.is_empty() {
-        let clear_target = if query.hot { format!("{base}?sort=hot") } else { base.to_string() };
-        format!("<a class=\"search-clear\" href=\"{}\" aria-label=\"清空搜索\" title=\"清空搜索\">×</a>", esc(&clear_target))
+        let clear_target = if query.hot {
+            format!("{base}?sort=hot")
+        } else {
+            base.to_string()
+        };
+        format!(
+            "<a class=\"search-clear\" href=\"{}\" aria-label=\"清空搜索\" title=\"清空搜索\">×</a>",
+            esc(&clear_target)
+        )
     } else {
         String::new()
     };
-    format!("<form class=\"discover-search\" method=\"get\" action=\"{}\" role=\"search\"><div class=\"search-box\"><label class=\"search-field\"><span class=\"sr-only\">搜索作品与合集</span><input type=\"search\" name=\"q\" maxlength=\"280\" placeholder=\"搜索作品、作者…\" value=\"{}\"></label>{clear}<button type=\"submit\" aria-label=\"搜索\" title=\"搜索\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"/><path d=\"m16 16 4 4\"/></svg></button></div><input type=\"hidden\" name=\"sort\" value=\"{}\"></form>", esc(base), esc(&query.search), if query.hot { "hot" } else { "latest" })
+    format!(
+        "<form class=\"discover-search\" method=\"get\" action=\"{}\" role=\"search\">\
+         <div class=\"search-box\">\
+         <span class=\"search-icon\" aria-hidden=\"true\">\
+         <svg class=\"icon\" viewBox=\"0 0 24 24\"><circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"/><path d=\"m16 16 4 4\"/></svg>\
+         </span>\
+         <label class=\"search-field\">\
+         <span class=\"sr-only\">搜索作品与合集</span>\
+         <input type=\"search\" name=\"q\" maxlength=\"280\" placeholder=\"搜索作品、作者…\" value=\"{}\" autocomplete=\"off\" spellcheck=\"false\">\
+         </label>\
+         {clear}\
+         <kbd class=\"search-kbd\" aria-hidden=\"true\" title=\"按 / 快速搜索\">/</kbd>\
+         <button type=\"submit\" class=\"search-submit\" aria-label=\"搜索\" title=\"搜索\">\
+         <svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"/><path d=\"m16 16 4 4\"/></svg>\
+         </button>\
+         </div>\
+         <input type=\"hidden\" name=\"sort\" value=\"{}\">\
+         </form>",
+        esc(base),
+        esc(&query.search),
+        if query.hot { "hot" } else { "latest" }
+    )
 }
 
-fn tabs(query: &Query, base: &str) -> String {
+fn sort_bar(query: &Query, base: &str) -> String {
     let explanation = if query.hot {
         "<details class=\"sort-help\"><summary aria-label=\"排序说明\" title=\"排序说明\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M12 11v5m0-9v.5\"/></svg></summary><p>按近 7 天点击开始的去重会话排序，无记录时按时间排列。会话数不等于真人数，也不代表作品质量。</p></details>"
     } else {
         ""
     };
-    format!("<div class=\"discover-toolbar\"><nav class=\"discover-tabs\" aria-label=\"作品顺序\"><a href=\"{}\" {}>最新</a><a href=\"{}\" {}>近 7 天</a></nav>{explanation}</div>",
-        esc(&query.link(base, false, 1)), if !query.hot { "aria-current=\"true\"" } else { "" },
-        esc(&query.link(base, true, 1)), if query.hot { "aria-current=\"true\"" } else { "" })
+    format!(
+        "<div class=\"discover-sort\" role=\"group\" aria-label=\"作品排序\">\
+         <span class=\"sort-label\">排序</span>\
+         <nav class=\"sort-options\" aria-label=\"排序方式\">\
+         <a href=\"{}\" class=\"sort-item{}\" {}>最新</a>\
+         <span class=\"sort-sep\" aria-hidden=\"true\">/</span>\
+         <a href=\"{}\" class=\"sort-item{}\" {} title=\"按近 7 天试玩热度排序\">热度</a>\
+         </nav>{explanation}</div>",
+        esc(&query.link(base, false, 1)),
+        if !query.hot { " active" } else { "" },
+        if !query.hot { "aria-current=\"true\"" } else { "" },
+        esc(&query.link(base, true, 1)),
+        if query.hot { " active" } else { "" },
+        if query.hot { "aria-current=\"true\"" } else { "" },
+    )
+}
+
+fn toolbar(query: &Query, base: &str, index: bool) -> String {
+    let segmented = format!(
+        "<nav class=\"discovery-segmented\" aria-label=\"发现内容类型\">\
+         <a href=\"/\" class=\"seg-item{}\"{}>作品</a>\
+         <a href=\"/collections\" class=\"seg-item{}\"{}>合集</a>\
+         </nav>",
+        if !index { " active" } else { "" },
+        if !index { " aria-current=\"page\"" } else { "" },
+        if index { " active" } else { "" },
+        if index { " aria-current=\"page\"" } else { "" },
+    );
+    let sort = if !index {
+        sort_bar(query, base)
+    } else {
+        String::new()
+    };
+    format!("<div class=\"discover-toolbar\">{segmented}{sort}</div>")
 }
 
 fn pages(query: &Query, base: &str, count: usize) -> (usize, String) {
@@ -214,7 +273,7 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
         "广场",
         search(query, base)
     );
-    body.push_str(&format!("<nav class=\"discovery-kinds\" aria-label=\"发现方式\"><a href=\"/\"{}>作品</a><a href=\"/collections\"{}>合集</a></nav>", if index { "" } else { " aria-current=\"page\"" }, if index { " aria-current=\"page\"" } else { "" }));
+    body.push_str(&toolbar(query, base, index));
     let collections: Vec<_> = view
         .plaza
         .collections
@@ -249,7 +308,6 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
         body.push_str(if searching { "<section class=\"discovery-empty\"><h2>没有找到合集</h2><p>换个词，或者 <a href=\"/collections\">看看所有合集</a>。</p></section>" } else { "<section class=\"discovery-empty\"><h2>把作品放在一个主题里</h2><p>整理自己的创作，或者邀请大家一起做同一道题。</p><a href=\"/console/#/collections\" data-manage>创建第一个合集 →</a></section>" });
     }
     if !index {
-        body.push_str(&tabs(query, base));
         let mut items: Vec<_> = view
             .plaza
             .items
@@ -451,7 +509,7 @@ pub fn collection(
     );
     body.push_str("<div class=\"collection-gallery-bar\">");
     body.push_str(&search(query, &base));
-    body.push_str(&tabs(query, &base));
+    body.push_str(&sort_bar(query, &base));
     body.push_str("</div>");
     let mut entries: Vec<_> = collection
         .entries
