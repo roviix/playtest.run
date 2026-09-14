@@ -56,3 +56,36 @@
   });
 })();
 
+(() => {
+  const form = document.querySelector('form.start');
+  if (!form) return;
+  const btn = form.querySelector('.start-btn');
+
+  const reportStart = () => {
+    try {
+      const data = new FormData(form);
+      const action = form.action || form.getAttribute('action');
+      if (!action) return;
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(action, data);
+      } else {
+        fetch(action, { method: 'POST', body: data, keepalive: true }).catch(() => {});
+      }
+    } catch (_) {}
+  };
+
+  if (btn) {
+    btn.addEventListener('click', () => {
+      reportStart();
+    });
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    reportStart();
+    const targetUrl = form.dataset.targetUrl || btn?.getAttribute('href');
+    if (targetUrl) {
+      window.open(targetUrl, '_blank', 'noopener');
+    }
+  });
+})();

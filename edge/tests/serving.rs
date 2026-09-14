@@ -266,6 +266,9 @@ async fn navigation_without_cookie_gets_the_gate_page() {
     assert!(html.contains("《小球大冒险》"));
     assert!(html.contains("· v7"));
     assert!(html.contains(&format!("action=\"/p/{SLUG}\"")));
+    assert!(html.contains(&format!("href=\"http://{HOST}/\"")));
+    assert!(html.contains("class=\"start-btn\""));
+    assert!(html.contains("target=\"_blank\""));
     // 门禁页出的不是作品的 index.html。
     assert!(!html.contains("<canvas"));
     // 弃用的旧域名不得出现。
@@ -952,6 +955,29 @@ async fn the_real_referrer_survives_the_gate() {
     assert_eq!(reply.status, StatusCode::SEE_OTHER);
     let events = site.events();
     assert_eq!(events.last().unwrap()["referer"], "");
+
+    // 异步信标或携带 Accept: application/json 时返回 200 OK 与目标地址。
+    let reply = site
+        .send(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/p/{SLUG}"))
+                .header("host", "localhost:8443")
+                .header("origin", "http://localhost:8443")
+                .header("accept", "application/json")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from("name=%E5%B0%8F%E9%9B%A8"))
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(reply.status, StatusCode::OK);
+    let json: serde_json::Value = serde_json::from_str(&reply.text()).unwrap();
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["location"], format!("http://{HOST}/"));
+    let events = site.events();
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "start");
+    assert_eq!(last["name"], "小雨");
 }
 
 #[tokio::test]

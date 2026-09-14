@@ -384,23 +384,31 @@ if(!isNaN(d))t.textContent=d.toLocaleString(undefined,{{month:'numeric',day:'num
         } else {
             format!("{prefix}report")
         };
-        let mobile_script = if self.is_root {
-            format!("<script{nonce_attr}>if(/Mobi|Android|iPhone/i.test(navigator.userAgent)){{document.querySelector('form.start')?.removeAttribute('target');}}</script>\n")
+
+        let target_url = format!("{}/", esc(self.origin));
+        let (button_markup, data_target_attr) = if self.is_root {
+            (
+                format!("<a class=\"start-btn\" href=\"{target_url}\"{target_attr}>{btn_text}</a>"),
+                format!(" data-target-url=\"{target_url}\""),
+            )
         } else {
-            String::new()
+            (
+                format!("<button type=\"submit\">{btn_text}</button>"),
+                String::new(),
+            )
         };
 
         let presentation = match m.kind {
             WorkKind::Web => format!(
                 "<div class=\"stub\">\n\
-<form class=\"start\" method=\"post\" action=\"{start_action}\"{target_attr}>\n\
+<form class=\"start\" method=\"post\" action=\"{start_action}\"{data_target_attr}{target_attr}>\n\
 <input type=\"hidden\" name=\"{to_field}\" value=\"{to}\">\n\
 <input type=\"hidden\" name=\"{ref_field}\" value=\"{referer}\">\n{from}\
 <label class=\"holder\"><span>你的名字 <small>· 可不填</small></span>\
 <input type=\"text\" name=\"{name_field}\" maxlength=\"{max_name}\" \
 placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
 </label>\n\
-<button type=\"submit\">{btn_text}</button>\n\
+{button_markup}\n\
 </form>\n\
 </div>\n",
                 to_field = field::TO,
@@ -451,7 +459,7 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
 {summary_html}<div class=\"edition\"><p class=\"stamp\">{stamp}</p>{expires}</div>\n{note}\
 {seats}{tips}{presentation}\
 {capability}\
-<footer>{tools}<a href=\"{report_href}\" class=\"report\">举报</a></footer>{badge}\n{mobile_script}",
+<footer>{tools}<a href=\"{report_href}\" class=\"report\">举报</a></footer>{badge}\n",
             avatar = self.avatar(),
             seats = self.seats(),
             tools = self.tools(),
@@ -1638,15 +1646,15 @@ mod tests {
         p.to = "/p/brisk-otter-41";
         p.nonce = Some("fake-nonce-1234");
         let html = p.render();
-        // 开始表单提交到 /p/brisk-otter-41 并开新标签
-        assert!(html.contains("<form class=\"start\" method=\"post\" action=\"/p/brisk-otter-41\" target=\"_blank\" rel=\"noopener\">"));
-        assert!(html.contains("<button type=\"submit\">开始试玩</button>"));
+        // 开始表单携带目标子域并开新标签
+        assert!(html.contains("<form class=\"start\" method=\"post\" action=\"/p/brisk-otter-41\" data-target-url=\"http://brisk-otter-41.localhost:8443/\" target=\"_blank\" rel=\"noopener\">"));
+        assert!(html.contains("<a class=\"start-btn\" href=\"http://brisk-otter-41.localhost:8443/\" target=\"_blank\" rel=\"noopener\">开始试玩</a>"));
         // 封面使用子域绝对地址
         assert!(html.contains(
             "<img class=\"hero\" src=\"http://brisk-otter-41.localhost:8443/_playtest/cover\""
         ));
-        // 移动端脚本带 nonce
-        assert!(html.contains("<script nonce=\"fake-nonce-1234\">if(/Mobi|Android|iPhone/i.test"));
+        // 不再注入剥离 target 的移动端脚本，保持新标签页优雅开启
+        assert!(!html.contains("removeAttribute('target')"));
         // 关注提交到根域 /follow
         assert!(html.contains("action=\"/follow\""));
         // 举报链接到子域

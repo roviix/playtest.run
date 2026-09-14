@@ -354,6 +354,14 @@ async fn project_door(
                 ),
             );
         }
+        if header_str(&parts.headers, "accept").is_some_and(|a| a.contains("application/json")) {
+            return (
+                StatusCode::OK,
+                headers,
+                axum::Json(serde_json::json!({"ok": true, "location": site_url})),
+            )
+                .into_response();
+        }
         return (StatusCode::SEE_OTHER, headers).into_response();
     }
 
