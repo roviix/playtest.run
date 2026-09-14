@@ -34,14 +34,17 @@
 .notice-subscribe-form{margin:0;display:flex;flex-direction:column;gap:10px}
 .notice-input-bar{display:flex;align-items:center;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:3px 4px 3px 12px;gap:8px;transition:border-color .15s,box-shadow .15s}
 .notice-input-bar:focus-within{border-color:#75cdb5;box-shadow:0 0 0 2px #75cdb533}
-.notice-input-bar input{flex:1;min-width:0;min-height:38px;padding:0;border:0;background:none;color:#fff;font-size:13.5px}
+.notice-input-bar:has(.notice-subscribe-btn:focus-visible){border-color:rgba(255,255,255,.12);box-shadow:none}
+.notice-input-bar input{flex:1;min-width:0;min-height:38px;padding:0;border:0;background:none;color:#fff;font-size:13.5px;outline:none!important;box-shadow:none!important}
+.notice-input-bar input:focus,.notice-input-bar input:focus-visible{outline:none!important;box-shadow:none!important;border:none!important}
 .notice-input-bar input::placeholder{color:#71717a}
-.notice-subscribe-btn{height:36px;min-height:36px;padding:0 16px;border:0;border-radius:7px;background:#fff;color:#09090b;font:600 13px system-ui;cursor:pointer;white-space:nowrap;transition:filter .15s}
+.notice-subscribe-btn{height:36px;min-height:36px;padding:0 16px;border:0;border-radius:7px;background:#fff;color:#09090b;font:600 13px system-ui;cursor:pointer;white-space:nowrap;transition:filter .15s;outline:none}
 .notice-subscribe-btn:hover{filter:brightness(1.06)}
+.notice-subscribe-btn:focus-visible{outline:2px solid #75cdb5;outline-offset:2px}
 .notice-pure-subscribed,.notice-pure-unsub{display:flex;flex-direction:column;gap:14px;padding:2px 0}
 .notice-status-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px}
 .notice-email-pure{font-family:ui-monospace,monospace;font-size:13px;color:var(--fg)}
 .notice-pure-desc{margin:0;font-size:13px;line-height:1.5;color:var(--dim)}
 .notice-pure-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:2px}
 .notice-onboarding-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 6px 6px 14px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:10px}
-.notice-pure-hint{margin:0;font-size:11.5px;color:var(--dim);line-height:1.4}
+

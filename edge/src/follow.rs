@@ -623,7 +623,6 @@ fn weekly_settings(view: Option<&MeView>, caps: &Capabilities) -> String {
                     <span class=\"notice-email-pure\">{}</span>\
                     {}\
                 </div>\
-                <p class=\"notice-pure-hint\">Unsubscribe anytime with one click.</p>\
             </div>",
             esc(masked),
             one_click(
@@ -649,7 +648,6 @@ fn weekly_settings(view: Option<&MeView>, caps: &Capabilities) -> String {
                             <input type=\"email\" name=\"email\" required placeholder=\"your@email.com\" autocomplete=\"email\" aria-label=\"Email for weekly digest\">\
                             <button type=\"submit\" class=\"notice-subscribe-btn\">Subscribe</button>\
                         </div>\
-                        <p class=\"notice-pure-hint\">No signup required. Unsubscribe anytime.</p>\
                     </form>\
                 </div>",
                 root_paths::FOLLOW
