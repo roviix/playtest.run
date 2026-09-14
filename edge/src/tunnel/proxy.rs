@@ -154,6 +154,9 @@ pub async fn forward(
     let (mut head, incoming) = upstream.into_parts();
     strip_hop_by_hop(&mut head.headers);
     crate::identity::strip_response(&mut head.headers, player.authority);
+    if head.status.is_redirection() {
+        rewrite_location(&mut head.headers, &player, session.local_port);
+    }
     // 上游是开发者的 dev server，它多半什么都没配。补的只有「不补就跑不起来」的那几个，
     // 别的（包括 `Content-Encoding`）一律它说了算——猜错一个头比少补一个头难查得多。
     game_headers::apply(
@@ -262,6 +265,35 @@ fn build_request(
     );
     put(headers, HEADER_FORWARDED_HOST, player.authority);
     put(headers, "x-forwarded-proto", player.public_scheme);
+
+    // 如果客户端发送的 Origin/Referer 是本作品的公网源（真正的同源请求），
+    // 将其映射为本地端口的源，解决全栈框架（Next.js、Django 等）因 Host 被改写为 localhost 而产生的 CSRF 误判。
+    // 第三方外部源（如 evil.com）保持原样，让本地中间件正常防御跨站请求。
+    let public_origin = format!("{}://{}", player.public_scheme, player.authority);
+    let local_origin = format!("http://localhost:{}", session.local_port);
+    if let Some(origin) = headers.get(header::ORIGIN) {
+        if let Ok(origin_str) = origin.to_str() {
+            if origin_str.trim().eq_ignore_ascii_case(&public_origin) {
+                put(headers, header::ORIGIN.as_str(), &local_origin);
+            }
+        }
+    }
+    if let Some(referer) = headers.get(header::REFERER) {
+        if let Ok(referer_str) = referer.to_str() {
+            let prefix = format!("{public_origin}/");
+            if referer_str.starts_with(&prefix) {
+                let remainder = &referer_str[public_origin.len()..];
+                put(
+                    headers,
+                    header::REFERER.as_str(),
+                    &format!("{local_origin}{remainder}"),
+                );
+            } else if referer_str.eq_ignore_ascii_case(&public_origin) {
+                put(headers, header::REFERER.as_str(), &local_origin);
+            }
+        }
+    }
+
     // 这里**没有** X-Forwarded-For：玩家 IP 我们不收集，也就没有 IP 可以往开发者那里送。
     request
 }
@@ -388,6 +420,44 @@ fn wants_upgrade(headers: &HeaderMap) -> bool {
                     .any(|item| item.trim().eq_ignore_ascii_case("upgrade"))
             })
         })
+}
+
+/// 上游回了重定向（301/302 等）。如果它把玩家重定向到了开发者的 localhost:<port>，
+/// 把它改写为外部公网地址，免得玩家在手机上访问自己的 localhost 打不开。
+/// 相对路径（`/foo`）和跳到第三方外部域（如 `https://github.com/login`）保持原样。
+fn rewrite_location(headers: &mut HeaderMap, player: &Player<'_>, local_port: u16) {
+    let Some(loc) = headers.get(header::LOCATION) else {
+        return;
+    };
+    let Ok(loc_str) = loc.to_str() else {
+        return;
+    };
+    let Ok(uri) = loc_str.parse::<axum::http::Uri>() else {
+        return;
+    };
+    let (Some(scheme), Some(auth)) = (uri.scheme_str(), uri.authority()) else {
+        return;
+    };
+    let host = auth.host();
+    let is_localhost = host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1";
+    let port = auth
+        .port_u16()
+        .unwrap_or(if scheme.eq_ignore_ascii_case("https") { 443 } else { 80 });
+    let is_local_port = port == local_port || (auth.port_u16().is_none() && local_port == 80);
+
+    if is_localhost && is_local_port {
+        let prefix = format!("{scheme}://{auth}");
+        let remainder = loc_str.strip_prefix(&prefix).unwrap_or("");
+        let path_and_query = if remainder.starts_with('/') {
+            remainder.to_string()
+        } else if remainder.is_empty() {
+            "/".to_string()
+        } else {
+            format!("/{remainder}")
+        };
+        let new_loc = format!("{}://{}{path_and_query}", player.public_scheme, player.authority);
+        put(headers, header::LOCATION.as_str(), &new_loc);
+    }
 }
 
 fn put(headers: &mut HeaderMap, name: &str, value: &str) {
@@ -570,5 +640,93 @@ mod tests {
         let third = Guard::acquire(&session).expect("有人走了就该腾出名额");
         drop((second, third));
         assert_eq!(session.open_streams.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn rewrite_location_rewrites_local_urls_and_preserves_external_and_relative() {
+        let p = player();
+        let mut headers = HeaderMap::new();
+
+        // 1. localhost:<port> 带查询参数和 hash，应该被正确改写为公网地址
+        headers.insert(
+            header::LOCATION,
+            HeaderValue::from_static("http://localhost:5173/dashboard?tab=1#sec"),
+        );
+        rewrite_location(&mut headers, &p, 5173);
+        assert_eq!(
+            headers[header::LOCATION],
+            "http://brisk-otter-41.localhost:8443/dashboard?tab=1#sec"
+        );
+
+        // 2. 127.0.0.1:<port> 同样被改写
+        headers.insert(
+            header::LOCATION,
+            HeaderValue::from_static("http://127.0.0.1:5173/game/"),
+        );
+        rewrite_location(&mut headers, &p, 5173);
+        assert_eq!(
+            headers[header::LOCATION],
+            "http://brisk-otter-41.localhost:8443/game/"
+        );
+
+        // 3. 相对路径保持不变
+        headers.insert(
+            header::LOCATION,
+            HeaderValue::from_static("/relative/path?v=2"),
+        );
+        rewrite_location(&mut headers, &p, 5173);
+        assert_eq!(headers[header::LOCATION], "/relative/path?v=2");
+
+        // 4. 第三方外部链接保持不变（绝不产生开放重定向或改坏外部登录）
+        headers.insert(
+            header::LOCATION,
+            HeaderValue::from_static("https://github.com/login/oauth"),
+        );
+        rewrite_location(&mut headers, &p, 5173);
+        assert_eq!(headers[header::LOCATION], "https://github.com/login/oauth");
+
+        // 5. 不同的本地端口保持不变
+        headers.insert(
+            header::LOCATION,
+            HeaderValue::from_static("http://localhost:9999/other"),
+        );
+        rewrite_location(&mut headers, &p, 5173);
+        assert_eq!(headers[header::LOCATION], "http://localhost:9999/other");
+    }
+
+    #[tokio::test]
+    async fn same_origin_origin_and_referer_are_aligned_cross_origin_is_kept() {
+        let (session, _peer) = session(5173);
+        let p = player();
+
+        // 真正同源的请求（玩家在当前作品页面上发起的 API 请求）
+        let incoming_same = Request::builder()
+            .uri("/api/score")
+            .header("host", "brisk-otter-41.localhost:8443")
+            .header("origin", "http://brisk-otter-41.localhost:8443")
+            .header(
+                "referer",
+                "http://brisk-otter-41.localhost:8443/game?level=1",
+            )
+            .body(())
+            .unwrap();
+        let out_same = build_request(&session, &p, &parts_of(incoming_same), Body::empty());
+        assert_eq!(out_same.headers()["origin"], "http://localhost:5173");
+        assert_eq!(
+            out_same.headers()["referer"],
+            "http://localhost:5173/game?level=1"
+        );
+
+        // 跨站第三方请求（例如 evil.com 试图跨站调用），绝不改写，保持原样供后端防御
+        let incoming_cross = Request::builder()
+            .uri("/api/score")
+            .header("host", "brisk-otter-41.localhost:8443")
+            .header("origin", "https://evil.com")
+            .header("referer", "https://evil.com/attack")
+            .body(())
+            .unwrap();
+        let out_cross = build_request(&session, &p, &parts_of(incoming_cross), Body::empty());
+        assert_eq!(out_cross.headers()["origin"], "https://evil.com");
+        assert_eq!(out_cross.headers()["referer"], "https://evil.com/attack");
     }
 }

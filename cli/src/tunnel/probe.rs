@@ -77,6 +77,19 @@ impl Page {
                 .hint("给朋友随手看看没问题；正式测试用 playtest ./dist，只发构建出来的东西")
         })
     }
+
+    /// 页面 HTML 中有没有硬编码的本地地址。
+    pub fn localhost_hint(&self) -> Option<Finding> {
+        let html = self.html.as_deref()?;
+        let has_hardcoded = html.contains("http://localhost:")
+            || html.contains("https://localhost:")
+            || html.contains("http://127.0.0.1:")
+            || html.contains("https://127.0.0.1:");
+        has_hardcoded.then(|| {
+            Finding::warn("首页中检测到硬编码的 localhost 地址")
+                .hint("静态资源或接口若使用绝对地址，外部玩家可能无法访问；建议改用相对路径（如 /api/...）")
+        })
+    }
 }
 
 /// 请求一次首页。只为认引擎，不作为健康探测。
@@ -328,6 +341,26 @@ mod tests {
         assert!(warning.hint.unwrap().contains("playtest ./dist"));
         // 没认出开发服务器就不说：socket.io 的房间服务器没有源码可看。
         assert!(Page::default().exposure_hint().is_none());
+    }
+
+    #[test]
+    fn hardcoded_localhost_triggers_a_helpful_warning() {
+        let page_with_local = Page {
+            html: Some(r#"<html><script src="http://localhost:3000/api.js"></script></html>"#.into()),
+            self_bytes: Some(10),
+        };
+        let warning = page_with_local
+            .localhost_hint()
+            .expect("硬编码 localhost 应该有提示");
+        assert!(warning.message.contains("localhost"));
+        assert!(warning.hint.unwrap().contains("相对路径"));
+
+        let page_clean = Page {
+            html: Some(r#"<html><script src="/api.js"></script></html>"#.into()),
+            self_bytes: Some(10),
+        };
+        assert!(page_clean.localhost_hint().is_none());
+        assert!(Page::default().localhost_hint().is_none());
     }
 
     #[test]

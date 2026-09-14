@@ -2,6 +2,16 @@
   max-width: 1140px;
   margin: 0 auto;
   --doc-accent: var(--accent);
+  --doc-fg: #f8fafc;
+  --doc-body: #e2e8f0;
+  --doc-muted: #94a3b8;
+  --doc-dim: #64748b;
+  --doc-card: #13151c;
+  --doc-card-hover: #181b24;
+  --doc-card-border: rgba(255, 255, 255, 0.08);
+  --doc-card-border-hover: rgba(255, 255, 255, 0.18);
+  --doc-code-bg: #0f1118;
+  --doc-code-border: rgba(255, 255, 255, 0.11);
   padding: 0 4px 64px;
 }
 
@@ -9,6 +19,52 @@
 .docs-hero {
   padding: 36px 0 48px;
   border-bottom: 1px solid var(--line2);
+}
+
+.docs-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.docs-lang-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--doc-card);
+  border: 1px solid var(--doc-card-border);
+  border-radius: 20px;
+  padding: 3px 6px;
+  user-select: none;
+}
+
+.docs-lang-btn {
+  background: transparent;
+  border: none;
+  color: var(--doc-muted);
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font: 12px/1 var(--mono);
+  font-weight: 550;
+  transition: all 0.15s ease;
+}
+
+.docs-lang-btn:hover {
+  color: var(--doc-fg);
+}
+
+.docs-lang-btn.active {
+  color: var(--doc-accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.docs-lang-divider {
+  color: var(--doc-dim);
+  font-size: 11px;
 }
 
 .docs-eyebrow {
@@ -31,14 +87,14 @@
   line-height: 1.25;
   letter-spacing: -.035em;
   font-weight: 650;
-  color: var(--fg);
+  color: var(--doc-fg);
   margin: 20px 0 14px;
 }
 
 .docs-hero > p {
-  font-size: 15.5px;
+  font-size: 16px;
   line-height: 1.8;
-  color: var(--soft);
+  color: var(--doc-body);
   max-width: 68ch;
   margin: 0;
 }
@@ -49,7 +105,7 @@
   flex-wrap: wrap;
   gap: 10px 16px;
   margin-top: 24px;
-  color: var(--dim);
+  color: var(--doc-muted);
   font-size: 13px;
 }
 
@@ -76,23 +132,23 @@
 /* 文档正文区 */
 .docs-article {
   min-width: 0;
-  font-size: 15px;
-  line-height: 1.78;
-  color: var(--soft);
+  font-size: 15.5px;
+  line-height: 1.82;
+  color: var(--doc-body);
 }
 
 .docs-article p {
-  margin: 14px 0;
+  margin: 16px 0;
   overflow-wrap: anywhere;
 }
 
 .docs-article strong {
-  color: var(--fg);
+  color: var(--doc-fg);
   font-weight: 600;
 }
 
 .docs-article a {
-  color: var(--fg);
+  color: var(--doc-fg);
   text-decoration: underline;
   text-underline-offset: 4px;
   text-decoration-color: var(--line2);
@@ -108,12 +164,12 @@
 .docs-article dd code,
 .doc-note code,
 .doc-faq code {
-  font: 12.5px/1.6 var(--mono);
-  color: #e2e8f0;
-  background: rgba(255, 255, 255, 0.07);
-  padding: 2px 6px;
+  font: 13px/1.6 var(--mono);
+  color: #8be0c9;
+  background: rgba(117, 205, 181, 0.09);
+  padding: 2px 7px;
   border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(117, 205, 181, 0.2);
   overflow-wrap: anywhere;
 }
 
@@ -149,7 +205,7 @@
 
 .doc-section-head h2 {
   font-size: 26px;
-  color: var(--fg);
+  color: var(--doc-fg);
   font-weight: 600;
   letter-spacing: -.03em;
   margin: 0 0 6px;
@@ -157,15 +213,15 @@
 }
 
 .doc-section-head p {
-  font-size: 13.5px;
-  color: var(--dim);
+  font-size: 14px;
+  color: var(--doc-muted);
   margin: 0;
   line-height: 1.6;
 }
 
 .docs-article h3 {
-  font-size: 17.5px;
-  color: var(--fg);
+  font-size: 18px;
+  color: var(--doc-fg);
   font-weight: 600;
   margin: 36px 0 14px;
   letter-spacing: -.02em;
@@ -175,8 +231,8 @@
 .doc-start-command {
   margin: 16px 0 32px;
   padding: 22px 24px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, rgba(255, 255, 255, 0.01) 100%);
-  border: 1px solid var(--line2);
+  background: var(--doc-card);
+  border: 1px solid var(--doc-card-border);
   border-radius: 12px;
 }
 
@@ -193,23 +249,23 @@
 
 .doc-start-command > p {
   margin: 12px 0 0;
-  font-size: 13.5px;
-  color: var(--dim);
+  font-size: 14px;
+  color: var(--doc-muted);
 }
 
 /* 分步指引卡片 */
 .doc-step {
   margin: 28px 0;
   padding: 22px 24px;
-  background: rgba(255, 255, 255, 0.015);
-  border: 1px solid var(--line2);
+  background: var(--doc-card);
+  border: 1px solid var(--doc-card-border);
   border-radius: 12px;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .doc-step:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.025);
+  border-color: var(--doc-card-border-hover);
+  background: var(--doc-card-hover);
 }
 
 .doc-step-head {
@@ -237,7 +293,7 @@
   margin: 0;
   font-size: 17px;
   font-weight: 600;
-  color: var(--fg);
+  color: var(--doc-fg);
   letter-spacing: -0.015em;
 }
 
@@ -245,9 +301,9 @@
 .doc-code {
   position: relative;
   margin: 16px 0 20px;
-  border: 1px solid var(--line2);
+  border: 1px solid var(--doc-code-border);
   border-radius: 10px;
-  background: #0d0e12;
+  background: var(--doc-code-bg);
   overflow: hidden;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
@@ -362,11 +418,11 @@
   position: relative;
   margin: 26px 0;
   padding: 18px 22px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--line2);
+  background: var(--doc-card);
+  border: 1px solid var(--doc-card-border);
   border-left: 3px solid var(--doc-accent);
   border-radius: 10px;
-  font-size: 14px;
+  font-size: 14.5px;
   line-height: 1.75;
 }
 
@@ -385,15 +441,15 @@
 
 .doc-note strong {
   display: block;
-  font-size: 15px;
+  font-size: 15.5px;
   font-weight: 600;
-  color: var(--fg);
+  color: var(--doc-fg);
   margin-bottom: 6px;
   letter-spacing: -.01em;
 }
 
 .doc-note-body {
-  color: var(--soft);
+  color: var(--doc-body);
 }
 
 .doc-note-body p {
@@ -411,9 +467,9 @@
 /* 终端输出示意 */
 .doc-output {
   padding: 18px 20px;
-  border: 1px solid var(--line2);
+  border: 1px solid var(--doc-code-border);
   border-radius: 10px;
-  background: #090a0d;
+  background: var(--doc-code-bg);
   margin: 20px 0 24px;
 }
 
@@ -423,9 +479,9 @@
   gap: 8px;
   font-size: 11.5px;
   font-family: var(--mono);
-  color: var(--dim);
+  color: var(--doc-muted);
   padding-bottom: 10px;
-  border-bottom: 1px dashed var(--line);
+  border-bottom: 1px dashed var(--doc-card-border);
   margin-bottom: 12px;
   letter-spacing: .03em;
 }
@@ -440,8 +496,8 @@
 
 .doc-output pre {
   margin: 0;
-  font: 12.5px/1.8 var(--mono);
-  color: var(--soft);
+  font: 13px/1.8 var(--mono);
+  color: var(--doc-body);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -450,9 +506,9 @@
 .doc-table-wrap {
   overflow-x: auto;
   margin: 22px 0 26px;
-  border: 1px solid var(--line2);
+  border: 1px solid var(--doc-card-border);
   border-radius: 10px;
-  background: #0c0d11;
+  background: var(--doc-card);
   scrollbar-width: thin;
 }
 
@@ -465,21 +521,21 @@
 }
 
 .docs-article th {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: .06em;
-  color: var(--soft);
+  color: var(--doc-fg);
   padding: 12px 18px;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid var(--line2);
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--doc-card-border-hover);
   white-space: nowrap;
 }
 
 .docs-article td {
   padding: 13px 18px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--doc-card-border);
   vertical-align: middle;
-  color: var(--soft);
+  color: var(--doc-body);
 }
 
 .docs-article tr:last-child td {
@@ -487,15 +543,16 @@
 }
 
 .docs-article tr:hover td {
-  background: rgba(255, 255, 255, 0.018);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .docs-article td code {
-  font: 12px/1.6 var(--mono);
-  color: #ededed;
-  background: rgba(255, 255, 255, 0.06);
+  font: 12.5px/1.6 var(--mono);
+  color: #8be0c9;
+  background: rgba(117, 205, 181, 0.09);
   padding: 2px 6px;
   border-radius: 4px;
+  border: 1px solid rgba(117, 205, 181, 0.2);
   overflow-wrap: anywhere;
 }
 
@@ -509,22 +566,26 @@
 
 .doc-address-card {
   padding: 16px 18px;
-  border: 1px solid var(--line2);
+  border: 1px solid var(--doc-card-border);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--doc-card);
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
 .doc-address-card span {
-  font-size: 12px;
-  color: var(--dim);
+  font-size: 12.5px;
+  color: var(--doc-muted);
 }
 
 .doc-address-card code {
-  font: 12.5px/1.6 var(--mono);
-  color: var(--fg);
+  font: 13px/1.6 var(--mono);
+  color: #8be0c9;
+  background: rgba(117, 205, 181, 0.09);
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid rgba(117, 205, 181, 0.2);
   overflow-wrap: anywhere;
 }
 
@@ -538,9 +599,9 @@
 
 .doc-details,
 .doc-faq details {
-  border: 1px solid var(--line2);
+  border: 1px solid var(--doc-card-border);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.015);
+  background: var(--doc-card);
   margin: 20px 0;
   transition: border-color 0.15s ease, background-color 0.15s ease;
   overflow: hidden;
@@ -552,20 +613,20 @@
 
 .doc-details:hover,
 .doc-faq details:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.025);
+  border-color: var(--doc-card-border-hover);
+  background: var(--doc-card-hover);
 }
 
 .doc-details[open],
 .doc-faq details[open] {
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--doc-card);
   border-color: rgba(255, 255, 255, 0.18);
 }
 
 .doc-details summary,
 .doc-faq summary {
   cursor: pointer;
-  color: var(--fg);
+  color: var(--doc-fg);
   font-size: 14.5px;
   font-weight: 550;
   line-height: 1.6;
@@ -591,8 +652,8 @@
   top: 50%;
   width: 7px;
   height: 7px;
-  border-right: 1.5px solid var(--dim);
-  border-bottom: 1.5px solid var(--dim);
+  border-right: 1.5px solid var(--doc-muted);
+  border-bottom: 1.5px solid var(--doc-muted);
   transform: translateY(-60%) rotate(45deg);
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
@@ -606,10 +667,10 @@
 .doc-details-content,
 .doc-faq-content {
   padding: 14px 20px 20px;
-  font-size: 14px;
+  font-size: 14.5px;
   line-height: 1.8;
-  color: var(--soft);
-  border-top: 1px solid var(--line);
+  color: var(--doc-body);
+  border-top: 1px solid var(--doc-card-border);
 }
 
 .doc-definitions {
@@ -620,33 +681,34 @@
 }
 
 .doc-definitions dt {
-  color: var(--fg);
+  color: var(--doc-fg);
+  font-weight: 550;
 }
 
 .doc-definitions dd {
   margin: 0;
-  color: var(--soft);
+  color: var(--doc-body);
 }
 
 /* 结语 CTA 卡片 */
 .doc-closing {
   margin-top: 48px;
   padding: 32px 28px;
-  border: 1px solid var(--line2);
+  border: 1px solid var(--doc-card-border);
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  background: var(--doc-card);
 }
 
 .doc-closing h3 {
   font-size: 22px;
   margin: 8px 0 18px;
-  color: var(--fg);
+  color: var(--doc-fg);
 }
 
 .doc-closing > p {
   margin: 14px 0 0;
-  font-size: 13.5px;
-  color: var(--dim);
+  font-size: 14px;
+  color: var(--doc-muted);
 }
 
 /* 右侧粘性目录 */
@@ -690,8 +752,8 @@
   align-items: center;
   gap: 12px;
   min-height: 40px;
-  font-size: 13px;
-  color: var(--dim);
+  font-size: 13.5px;
+  color: var(--doc-muted);
   padding: 8px 12px;
   border-radius: 6px;
   transition: all 0.15s ease;
@@ -699,61 +761,27 @@
 
 .docs-toc nav a span,
 .docs-mobile-menu nav a span {
-  font: 11px var(--mono);
-  color: var(--faint);
+  font: 11.5px var(--mono);
+  color: var(--doc-dim);
 }
 
 .docs-toc nav a:hover,
 .docs-mobile-menu nav a:hover {
-  color: var(--fg);
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--doc-fg);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .docs-toc nav a[aria-current],
 .docs-mobile-menu nav a[aria-current] {
-  color: var(--fg);
-  background: rgba(255, 255, 255, 0.07);
-  font-weight: 550;
+  color: var(--doc-fg);
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 600;
 }
 
 .docs-toc nav a[aria-current] span,
 .docs-mobile-menu nav a[aria-current] span {
   color: var(--doc-accent);
   font-weight: 600;
-}
-
-.docs-toc-foot {
-  border-top: 1px solid var(--line);
-  padding-top: 18px;
-  font-size: 12px;
-  color: var(--dim);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  line-height: 1.6;
-}
-
-.docs-toc-foot code {
-  font: 11.5px var(--mono);
-  color: var(--soft);
-  background: rgba(255, 255, 255, 0.04);
-  padding: 4px 8px;
-  border-radius: 5px;
-  border: 1px solid var(--line);
-  align-self: flex-start;
-}
-
-.docs-toc-foot a {
-  color: var(--soft);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 6px;
-  transition: color 0.15s ease;
-}
-
-.docs-toc-foot a:hover {
-  color: var(--doc-accent);
 }
 
 /* 底栏 */
@@ -836,6 +864,20 @@
 
   .docs-mobile-menu summary b {
     margin-left: 6px;
+  }
+
+  .docs-mobile-menu-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0 12px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--doc-card-border);
+  }
+
+  .docs-mobile-lang-label {
+    font-size: 12px;
+    color: var(--doc-muted);
   }
 
   .docs-mobile-menu nav {

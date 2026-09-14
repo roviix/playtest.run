@@ -93,17 +93,36 @@ pub fn strip_response(headers: &mut HeaderMap, authority: &str) {
         if reserved(name.trim()) {
             continue;
         }
-        let escapes_host = fields.any(|field| {
-            field.split_once('=').is_some_and(|(key, value)| {
-                key.trim().eq_ignore_ascii_case("domain")
-                    && !value
-                        .trim()
-                        .trim_start_matches('.')
-                        .eq_ignore_ascii_case(authority.host())
-            })
-        });
+        let mut escapes_host = false;
+        let mut rewritten_parts: Vec<&str> = Vec::with_capacity(fields.clone().count() + 1);
+        let first = raw.split(';').next().unwrap_or_default().trim();
+        rewritten_parts.push(first);
+
+        for field in fields {
+            let trimmed = field.trim();
+            if let Some((key, value)) = trimmed.split_once('=') {
+                if key.trim().eq_ignore_ascii_case("domain") {
+                    let domain = value.trim().trim_start_matches('.');
+                    if domain.eq_ignore_ascii_case("localhost") || domain == "127.0.0.1" {
+                        // 开发者本地设置的 localhost 域：剥离 Domain 属性，退化为针对当前作品主机的 Host-only Cookie
+                        continue;
+                    } else if domain.eq_ignore_ascii_case(authority.host()) {
+                        rewritten_parts.push(trimmed);
+                        continue;
+                    } else {
+                        escapes_host = true;
+                        break;
+                    }
+                }
+            }
+            rewritten_parts.push(trimmed);
+        }
+
         if !escapes_host {
-            headers.append(header::SET_COOKIE, cookie);
+            let value_str = rewritten_parts.join("; ");
+            if let Ok(val) = HeaderValue::from_str(&value_str) {
+                headers.append(header::SET_COOKIE, val);
+            }
         }
     }
 }
@@ -178,6 +197,33 @@ mod tests {
             [
                 "game=ok; HttpOnly; Path=/",
                 "theme=dark; Domain=.GAME.playtest.run; Path=/"
+            ]
+        );
+    }
+
+    #[test]
+    fn localhost_cookie_domains_become_host_only() {
+        let mut headers = HeaderMap::new();
+        for value in [
+            "session=abc; Domain=localhost; Path=/; HttpOnly",
+            "token=123; Domain=127.0.0.1; Path=/",
+            "other=xyz; Domain=.localhost; Path=/",
+            "evil=bad; Domain=.playtest.run; Path=/",
+        ] {
+            headers.append(header::SET_COOKIE, HeaderValue::from_static(value));
+        }
+        strip_response(&mut headers, "my-game.playtest.run");
+        let values: Vec<_> = headers
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|value| value.to_str().unwrap())
+            .collect();
+        assert_eq!(
+            values,
+            [
+                "session=abc; Path=/; HttpOnly",
+                "token=123; Path=/",
+                "other=xyz; Path=/",
             ]
         );
     }

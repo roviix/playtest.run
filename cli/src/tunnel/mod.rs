@@ -293,6 +293,7 @@ async fn findings_for(
     let mut findings = Vec::new();
     findings.extend(page.vite_hint());
     findings.extend(page.exposure_hint());
+    findings.extend(page.localhost_hint());
     let Some(weighing) = weighing else {
         return findings;
     };
