@@ -370,19 +370,78 @@ export function DocsPage({ section }: { section: DocSection }) {
               </p>
             </div>
 
-            <h3>{t("随时关联账号以长期保留作品", "Link an Account Anytime to Preserve Works")}</h3>
+            <h3>{t("三种身份模式：匿名试玩、设备登录 (login) 与自动化令牌 (Token)", "Three Auth Modes: Anonymous, Device Login & API Tokens")}</h3>
             <p>
               {t(
-                "当你需要跨设备管理或长期保留作品时，在终端运行 playtest login。浏览器打开提示的页面，通过邮箱或 GitHub 登录、核对验证码并确认授权即可。该设备上所有未过期的匿名作品会自动绑定到你的账号下。",
-                "When you need to preserve works long-term or manage across devices, run playtest login in your terminal. Open the prompted playtest URL, sign in with email or GitHub, verify the code and authorize. Any unexpired anonymous works on this device will be linked to your account."
+                "playtest 遵循「玩家零门槛，创作者零等待」的设计理念。你可以完全免注册直接发布，也可以随时关联正式账号永久保留作品：",
+                "playtest is designed for zero player friction and zero creator waiting. Publish instantly without sign-up, or link an account anytime to preserve works permanently:"
               )}
             </p>
-            <p>
-              {t(
-                "浏览器、CLI、关注与发布使用同一个账号体系，各自独立凭据。浏览器退出登录不会让 CLI 下线。自动化调用令牌可在账号设置中随时创建与吊销——切勿将令牌泄漏给玩家。",
-                "Browser, CLI, following, and publishing share one account with separate credentials. Signing out of the browser will not log out the CLI. Automation access tokens can be created or revoked in Account settings—never share them with players."
-              )}
-            </p>
+            <div class="doc-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>{t("模式", "Mode")}</th>
+                    <th>{t("操作方式与凭据", "Credentials")}</th>
+                    <th>{t("作品有效期", "TTL")}</th>
+                    <th>{t("适用场景", "Use Cases")}</th>
+                    <th>{t("作品归属与迁移", "Ownership & Migration")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><b>{t("匿名发布", "Anonymous")}</b></td>
+                    <td>{t("无需注册；首次发布 CLI 自动生成本机临时凭据", "No sign-up; CLI auto-provisions device anonymous token")}</td>
+                    <td>{t("24 小时（临时试玩）", "24 hours (temporary playtest)")}</td>
+                    <td>{t("快速发给朋友尝鲜、手机真机即时扫码体验", "Instant friend testing, mobile QR verification")}</td>
+                    <td>{t("门禁页显示为「匿名开发者」，不上公共广场", "Marked as Anonymous Creator, unlisted from Plaza")}</td>
+                  </tr>
+                  <tr>
+                    <td><b>{t("设备登录", "Device Login")}</b></td>
+                    <td><code>playtest login</code> {t("（终端打码，浏览器一键授权）", "(device code, one-click browser authorize)")}</td>
+                    <td>{t("永久有效", "Permanent")}</td>
+                    <td>{t("个人日常开发、网页控制台查看反馈与版本管理", "Daily development, web console analytics & management")}</td>
+                    <td><b>{t("自动迁移！", "Automatic migration!")}</b> {t("本机未过期的匿名作品自动归入账号，原链接与二维码完全不变", "All active anonymous works on device are linked into account, URLs stay identical")}</td>
+                  </tr>
+                  <tr>
+                    <td><b>{t("自动化令牌", "API Token")}</b></td>
+                    <td><code>PLAYTEST_TOKEN</code> {t("（网页账号设置中一键生成）", "(generated in web Account Settings)")}</td>
+                    <td>{t("长期有效（可随时吊销）", "Permanent (revocable anytime)")}</td>
+                    <td>{t("CI/CD 自动化流水线、无头服务器、AI 编程助手", "CI/CD pipelines, headless servers, AI agents")}</td>
+                    <td>{t("以账号身份直接发布，专为无浏览器交互脚本设计", "Publishes directly under your account, ideal for non-interactive scripts")}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <Note title={t("常见疑惑澄清", "Common Questions Clarified")} lang={lang}>
+              <ul style="margin: 0; padding-left: 1.2rem; line-height: 1.8;">
+                <li>
+                  <b>{t("从匿名登录后，我之前的作品和链接会丢失吗？", "Will I lose previous works or links after logging in?")}</b>
+                  <br />
+                  {t(
+                    "绝对不会。运行 playtest login 成功后，CLI 会将本机所有未过期的匿名作品自动迁移至你的正式账号下。原分享链接和二维码完全不变，作品有效期自动转为永久，门禁页作者名同步更新为你的真实昵称与头像。",
+                    "Never. Running playtest login automatically migrates all unexpired works on your machine to your formal account. Share links and QR codes remain identical, TTL becomes permanent, and creator info updates to your profile."
+                  )}
+                </li>
+                <li>
+                  <b>{t("浏览器登录与终端登录有什么区别？", "What is the difference between browser login and CLI login?")}</b>
+                  <br />
+                  {t(
+                    "两者管理同一套账号，但各自分配独立凭据。浏览器控制台基于安全 Cookie 鉴权，CLI 终端基于本地设备令牌鉴权。在网页退出登录不会影响终端发布，在终端登出也不会影响网页访问。",
+                    "Both manage the same account but hold independent credentials. The web console uses secure Cookies while CLI uses a local device token. Signing out of the browser will not affect the CLI, and vice versa."
+                  )}
+                </li>
+                <li>
+                  <b>{t("CI/CD 或无头环境如何使用 Token？", "How do I use Tokens in CI/CD or headless environments?")}</b>
+                  <br />
+                  {t(
+                    "登录网页控制台 → 右上角「账号设置」→「开发者令牌」生成一个 pl_live_... 令牌。在 GitHub Actions 或服务器中注入环境变量 PLAYTEST_TOKEN 即可直接发布，无需任何交互授权。",
+                    "Sign in to the web console → Account Settings → Developer Tokens to generate a pl_live_... token. Inject it as the PLAYTEST_TOKEN environment variable in GitHub Actions or servers without interactive logins."
+                  )}
+                </li>
+              </ul>
+            </Note>
           </Chapter>
 
           <Chapter name="publish">

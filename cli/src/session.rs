@@ -39,7 +39,10 @@ impl Session {
     /// 没有令牌就是 `None`，不是错误，也**不**凭空申请一个新的匿名令牌：`ls`、`rm`、`card`
     /// 问的都是「我已经有的东西」，拿一个崭新的身份去问只会看到空列表，更让人困惑。
     pub fn client(&self) -> Result<Option<Client>> {
-        let Some(token) = self.config.usable_token(&self.api, clock::now()) else {
+        let env_tok = std::env::var("PLAYTEST_TOKEN").ok();
+        let env_trimmed = env_tok.as_deref().map(str::trim).filter(|s| !s.is_empty());
+        let token = env_trimmed.or_else(|| self.config.usable_token(&self.api, clock::now()));
+        let Some(token) = token else {
             return Ok(None);
         };
         let mut client = Client::new(&self.api)?;

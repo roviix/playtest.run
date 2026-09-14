@@ -881,6 +881,13 @@ pub(crate) async fn ensure_token(
     config_path: &Path,
     api: &str,
 ) -> Result<()> {
+    if let Ok(env_tok) = std::env::var("PLAYTEST_TOKEN") {
+        let trimmed = env_tok.trim();
+        if !trimmed.is_empty() {
+            client.set_token(Some(trimmed.to_string()));
+            return Ok(());
+        }
+    }
     if let Some(token) = config.usable_token(api, clock::now()) {
         client.set_token(Some(token.to_string()));
         return Ok(());
