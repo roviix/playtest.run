@@ -863,7 +863,7 @@ async fn the_wall_is_one_grid_with_a_rail_and_says_which_card_is_paid_for() {
     let csp = reply.header("content-security-policy").unwrap();
     assert!(csp.starts_with("default-src 'none'"));
     assert!(
-        csp.contains("img-src http://*.localhost:8443 https://avatars.githubusercontent.com;"),
+        csp.contains("img-src http://*.localhost:8443 'self' data: https://avatars.githubusercontent.com;"),
         "{csp}"
     );
     assert!(csp.contains("form-action 'self'"));

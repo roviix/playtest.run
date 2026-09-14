@@ -995,7 +995,7 @@ fn root_headers(app: &App, authority: &str, nonce: &str) -> HeaderMap {
         &mut headers,
         "content-security-policy",
         &format!(
-            "default-src 'none'; img-src {img_src} https://avatars.githubusercontent.com; media-src {img_src}; \
+            "default-src 'none'; img-src {img_src} 'self' data: https://avatars.githubusercontent.com; media-src {img_src} 'self'; \
 style-src 'unsafe-inline'; script-src 'nonce-{nonce}'; connect-src 'self'; worker-src 'self'; \
 base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
         ),
