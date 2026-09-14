@@ -98,6 +98,19 @@ impl Config {
             .ok()
             .filter(|s| !s.is_empty())
     }
+
+    /// 边缘本地不可变 Blob 缓存目录（针对 S3 对象按需拉取落盘）。
+    pub fn blob_cache_dir(&self) -> PathBuf {
+        self.data_dir.join("cache").join("blobs")
+    }
+
+    /// 本地 Blob 缓存上限字节数（默认 10 GiB，环境变量 PLAYTEST_EDGE_CACHE_MAX_BYTES）。
+    pub fn blob_cache_max_bytes(&self) -> u64 {
+        std::env::var("PLAYTEST_EDGE_CACHE_MAX_BYTES")
+            .ok()
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .unwrap_or(10 * 1024 * 1024 * 1024)
+    }
 }
 
 fn env_or(key: &str, fallback: &str) -> String {

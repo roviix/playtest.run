@@ -18,6 +18,7 @@ use playtest_common::manifest::{GateMode, Manifest, WorkKind};
 use playtest_common::store::Store;
 use playtest_common::{GATE_COOKIE, ME_COOKIE, SESSION_COOKIE};
 use rand::RngCore;
+use tokio::io::AsyncSeekExt;
 use tower_http::trace::TraceLayer;
 
 use crate::breaker::Breaker;
@@ -59,6 +60,7 @@ const CARD_COVER_MAX_BYTES: u64 = 8 * 1024 * 1024;
 pub struct App {
     pub config: Config,
     pub sites: SiteStore,
+    pub blob_cache: Arc<crate::blob_cache::BlobCache>,
     pub events: EventLog,
     pub breaker: Breaker,
     pub traffic: Arc<crate::quota::Ledger>,
@@ -81,6 +83,10 @@ impl App {
 
     pub fn try_new(config: Config) -> anyhow::Result<Self> {
         let store = Store::from_config(&config.store_config()?)?;
+        let blob_cache = Arc::new(crate::blob_cache::BlobCache::new(
+            config.blob_cache_dir(),
+            config.blob_cache_max_bytes(),
+        ));
         let sites = SiteStore::new(store.clone());
         let plaza = PlazaCache::new(store.clone());
         let live = LiveCache::new(store.clone());
@@ -91,6 +97,7 @@ impl App {
         Ok(Self {
             config,
             sites,
+            blob_cache,
             events,
             breaker: Breaker::new(),
             traffic,
@@ -1758,10 +1765,51 @@ async fn blob(
     app.breaker.record(&manifest.slug, length);
     let object_range = (length != total).then_some(start..start + length);
 
+    // 优先尝试本地持久文件（本机 Store 目录或已落盘的本地 Blob 缓存）
+    let local_path = if let Ok(path) = app.sites.store().blob_path(&served.entry.hash) {
+        if path.is_file() {
+            Some(path)
+        } else {
+            None
+        }
+    } else {
+        app.blob_cache.get(&served.entry.hash)
+    };
+
+    if let Some(path) = local_path {
+        let body = match tokio::fs::File::open(&path).await {
+            Ok(mut file) => {
+                if start > 0 {
+                    if let Err(err) = file.seek(std::io::SeekFrom::Start(start)).await {
+                        tracing::warn!(%err, path = %path.display(), "seek 本地 blob 失败");
+                        return page(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            pages::broken(),
+                            Some((manifest.isolated, false)),
+                        );
+                    }
+                }
+                let stream =
+                    tokio_util::io::ReaderStream::new(tokio::io::AsyncReadExt::take(file, length));
+                Body::from_stream(stream)
+            }
+            Err(err) => {
+                tracing::warn!(%err, path = %path.display(), "打开本地 blob 失败");
+                return page(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    pages::broken(),
+                    Some((manifest.isolated, false)),
+                );
+            }
+        };
+        return (status, headers, body).into_response();
+    }
+
+    // 本地未命中时向远端对象存储（如私有 S3）发起读取
     let object = match app
         .sites
         .store()
-        .get_blob(&served.entry.hash, object_range)
+        .get_blob(&served.entry.hash, object_range.clone())
         .await
     {
         Ok(Some(object)) => object,
@@ -1783,7 +1831,16 @@ async fn blob(
         }
     };
 
-    (status, headers, Body::from_stream(object.into_stream())).into_response()
+    // 若为完整读取（非局部 Range），边向客户端流式输出边缓存至本地磁盘；
+    // 局部 Range 读取直接流式写出，避免不必要地把大文件全量落盘。
+    let body = if object_range.is_none() {
+        app.blob_cache
+            .stream_and_cache(&served.entry.hash, total, object.into_stream())
+    } else {
+        Body::from_stream(object.into_stream())
+    };
+
+    (status, headers, body).into_response()
 }
 
 // ---------------------------------------------------------------- 熔断

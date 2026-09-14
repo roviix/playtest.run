@@ -82,7 +82,7 @@ export function LoginDialog({ request, onClose, available }: {
 }
 
 export function LoginRequired({ route, onLogin }: { route: Route; onLogin: () => void }) {
-  const title = route.name === "collections" ? "My Collections" : route.name === "token" ? "Account" : "My Works";
+  const title = route.name === "collections" ? "My Collections" : route.name === "token" ? "Account" : "My Projects";
   return <div class="auth-required">
     <header class="stage-head"><h1>{title}</h1></header>
     <div class="auth-empty">

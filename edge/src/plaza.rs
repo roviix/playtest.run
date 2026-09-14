@@ -136,19 +136,13 @@ fn rail(here: Here) -> String {
             icon = icon("bell")
         ),
     };
-    let collections = match here {
-        Here::Collections => format!(
-            "<a class=\"nav-item active\" href=\"/collections\" aria-current=\"page\">{icon}Collections<span class=\"nav-dot\"></span></a>",
-            icon = icon("grid")
-        ),
-        Here::Plaza | Here::Mine => format!(
-            "<a class=\"nav-item\" href=\"/collections\">{icon}Collections</a>",
-            icon = icon("grid")
-        ),
-    };
-    let management = format!(
+    let my_projects = format!(
         "<a class=\"nav-item\" href=\"/console/#/\" data-manage>{}My Projects</a>",
         icon("grid")
+    );
+    let my_collections = format!(
+        "<a class=\"nav-item\" href=\"/console/#/collections\" data-manage>{}My Collections</a>",
+        icon("folder")
     );
     let publish_link = if matches!(here, Here::Collections) {
         "/#publish-dialog"
@@ -162,17 +156,17 @@ fn rail(here: Here) -> String {
 <span class=\"mark\" aria-hidden=\"true\">{mark}</span>\
 {wordmark}</a>\n\
 <div class=\"sidebar-action\"><a class=\"publish\" href=\"{publish_link}\">{plus}Publish Project</a></div>\n\
-<nav class=\"nav\" aria-label=\"Navigation\">{plaza}{collections}{mine}{management}</nav>\
+<nav class=\"nav\" aria-label=\"Navigation\">{plaza}{mine}{my_projects}{my_collections}</nav>\
 </div>\n\
 <div class=\"sidebar-footer\">\
-<a class=\"nav-item\" href=\"/console/#/docs/start\">{book}Docs</a>\
+<a class=\"nav-item\" href=\"/console/#/docs/start\">{book}Documentation</a>\
 <a class=\"nav-item account\" href=\"/console/?login=1\" data-account-login><span class=\"account-name\">Sign in</span></a>\
 </div>\n\
 </aside>\n",
         mark = crate::html::MARK,
         wordmark = crate::html::WORDMARK,
         plus = icon("plus"),
-        book = icon("grid"),
+        book = icon("book"),
     )
 }
 
@@ -435,6 +429,9 @@ pub(crate) fn icon(name: &str) -> &'static str {
         }
         "grid" => {
             r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>"#
+        }
+        "folder" => {
+            r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5a1 1 0 0 1 1-1h5l2 3h9v13H3Z"/></svg>"#
         }
         "bell" => {
             r#"<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2a5.3 5.3 0 0 0-5.3 5.3c0 4-1.7 5.4-1.7 5.4h14s-1.7-1.4-1.7-5.4A5.3 5.3 0 0 0 12 4.2Z"/><path d="M10.3 18.2a2 2 0 0 0 3.4 0"/></svg>"#

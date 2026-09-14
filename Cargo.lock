@@ -2156,6 +2156,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "futures",
+ "futures-util",
  "http-body-util",
  "hyper",
  "hyper-util",

@@ -21,6 +21,7 @@
 //! 这个进程不执行任何用户代码（DESIGN §3.7），也不记玩家 IP（§3.4）。
 
 pub mod app;
+pub mod blob_cache;
 pub mod breaker;
 pub mod cache;
 pub mod capabilities;

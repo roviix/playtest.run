@@ -22,8 +22,8 @@ export function HomePage({ sites, me }: { sites: Loaded<Site[]>; me: Me | null }
   return (
     <>
       <header class="workspace-head">
-        <h1>My Works</h1>
-        <span class="workspace-count">{count} {count === 1 ? "work" : "works"}</span>
+        <h1>My Projects</h1>
+        <span class="workspace-count">{count} {count === 1 ? "project" : "projects"}</span>
       </header>
       {!data || data.length === 0 ? (
         <EmptyHome me={me} />
@@ -111,7 +111,7 @@ function EmptyHome({ me }: { me: Me | null }) {
             <line x1="12" y1="22.08" x2="12" y2="12" />
           </svg>
         }
-        title="No works yet"
+        title="No projects yet"
         description="Run one command in your project directory to create a playable build and collect feedback."
         action={
           <div class="empty-home-actions">
@@ -127,7 +127,7 @@ function EmptyHome({ me }: { me: Me | null }) {
       >
         {anonymous ? (
           <p class="empty-anon-hint">
-            Anonymous session. Sign in anytime to preserve works permanently.
+            Anonymous session. Sign in anytime to preserve projects permanently.
           </p>
         ) : null}
       </Empty>

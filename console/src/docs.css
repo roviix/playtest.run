@@ -759,7 +759,7 @@
 /* 底栏 */
 .docs-footer {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 20px;
   padding: 36px 0 20px;

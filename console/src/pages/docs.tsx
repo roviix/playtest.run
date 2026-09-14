@@ -510,7 +510,7 @@ export function DocsPage({ section }: { section: DocSection }) {
             <span>Look up as needed, no need to memorize.</span>
             <code>playtest --help</code>
             <a href={href({ name: "sites" })}>
-              <span>Back to my works</span>
+              <span>Back to my projects</span>
               <span aria-hidden="true">↗</span>
             </a>
           </div>
@@ -518,7 +518,6 @@ export function DocsPage({ section }: { section: DocSection }) {
       </div>
 
       <footer class="docs-footer">
-        <span>playtest · Creator Guide</span>
         <a href={href({ name: "docs", section: "start" })} onClick={() => locate("start")}>
           <span>Back to top ↑</span>
         </a>

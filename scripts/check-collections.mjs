@@ -214,7 +214,9 @@ try {
   await until(() => evaluate("location.hash==='#follow-login' || !!document.querySelector('#follow-login[open], #account-login[open]')"), "登录弹窗打开");
   shots.push(await screenshot("follow-login-dialog"));
   await click('.dialog-close-btn');
-  await click('a.nav-item[href="/collections"]');
+  await click('a.nav-item[href="/"]');
+  await until(() => evaluate("!!document.querySelector('a.seg-item[href=\"/collections\"]')"), "广场分段控件");
+  await click('a.seg-item[href="/collections"]');
   await until(() => evaluate("!!document.querySelector('.collection-card')"), "合集大厅挑战入口");
   await click('a.collection-card[href="/c/pelican-bicycle"]');
   await until(() => evaluate("!!document.querySelector('#challenge-prompt')"), "挑战页");
