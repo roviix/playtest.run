@@ -587,7 +587,7 @@ async fn me_without_a_key_is_this_device_not_a_login_wall() {
         assert!(!html.contains(word), "「{word}」不该出现");
     }
     // 找回与登录入口通过统一账号弹窗提供。
-    assert!(html.contains("placeholder=\"name@example.com\""));
+    assert!(html.contains("placeholder=\"your@email.com\""));
     assert!(html.contains(&format!("action=\"{}\"", root_paths::FOLLOW)));
     assert!(html.contains("value=\"plaza\""));
 }

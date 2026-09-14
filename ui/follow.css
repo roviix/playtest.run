@@ -22,7 +22,6 @@
 .notice-email{font-size:13px;font-family:ui-monospace,monospace;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .notice-switch-link{font-size:12px;color:#75cdb5;text-decoration:none;flex-shrink:0;transition:opacity .15s}
 .notice-switch-link:hover{opacity:.8;text-decoration:underline}
-.notice-group{border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.02);overflow:hidden}
 .notice-channel{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.06)}
 .notice-channel:last-child{border-bottom:0}
 .notice-meta{display:flex;flex-direction:column;gap:3px;min-width:0}
@@ -32,10 +31,6 @@
 .notice-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:500;background:rgba(255,255,255,.06);color:var(--dim)}
 .notice-chip.pos{background:rgba(117,205,181,.12);color:#75cdb5;border:1px solid rgba(117,205,181,.25)}
 .chip-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
-.notice-subscribe-card{border:1px solid rgba(255,255,255,.08);border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));padding:18px}
-.notice-subscribe-head{margin-bottom:14px}
-.notice-subscribe-head .notice-title{display:block;font-size:14px;font-weight:600;letter-spacing:-.01em;color:var(--fg);margin-bottom:4px}
-.notice-subscribe-head .notice-desc{display:block;font-size:12.5px;color:var(--dim);line-height:1.45}
 .notice-subscribe-form{margin:0;display:flex;flex-direction:column;gap:10px}
 .notice-input-bar{display:flex;align-items:center;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:3px 4px 3px 12px;gap:8px;transition:border-color .15s,box-shadow .15s}
 .notice-input-bar:focus-within{border-color:#75cdb5;box-shadow:0 0 0 2px #75cdb533}
@@ -43,9 +38,10 @@
 .notice-input-bar input::placeholder{color:#71717a}
 .notice-subscribe-btn{height:36px;min-height:36px;padding:0 16px;border:0;border-radius:7px;background:#fff;color:#09090b;font:600 13px system-ui;cursor:pointer;white-space:nowrap;transition:filter .15s}
 .notice-subscribe-btn:hover{filter:brightness(1.06)}
-.notice-card-hint{margin:0;font-size:11.5px;color:var(--dim);line-height:1.4}
-.notice-footer-bar{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.06);font-size:12px;color:var(--dim)}
-.notice-footer-bar a{color:#75cdb5;text-decoration:none;font-weight:500}
-.notice-footer-bar a:hover{text-decoration:underline}
-.notice-group.push-only{margin-top:12px}
-
+.notice-pure-subscribed,.notice-pure-unsub{display:flex;flex-direction:column;gap:14px;padding:2px 0}
+.notice-status-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px}
+.notice-email-pure{font-family:ui-monospace,monospace;font-size:13px;color:var(--fg)}
+.notice-pure-desc{margin:0;font-size:13px;line-height:1.5;color:var(--dim)}
+.notice-pure-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:2px}
+.notice-onboarding-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 6px 6px 14px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:10px}
+.notice-pure-hint{margin:0;font-size:11.5px;color:var(--dim);line-height:1.4}

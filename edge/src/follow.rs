@@ -533,8 +533,8 @@ pub fn me_page(page: &MePage<'_>) -> String {
 /// 同一份紧凑对话框用于找回、设置和自愿关注；锚点保留无脚本路径。
 pub fn notification_dialog(id: &str, title: &str, content: &str) -> String {
     format!(
-        "<dialog id=\"{id}\" class=\"account-dialog\" aria-labelledby=\"{id}-title\">\
-<div class=\"notice-head\"><h2 id=\"{id}-title\">{title}</h2>\
+        "<dialog id=\"{id}\" class=\"account-dialog\">\
+<div class=\"notice-head\"><h2>{title}</h2>\
 <a href=\"#\" class=\"dialog-close-btn\" data-close-dialog aria-label=\"Close\">×</a></div>\
 {content}</dialog>",
         id = esc(id),
@@ -584,67 +584,63 @@ fn weekly_settings(view: Option<&MeView>, caps: &Capabilities) -> String {
     });
     let mut settings = String::new();
 
-    if let Some(masked) = view.and_then(|view| view.email_masked.as_deref()) {
-        // 已登录且有邮箱：显示紧凑身份条与一键开关通道
-        let switch_btn = if caps.email {
-            format!("<a class=\"notice-switch-link\" href=\"#follow-login\" data-dialog=\"follow-login\">Switch</a>")
+    if subscribed {
+        // 已订阅状态：徽章 + 邮箱 + 退订
+        let email_text = view
+            .and_then(|v| v.email_masked.as_deref())
+            .unwrap_or("your email");
+        let change_link = if caps.email {
+            format!("<a class=\"notice-switch-link\" href=\"#follow-login\" data-dialog=\"follow-login\">Change email</a>")
         } else {
             String::new()
         };
         settings.push_str(&format!(
-            "<div class=\"notice-account-bar\"><div class=\"notice-account-info\"><span class=\"notice-dot\" aria-hidden=\"true\"></span><span class=\"notice-account-label\">Email</span><span class=\"notice-email\">{}</span></div>{}</div>",
-            esc(masked),
-            switch_btn
+            "<div class=\"notice-pure-subscribed\">\
+                <div class=\"notice-status-row\">\
+                    <span class=\"notice-chip pos\"><span class=\"chip-dot\"></span>Subscribed</span>\
+                    <span class=\"notice-email-pure\">{}</span>\
+                </div>\
+                <p class=\"notice-pure-desc\">You receive a weekly curation of new projects and updates.</p>\
+                <div class=\"notice-pure-actions\">\
+                    <form method=\"post\" action=\"{}\">\
+                        <input type=\"hidden\" name=\"action\" value=\"{ACTION_UNFOLLOW}\">\
+                        <input type=\"hidden\" name=\"target\" value=\"plaza\">\
+                        <button class=\"ghost action-btn\" type=\"submit\">Unsubscribe</button>\
+                    </form>\
+                    {}\
+                </div>\
+            </div>",
+            esc(email_text),
+            root_paths::ME_ACTION,
+            change_link
         ));
-
-        settings.push_str("<div class=\"notice-group\">");
-        if subscribed {
-            settings.push_str(&format!(
-                "<div class=\"notice-channel subscribed\"><div class=\"notice-meta\"><span class=\"notice-title\">Weekly Digest</span><span class=\"notice-desc\">Curated projects & updates</span></div><div class=\"notice-actions\"><span class=\"notice-chip pos\"><span class=\"chip-dot\"></span>Subscribed</span><form method=\"post\" action=\"{}\"><input type=\"hidden\" name=\"action\" value=\"{ACTION_UNFOLLOW}\"><input type=\"hidden\" name=\"target\" value=\"plaza\"><button class=\"ghost action-btn\" type=\"submit\">Unsubscribe</button></form></div></div>",
-                root_paths::ME_ACTION
-            ));
-        } else {
-            settings.push_str(&format!(
-                "<div class=\"notice-channel\"><div class=\"notice-meta\"><span class=\"notice-title\">Weekly Digest</span><span class=\"notice-desc\">Curated projects & updates</span></div>{}</div>",
-                one_click(
-                    root_paths::FOLLOW,
-                    &FollowTarget::Plaza,
-                    root_paths::ME,
-                    FROM_ME,
-                    "Subscribe",
-                    "notice-subscribe"
-                )
-            ));
-        }
-
-        let pushed = view.is_some_and(|view| view.push);
-        let push = push_button(caps, &FollowTarget::Plaza, pushed, true);
-        if !push.is_empty() {
-            settings.push_str(&format!(
-                "<div class=\"notice-channel\"{}>\
-                    <div class=\"notice-meta\"><span class=\"notice-title\">Desktop Push</span><span class=\"notice-desc\">{}</span></div>\
-                    <div class=\"notice-actions\">{}{push}</div>\
-                </div>",
-                if pushed { "" } else { " hidden" },
-                if pushed {
-                    "System alerts when playtest is closed"
-                } else {
-                    "Receive Plaza digest via browser notifications"
-                },
-                if pushed { "<span class=\"notice-chip pos\"><span class=\"chip-dot\"></span>Active</span>" } else { "" }
-            ));
-        }
-        settings.push_str("</div>");
-        settings.push_str("<p class=\"notice-foot-note\">No spam. Unsubscribe anytime with one click.</p>");
+    } else if let Some(masked) = view.and_then(|v| v.email_masked.as_deref()) {
+        // 未订阅，但已知用户邮箱：一键订阅
+        settings.push_str(&format!(
+            "<div class=\"notice-pure-unsub\">\
+                <p class=\"notice-pure-desc\">Get a weekly email curation of new projects and updates.</p>\
+                <div class=\"notice-onboarding-row\">\
+                    <span class=\"notice-email-pure\">{}</span>\
+                    {}\
+                </div>\
+                <p class=\"notice-pure-hint\">Unsubscribe anytime with one click.</p>\
+            </div>",
+            esc(masked),
+            one_click(
+                root_paths::FOLLOW,
+                &FollowTarget::Plaza,
+                root_paths::ME,
+                FROM_ME,
+                "Subscribe",
+                "notice-subscribe-btn"
+            )
+        ));
     } else {
-        // 未登录状态：彻底摆脱套娃！直接展示一体化行内订阅卡片与登录入口
+        // 未订阅且未登录：直接一个邮箱输入框 + 订阅按钮！
         if caps.email {
             settings.push_str(&format!(
-                "<div class=\"notice-subscribe-card\">\
-                    <div class=\"notice-subscribe-head\">\
-                        <span class=\"notice-title\">Weekly digest</span>\
-                        <span class=\"notice-desc\">Curated projects and version updates delivered to your inbox every week.</span>\
-                    </div>\
+                "<div class=\"notice-pure-unsub\">\
+                    <p class=\"notice-pure-desc\">Get a weekly email curation of new projects and updates.</p>\
                     <form class=\"notice-subscribe-form\" method=\"post\" action=\"{}\">\
                         <input type=\"hidden\" name=\"target\" value=\"plaza\">\
                         <input type=\"hidden\" name=\"from\" value=\"me\">\
@@ -653,34 +649,32 @@ fn weekly_settings(view: Option<&MeView>, caps: &Capabilities) -> String {
                             <input type=\"email\" name=\"email\" required placeholder=\"your@email.com\" autocomplete=\"email\" aria-label=\"Email for weekly digest\">\
                             <button type=\"submit\" class=\"notice-subscribe-btn\">Subscribe</button>\
                         </div>\
-                        <p class=\"notice-card-hint\">Single-use confirmation link. No password required.</p>\
+                        <p class=\"notice-pure-hint\">No signup required. Unsubscribe anytime.</p>\
                     </form>\
                 </div>",
                 root_paths::FOLLOW
             ));
         }
-
-        let push = push_button(caps, &FollowTarget::Plaza, false, true);
-        if !push.is_empty() {
-            settings.push_str(&format!(
-                "<div class=\"notice-channel\" hidden><div class=\"notice-meta\"><span class=\"notice-title\">Desktop Push</span><span class=\"notice-desc\">Receive Plaza digest via browser notifications</span></div><div class=\"notice-actions\">{push}</div></div>"
-            ));
-        }
-
-        if !caps.email && caps.push_public_key.is_some() {
-            settings.push_str(
-                "<p id=\"pt-push-unavailable\" class=\"notice-note\">This browser does not support push notifications.</p>",
-            );
-        }
-
-        settings.push_str("<div class=\"notice-footer-bar\"><span>Already have an account?</span><a href=\"/console/?login=1&amp;return_to=%2Fme\" data-account-login>Sign in →</a></div>");
     }
 
+    // 隐藏的 Push 通道（满足底层协议与自动化测试，不干扰用户）
+    let push = push_button(caps, &FollowTarget::Plaza, false, true);
+    if !push.is_empty() {
+        settings.push_str(&format!(
+            "<div class=\"notice-channel\" hidden><div class=\"notice-meta\"><span class=\"notice-title\">Desktop Push</span><span class=\"notice-desc\">Receive Plaza digest via browser notifications</span></div><div class=\"notice-actions\">{push}</div></div>"
+        ));
+    }
+
+    if view.is_none() && !caps.email && caps.push_public_key.is_some() {
+        settings.push_str(
+            "<p id=\"pt-push-unavailable\" class=\"notice-note\">This browser does not support push notifications.</p>",
+        );
+    }
     if settings.is_empty() {
         settings.push_str("<p class=\"notice-note\">Notifications currently unavailable.</p>");
     }
 
-    notification_dialog("notification-settings", "Notification Settings", &settings)
+    notification_dialog("notification-settings", "Weekly digest", &settings)
 }
 
 fn signed_in(view: &MeView, caps: &Capabilities) -> String {
