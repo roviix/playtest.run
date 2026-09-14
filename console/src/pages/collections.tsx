@@ -1,7 +1,8 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { api, AUTH_REQUEST_EVENT, type Collection, type CollectionDraft, type EntryDraft, type Me, type Site } from "../api";
 import { href } from "../router";
 import { hue, monogram } from "../hue";
+import { BrandMark } from "../auth";
 import "../collections.css";
 
 function message(error: unknown): string {
@@ -44,10 +45,12 @@ export function CollectionsPage({
   const [notice, setNotice] = useState("");
   const [revision, setRevision] = useState(0);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [addingWork, setAddingWork] = useState(false);
   const [busy, setBusy] = useState(false);
   const [section, setSection] = useState<"mine" | "join">("mine");
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<"entries" | "settings" | "prompt">("entries");
+  const [tab, setTab] = useState<"entries" | "prompt">("entries");
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -125,14 +128,14 @@ export function CollectionsPage({
     return (
       <div class="collection-workspace">
         <nav class="collection-breadcrumb" aria-label="返回导航">
-          <a class="back-link" href={collectionLink()}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
+          <a class="breadcrumb-item" href={collectionLink()}>
+            <svg class="breadcrumb-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
             </svg>
             <span>我的合集</span>
           </a>
           <span class="breadcrumb-sep" aria-hidden="true">/</span>
-          <span class="breadcrumb-title" title={selected.title}>{selected.title}</span>
+          <span class="breadcrumb-current" title={selected.title}>{selected.title}</span>
         </nav>
 
         {error ? (
@@ -184,6 +187,15 @@ export function CollectionsPage({
           </div>
 
           <div class="collection-header-actions">
+            {owner ? (
+              <button class="button quiet" type="button" onClick={() => setEditing(true)}>
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ width: "14px", height: "14px", marginRight: "5px" }}>
+                  <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                设置
+              </button>
+            ) : null}
             {selected.public && !selected.hidden ? (
               <a class="button primary" href={publicUrl} target="_blank" rel="noreferrer">
                 打开玩家页面 ↗
@@ -197,24 +209,16 @@ export function CollectionsPage({
           </div>
         </header>
 
-        {/* 详情页选项卡导航 */}
-        <nav class="collection-tabs-nav" aria-label="合集功能分段">
-          <button
-            type="button"
-            class={`collection-tab-btn ${tab === "entries" ? "active" : ""}`}
-            onClick={() => setTab("entries")}
-          >
-            收录作品 <span class="collection-tab-badge">{entries.length}</span>
-          </button>
-          {owner ? (
+        {/* 若为挑战，提供题目与规则的切换标签 */}
+        {isChallenge ? (
+          <nav class="collection-tabs-nav" aria-label="合集功能分段">
             <button
               type="button"
-              class={`collection-tab-btn ${tab === "settings" ? "active" : ""}`}
-              onClick={() => setTab("settings")}
+              class={`collection-tab-btn ${tab === "entries" ? "active" : ""}`}
+              onClick={() => setTab("entries")}
             >
-              资料与设置
+              收录作品 <span class="collection-tab-badge">{entries.length}</span>
             </button>
-          ) : isChallenge ? (
             <button
               type="button"
               class={`collection-tab-btn ${tab === "prompt" ? "active" : ""}`}
@@ -222,23 +226,13 @@ export function CollectionsPage({
             >
               题目与规则
             </button>
-          ) : null}
-        </nav>
+          </nav>
+        ) : null}
 
-        {/* 选项卡一：作品列表与投稿舱 */}
+        {/* 区域一：作品列表 */}
         {tab === "entries" ? (
           <div>
-            {!selected.hidden && !closed && authenticated && (owner || isChallenge) ? (
-              <Submission
-                collection={selected}
-                sites={sites}
-                onSubmit={async (draft) => {
-                  await api.submitCollection(selected.slug, draft);
-                  setNotice("作品已加入。玩家页面可能需要最多 30 秒刷新。");
-                  refresh();
-                }}
-              />
-            ) : !authenticated && me ? (
+            {!authenticated && me ? (
               <div class="collection-callout">
                 投稿作品需要 GitHub 长期账号。
                 <button
@@ -256,7 +250,22 @@ export function CollectionsPage({
             ) : null}
 
             <section class="collection-entries-section">
-              <h2>收录的作品 ({entries.length})</h2>
+              <div class="collection-entries-head">
+                <div class="collection-entries-title">
+                  <h2>收录的作品</h2>
+                  <span class="collection-entries-count">{entries.length}</span>
+                </div>
+                {!selected.hidden && !closed && authenticated && (owner || isChallenge) ? (
+                  <button
+                    class="button primary small"
+                    type="button"
+                    onClick={() => setAddingWork(true)}
+                  >
+                    + 添加作品
+                  </button>
+                ) : null}
+              </div>
+
               {entries.length ? (
                 <ul class="collection-entry-list">
                   {entries.map((entry, index) => {
@@ -324,84 +333,23 @@ export function CollectionsPage({
                     </svg>
                   </div>
                   <h2>还没有收录任何公开作品</h2>
-                  <p>被设为私密、到期或已被移除的作品不会展示在这里。通过上方表单选择作品加入。</p>
+                  <p>把已发布的作品汇聚在一起，让玩家一口气体验完整系列。</p>
+                  {!selected.hidden && !closed && authenticated && (owner || isChallenge) ? (
+                    <button
+                      class="button primary"
+                      type="button"
+                      onClick={() => setAddingWork(true)}
+                    >
+                      + 添加作品
+                    </button>
+                  ) : null}
                 </div>
               )}
             </section>
           </div>
         ) : null}
 
-        {/* 选项卡二：资料与设置 (Owner Only) */}
-        {tab === "settings" && owner ? (
-          <div class="collection-settings-container">
-            <div class="collection-panel">
-              <Editor
-                key={`${selected.slug}-${selected.updated_at}`}
-                collection={selected}
-                onSave={async (draft) => {
-                  await api.updateCollection(selected.slug, draft);
-                  setNotice("合集资料已保存。");
-                  refresh();
-                }}
-              />
-            </div>
-
-            {selected.blocked_slugs?.length ? (
-              <section class="collection-panel">
-                <div class="collection-panel-head">
-                  <div>
-                    <h2>已移除的投稿</h2>
-                    <p>被你移除的作品被限制再次提交，你可以在此解除限制。</p>
-                  </div>
-                </div>
-                <ul class="collection-entry-list">
-                  {selected.blocked_slugs.map((siteSlug) => (
-                    <li class="collection-entry-item" key={siteSlug}>
-                      <span class="mono">{siteSlug}</span>
-                      <button
-                        class="button small quiet"
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void act(
-                            () => api.unblockCollection(selected.slug, siteSlug),
-                            "已允许重新投稿，原作品不会自动恢复。"
-                          )
-                        }
-                      >
-                        允许重新投稿
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-
-            <section class="collection-danger-zone">
-              <div class="collection-danger-info">
-                <h4>删除合集</h4>
-                <p>删除合集只移除这个聚合页面，里面的所有作品与分享链接不受任何影响。</p>
-              </div>
-              <button
-                class="button danger"
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  if (confirm("删除这个合集及其公开页面？原作品不会删除。")) {
-                    void act(async () => {
-                      await api.deleteCollection(selected.slug);
-                      location.hash = collectionLink();
-                    }, "合集已删除。");
-                  }
-                }}
-              >
-                删除合集
-              </button>
-            </section>
-          </div>
-        ) : null}
-
-        {/* 选项卡三：挑战题目与规则 (Participant Only) */}
+        {/* 区域二：挑战题目与规则 */}
         {tab === "prompt" && isChallenge ? (
           <div>
             <div class="collection-prompt-canvas">
@@ -432,6 +380,42 @@ export function CollectionsPage({
               </div>
             ) : null}
           </div>
+        ) : null}
+
+        {/* 弹窗：合集设置 (Owner) */}
+        {editing && owner ? (
+          <CollectionDialog
+            collection={selected}
+            onSave={async (draft) => {
+              await api.updateCollection(selected.slug, draft);
+              setNotice("合集资料已保存。");
+              refresh();
+            }}
+            onDelete={async () => {
+              await api.deleteCollection(selected.slug);
+              location.hash = collectionLink();
+            }}
+            onUnblock={async (siteSlug) => {
+              await api.unblockCollection(selected.slug, siteSlug);
+              setNotice("已允许重新投稿。");
+              refresh();
+            }}
+            onClose={() => setEditing(false)}
+          />
+        ) : null}
+
+        {/* 弹窗：添加/投稿作品 */}
+        {addingWork ? (
+          <WorkSubmitDialog
+            collection={selected}
+            sites={sites}
+            onSubmit={async (draft) => {
+              await api.submitCollection(selected.slug, draft);
+              setNotice("作品已加入。玩家页面可能需要最多 30 秒刷新。");
+              refresh();
+            }}
+            onClose={() => setAddingWork(false)}
+          />
         ) : null}
       </div>
     );
@@ -493,26 +477,15 @@ export function CollectionsPage({
         </div>
       ) : null}
 
-      {/* 新建合集抽屉 */}
+      {/* 新建合集弹窗 */}
       {creating ? (
-        <div class="collection-create-card">
-          <div class="collection-create-head">
-            <div>
-              <h2>新建作品组织</h2>
-              <p>选择你要创建的组织形态。默认保存为草稿，明确选择公开后才会出现在广场索引中。</p>
-            </div>
-            <button class="button small quiet" type="button" onClick={() => setCreating(false)}>
-              ✕
-            </button>
-          </div>
-          <Editor
-            onSave={async (draft) => {
-              const created = await api.createCollection(draft);
-              location.hash = collectionLink(created.slug);
-            }}
-            onCancel={() => setCreating(false)}
-          />
-        </div>
+        <CollectionDialog
+          onSave={async (draft) => {
+            const created = await api.createCollection(draft);
+            location.hash = collectionLink(created.slug);
+          }}
+          onClose={() => setCreating(false)}
+        />
       ) : null}
 
       {/* 工具栏：分段切换与搜索 */}
@@ -635,16 +608,21 @@ export function CollectionsPage({
   );
 }
 
-// ------------------------------------------------------------------ 合集编辑器 (Editor)
-function Editor({
+// ------------------------------------------------------------------ 合集弹窗：设置与新建 (CollectionDialog)
+function CollectionDialog({
   collection,
   onSave,
-  onCancel,
+  onDelete,
+  onUnblock,
+  onClose,
 }: {
   collection?: Collection;
   onSave: (draft: CollectionDraft) => Promise<void>;
-  onCancel?: () => void;
+  onDelete?: () => Promise<void>;
+  onUnblock?: (siteSlug: string) => Promise<void>;
+  onClose: () => void;
 }) {
+  const dialog = useRef<HTMLDialogElement>(null);
   const [draft, setDraft] = useState<CollectionDraft>(() =>
     collection
       ? {
@@ -671,6 +649,13 @@ function Editor({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    dialog.current?.showModal();
+    return () => {
+      if (dialog.current?.open) dialog.current.close();
+    };
+  }, []);
+
   const locked = Boolean(collection?.entries?.length);
   const isChallenge = draft.kind === "challenge";
   const deadline = draft.closes_at
@@ -680,250 +665,35 @@ function Editor({
     : "";
 
   return (
-    <form
-      class="collection-form"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        if (busy) return;
-        setBusy(true);
-        setError("");
-        try {
-          await onSave(draft);
-        } catch (failure) {
-          setError(message(failure));
-        } finally {
-          setBusy(false);
-        }
+    <dialog
+      ref={dialog}
+      class="overlay"
+      aria-labelledby="collection-dialog-title"
+      onClose={onClose}
+      onClick={(e) => {
+        if (e.target === dialog.current) onClose();
       }}
     >
-      <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-        {/* 新建时选择组织形态：分段单选卡片 */}
-        {!collection ? (
-          <div class="collection-type-grid" role="radiogroup" aria-label="组织形态">
-            <div
-              class={`collection-type-option ${draft.kind === "collection" ? "active" : ""}`}
-              onClick={() => setDraft({ ...draft, kind: "collection" })}
-              role="radio"
-              aria-checked={draft.kind === "collection"}
-              tabIndex={0}
-            >
-              <div class="collection-type-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-                </svg>
-              </div>
-              <div class="collection-type-info">
-                <h3>自选作品集</h3>
-                <p>整理自己的已发布作品，汇聚成个人系列专题。仅自己可添加作品。</p>
-              </div>
-            </div>
-
-            <div
-              class={`collection-type-option ${draft.kind === "challenge" ? "active" : ""}`}
-              onClick={() => setDraft({ ...draft, kind: "challenge" })}
-              role="radio"
-              aria-checked={draft.kind === "challenge"}
-              tabIndex={0}
-            >
-              <div class="collection-type-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-                </svg>
-              </div>
-              <div class="collection-type-info">
-                <h3>创作挑战</h3>
-                <p>设定一道题目与规则，邀请所有创作者一起参与并投稿。</p>
-              </div>
-            </div>
+      <div class="sheet collection-dialog-sheet">
+        <div class="dialog-head">
+          <div class="dialog-title-wrap">
+            <BrandMark />
+            <h2 id="collection-dialog-title">
+              {collection ? "合集设置" : "新建合集 / 创作挑战"}
+            </h2>
           </div>
-        ) : null}
-
-        {/* 标题 */}
-        <div class="field">
-          <label class="field-label">
-            <span>合集名称</span>
-          </label>
-          <input
-            required
-            maxLength={80}
-            value={draft.title}
-            onInput={(event) => setDraft({ ...draft, title: event.currentTarget.value })}
-            placeholder="例如：鹈鹕骑单车"
-          />
-        </div>
-
-        {/* Slug 地址 */}
-        {!collection ? (
-          <div class="field">
-            <label class="field-label">
-              <span>自定义地址</span>
-            </label>
-            <div class="collection-slug-preview">
-              <span class="collection-slug-prefix">playtest.run/c/</span>
-              <input
-                pattern="[a-z0-9-]{3,63}"
-                maxLength={63}
-                value={draft.slug ?? ""}
-                onInput={(event) =>
-                  setDraft({ ...draft, slug: event.currentTarget.value || undefined })
-                }
-                placeholder="pelican-bicycle（留空自动生成）"
-              />
-            </div>
-          </div>
-        ) : null}
-
-        {/* 简介 */}
-        <div class="field">
-          <label class="field-label">
-            <span>一句话介绍</span>
-          </label>
-          <textarea
-            rows={2}
-            maxLength={280}
-            value={draft.summary}
-            onInput={(event) => setDraft({ ...draft, summary: event.currentTarget.value })}
-            placeholder="简要介绍这个合集收录了什么…"
-          />
-        </div>
-
-        {/* 创作挑战特有字段 */}
-        {isChallenge ? (
-          <>
-            <div class="field">
-              <label class="field-label">
-                <span>创作题目</span>
-              </label>
-              <textarea
-                rows={3}
-                maxLength={6000}
-                required={draft.public}
-                disabled={locked}
-                value={draft.prompt}
-                onInput={(event) => setDraft({ ...draft, prompt: event.currentTarget.value })}
-                placeholder="清晰描述参与者要做什么。例如：请用一个 HTML 文件做一只鹈鹕骑单车的动画…"
-              />
-            </div>
-
-            <div class="field">
-              <label class="field-label">
-                <span>投稿规则 (选填)</span>
-              </label>
-              <textarea
-                rows={2}
-                maxLength={3000}
-                disabled={locked}
-                value={draft.rules}
-                onInput={(event) => setDraft({ ...draft, rules: event.currentTarget.value })}
-                placeholder="例如：只提交自己原创的作品；不使用违规素材…"
-              />
-            </div>
-
-            <div class="field">
-              <label class="field-label">
-                <span>截止时间 (选填)</span>
-              </label>
-              <input
-                type="datetime-local"
-                value={deadline}
-                disabled={locked}
-                onInput={(event) =>
-                  setDraft({
-                    ...draft,
-                    closes_at: event.currentTarget.value
-                      ? new Date(event.currentTarget.value).toISOString()
-                      : undefined,
-                  })
-                }
-              />
-            </div>
-
-            {locked ? (
-              <p class="muted">
-                已有投稿后不再修改题目、规则与截止时间，避免改变大家参加时的约定。
-              </p>
-            ) : null}
-          </>
-        ) : null}
-
-        {/* 公开状态开关卡片 */}
-        <div
-          class={`collection-toggle-card ${draft.public ? "active" : ""}`}
-          onClick={() => setDraft({ ...draft, public: !draft.public })}
-          role="switch"
-          aria-checked={draft.public}
-          tabIndex={0}
-        >
-          <div class="collection-toggle-info">
-            <h4>公开展示到合集大厅与搜索</h4>
-            <p>
-              {draft.public
-                ? "已设为公开：所有人均可在广场合集大厅看到并检索此合集。"
-                : "当前为草稿：只有你自己能看到和管理。合集公开不会自动公开你的私密作品。"}
-            </p>
-          </div>
-          <div class="collection-switch-pill" aria-hidden="true" />
-        </div>
-
-        {error ? (
-          <p role="alert" class="collection-error">
-            {error}
-          </p>
-        ) : null}
-
-        <div class="collection-form-actions">
-          {onCancel ? (
-            <button class="button quiet" type="button" disabled={busy} onClick={onCancel}>
-              取消
-            </button>
-          ) : null}
-          <button class="button primary" type="submit" disabled={busy}>
-            {busy ? "正在保存…" : collection ? "保存资料" : "创建合集"}
+          <button
+            class="close"
+            type="button"
+            aria-label="关闭"
+            onClick={onClose}
+          >
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12M6 18 18 6" />
+            </svg>
           </button>
         </div>
-      </fieldset>
-    </form>
-  );
-}
 
-// ------------------------------------------------------------------ 投稿工作舱 (Submission)
-function Submission({
-  collection,
-  sites,
-  onSubmit,
-}: {
-  collection: Collection;
-  sites: Site[];
-  onSubmit: (draft: EntryDraft) => Promise<void>;
-}) {
-  const [draft, setDraft] = useState<EntryDraft>({ slug: "", note: "" });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const eligible = sites.filter(
-    (site) =>
-      site.current_version != null &&
-      site.listing?.public &&
-      !site.listing.hidden &&
-      !site.expires_at
-  );
-  const existing = (collection.entries ?? []).some((entry) => entry.slug === draft.slug);
-
-  return (
-    <section class="collection-panel">
-      <div class="collection-panel-head">
-        <div>
-          <h2>把我的作品放进来</h2>
-          <p>
-            {collection.kind === "challenge"
-              ? "参与本次创作挑战，将你已发布的公开作品提交至本合集。"
-              : "将自己的公开作品收录到当前作品集中。"}
-          </p>
-        </div>
-      </div>
-
-      {eligible.length ? (
         <form
           class="collection-form"
           onSubmit={async (event) => {
@@ -932,7 +702,8 @@ function Submission({
             setBusy(true);
             setError("");
             try {
-              await onSubmit(draft);
+              await onSave(draft);
+              onClose();
             } catch (failure) {
               setError(message(failure));
             } finally {
@@ -941,69 +712,336 @@ function Submission({
           }}
         >
           <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-            <legend class="sr-only">投稿</legend>
+            {!collection ? (
+              <div class="collection-type-grid" role="radiogroup" aria-label="组织形态">
+                <div
+                  class={`collection-type-option ${draft.kind === "collection" ? "active" : ""}`}
+                  onClick={() => setDraft({ ...draft, kind: "collection" })}
+                  role="radio"
+                  aria-checked={draft.kind === "collection"}
+                  tabIndex={0}
+                >
+                  <div class="collection-type-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+                    </svg>
+                  </div>
+                  <div class="collection-type-info">
+                    <h3>自选作品集</h3>
+                    <p>汇聚自己的系列作品</p>
+                  </div>
+                </div>
+
+                <div
+                  class={`collection-type-option ${draft.kind === "challenge" ? "active" : ""}`}
+                  onClick={() => setDraft({ ...draft, kind: "challenge" })}
+                  role="radio"
+                  aria-checked={draft.kind === "challenge"}
+                  tabIndex={0}
+                >
+                  <div class="collection-type-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+                    </svg>
+                  </div>
+                  <div class="collection-type-info">
+                    <h3>创作挑战</h3>
+                    <p>出题邀请所有创作者投稿</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div class="field">
-              <label class="field-label">
-                <span>选择已发布的公开作品</span>
-                <span class="field-hint">要求已上广场且未设置访问门禁</span>
-              </label>
+              <label class="field-label">合集名称</label>
+              <input
+                required
+                maxLength={80}
+                value={draft.title}
+                onInput={(e) => setDraft({ ...draft, title: e.currentTarget.value })}
+                placeholder="例如：鹈鹕骑单车"
+                autoFocus
+              />
+            </div>
+
+            {!collection ? (
+              <div class="field">
+                <label class="field-label">自定义地址 (选填)</label>
+                <div class="collection-slug-preview">
+                  <span class="collection-slug-prefix">playtest.run/c/</span>
+                  <input
+                    pattern="[a-z0-9-]{3,63}"
+                    maxLength={63}
+                    value={draft.slug ?? ""}
+                    onInput={(e) =>
+                      setDraft({ ...draft, slug: e.currentTarget.value || undefined })
+                    }
+                    placeholder="留空自动生成"
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <div class="field">
+              <label class="field-label">一句话介绍</label>
+              <textarea
+                rows={2}
+                maxLength={280}
+                value={draft.summary}
+                onInput={(e) => setDraft({ ...draft, summary: e.currentTarget.value })}
+                placeholder="简短介绍这个合集收录了什么…"
+              />
+            </div>
+
+            {isChallenge ? (
+              <>
+                <div class="field">
+                  <label class="field-label">创作题目</label>
+                  <textarea
+                    rows={3}
+                    maxLength={6000}
+                    required={draft.public}
+                    disabled={locked}
+                    value={draft.prompt}
+                    onInput={(e) => setDraft({ ...draft, prompt: e.currentTarget.value })}
+                    placeholder="清晰描述参与者要做什么…"
+                  />
+                </div>
+
+                <div class="field">
+                  <label class="field-label">投稿规则 (选填)</label>
+                  <textarea
+                    rows={2}
+                    maxLength={3000}
+                    disabled={locked}
+                    value={draft.rules}
+                    onInput={(e) => setDraft({ ...draft, rules: e.currentTarget.value })}
+                    placeholder="约定格式、限制或注意事项…"
+                  />
+                </div>
+
+                <div class="field">
+                  <label class="field-label">截止时间 (选填)</label>
+                  <input
+                    type="datetime-local"
+                    value={deadline}
+                    disabled={locked}
+                    onInput={(e) =>
+                      setDraft({
+                        ...draft,
+                        closes_at: e.currentTarget.value
+                          ? new Date(e.currentTarget.value).toISOString()
+                          : undefined,
+                      })
+                    }
+                  />
+                </div>
+              </>
+            ) : null}
+
+            <div
+              class={`collection-toggle-card ${draft.public ? "active" : ""}`}
+              onClick={() => setDraft({ ...draft, public: !draft.public })}
+              role="switch"
+              aria-checked={draft.public}
+              tabIndex={0}
+            >
+              <div class="collection-toggle-info">
+                <h4>公开到合集大厅与搜索</h4>
+                <p>
+                  {draft.public
+                    ? "已公开：所有人均可在大厅与搜索中浏览"
+                    : "草稿中：仅你自己可见与管理"}
+                </p>
+              </div>
+              <div class="collection-switch-pill" aria-hidden="true" />
+            </div>
+
+            {collection?.blocked_slugs?.length && onUnblock ? (
+              <div class="collection-dialog-blocked">
+                <label class="field-label">已移除的投稿 ({collection.blocked_slugs.length})</label>
+                <div class="collection-dialog-blocked-list">
+                  {collection.blocked_slugs.map((siteSlug) => (
+                    <div class="collection-dialog-blocked-item" key={siteSlug}>
+                      <span class="mono">{siteSlug}</span>
+                      <button
+                        class="button small quiet"
+                        type="button"
+                        onClick={() => void onUnblock(siteSlug)}
+                      >
+                        允许重新投稿
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {error ? <p role="alert" class="collection-error">{error}</p> : null}
+
+            <div class="collection-dialog-foot">
+              {collection && onDelete ? (
+                <button
+                  class="button danger small"
+                  type="button"
+                  onClick={() => {
+                    if (confirm("确定删除这个合集？里面的所有作品与分享链接不受影响。")) {
+                      void onDelete();
+                    }
+                  }}
+                >
+                  删除合集
+                </button>
+              ) : <div />}
+
+              <div class="collection-dialog-actions">
+                <button class="button quiet" type="button" onClick={onClose}>
+                  取消
+                </button>
+                <button class="button primary" type="submit" disabled={busy}>
+                  {busy ? "保存中…" : collection ? "保存设置" : "创建合集"}
+                </button>
+              </div>
+            </div>
+          </fieldset>
+        </form>
+      </div>
+    </dialog>
+  );
+}
+
+// ------------------------------------------------------------------ 作品收录与投稿弹窗 (WorkSubmitDialog)
+function WorkSubmitDialog({
+  collection,
+  sites,
+  onSubmit,
+  onClose,
+}: {
+  collection: Collection;
+  sites: Site[];
+  onSubmit: (draft: EntryDraft) => Promise<void>;
+  onClose: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [draft, setDraft] = useState<EntryDraft>({ slug: "", note: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const existingSlugs = new Set((collection.entries ?? []).map((e) => e.slug));
+  const eligible = sites.filter(
+    (site) =>
+      site.current_version != null &&
+      site.listing?.public &&
+      !site.listing.hidden &&
+      !site.expires_at &&
+      !existingSlugs.has(site.slug)
+  );
+
+  useEffect(() => {
+    if (eligible.length > 0 && !draft.slug) {
+      setDraft((d) => ({ ...d, slug: eligible[0].slug }));
+    }
+    dialog.current?.showModal();
+    return () => {
+      if (dialog.current?.open) dialog.current.close();
+    };
+  }, []);
+
+  return (
+    <dialog
+      ref={dialog}
+      class="overlay"
+      aria-labelledby="work-submit-title"
+      onClose={onClose}
+      onClick={(e) => {
+        if (e.target === dialog.current) onClose();
+      }}
+    >
+      <div class="sheet collection-submit-sheet">
+        <div class="dialog-head">
+          <div class="dialog-title-wrap">
+            <BrandMark />
+            <h2 id="work-submit-title">
+              {collection.kind === "challenge" ? "投稿作品到挑战" : "添加作品到合集"}
+            </h2>
+          </div>
+          <button class="close" type="button" aria-label="关闭" onClick={onClose}>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12M6 18 18 6" />
+            </svg>
+          </button>
+        </div>
+
+        {eligible.length ? (
+          <form
+            class="collection-form"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (busy || !draft.slug) return;
+              setBusy(true);
+              setError("");
+              try {
+                await onSubmit(draft);
+                onClose();
+              } catch (failure) {
+                setError(message(failure));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <div class="field">
+              <label class="field-label">选择你的公开作品</label>
               <select
                 required
                 value={draft.slug}
-                onChange={(event) => {
-                  const selectedSlug = event.currentTarget.value;
-                  const entry = (collection.entries ?? []).find((item) => item.slug === selectedSlug);
-                  setDraft({ slug: selectedSlug, note: entry?.note ?? "" });
-                }}
+                onChange={(e) => setDraft({ ...draft, slug: e.currentTarget.value })}
               >
-                <option value="">选择一件作品…</option>
                 {eligible.map((site) => (
                   <option key={site.slug} value={site.slug}>
-                    {site.title} · v{site.current_version} ({site.slug})
+                    {site.title || site.slug} (v{site.current_version}) · /{site.slug}
                   </option>
                 ))}
               </select>
             </div>
 
             <div class="field">
-              <label class="field-label">
-                <span>作者附言 · 选填</span>
-                <span class="field-hint">关于本次创作的说明或心得，会公开展示</span>
-              </label>
-              <textarea
-                rows={2}
-                maxLength={6000}
-                value={draft.note ?? ""}
-                placeholder="写两句制作时的想法或提示…"
-                onInput={(event) => setDraft({ ...draft, note: event.currentTarget.value })}
+              <label class="field-label">一句话附言 (选填)</label>
+              <input
+                maxLength={140}
+                value={draft.note}
+                onInput={(e) => setDraft({ ...draft, note: e.currentTarget.value })}
+                placeholder="例如：支持键盘和手柄操控"
               />
             </div>
 
-            <p class="muted">
-              记录本次投稿版本；以后更新作品，玩家会打开当前最新版，合集内标明版本变化。
-            </p>
+            {error ? <p role="alert" class="collection-error">{error}</p> : null}
 
-            {error ? (
-              <p role="alert" class="collection-error">
-                {error}
-              </p>
-            ) : null}
-
-            <div class="collection-form-actions">
+            <div class="collection-dialog-actions" style={{ marginTop: "16px", justifyContent: "flex-end" }}>
+              <button class="button quiet" type="button" onClick={onClose}>
+                取消
+              </button>
               <button class="button primary" type="submit" disabled={busy}>
-                {busy ? "正在提交…" : existing ? "更新这件投稿" : "加入合集"}
+                {busy ? "添加中…" : "确认添加"}
               </button>
             </div>
-          </fieldset>
-        </form>
-      ) : (
-        <div class="collection-callout">
-          先发布并公开一件长期作品，再回来选择。已有作品不需要重复上传。
-          <a href={href({ name: "sites" })}>回到我的作品 →</a>
-        </div>
-      )}
-    </section>
+          </form>
+        ) : (
+          <div class="collection-empty-submit">
+            <div class="empty-emoji" aria-hidden="true">📦</div>
+            <h3>暂无可收录的公开作品</h3>
+            <p>
+              合集仅可收录已在平台公开发布的作品。已有的私密或草稿作品无需重新上传，只需在控制台中设为公开即可。
+            </p>
+            <div class="collection-dialog-actions" style={{ justifyContent: "center", marginTop: "20px" }}>
+              <a class="button primary" href="#/" onClick={onClose}>
+                前往我的作品 ↗
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
+    </dialog>
   );
 }
-
