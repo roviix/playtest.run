@@ -77,6 +77,10 @@ pub enum Root<'a> {
     Llms,
     /// `/p/{slug}`：主域作品邀请函（DESIGN §3.1、§3.3）。
     Project(&'a str),
+    /// `/favicon.svg`：高清矢量品牌图标。
+    FaviconSvg,
+    /// `/favicon.ico`：点阵图标兜底。
+    FaviconIco,
 }
 
 /// 根域的表：路径与允许的方法。带令牌与 slug 的按前缀匹配，其余精确匹配。
@@ -92,6 +96,8 @@ pub const ROOT: &[(&str, Allow)] = &[
     (root_paths::ME_UNSUBSCRIBE, Allow::Read),
     (SW_PATH, Allow::Read),
     (LLMS_TXT, Allow::Read),
+    (root_paths::FAVICON_SVG, Allow::Read),
+    (root_paths::FAVICON_ICO, Allow::Read),
 ];
 
 /// 根域上这条路径是哪一间房。`None` 就是 404。
@@ -104,6 +110,8 @@ pub fn root(path: &str) -> Option<(Root<'_>, Allow)> {
         p if p == root_paths::ME_ACTION => Root::MeAction,
         p if p == SW_PATH => Root::ServiceWorker,
         p if p == LLMS_TXT => Root::Llms,
+        p if p == root_paths::FAVICON_SVG => Root::FaviconSvg,
+        p if p == root_paths::FAVICON_ICO => Root::FaviconIco,
         p => {
             if let Some(slug) = p.strip_prefix(playtest_common::collection::PREFIX) {
                 playtest_common::slug::validate(slug).ok()?;
@@ -131,7 +139,9 @@ pub fn root(path: &str) -> Option<(Root<'_>, Allow)> {
         | Root::Confirm(_)
         | Root::Unsubscribe(_)
         | Root::ServiceWorker
-        | Root::Llms => Allow::Read,
+        | Root::Llms
+        | Root::FaviconSvg
+        | Root::FaviconIco => Allow::Read,
         Root::Project(_) => Allow::ReadOrPost,
         Root::Follow | Root::MeAction => Allow::Post,
     };
@@ -243,7 +253,7 @@ mod tests {
 
     #[test]
     fn the_root_host_has_exactly_nine_doors() {
-        assert_eq!(ROOT.len(), 11, "根域多一条路径要先改 DESIGN §3.9");
+        assert_eq!(ROOT.len(), 13, "根域多一条路径要先改 DESIGN §3.9");
         for (path, allow) in ROOT {
             let probe = if path.ends_with('/') && *path != "/" {
                 format!("{path}tok")

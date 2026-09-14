@@ -1050,3 +1050,51 @@ async fn reserved_prefix_shadows_site_files() {
     assert_eq!(reply.status, StatusCode::METHOD_NOT_ALLOWED);
     assert_eq!(reply.header("allow"), Some("POST"));
 }
+
+#[tokio::test]
+async fn root_serves_favicon_svg_and_ico() {
+    let site = Site::plain().await;
+
+    // GET /favicon.svg
+    let reply = site
+        .send(nav_on("localhost:8443", "/favicon.svg").body(Body::empty()).unwrap())
+        .await;
+    assert_eq!(reply.status, StatusCode::OK);
+    assert_eq!(reply.header("content-type"), Some("image/svg+xml"));
+    assert!(reply.header("cache-control").unwrap_or_default().contains("public"));
+    let svg_text = reply.text();
+    assert!(svg_text.contains("<svg"));
+    assert!(svg_text.contains("#75cdb5"));
+
+    // HEAD /favicon.svg
+    let head = site
+        .send(
+            Request::builder()
+                .method("HEAD")
+                .header("host", "localhost:8443")
+                .uri("/favicon.svg")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(head.status, StatusCode::OK);
+    assert_eq!(head.header("content-type"), Some("image/svg+xml"));
+    assert!(head.body.is_empty());
+
+    // GET /favicon.ico
+    let ico = site
+        .send(nav_on("localhost:8443", "/favicon.ico").body(Body::empty()).unwrap())
+        .await;
+    assert_eq!(ico.status, StatusCode::OK);
+    assert_eq!(ico.header("content-type"), Some("image/x-icon"));
+    assert!(!ico.body.is_empty());
+
+    // 页面 head 均带图标 link 标签
+    let plaza = site
+        .send(nav_on("localhost:8443", "/").body(Body::empty()).unwrap())
+        .await;
+    let html = plaza.text();
+    assert!(html.contains(r#"<link rel="icon" type="image/svg+xml" href="/favicon.svg">"#));
+    assert!(html.contains(r#"<link rel="alternate icon" href="/favicon.ico">"#));
+}
+

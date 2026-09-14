@@ -207,6 +207,8 @@ async fn root(
         Root::Unsubscribe(token) => unsubscribe(app, authority, token).await,
         Root::ServiceWorker => service_worker(parts.method == Method::HEAD),
         Root::Llms => llms_pointer(),
+        Root::FaviconSvg => favicon_svg(parts.method == Method::HEAD),
+        Root::FaviconIco => favicon_ico(parts.method == Method::HEAD),
     };
     response
 }
@@ -873,6 +875,28 @@ fn service_worker(head_only: bool) -> Response {
         return (StatusCode::OK, headers).into_response();
     }
     (StatusCode::OK, headers, follow::SW_JS).into_response()
+}
+
+/// 根域上的矢量 Favicon。全站统一使用官方品牌准星图标。
+fn favicon_svg(head_only: bool) -> Response {
+    let mut headers = base_headers();
+    put(&mut headers, "content-type", "image/svg+xml");
+    put(&mut headers, "cache-control", "public, max-age=86400, immutable");
+    if head_only {
+        return (StatusCode::OK, headers).into_response();
+    }
+    (StatusCode::OK, headers, crate::html::FAVICON_SVG).into_response()
+}
+
+/// 根域上的点阵 Favicon 兜底。
+fn favicon_ico(head_only: bool) -> Response {
+    let mut headers = base_headers();
+    put(&mut headers, "content-type", "image/x-icon");
+    put(&mut headers, "cache-control", "public, max-age=86400, immutable");
+    if head_only {
+        return (StatusCode::OK, headers).into_response();
+    }
+    (StatusCode::OK, headers, crate::html::FAVICON_ICO).into_response()
 }
 
 /// 根域上一页 HTML 的标准答法。

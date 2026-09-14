@@ -58,6 +58,10 @@ pub mod root_paths {
     pub const ME_ACTION: &str = "/me/action";
     /// `GET /p/{slug}`：主域作品邀请函（DESIGN §3.1、§3.3）。
     pub const PROJECT_PREFIX: &str = "/p/";
+    /// `GET /favicon.svg`：根域与标签页的高清矢量品牌图标。
+    pub const FAVICON_SVG: &str = "/favicon.svg";
+    /// `GET /favicon.ico`：根域标签页图标的点阵兜底。
+    pub const FAVICON_ICO: &str = "/favicon.ico";
 
     pub fn project_path(slug: &str) -> String {
         format!("{PROJECT_PREFIX}{slug}")

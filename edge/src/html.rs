@@ -72,6 +72,10 @@ pub const MARK: &str = include_str!("../../ui/mark.svg");
 
 pub const WORDMARK: &str = include_str!("../../ui/wordmark.svg");
 
+pub const FAVICON_SVG: &str = include_str!("../../ui/favicon.svg");
+
+pub const FAVICON_ICO: &[u8] = include_bytes!("../../ui/favicon.ico");
+
 pub const CARD: &str = include_str!("../../ui/invitation.css");
 
 pub const PAGE: &str = concat!(
@@ -136,7 +140,10 @@ pub fn shell_hero(title: &str, head: &str, hero: &str, body: &str) -> String {
         "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n\
 <meta charset=\"utf-8\">\n\
 <meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n\
-<title>{title}</title>\n{head}<style>{BASE}{CARD}</style>\n\
+<title>{title}</title>\n\
+<link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\">\n\
+<link rel=\"alternate icon\" href=\"/favicon.ico\">\n\
+{head}<style>{BASE}{CARD}</style>\n\
 </head>\n<body>\n<main class=\"card\">\n{hero}<div class=\"body\">\n{body}</div>\n</main>\n</body>\n</html>\n",
         title = esc(title),
     )
@@ -148,7 +155,10 @@ pub fn page(title: &str, head: &str, body: &str) -> String {
         "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n\
 <meta charset=\"utf-8\">\n\
 <meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n\
-<title>{title}</title>\n{head}<style>{BASE}{PAGE}</style>\n\
+<title>{title}</title>\n\
+<link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\">\n\
+<link rel=\"alternate icon\" href=\"/favicon.ico\">\n\
+{head}<style>{BASE}{PAGE}</style>\n\
 </head>\n<body class=\"page\">\n{body}</body>\n</html>\n",
         title = esc(title),
     )
