@@ -7,47 +7,49 @@
 import type { SourceTally, VersionResults, WorkKind } from "./api";
 
 export function workKind(kind: WorkKind | undefined): string {
-  if (kind === "article") return "文章";
-  if (kind === "video") return "视频";
-  return "网页";
+  if (kind === "article") return "Article";
+  if (kind === "video") return "Video";
+  return "Web";
 }
 
 export function audience(kind: WorkKind | undefined): string {
-  if (kind === "article") return "读者";
-  if (kind === "video") return "观众";
-  return "试玩者";
+  if (kind === "article") return "Readers";
+  if (kind === "video") return "Viewers";
+  return "Playtesters";
 }
 
-/** 秒 → 人话。「45 秒」「3 分 20 秒」「1 小时 2 分」。 */
+/** Seconds → human words. "45s", "3m 20s", "1h 2m". */
 export function seconds(value: number): string {
-  if (value < 60) return `${value} 秒`;
+  if (value < 60) return `${value}s`;
   if (value < 3600) {
     const rest = value % 60;
-    return rest === 0 ? `${Math.floor(value / 60)} 分` : `${Math.floor(value / 60)} 分 ${rest} 秒`;
+    return rest === 0 ? `${Math.floor(value / 60)}m` : `${Math.floor(value / 60)}m ${rest}s`;
   }
   const hours = Math.floor(value / 3600);
   const minutes = Math.floor((value % 3600) / 60);
-  return minutes === 0 ? `${hours} 小时` : `${hours} 小时 ${minutes} 分`;
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
 }
 
-/** RFC 3339 → 「9 月 5 日 14:20」，按看的人自己的时区。 */
+/** RFC 3339 → "Sep 5 14:20", in viewer's local timezone. */
 export function moment(iso: string | undefined): string {
   if (!iso) return "";
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return iso;
   const clock = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
-  return `${at.getMonth() + 1} 月 ${at.getDate()} 日 ${clock}`;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[at.getMonth()]} ${at.getDate()} ${clock}`;
 }
 
-/** RFC 3339 → 「9 月 12 日」。推广的起止那种只关心哪一天的地方用。 */
+/** RFC 3339 → "Sep 12". */
 export function day(iso: string | undefined): string {
   if (!iso) return "";
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return iso;
-  return `${at.getMonth() + 1} 月 ${at.getDate()} 日`;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[at.getMonth()]} ${at.getDate()}`;
 }
 
-/** RFC 3339 → 「14:20:05」。点名册和事件流里用，同一天的行不用重复日期。 */
+/** RFC 3339 → "14:20:05". */
 export function clock(iso: string | undefined): string {
   if (!iso) return "";
   const at = new Date(iso);
@@ -59,31 +61,31 @@ function pad(value: number): string {
   return value.toString().padStart(2, "0");
 }
 
-/** 多久之前。「刚刚」「12 分钟前」「3 小时前」，隔了一天以上就回到具体日期。 */
+/** Relative time. "just now", "12m ago", "3h ago", falls back to date after a day. */
 export function ago(iso: string | undefined, now = Date.now()): string {
   if (!iso) return "";
   const at = new Date(iso).getTime();
   if (Number.isNaN(at)) return iso;
   const delta = Math.max(0, Math.floor((now - at) / 1000));
-  if (delta < 60) return "刚刚";
-  if (delta < 3600) return `${Math.floor(delta / 60)} 分钟前`;
-  if (delta < 86400) return `${Math.floor(delta / 3600)} 小时前`;
+  if (delta < 60) return "just now";
+  if (delta < 3600) return `${Math.floor(delta / 60)}m ago`;
+  if (delta < 86400) return `${Math.floor(delta / 3600)}h ago`;
   return moment(iso);
 }
 
-/** 到期还剩多久。「还剩 5 小时」「还剩 40 分钟」；已过期返回 null。 */
+/** Time left until expiry. "5h left", "40m left"; null if expired. */
 export function left(iso: string | undefined, now = Date.now()): string | null {
   if (!iso) return null;
   const at = new Date(iso).getTime();
   if (Number.isNaN(at)) return null;
   const delta = Math.floor((at - now) / 1000);
   if (delta <= 0) return null;
-  if (delta < 3600) return `还剩 ${Math.max(1, Math.floor(delta / 60))} 分钟`;
-  if (delta < 86400 * 2) return `还剩 ${Math.floor(delta / 3600)} 小时`;
-  return `还剩 ${Math.floor(delta / 86400)} 天`;
+  if (delta < 3600) return `${Math.max(1, Math.floor(delta / 60))}m left`;
+  if (delta < 86400 * 2) return `${Math.floor(delta / 3600)}h left`;
+  return `${Math.floor(delta / 86400)}d left`;
 }
 
-/** 字节数 → 「1.2 MB」。版本清单里用，给开发者一个「这版有多大」的感觉。 */
+/** Byte size → "1.2 MB". */
 export function bytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
@@ -91,128 +93,164 @@ export function bytes(value: number): string {
   return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-/**
- * 一版的那段话。一句一行，数为 0 的句子不说——
- * 「0 条反馈」「0 个错误」占着地方却什么也没告诉人（DESIGN §3.5）。
- * 措辞按 §3.13「文案」：只报事实，「8 人打开」，不带括号和转折。
- */
 export function sentences(version: VersionResults, kind: WorkKind | undefined = "web"): string[] {
   if (version.opened === 0) {
-    return ["还没有人打开。"];
+    return ["No visits yet."];
   }
 
   const lines: string[] = [];
   const dropped = version.dropped_before_first_frame;
   if (kind === "article") {
-    lines.push(`${version.opened} 人打开文章页面。页面打开不等于读完。`);
+    lines.push(`${version.opened} visited the article. Visiting does not imply full read.`);
   } else if (kind === "video") {
-    lines.push(`${version.opened} 人打开视频页面。目前不把页面打开算作播放。`);
+    lines.push(`${version.opened} visited the video page. Opening page is not counted as full play.`);
   } else if (dropped === null || dropped === undefined) {
-    // 首帧要 SDK 才报得出来。没接就说没接，不拿「0 人在加载时离开」冒充。
-    lines.push(`${version.opened} 人打开，${version.entered} 人点了开始。`);
-    lines.push("没接 playtest.js，看不到加载时离开的人。");
+    lines.push(`${version.opened} opened, ${version.entered} clicked start.`);
+    lines.push("playtest.js not integrated; unable to track drop-offs during load.");
   } else {
     const reached = Math.max(version.entered - dropped, 0);
     lines.push(
       dropped > 0
-        ? `${version.opened} 人打开，${reached} 人进到游戏，${dropped} 人在加载时离开。`
-        : `${version.opened} 人打开，${reached} 人进到游戏。`,
+        ? `${version.opened} opened, ${reached} entered, ${dropped} dropped off during load.`
+        : `${version.opened} opened, ${reached} entered.`,
     );
   }
 
   const stayed: string[] = [];
-  if ((version.named ?? 0) > 0) stayed.push(`${version.named} 人留名`);
-  if (kind === "web" && (version.played_5min_plus ?? 0) > 0) stayed.push(`${version.played_5min_plus} 人玩过 5 分钟`);
-  if ((version.returned ?? 0) > 0) stayed.push(`${version.returned} 人回来过`);
+  if ((version.named ?? 0) > 0) stayed.push(`${version.named} left name`);
+  if (kind === "web" && (version.played_5min_plus ?? 0) > 0) stayed.push(`${version.played_5min_plus} played 5m+`);
+  if ((version.returned ?? 0) > 0) stayed.push(`${version.returned} returned`);
   if (version.dwell_median_s !== null && version.dwell_median_s !== undefined) {
-    stayed.push(`停留中位 ${seconds(version.dwell_median_s)}`);
+    stayed.push(`median dwell ${seconds(version.dwell_median_s)}`);
   }
-  if (stayed.length > 0) lines.push(`${stayed.join("，")}。`);
+  if (stayed.length > 0) lines.push(`${stayed.join(", ")}.`);
 
-  // 三个环各带来了几个人，这一句是唯一的答案（DESIGN §3.5）。单独一行。
   const from = sources(version.sources);
   if (from) lines.push(from);
 
   const errors = version.errors;
   if (errors.total > 0) {
     const counted =
-      errors.distinct === 1 ? `1 个错误，出现 ${errors.total} 次` : `${errors.distinct} 个错误，共 ${errors.total} 次`;
+      errors.distinct === 1 ? `1 error occurred ${errors.total} times` : `${errors.distinct} errors, ${errors.total} total`;
     const worst = errors.top?.[0]?.fingerprint;
-    lines.push(worst ? `${counted}：${worst}` : `${counted}。`);
+    lines.push(worst ? `${counted}: ${worst}` : `${counted}.`);
   }
 
-  if (version.load_failures > 0) lines.push(`${version.load_failures} 次加载失败。`);
-  if (version.feedback_count > 0) lines.push(`${version.feedback_count} 条反馈。`);
+  if (version.load_failures > 0) lines.push(`${version.load_failures} load failure${version.load_failures > 1 ? "s" : ""}.`);
+  if (version.feedback_count > 0) lines.push(`${version.feedback_count} feedback item${version.feedback_count > 1 ? "s" : ""}.`);
 
   return lines;
 }
 
-/** 「来自 邀请卡 4 · 广场 2 · 微信 2」。一个来源都没有就返回 null，整句不说。 */
 function sources(tally: SourceTally[] | undefined): string | null {
   const counted = (tally ?? []).filter((one) => one.count > 0);
   if (counted.length === 0) return null;
-  return `来自 ${counted.map((one) => `${sourceLabel(one.kind)} ${one.count}`).join(" · ")}`;
+  return `From ${counted.map((one) => `${sourceLabel(one.kind)} ${one.count}`).join(" · ")}`;
 }
 
-/** 和上一版比的那一行：「比 v6：打开 +3，加载失败 2 → 0，反馈 1 → 2」。没有一处变化就不说话。 */
-export function versus(version: VersionResults, previous: VersionResults): string | null {
-  const bits: string[] = [];
+export type VersusDelta = {
+  label: string;
+  kind: "better" | "worse" | "neutral";
+};
+
+export function versusDeltas(version: VersionResults, previous: VersionResults): {
+  previousVersion: number;
+  deltas: VersusDelta[];
+} | null {
+  const deltas: VersusDelta[] = [];
 
   const opened = version.opened - previous.opened;
-  if (opened !== 0) bits.push(`打开 ${opened > 0 ? "+" : "−"}${Math.abs(opened)}`);
-  if (version.load_failures !== previous.load_failures) {
-    bits.push(`加载失败 ${previous.load_failures} → ${version.load_failures}`);
-  }
-  if (version.errors.total !== previous.errors.total) {
-    bits.push(`错误 ${previous.errors.total} → ${version.errors.total}`);
-  }
-  if (version.feedback_count !== previous.feedback_count) {
-    bits.push(`反馈 ${previous.feedback_count} → ${version.feedback_count}`);
+  if (opened !== 0) {
+    deltas.push({
+      label: `opened ${opened > 0 ? "+" : "−"}${Math.abs(opened)}`,
+      kind: opened > 0 ? "better" : "neutral",
+    });
   }
 
-  if (bits.length === 0) return null;
-  return `比 v${previous.version}：${bits.join("，")}`;
+  const entered = version.entered - previous.entered;
+  if (entered !== 0) {
+    deltas.push({
+      label: `entered ${entered > 0 ? "+" : "−"}${Math.abs(entered)}`,
+      kind: entered > 0 ? "better" : "neutral",
+    });
+  }
+
+  if (version.played_5min_plus !== previous.played_5min_plus) {
+    const playDiff = version.played_5min_plus - previous.played_5min_plus;
+    deltas.push({
+      label: `5m+ play ${playDiff > 0 ? "+" : "−"}${Math.abs(playDiff)}`,
+      kind: playDiff > 0 ? "better" : "neutral",
+    });
+  }
+
+  if (version.load_failures !== previous.load_failures) {
+    const worse = version.load_failures > previous.load_failures;
+    deltas.push({
+      label: `load failures ${previous.load_failures} → ${version.load_failures}`,
+      kind: worse ? "worse" : "better",
+    });
+  }
+
+  if (version.errors.total !== previous.errors.total) {
+    const worse = version.errors.total > previous.errors.total;
+    deltas.push({
+      label: `errors ${previous.errors.total} → ${version.errors.total}`,
+      kind: worse ? "worse" : "better",
+    });
+  }
+
+  if (version.feedback_count !== previous.feedback_count) {
+    const fbDiff = version.feedback_count - previous.feedback_count;
+    deltas.push({
+      label: `feedback ${previous.feedback_count} → ${version.feedback_count}`,
+      kind: fbDiff > 0 ? "better" : "neutral",
+    });
+  }
+
+  if (deltas.length === 0) return null;
+  return { previousVersion: previous.version, deltas };
 }
 
-/** 设备 / 浏览器 / 系统的中文说法。库里存的是英文小写。 */
+export function versus(version: VersionResults, previous: VersionResults): string | null {
+  const res = versusDeltas(version, previous);
+  if (!res) return null;
+  return `vs v${res.previousVersion}: ${res.deltas.map((d) => d.label).join(", ")}`;
+}
+
 const NAMES: Record<string, string> = {
-  phone: "手机",
-  tablet: "平板",
-  desktop: "电脑",
+  phone: "Mobile",
+  tablet: "Tablet",
+  desktop: "Desktop",
   chrome: "Chrome",
   safari: "Safari",
   firefox: "Firefox",
-  wechat: "微信",
+  wechat: "WeChat",
   ios: "iOS",
   android: "Android",
   windows: "Windows",
   macos: "macOS",
   linux: "Linux",
   discord: "Discord",
-  plaza: "广场",
-  direct: "直接打开",
-  other: "其它",
+  plaza: "Plaza",
+  direct: "Direct",
+  other: "Other",
 };
 
 export function label(value: string | undefined): string {
-  if (!value) return "不知道";
+  if (!value) return "Unknown";
   return NAMES[value] ?? value;
 }
 
-/**
- * 「来自哪里」的中文说法。抄的是 common/src/ingest.rs 的 `source::label`，
- * 连不认识的值说「其它」这一条也一样——那边加了新来源，这边照着补一行。
- */
 const SOURCES: Record<string, string> = {
-  card: "邀请卡",
-  notice: "通知",
-  collection: "合集",
-  plaza: "广场",
-  wechat: "微信",
+  card: "Card",
+  notice: "Notice",
+  collection: "Collection",
+  plaza: "Plaza",
+  wechat: "WeChat",
   discord: "Discord",
-  direct: "直接打开",
+  direct: "Direct",
 };
 
 export function sourceLabel(kind: string): string {
-  return SOURCES[kind] ?? "其它";
+  return SOURCES[kind] ?? "Other";
 }

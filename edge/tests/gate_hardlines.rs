@@ -34,9 +34,10 @@ const UNITYWEB: &[u8] = b"<pretend brotli inside a .unityweb>";
 /// 门禁页上一定有、作品自己的文件上一定没有的那几个记号。
 fn is_gate_page(body: &str) -> bool {
     body.contains("/_playtest/start")
-        || body.contains("开始试玩")
-        || body.contains("开始体验")
-        || body.contains(">开始</button>")
+        || body.contains("class=\"start-btn\"")
+        || body.contains(">Start</button>")
+        || body.contains(">Play</button>")
+        || body.contains(">Test</button>")
 }
 
 fn root_nav(path: &str) -> axum::http::request::Builder {

@@ -4,19 +4,19 @@ import { BrandMark } from "./auth";
 
 const modes = [
   {
-    label: "导出目录",
+    label: "Export Folder",
     command: "playtest ./dist",
-    hint: "先构建项目，将 ./dist 换成你的游戏打包导出目录。",
+    hint: "Build your project first, then replace ./dist with your build output folder.",
   },
   {
-    label: "本地端口",
+    label: "Local Port",
     command: "playtest 3000",
-    hint: "先启动本地服务，并在分享期间保持终端运行。",
+    hint: "Start your local dev server, and keep your terminal open during sharing.",
   },
   {
-    label: "带后端服务",
+    label: "Static + Backend",
     command: "playtest ./dist --backend 8000",
-    hint: "静态目录照常发布，未匹配的请求转到本地后端。",
+    hint: "Serves static files as usual; unmatched requests forward to your local backend.",
   },
 ];
 
@@ -40,47 +40,47 @@ export function Publish() {
       await navigator.clipboard.writeText(selected.command);
       if (generation !== copyGeneration.current) return;
       setCopied(true);
-      setMessage("已复制命令。");
+      setMessage("Command copied.");
     } catch {
       if (generation !== copyGeneration.current) return;
       setCopied(false);
-      setMessage("复制失败，请选中命令手动复制。");
+      setMessage("Failed to copy automatically, please select and copy manually.");
     }
   }
 
   return <>
     <button class="publish" type="button" onClick={() => { resetCopy(); dialog.current?.showModal(); }}>
-      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg> 发布作品
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg> Publish Work
     </button>
     <dialog class="overlay" ref={dialog} aria-labelledby="publish-title" onClose={resetCopy}>
-      <button class="overlay-back" type="button" aria-label="关闭发布说明" tabIndex={-1} onClick={() => dialog.current?.close()} />
+      <button class="overlay-back" type="button" aria-label="Close publish dialog" tabIndex={-1} onClick={() => dialog.current?.close()} />
       <div class="sheet publish-sheet">
         <div class="dialog-head">
           <div class="dialog-title-wrap">
             <BrandMark />
-            <h2 id="publish-title">发布作品</h2>
+            <h2 id="publish-title">Publish Work</h2>
           </div>
-          <button class="close" type="button" autoFocus aria-label="关闭发布说明" onClick={() => dialog.current?.close()}>
+          <button class="close" type="button" autoFocus aria-label="Close publish dialog" onClick={() => dialog.current?.close()}>
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg>
           </button>
         </div>
         <div class="pub">
-          <div class="publish-tabs" role="group" aria-label="发布方式">
+          <div class="publish-tabs" role="group" aria-label="Publish mode">
             {modes.map((item, index) => <button type="button" key={item.label} aria-pressed={mode === index} onClick={() => { setMode(index); resetCopy(); }}>{item.label}</button>)}
           </div>
           <div class="cli">
             <div class="cli-bar">
               <div class="cli-info">
                 <span class="cli-dots" aria-hidden="true"></span>
-                <span class="cli-meta">bash · 命令行发布</span>
+                <span class="cli-meta">bash · CLI Publish</span>
               </div>
-              <button class="copy-command" type="button" aria-label={copied ? "已复制命令" : "复制命令"} title={copied ? "已复制" : "复制命令"} data-copied={copied || undefined} onClick={copy}>
+              <button class="copy-command" type="button" aria-label={copied ? "Command copied" : "Copy command"} title={copied ? "Copied" : "Copy command"} data-copied={copied || undefined} onClick={copy}>
                 <svg class="icon copy-glyph" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></svg>
                 <svg class="icon copied-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
-                <span class="copy-text">{copied ? "已复制" : "复制"}</span>
+                <span class="copy-text">{copied ? "Copied" : "Copy"}</span>
               </button>
             </div>
-            <div class="codebox selected" tabIndex={0} role="region" aria-label="发布命令"><b aria-hidden="true">$</b><code>{selected.command}</code></div>
+            <div class="codebox selected" tabIndex={0} role="region" aria-label="Publish command"><b aria-hidden="true">$</b><code>{selected.command}</code></div>
             <p class="leg selected">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4m0-4h.01" /></svg>
               <span>{selected.hint}</span>
@@ -91,11 +91,11 @@ export function Publish() {
         <div class="pub-foot">
           <a href="https://github.com/roviix/playtest.run/releases" target="_blank" rel="noreferrer">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0-4-4m4 4 4-4M4 20h16" /></svg>
-            下载 CLI
+            Download CLI
           </a>
           <a href={href({ name: "docs", section: "publish" })} onClick={() => dialog.current?.close()}>
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15Z" /></svg>
-            使用方法
+            Documentation
           </a>
         </div>
       </div>

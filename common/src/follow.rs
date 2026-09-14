@@ -62,6 +62,10 @@ pub mod root_paths {
     pub const FAVICON_SVG: &str = "/favicon.svg";
     /// `GET /favicon.ico`：根域标签页图标的点阵兜底。
     pub const FAVICON_ICO: &str = "/favicon.ico";
+    /// `GET /robots.txt`：搜索引擎与 AI 爬虫抓取规则。
+    pub const ROBOTS_TXT: &str = "/robots.txt";
+    /// `GET /sitemap.xml`：公开作品与合集的站点地图。
+    pub const SITEMAP_XML: &str = "/sitemap.xml";
 
     pub fn project_path(slug: &str) -> String {
         format!("{PROJECT_PREFIX}{slug}")

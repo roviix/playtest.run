@@ -81,6 +81,10 @@ pub enum Root<'a> {
     FaviconSvg,
     /// `/favicon.ico`：点阵图标兜底。
     FaviconIco,
+    /// `/robots.txt`：搜索引擎与 AI 爬虫抓取规则。
+    Robots,
+    /// `/sitemap.xml`：公开作品与合集的站点地图。
+    Sitemap,
 }
 
 /// 根域的表：路径与允许的方法。带令牌与 slug 的按前缀匹配，其余精确匹配。
@@ -98,6 +102,8 @@ pub const ROOT: &[(&str, Allow)] = &[
     (LLMS_TXT, Allow::Read),
     (root_paths::FAVICON_SVG, Allow::Read),
     (root_paths::FAVICON_ICO, Allow::Read),
+    (root_paths::ROBOTS_TXT, Allow::Read),
+    (root_paths::SITEMAP_XML, Allow::Read),
 ];
 
 /// 根域上这条路径是哪一间房。`None` 就是 404。
@@ -112,6 +118,8 @@ pub fn root(path: &str) -> Option<(Root<'_>, Allow)> {
         p if p == LLMS_TXT => Root::Llms,
         p if p == root_paths::FAVICON_SVG => Root::FaviconSvg,
         p if p == root_paths::FAVICON_ICO => Root::FaviconIco,
+        p if p == root_paths::ROBOTS_TXT => Root::Robots,
+        p if p == root_paths::SITEMAP_XML => Root::Sitemap,
         p => {
             if let Some(slug) = p.strip_prefix(playtest_common::collection::PREFIX) {
                 playtest_common::slug::validate(slug).ok()?;
@@ -141,7 +149,9 @@ pub fn root(path: &str) -> Option<(Root<'_>, Allow)> {
         | Root::ServiceWorker
         | Root::Llms
         | Root::FaviconSvg
-        | Root::FaviconIco => Allow::Read,
+        | Root::FaviconIco
+        | Root::Robots
+        | Root::Sitemap => Allow::Read,
         Root::Project(_) => Allow::ReadOrPost,
         Root::Follow | Root::MeAction => Allow::Post,
     };
@@ -253,7 +263,7 @@ mod tests {
 
     #[test]
     fn the_root_host_has_exactly_nine_doors() {
-        assert_eq!(ROOT.len(), 13, "根域多一条路径要先改 DESIGN §3.9");
+        assert_eq!(ROOT.len(), 15, "根域多一条路径要先改 DESIGN §3.9");
         for (path, allow) in ROOT {
             let probe = if path.ends_with('/') && *path != "/" {
                 format!("{path}tok")
@@ -266,6 +276,14 @@ mod tests {
         assert!(root("/about").is_none());
         assert!(root("/me/").is_none());
         assert!(root("/index.html").is_none());
+        assert_eq!(
+            root("/robots.txt"),
+            Some((Root::Robots, Allow::Read))
+        );
+        assert_eq!(
+            root("/sitemap.xml"),
+            Some((Root::Sitemap, Allow::Read))
+        );
         assert_eq!(
             root("/p/scarlet-tiger-35"),
             Some((Root::Project("scarlet-tiger-35"), Allow::ReadOrPost))

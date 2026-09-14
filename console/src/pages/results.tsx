@@ -8,7 +8,7 @@ import { useState } from "preact/hooks";
 import { api, type Site, type SiteResults, type VersionResults } from "../api";
 import type { Loaded } from "../load";
 import { href } from "../router";
-import { moment, sentences, versus } from "../words";
+import { moment, sentences, versusDeltas } from "../words";
 import { Empty, Failed, Loading } from "./status";
 
 export function ResultsTab({
@@ -27,7 +27,7 @@ export function ResultsTab({
 
   // 回滚只动「当前版本」指针，不删任何版本；确认一句是因为玩家那边会立刻变。
   async function rollbackTo(version: number) {
-    if (!confirm(`把 v${version} 设为当前？链接不变。`)) return;
+    if (!confirm(`Set v${version} as current? Link stays the same.`)) return;
     setBusy(version);
     setProblem(null);
     try {
@@ -47,12 +47,17 @@ export function ResultsTab({
 
   if (data.versions.length === 0) {
     return (
-      <Empty>
-        <p>还没有版本。</p>
-        <p class="muted">
-          在作品目录里运行 <code>playtest</code>。
-        </p>
-      </Empty>
+      <Empty
+        icon={
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10" />
+            <line x1="12" y1="20" x2="12" y2="4" />
+            <line x1="6" y1="20" x2="6" y2="14" />
+          </svg>
+        }
+        title="No build versions yet"
+        description="Run playtest ./dist in your project directory to publish and begin tracking playthrough metrics."
+      />
     );
   }
 
@@ -67,9 +72,9 @@ export function ResultsTab({
             <li key={version.version} class={`ver ${isCurrent ? "current" : ""}`}>
               <header class="ver-head">
                 <span class="ver-no mono">v{version.version}</span>
-                {isCurrent ? <span class="chip good">当前</span> : null}
+                {isCurrent ? <span class="chip good">Current</span> : null}
                 <span class="muted">{moment(version.created_at ?? version.first_at)}</span>
-                {version.note ? <span class="ver-note">「{version.note}」</span> : null}
+                {version.note ? <span class="ver-note">“{version.note}”</span> : null}
               </header>
 
               <Figures version={version} kind={site.kind} />
@@ -85,10 +90,10 @@ export function ResultsTab({
 
               <p class="row-actions">
                 <a href={href({ name: "site", slug, tab: "roster", version: version.version })}>
-                  点名册 →
+                  Roster →
                 </a>
                 {version.feedback_count > 0 ? (
-                  <a href={href({ name: "site", slug, tab: "feedback" })}>反馈 →</a>
+                  <a href={href({ name: "site", slug, tab: "feedback" })}>Feedback →</a>
                 ) : null}
                 {!isCurrent ? (
                   <button
@@ -97,7 +102,7 @@ export function ResultsTab({
                     disabled={busy !== null}
                     onClick={() => rollbackTo(version.version)}
                   >
-                    {busy === version.version ? "切换中…" : "设为当前"}
+                    {busy === version.version ? "Switching…" : "Set as Current"}
                   </button>
                 ) : null}
               </p>
@@ -109,31 +114,27 @@ export function ResultsTab({
   );
 }
 
-/**
- * 四个数：打开 / 进到游戏 / 5 分钟以上 / 反馈。
- * 没接 SDK 的版本报不出首帧，第二格退成「点了开始」——不拿「0 个人在加载时走了」冒充。
- */
 function Figures({ version, kind }: { version: VersionResults; kind: Site["kind"] }) {
   if (kind === "article" || kind === "video") {
     return (
       <div class="figures">
-        <Figure n={version.opened} label="打开页面" />
-        <Figure n={version.returned ?? 0} label="再次回来" />
-        <Figure n={version.feedback_count} label="反馈" />
+        <Figure n={version.opened} label="Page Views" />
+        <Figure n={version.returned ?? 0} label="Returned" />
+        <Figure n={version.feedback_count} label="Feedback" />
       </div>
     );
   }
   const dropped = version.dropped_before_first_frame;
   const entered =
     dropped === null || dropped === undefined
-      ? { n: version.entered, label: "点了开始" }
-      : { n: Math.max(version.entered - dropped, 0), label: "进到游戏" };
+      ? { n: version.entered, label: "Clicked Start" }
+      : { n: Math.max(version.entered - dropped, 0), label: "Entered Game" };
   return (
     <div class="figures">
-      <Figure n={version.opened} label="打开" />
+      <Figure n={version.opened} label="Opened" />
       <Figure n={entered.n} label={entered.label} />
-      <Figure n={version.played_5min_plus} label="5 分钟以上" />
-      <Figure n={version.feedback_count} label="反馈" />
+      <Figure n={version.played_5min_plus} label="5m+ Played" />
+      <Figure n={version.feedback_count} label="Feedback" />
     </div>
   );
 }
@@ -148,6 +149,18 @@ function Figure({ n, label }: { n: number; label: string }) {
 }
 
 function Versus({ version, previous }: { version: VersionResults; previous: VersionResults }) {
-  const text = versus(version, previous);
-  return text ? <p class="versus">{text}</p> : null;
+  const res = versusDeltas(version, previous);
+  if (!res) return null;
+  return (
+    <div class="versus" aria-label={`Compared with v${res.previousVersion}`}>
+      <span class="versus-lead">vs v{res.previousVersion}:</span>
+      <div class="versus-pills">
+        {res.deltas.map((delta, i) => (
+          <span key={i} class={`versus-pill ${delta.kind}`}>
+            {delta.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }

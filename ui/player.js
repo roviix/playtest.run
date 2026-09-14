@@ -1,46 +1,77 @@
 (() => {
   const dialog = document.querySelector('#publish-dialog');
-  if (!dialog || !dialog.showModal) return;
-  const copy = dialog.querySelector('[data-copy-command]');
-  const copyText = copy?.querySelector('.copy-text');
-  const status = dialog.querySelector('[role="status"]');
+  const status = dialog?.querySelector('[role="status"]');
   let copyGeneration = 0;
-  const resetCopy = () => {
+  const resetCopy = (copy) => {
     copyGeneration++;
     if (status) status.textContent = '';
     if (copy) {
       delete copy.dataset.copied;
       copy.setAttribute('aria-label', '复制命令');
       copy.title = '复制命令';
-      if (copyText) copyText.textContent = '复制';
+      const ct = copy.querySelector('.copy-text, .hero-copy-text');
+      if (ct) ct.textContent = '复制';
     }
   };
-  dialog.addEventListener('close', resetCopy);
-  if (copy) {
+  if (dialog) {
+    dialog.addEventListener('close', () => {
+      dialog.querySelectorAll('[data-copy-command], [data-hero-copy]').forEach(resetCopy);
+    });
+    dialog.querySelectorAll('input[type="radio"]').forEach(input => input.addEventListener('change', () => {
+      dialog.querySelectorAll('[data-copy-command], [data-hero-copy]').forEach(resetCopy);
+    }));
+  }
+  document.querySelectorAll('[data-copy-command], [data-hero-copy]').forEach(copy => {
     copy.hidden = false;
     copy.addEventListener('click', async () => {
       const generation = copyGeneration;
-      const panel = Array.from(dialog.querySelectorAll('.codebox')).find(item => getComputedStyle(item).display !== 'none');
-      try {
-        await navigator.clipboard.writeText(panel.querySelector('code').textContent);
+      const copyText = copy.querySelector('.copy-text, .hero-copy-text');
+      let text = copy.dataset.copyText;
+      if (!text && dialog) {
+        const panel = Array.from(dialog.querySelectorAll('.codebox')).find(item => getComputedStyle(item).display !== 'none');
+        text = panel?.querySelector('code')?.textContent;
+      }
+      text = text || '';
+      const succeed = () => {
         if (generation !== copyGeneration) return;
         copy.dataset.copied = 'true';
         copy.setAttribute('aria-label', '已复制命令');
         copy.title = '已复制';
         if (copyText) copyText.textContent = '已复制';
-        status.dataset.state = 'success';
-        status.textContent = '已复制命令。';
+        if (status) {
+          status.dataset.state = 'success';
+          status.textContent = '已复制命令。';
+        }
+      };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+          succeed();
+        } else {
+          throw new Error('no clipboard API');
+        }
       } catch {
-        if (generation !== copyGeneration) return;
-        resetCopy();
-        status.dataset.state = 'error';
-        status.textContent = '复制失败，请选中命令手动复制。';
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+          succeed();
+        } catch {
+          if (generation !== copyGeneration) return;
+          resetCopy(copy);
+          if (status) {
+            status.dataset.state = 'error';
+            status.textContent = '复制失败，请选中命令手动复制。';
+          }
+        }
       }
     });
-  }
-  dialog.querySelectorAll('input[type="radio"]').forEach(input => input.addEventListener('change', () => {
-    resetCopy();
-  }));
+  });
 })();
 
 (() => {

@@ -104,16 +104,16 @@ function Plaza({
 
   if (!canPublish) {
     return (
-      <Block title="广场" lead="上传第一版之后可以放到广场上。" />
+      <Block title="Plaza" lead="Available for Plaza listing after uploading your first version." />
     );
   }
 
   if (!listing.public) {
     return (
-      <Block title="广场" lead="没公开。只有拿到链接的人能玩。">
+      <Block title="Plaza" lead="Unlisted. Only people with the link can play.">
         <p class="row-actions">
           <button class="button" type="button" disabled={busy} onClick={() => onChange({ public: true })}>
-            放到广场上
+            Publish to Plaza
           </button>
           <button
             class="button primary"
@@ -121,10 +121,10 @@ function Plaza({
             disabled={busy}
             onClick={() => onChange({ public: true, seeking: true })}
           >
-            放上去找人测
+            List to Recruit
           </button>
           <a class="muted" href={plazaUrl} target="_blank" rel="noreferrer">
-            广场 ↗
+            Plaza ↗
           </a>
         </p>
       </Block>
@@ -133,11 +133,11 @@ function Plaza({
 
   return (
     <Block
-      title="广场"
+      title="Plaza"
       lead={
         listing.hidden
-          ? "多人举报，已从广场撤下，待复核。链接仍能打开。"
-          : `在广场上${listing.seeking ? "，正在找人测" : ""}。`
+          ? "Multiple reports received, removed from Plaza pending review. Direct link still works."
+          : `Listed on Plaza${listing.seeking ? ", recruiting playtesters" : ""}.`
       }
     >
       {listing.seeking ? (
@@ -150,42 +150,42 @@ function Plaza({
         >
           <label class="field">
             <span>
-              想让人看什么 · {Array.from(note).length}/{SEEK_NOTE_MAX}
+              What to look for · {Array.from(note).length}/{SEEK_NOTE_MAX}
             </span>
             <input
               value={note}
               maxLength={SEEK_NOTE_MAX}
-              placeholder="新手引导看得懂吗？"
+              placeholder="Can you understand the tutorial?"
               onInput={(event) => setNote((event.target as HTMLInputElement).value)}
             />
           </label>
           <button class="button" type="submit" disabled={busy || note.trim() === (listing.seek_note ?? "")}>
-            保存
+            Save
           </button>
         </form>
       ) : null}
       <p class="row-actions">
         {listing.seeking ? (
           <button class="button" type="button" disabled={busy} onClick={() => onChange({ seeking: false })}>
-            找够了
+            Stop Recruiting
           </button>
         ) : (
           <button class="button" type="button" disabled={busy} onClick={() => onChange({ seeking: true })}>
-            找人测
+            Recruit Playtesters
           </button>
         )}
         <button class="button quiet" type="button" disabled={busy} onClick={() => onChange({ public: false })}>
-          撤下
+          Unlist
         </button>
         <a class="muted" href={plazaUrl} target="_blank" rel="noreferrer">
-          去广场看 ↗
+          View on Plaza ↗
         </a>
       </p>
     </Block>
   );
 }
 
-// ------------------------------------------------------------------ 名额
+// ------------------------------------------------------------------ Seats
 
 function Seats({ listing, busy, onChange }: { listing: Listing; busy: boolean; onChange: Change }) {
   const [value, setValue] = useState(listing.seats ? String(listing.seats) : "");
@@ -195,7 +195,7 @@ function Seats({ listing, busy, onChange }: { listing: Listing; busy: boolean; o
     event.preventDefault();
     const seats = Number(value.trim());
     if (!Number.isInteger(seats) || seats < 1 || seats > MAX_SEATS) {
-      setWrong(`1 到 ${MAX_SEATS} 之间的整数。`);
+      setWrong(`Must be an integer between 1 and ${MAX_SEATS}.`);
       return;
     }
     setWrong(null);
@@ -204,33 +204,32 @@ function Seats({ listing, busy, onChange }: { listing: Listing; busy: boolean; o
 
   return (
     <Block
-      title="名额"
+      title="Seats"
       lead={
         listing.seats
-          ? `在找 ${listing.seats} 位，已有 ${listing.joined ?? 0} 位加入。`
+          ? `Seeking ${listing.seats} playtesters, ${listing.joined ?? 0} joined so far.`
           : (listing.joined ?? 0) > 0
-            ? `没设名额。已有 ${listing.joined} 位留名。`
-            : "没设名额。"
+            ? `No seat limit. ${listing.joined} joined so far.`
+            : "No seat limit."
       }
     >
       <form class="field-row" onSubmit={save}>
         <label class="field">
-          <span>名额</span>
+          <span>Seats</span>
           <input
             type="number"
             min={1}
             max={MAX_SEATS}
             inputMode="numeric"
             value={value}
-            placeholder="不限"
+            placeholder="Unlimited"
             onInput={(event) => setValue((event.target as HTMLInputElement).value)}
           />
         </label>
         <button class="button" type="submit" disabled={busy}>
-          保存
+          Save
         </button>
         {listing.seats ? (
-          // 0 就是清掉（common/src/api.rs 的 UpdateSiteRequest）。
           <button
             class="button quiet"
             type="button"
@@ -241,12 +240,12 @@ function Seats({ listing, busy, onChange }: { listing: Listing; busy: boolean; o
               void onChange({ seats: 0 });
             }}
           >
-            不限
+            Unlimited
           </button>
         ) : null}
       </form>
       {wrong ? <p class="notice">{wrong}</p> : null}
-      <p class="muted">留名即加入。满了仍能玩。</p>
+      <p class="muted">Leaving a name counts as joined. Playable even when full.</p>
     </Block>
   );
 }
@@ -260,9 +259,8 @@ function Community({ listing, busy, onChange }: { listing: Listing; busy: boolea
   function save(event: Event) {
     event.preventDefault();
     const url = value.trim();
-    // 空的就是清掉；剩下的只查开头，去哪是开发者的事，我们对去向不承诺（DESIGN §3.3）。
     if (url !== "" && !/^https?:\/\/\S+$/.test(url)) {
-      setWrong("要 http:// 或 https:// 开头的地址。");
+      setWrong("URL must start with http:// or https://");
       return;
     }
     setWrong(null);
@@ -270,10 +268,10 @@ function Community({ listing, busy, onChange }: { listing: Listing; busy: boolea
   }
 
   return (
-    <Block title="开发者的群" lead="玩家在门禁页和留言之后看到。任何地址都行。">
+    <Block title="Community" lead="Shown on the Door page and after leaving feedback. Any valid URL accepted.">
       <form class="field-row" onSubmit={save}>
         <label class="field grow">
-          <span>地址</span>
+          <span>URL</span>
           <input
             type="url"
             maxLength={MAX_COMMUNITY_URL_CHARS}
@@ -283,7 +281,7 @@ function Community({ listing, busy, onChange }: { listing: Listing; busy: boolea
           />
         </label>
         <button class="button" type="submit" disabled={busy}>
-          保存
+          Save
         </button>
         {listing.community_url ? (
           <button
@@ -296,7 +294,7 @@ function Community({ listing, busy, onChange }: { listing: Listing; busy: boolea
               void onChange({ community_url: "" });
             }}
           >
-            不放
+            None
           </button>
         ) : null}
       </form>
@@ -305,13 +303,13 @@ function Community({ listing, busy, onChange }: { listing: Listing; busy: boolea
   );
 }
 
-// ------------------------------------------------------------------ 公开反馈
+// ------------------------------------------------------------------ Public Feedback
 
 function PublicFeedback({ listing, busy, onChange }: { listing: Listing; busy: boolean; onChange: Change }) {
   return (
     <Block
-      title="公开反馈"
-      lead={listing.feedback_public ? "开着。门禁页显示最近 3 条，署留下的名字。" : "关着。只有你看得到反馈。"}
+      title="Public Feedback"
+      lead={listing.feedback_public ? "Enabled. Door page displays the 3 latest entries with author names." : "Disabled. Only you can view feedback."}
     >
       <p class="row-actions">
         <button
@@ -320,27 +318,27 @@ function PublicFeedback({ listing, busy, onChange }: { listing: Listing; busy: b
           disabled={busy}
           onClick={() => onChange({ feedback_public: !listing.feedback_public })}
         >
-          {listing.feedback_public ? "关掉" : "打开"}
+          {listing.feedback_public ? "Disable" : "Enable"}
         </button>
       </p>
     </Block>
   );
 }
 
-// ------------------------------------------------------------------ 推广
+// ------------------------------------------------------------------ Boost
 
 const BOOST_KINDS: Record<string, string> = {
-  days3: "推广 3 天",
-  days7: "推广 7 天",
-  digest: "进本周周报",
+  days3: "3-Day Boost",
+  days7: "7-Day Boost",
+  digest: "Weekly Digest Feature",
 };
 
 function BoostSection({ boost }: { boost?: Boost }) {
   return (
     <Block
-      title="推广"
+      title="Boost"
       lead={
-        boost ? "尚未开放购买。这一段由运营者给出。" : "尚未开放。开放后可买 3 天或 7 天，作品排在广场顶部，标「推广」。"
+        boost ? "Not open for purchase yet. Managed by platform operators." : "Coming soon. Featured placement at top of Plaza with a 'Boosted' badge."
       }
     >
       {boost ? <BoostState boost={boost} /> : null}
@@ -354,31 +352,31 @@ function BoostState({ boost }: { boost: Boost }) {
     case "pending":
       return (
         <p>
-          <span class="chip">{kind}</span> 排到 {day(boost.starts_at)}，上位前人工复核。
+          <span class="chip">{kind}</span> scheduled for {day(boost.starts_at)}, manual review before going live.
         </p>
       );
     case "live":
       return (
         <p>
-          <span class="chip">{kind}</span> 推广中{boost.ends_at ? `，到 ${day(boost.ends_at)}` : ""}。
+          <span class="chip">{kind}</span> active{boost.ends_at ? `, until ${day(boost.ends_at)}` : ""}.
         </p>
       );
     case "ended":
       return (
         <p class="muted">
-          {kind}已结束{boost.ends_at ? `，${day(boost.ends_at)}` : ""}。
+          {kind} ended{boost.ends_at ? `, ${day(boost.ends_at)}` : ""}.
         </p>
       );
     case "rejected":
       return (
         <p class="says warn">
-          {kind}未通过复核{boost.reason ? `：${boost.reason}` : ""}。全额退款。
+          {kind} rejected{boost.reason ? `: ${boost.reason}` : ""}. Full refund issued.
         </p>
       );
   }
 }
 
-// ------------------------------------------------------------------ 版本
+// ------------------------------------------------------------------ Versions
 
 function Versions({ site, onVersionsChanged }: { site: Site; onVersionsChanged: () => void }) {
   const { data, error, loading, reload } = useLoad(() => api.versions(site.slug), [site.slug, site.current_version]);
@@ -386,7 +384,7 @@ function Versions({ site, onVersionsChanged }: { site: Site; onVersionsChanged: 
   const [problem, setProblem] = useState<string | null>(null);
 
   async function activate(version: number) {
-    if (!confirm(`把 v${version} 设为当前？链接不变。`)) return;
+    if (!confirm(`Set v${version} as current? Link stays the same.`)) return;
     setBusy(version);
     setProblem(null);
     try {
@@ -401,11 +399,11 @@ function Versions({ site, onVersionsChanged }: { site: Site; onVersionsChanged: 
   }
 
   return (
-    <Block title="版本" lead="每次上传是一版，都留着。换版不换链接。">
+    <Block title="Versions" lead="Every upload creates a new version. Past versions are preserved. Rollback keeps the same link.">
       {loading ? <Loading /> : null}
       {error ? <Failed error={error} onRetry={reload} /> : null}
       {problem ? <p class="notice">{problem}</p> : null}
-      {data && data.versions.length === 0 ? <p class="muted">还没有版本。</p> : null}
+      {data && data.versions.length === 0 ? <p class="muted">No versions yet.</p> : null}
       {data && data.versions.length > 0 ? (
         <ul class="version-list">
           {data.versions.map((one) => (
@@ -413,11 +411,11 @@ function Versions({ site, onVersionsChanged }: { site: Site; onVersionsChanged: 
               <span class="mono ver-no">v{one.version}</span>
               <span class="version-when muted">{moment(one.created_at)}</span>
               <span class="version-size muted mono">
-                {one.file_count} 个文件 · {bytes(one.total_bytes)}
+                {one.file_count} files · {bytes(one.total_bytes)}
               </span>
-              <span class="version-note">{one.note ? `「${one.note}」` : ""}</span>
+              <span class="version-note">{one.note ? `“${one.note}”` : ""}</span>
               {one.current ? (
-                <span class="chip good">当前</span>
+                <span class="chip good">Current</span>
               ) : (
                 <button
                   class="button small"
@@ -425,7 +423,7 @@ function Versions({ site, onVersionsChanged }: { site: Site; onVersionsChanged: 
                   disabled={busy !== null}
                   onClick={() => activate(one.version)}
                 >
-                  {busy === one.version ? "切换中…" : "设为当前"}
+                  {busy === one.version ? "Switching…" : "Set as Current"}
                 </button>
               )}
             </li>
@@ -436,7 +434,7 @@ function Versions({ site, onVersionsChanged }: { site: Site; onVersionsChanged: 
   );
 }
 
-// ------------------------------------------------------------------ 危险区
+// ------------------------------------------------------------------ Danger Zone
 
 function Danger({ site }: { site: Site }) {
   const [typed, setTyped] = useState("");
@@ -448,7 +446,6 @@ function Danger({ site }: { site: Site }) {
     setState("working");
     try {
       await api.deleteSite(site.slug);
-      // 回到作品墙。壳上的作品清单由 App 在下一次取的时候刷新；这里直接换地址触发一次。
       go({ name: "sites" });
       location.reload();
     } catch (e) {
@@ -459,15 +456,15 @@ function Danger({ site }: { site: Site }) {
   return (
     <section class="block danger">
       <div class="block-head">
-        <h2>删除作品</h2>
+        <h2>Delete Work</h2>
         <p class="muted">
-          链接立刻失效，版本、点名册、反馈一起删除。不可恢复。
+          The link will become invalid immediately. Versions, roster, and feedback will be permanently deleted. This cannot be undone.
         </p>
       </div>
       <form class="field-row" onSubmit={remove}>
         <label class="field">
           <span>
-            输入 <code>{site.slug}</code> 确认
+            Enter <code>{site.slug}</code> to confirm
           </span>
           <input
             value={typed}
@@ -478,7 +475,7 @@ function Danger({ site }: { site: Site }) {
           />
         </label>
         <button class="button danger" type="submit" disabled={typed.trim() !== site.slug || state === "working"}>
-          {state === "working" ? "删除中…" : "删除"}
+          {state === "working" ? "Deleting…" : "Delete"}
         </button>
       </form>
       {state !== "idle" && state !== "working" ? <p class="notice">{state}</p> : null}

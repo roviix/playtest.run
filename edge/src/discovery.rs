@@ -101,7 +101,7 @@ fn search(query: &Query, base: &str) -> String {
             base.to_string()
         };
         format!(
-            "<a class=\"search-clear\" href=\"{}\" aria-label=\"清空搜索\" title=\"清空搜索\">×</a>",
+            "<a class=\"search-clear\" href=\"{}\" aria-label=\"Clear search\" title=\"Clear search\">×</a>",
             esc(&clear_target)
         )
     } else {
@@ -114,12 +114,12 @@ fn search(query: &Query, base: &str) -> String {
          <svg class=\"icon\" viewBox=\"0 0 24 24\"><circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"/><path d=\"m16 16 4 4\"/></svg>\
          </span>\
          <label class=\"search-field\">\
-         <span class=\"sr-only\">搜索作品与合集</span>\
-         <input type=\"search\" name=\"q\" maxlength=\"280\" placeholder=\"搜索作品、作者…\" value=\"{}\" autocomplete=\"off\" spellcheck=\"false\">\
+         <span class=\"sr-only\">Search projects and collections</span>\
+         <input type=\"search\" name=\"q\" maxlength=\"280\" placeholder=\"Search projects, creators…\" value=\"{}\" autocomplete=\"off\" spellcheck=\"false\">\
          </label>\
          {clear}\
-         <kbd class=\"search-kbd\" aria-hidden=\"true\" title=\"按 / 快速搜索\">/</kbd>\
-         <button type=\"submit\" class=\"search-submit\" aria-label=\"搜索\" title=\"搜索\">\
+         <kbd class=\"search-kbd\" aria-hidden=\"true\" title=\"Press / to search\">/</kbd>\
+         <button type=\"submit\" class=\"search-submit\" aria-label=\"Search\" title=\"Search\">\
          <svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"/><path d=\"m16 16 4 4\"/></svg>\
          </button>\
          </div>\
@@ -133,17 +133,17 @@ fn search(query: &Query, base: &str) -> String {
 
 fn sort_bar(query: &Query, base: &str) -> String {
     let explanation = if query.hot {
-        "<details class=\"sort-help\"><summary aria-label=\"排序说明\" title=\"排序说明\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M12 11v5m0-9v.5\"/></svg></summary><p>按近 7 天点击开始的去重会话排序，无记录时按时间排列。会话数不等于真人数，也不代表作品质量。</p></details>"
+        "<details class=\"sort-help\"><summary aria-label=\"Sorting explanation\" title=\"Sorting explanation\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M12 11v5m0-9v.5\"/></svg></summary><p>Sorted by unique sessions started in the last 7 days; falls back to chronological order. Sessions do not equal unique people or project quality.</p></details>"
     } else {
         ""
     };
     format!(
-        "<div class=\"discover-sort\" role=\"group\" aria-label=\"作品排序\">\
-         <span class=\"sort-label\">排序</span>\
-         <nav class=\"sort-options\" aria-label=\"排序方式\">\
-         <a href=\"{}\" class=\"sort-item{}\" {}>最新</a>\
+        "<div class=\"discover-sort\" role=\"group\" aria-label=\"Sort projects\">\
+         <span class=\"sort-label\">Sort</span>\
+         <nav class=\"sort-options\" aria-label=\"Sort options\">\
+         <a href=\"{}\" class=\"sort-item{}\" {}>Latest</a>\
          <span class=\"sort-sep\" aria-hidden=\"true\">/</span>\
-         <a href=\"{}\" class=\"sort-item{}\" {} title=\"按近 7 天试玩热度排序\">热度</a>\
+         <a href=\"{}\" class=\"sort-item{}\" {} title=\"Sort by 7-day playtest activity\">Popular</a>\
          </nav>{explanation}</div>",
         esc(&query.link(base, false, 1)),
         if !query.hot { " active" } else { "" },
@@ -156,21 +156,22 @@ fn sort_bar(query: &Query, base: &str) -> String {
 
 fn toolbar(query: &Query, base: &str, index: bool) -> String {
     let segmented = format!(
-        "<nav class=\"discovery-segmented\" aria-label=\"发现内容类型\">\
-         <a href=\"/\" class=\"seg-item{}\"{}>作品</a>\
-         <a href=\"/collections\" class=\"seg-item{}\"{}>合集</a>\
+        "<nav class=\"discovery-segmented\" aria-label=\"Discovery category\">\
+         <a href=\"/\" class=\"seg-item{}\"{}>Projects</a>\
+         <a href=\"/collections\" class=\"seg-item{}\"{}>Collections</a>\
          </nav>",
         if !index { " active" } else { "" },
         if !index { " aria-current=\"page\"" } else { "" },
         if index { " active" } else { "" },
         if index { " aria-current=\"page\"" } else { "" },
     );
+    let search_form = search(query, base);
     let sort = if !index {
         sort_bar(query, base)
     } else {
         String::new()
     };
-    format!("<div class=\"discover-toolbar\">{segmented}{sort}</div>")
+    format!("<div class=\"discover-toolbar\">{segmented}<div class=\"discover-tools\">{search_form}{sort}</div></div>")
 }
 
 fn pages(query: &Query, base: &str, count: usize) -> (usize, String) {
@@ -179,17 +180,17 @@ fn pages(query: &Query, base: &str, count: usize) -> (usize, String) {
     if last == 1 {
         return (0, String::new());
     }
-    let mut output = String::from("<nav class=\"discovery-pages\" aria-label=\"分页\">");
+    let mut output = String::from("<nav class=\"discovery-pages\" aria-label=\"Pagination\">");
     if current > 1 {
         output.push_str(&format!(
-            "<a href=\"{}\">上一页</a>",
+            "<a href=\"{}\">Previous</a>",
             esc(&query.link(base, query.hot, current - 1))
         ));
     }
-    output.push_str(&format!("<span>第 {current} / {last} 页</span>"));
+    output.push_str(&format!("<span>Page {current} of {last}</span>"));
     if current < last {
         output.push_str(&format!(
-            "<a href=\"{}\">下一页</a>",
+            "<a href=\"{}\">Next</a>",
             esc(&query.link(base, query.hot, current + 1))
         ));
     }
@@ -199,10 +200,10 @@ fn pages(query: &Query, base: &str, count: usize) -> (usize, String) {
 
 fn status(collection: &Collection, now: &str) -> String {
     if collection.kind == CollectionKind::Collection {
-        return "作品集".to_string();
+        return "Collection".to_string();
     }
     if collection.closed(now) {
-        return "已结束 · 仍可观看".to_string();
+        return "Ended · Still playable".to_string();
     }
     match collection
         .closes_at
@@ -210,11 +211,11 @@ fn status(collection: &Collection, now: &str) -> String {
         .and_then(|value| time::OffsetDateTime::parse(value, &Rfc3339).ok())
     {
         Some(close) => format!(
-            "征集中 · {} 月 {} 日截止（UTC）",
-            u8::from(close.month()),
+            "Open · Submissions close {} {} (UTC)",
+            crate::when::month_short(close.month()),
             close.day()
         ),
-        None => "开放创作 · 随时加入".to_string(),
+        None => "Open challenge · Join anytime".to_string(),
     }
 }
 
@@ -260,18 +261,22 @@ fn collection_card(collection: &Collection, view: &View<'_>) -> String {
     } else {
         "collection-regular"
     };
-    format!("<a class=\"collection-card\" href=\"{}\"><div class=\"collection-art\" aria-hidden=\"true\">{art}</div><div class=\"collection-card-body\"><span class=\"collection-state {}\">{}</span><h2>{}</h2><p>{}</p><div class=\"collection-meta\"><span>{}</span><span class=\"count-badge\">{}</span></div></div></a>",
-        esc(&collection.path()), state_class, esc(&status(collection, &now)), esc(&collection.title), esc(&collection.summary), esc(&collection.creator), if count == 0 { "等你带来第一件作品".to_string() } else { format!("{count} 件作品 ↗") })
+    format!("<a class=\"collection-card\" href=\"{}\"><div class=\"collection-art\" aria-hidden=\"true\"><span class=\"collection-state {}\">{}</span>{art}</div><div class=\"collection-card-body\"><h2>{}</h2><p>{}</p><div class=\"collection-meta\"><span>{}</span><span class=\"count-badge\">{}</span></div></div></a>",
+        esc(&collection.path()), state_class, esc(&status(collection, &now)), esc(&collection.title), esc(&collection.summary), esc(&collection.creator), if count == 0 { "Be the first to submit".to_string() } else if count == 1 { "1 project ↗".to_string() } else { format!("{count} projects ↗") })
 }
 
 pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
     let base = if index { "/collections" } else { "/" };
     let now = view.now.format(&Rfc3339).unwrap_or_default();
     let searching = !query.search.is_empty();
+    let hero_banner = if !searching && query.page <= 1 {
+        crate::plaza::hero()
+    } else {
+        String::new()
+    };
+    let title = if index { "Collections" } else { "Plaza" };
     let mut body = format!(
-        "<div class=\"content discovery\"><header class=\"workspace-head\"><h1>{}</h1>{}</header>",
-        "广场",
-        search(query, base)
+        "<div class=\"content discovery\">{hero_banner}<h1 class=\"sr-only\">{title}</h1>"
     );
     body.push_str(&toolbar(query, base, index));
     let collections: Vec<_> = view
@@ -287,14 +292,14 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
         .collect();
     if !collections.is_empty() {
         if !index {
-            body.push_str(&format!("<div class=\"discovery-section\"><h2>{}</h2><a href=\"/collections\">所有合集 →</a></div>", if searching { "合集" } else { "创作挑战" }));
+            body.push_str(&format!("<div class=\"discovery-section\"><h2>{}</h2><a href=\"/collections\">All collections →</a></div>", if searching { "Collections" } else { "Challenges" }));
         }
         let (offset, navigation) = if index {
             pages(query, base, collections.len())
         } else {
             (0, String::new())
         };
-        body.push_str("<section class=\"collection-grid\" aria-label=\"合集\">");
+        body.push_str("<section class=\"collection-grid\" aria-label=\"Collections\">");
         for collection in collections
             .iter()
             .skip(offset)
@@ -305,7 +310,7 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
         body.push_str("</section>");
         body.push_str(&navigation);
     } else if index {
-        body.push_str(if searching { "<section class=\"discovery-empty\"><h2>没有找到合集</h2><p>换个词，或者 <a href=\"/collections\">看看所有合集</a>。</p></section>" } else { "<section class=\"discovery-empty\"><h2>把作品放在一个主题里</h2><p>整理自己的创作，或者邀请大家一起做同一道题。</p><a href=\"/console/#/collections\" data-manage>创建第一个合集 →</a></section>" });
+        body.push_str(if searching { "<section class=\"discovery-empty\"><h2>No collections found</h2><p>Try different keywords, or <a href=\"/collections\">view all collections</a>.</p></section>" } else { "<section class=\"discovery-empty\"><h2>Group projects under a theme</h2><p>Organize your work, or invite creators to tackle the same prompt together.</p><a href=\"/console/#/collections\" data-manage>Create your first collection →</a></section>" });
     }
     if !index {
         let mut items: Vec<_> = view
@@ -328,9 +333,9 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
         });
         let (offset, navigation) = pages(query, base, items.len());
         if items.is_empty() {
-            body.push_str(if searching { "<section class=\"discovery-empty\"><h2>没有找到作品</h2><p>试试作品名或作者名，或者 <a href=\"/\">清空搜索</a>。</p></section>" } else { "<section class=\"empty-plaza\"><p>广场上还没有作品。</p><p class=\"lead\"><code>playtest ./dist --public</code> 会把作品放到这里。</p></section>" });
+            body.push_str(if searching { "<section class=\"discovery-empty\"><h2>No projects found</h2><p>Try a project name or creator, or <a href=\"/\">clear search</a>.</p></section>" } else { "<section class=\"empty-plaza\"><p>No projects on the plaza yet.</p><p class=\"lead\"><code>playtest ./dist --public</code> will put your project here.</p></section>" });
         } else {
-            body.push_str("<section class=\"grid\" aria-label=\"公开试玩作品\">");
+            body.push_str("<section class=\"grid\" aria-label=\"Public playtests\">");
             for item in items.iter().skip(offset).take(PAGE_SIZE) {
                 body.push_str(&plaza::tile(
                     item,
@@ -343,13 +348,18 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
         }
     }
     body.push_str("</div>");
+    let canonical = if index {
+        format!("<link rel=\"canonical\" href=\"https://{}/collections\">\n", playtest_common::DEVELOPER_HOST)
+    } else {
+        format!("<link rel=\"canonical\" href=\"https://{}/\">\n", playtest_common::DEVELOPER_HOST)
+    };
     let mut html = wrap(
         if index {
-            "合集与挑战"
+            "Collections & Challenges"
         } else {
-            "playtest.run"
+            "playtest · Show the work, not the hype"
         },
-        "<meta name=\"description\" content=\"发现浏览器作品，围绕一个好题目一起创作。\">",
+        &format!("{canonical}<meta name=\"description\" content=\"Discover browser-based projects and build together around great prompts.\">"),
         if index {
             Here::Collections
         } else {
@@ -403,22 +413,22 @@ pub fn collection(
             &target,
             &base,
             "collection",
-            "关注新投稿",
+            "Follow updates",
             "utility-btn collection-subscribe",
         )
     } else {
         let form = crate::follow::email_details(
             caps,
-            "关注新投稿",
+            "Follow updates",
             "/follow",
             &target,
             &base,
             "collection",
-            "确认关注",
+            "Confirm follow",
         );
         form.replacen(
             "</form>",
-            "<p class=\"tell-hint\">每周有新投稿时汇总一封，可随时退订</p></form>",
+            "<p class=\"tell-hint\">Weekly digest of new submissions, unsubscribe anytime</p></form>",
             1,
         )
     };
@@ -433,7 +443,7 @@ pub fn collection(
     let has_rules = !collection.rules.is_empty();
     let is_open_challenge = collection.kind == CollectionKind::Challenge && !collection.closed(&now);
     let participate_btn = if is_open_challenge {
-        "<a class=\"discovery-button primary action-participate\" href=\"#participate\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\"/></svg>我也来做一个 ↗</a>"
+        "<a class=\"discovery-button primary action-participate\" href=\"#participate\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\"/></svg>Submit a Project ↗</a>"
     } else {
         ""
     };
@@ -442,17 +452,17 @@ pub fn collection(
         let mut guide_sections = String::new();
         if has_rules {
             guide_sections.push_str(&format!(
-                "<div class=\"guide-section\"><h3>投稿规则</h3><p class=\"preserve-lines\">{}</p></div>",
+                "<div class=\"guide-section\"><h3>Submission Rules</h3><p class=\"preserve-lines\">{}</p></div>",
                 esc(&collection.rules)
             ));
         }
         if is_open_challenge {
             guide_sections.push_str(&format!(
-                "<div class=\"guide-section\"><h3>如何参与</h3>\
-<p>围绕题目动手创作，做一个浏览器里能打开的作品。已有作品也可以投稿，不用重复上传。</p>\
+                "<div class=\"guide-section\"><h3>How to Participate</h3>\
+<p>Build a browser-playable project around the theme. Existing projects can also be submitted without re-uploading.</p>\
 <div class=\"command-pill\"><code>playtest ./dist --public</code></div>\
-<p class=\"guide-subtext\">选择自己的公开作品投稿。还没有作品？先发布，再回来参与。</p>\
-<a class=\"guide-cta\" href=\"/console/#/collections/{}\" data-manage>选择作品投稿 →</a>\
+<p class=\"guide-subtext\">Select your public project to submit. No project yet? Publish first, then come back.</p>\
+<a class=\"guide-cta\" href=\"/console/#/collections/{}\" data-manage>Submit a Project →</a>\
 </div>",
                 esc(&collection.slug)
             ));
@@ -462,14 +472,14 @@ pub fn collection(
         } else {
             format!(
                 "<details id=\"participate\" class=\"challenge-guide\">\
-<summary><div class=\"guide-summary-label\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 16v-4m0-4h.01\"/></svg><span>规则与参与说明</span></div><span class=\"guide-toggle-hint\">展开 ▾</span></summary>\
+<summary><div class=\"guide-summary-label\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 16v-4m0-4h.01\"/></svg><span>Rules & Guidelines</span></div><span class=\"guide-toggle-hint\">Details ▾</span></summary>\
 <div class=\"guide-body\">{guide_sections}</div></details>"
             )
         };
         let prompt_part = if has_prompt {
             format!(
-                "<div class=\"brief-bar\"><div class=\"brief-label\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><path d=\"M14 2v6h6M16 13H8M16 17H8M10 9H8\"/></svg><h2>创作题目</h2></div>\
-<button type=\"button\" class=\"utility-btn copy-prompt-btn\" data-copy-prompt hidden><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"8\" y=\"8\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3\"/></svg><span>复制题目</span></button></div>\
+                "<div class=\"brief-bar\"><div class=\"brief-label\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><path d=\"M14 2v6h6M16 13H8M16 17H8M10 9H8\"/></svg><h2>Prompt</h2></div>\
+<button type=\"button\" class=\"utility-btn copy-prompt-btn\" data-copy-prompt hidden><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"8\" y=\"8\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3\"/></svg><span>Copy prompt</span></button></div>\
 <div class=\"prompt-canvas\"><pre id=\"challenge-prompt\">{}</pre></div>",
                 esc(&collection.prompt)
             )
@@ -477,7 +487,7 @@ pub fn collection(
             String::new()
         };
         format!(
-            "<section class=\"challenge-brief\" aria-label=\"创作题目\">\
+            "<section class=\"challenge-brief\" aria-label=\"Challenge prompt\">\
 {prompt_part}\
 {guide}\
 </section>"
@@ -491,12 +501,12 @@ pub fn collection(
 <header class=\"collection-hero\">\
 <div class=\"collection-hero-head\">\
 <div class=\"collection-hero-main\">\
-<div class=\"collection-badges\"><span class=\"collection-state {state_class}\">{}</span><span class=\"collection-creator\">{} 发起</span></div>\
+<div class=\"collection-badges\"><span class=\"collection-state {state_class}\">{}</span><span class=\"collection-creator\">by {}</span></div>\
 <h1>{}</h1>\
 <p class=\"collection-summary\">{}</p>\
 </div>\
 <div class=\"collection-actions\">{participate_btn}\
-<div class=\"collection-utilities\"><button type=\"button\" class=\"utility-btn action-share\" data-share-collection hidden><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"5\" r=\"3\"/><circle cx=\"6\" cy=\"12\" r=\"3\"/><circle cx=\"18\" cy=\"19\" r=\"3\"/><path d=\"m8.59 13.51 6.83 3.98m-.01-10.98-6.82 3.98\"/></svg><span>分享</span></button>{subscribe}</div>\
+<div class=\"collection-utilities\"><button type=\"button\" class=\"utility-btn action-share\" data-share-collection hidden><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"5\" r=\"3\"/><circle cx=\"6\" cy=\"12\" r=\"3\"/><circle cx=\"18\" cy=\"19\" r=\"3\"/><path d=\"m8.59 13.51 6.83 3.98m-.01-10.98-6.82 3.98\"/></svg><span>Share</span></button>{subscribe}</div>\
 </div>\
 </div>\
 {brief}\
@@ -535,18 +545,18 @@ pub fn collection(
         body.push_str(&format!(
             "<section class=\"discovery-empty\"><h2>{}</h2><p>{}</p></section>",
             if query.search.is_empty() {
-                "还没有作品"
+                "No projects yet"
             } else {
-                "没有符合条件的作品"
+                "No matching projects"
             },
             if query.search.is_empty() {
-                "作品投稿后会显示在这里。".to_string()
+                "Submitted projects will appear here.".to_string()
             } else {
-                format!("<a href=\"{}\">清空条件</a>，看看其他作品。", esc(&base))
+                format!("<a href=\"{}\">Clear filters</a> to view other projects.", esc(&base))
             }
         ));
     } else {
-        body.push_str("<section class=\"grid collection-entries\" aria-label=\"投稿作品\">");
+        body.push_str("<section class=\"grid collection-entries\" aria-label=\"Submitted projects\">");
         for (entry, item) in entries.iter().skip(offset).take(PAGE_SIZE) {
             let tile = plaza::tile(item, false, view.now).replacen(
                 &format!("href=\"/p/{}\"", item.slug),
@@ -557,26 +567,26 @@ pub fn collection(
                 1,
             );
             let version_diff = if entry.submitted_version != item.version {
-                format!(" · 当前 v{}（作品已更新，打开的是当前版本）", item.version)
+                format!(" · Current v{} (updated since submission)", item.version)
             } else {
                 String::new()
             };
             let note_tag = if !entry.note.is_empty() {
-                "<span class=\"note-tag\">附言</span>"
+                "<span class=\"note-tag\">Note</span>"
             } else {
                 ""
             };
             let note_box = if entry.note.is_empty() {
                 String::new()
             } else {
-                format!("<div class=\"prompt-box\"><span class=\"box-label\">作者附言</span><pre>{}</pre></div>", esc(&entry.note))
+                format!("<div class=\"prompt-box\"><span class=\"box-label\">Creator's note</span><pre>{}</pre></div>", esc(&entry.note))
             };
             body.push_str(&format!(
                 "<article class=\"collection-entry\">{tile}\
 <details class=\"creation-note\">\
-<summary class=\"creation-summary\">{note_tag}<span class=\"version-tag\">投稿 v{}{}</span></summary>\
+<summary class=\"creation-summary\">{note_tag}<span class=\"version-tag\">Submitted v{}{}</span></summary>\
 <div class=\"creation-body\">\
-<p class=\"creation-time\">投稿时间 · {}</p>\
+<p class=\"creation-time\">Submitted at · {}</p>\
 {}\
 </div></details></article>",
                 entry.submitted_version,
@@ -589,7 +599,17 @@ pub fn collection(
         body.push_str(&navigation);
     }
     body.push_str("</div>");
-    let head = format!("<meta property=\"og:type\" content=\"website\"><meta property=\"og:title\" content=\"{}\"><meta property=\"og:description\" content=\"{}\"><meta name=\"description\" content=\"{}\">", esc(&collection.title), esc(&collection.summary), esc(&collection.summary));
+    let canonical = format!(
+        "<link rel=\"canonical\" href=\"https://{}/c/{}\">\n",
+        playtest_common::DEVELOPER_HOST,
+        esc(&collection.slug)
+    );
+    let head = format!(
+        "{canonical}<meta property=\"og:type\" content=\"website\"><meta property=\"og:title\" content=\"{}\"><meta property=\"og:description\" content=\"{}\"><meta name=\"description\" content=\"{}\">",
+        esc(&collection.title),
+        esc(&collection.summary),
+        esc(&collection.summary)
+    );
     wrap(&collection.title, &head, Here::Collections, &body)
 }
 
@@ -611,5 +631,5 @@ pub fn context(plaza: &Plaza, slug: &str, collection_slug: Option<&str>) -> Stri
     }) else {
         return String::new();
     };
-    format!("<a class=\"invitation-back collection-context\" href=\"{}\">‹ 返回 {}</a>", esc(&collection.path()), esc(&collection.title))
+    format!("<a class=\"invitation-back collection-context\" href=\"{}\" title=\"Back to {}\">‹ 返回 {}</a>", esc(&collection.path()), esc(&collection.title), esc(&collection.title))
 }

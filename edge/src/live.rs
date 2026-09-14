@@ -54,6 +54,10 @@ impl LiveCache {
         }
         live
     }
+
+    pub fn invalidate(&self, slug: &str) {
+        self.cached.invalidate(&slug.to_string());
+    }
 }
 
 #[cfg(test)]

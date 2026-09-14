@@ -261,9 +261,9 @@ async fn navigation_without_cookie_gets_the_gate_page() {
     assert_eq!(root_reply.header("cache-control"), None);
 
     let html = root_reply.text();
-    assert!(html.contains("开始试玩"));
-    assert!(html.contains("某某 邀请你试玩"));
-    assert!(html.contains("《小球大冒险》"));
+    assert!(html.contains("Play"));
+    assert!(html.contains("某某 invites you to play"));
+    assert!(html.contains("小球大冒险"));
     assert!(html.contains("· v7"));
     assert!(html.contains(&format!("action=\"/p/{SLUG}\"")));
     assert!(html.contains(&format!("href=\"http://{HOST}/\"")));
@@ -344,8 +344,8 @@ async fn wechat_gets_the_open_in_browser_tip() {
         )
         .await;
     let html = reply.text();
-    assert!(html.contains("在浏览器中打开"));
-    assert!(html.contains("需要系统浏览器"));
+    assert!(html.contains("Open in Browser"));
+    assert!(html.contains("WeChat"));
     assert_eq!(site.events()[0]["wechat"], true);
 }
 
@@ -414,7 +414,7 @@ async fn video_uses_native_player_and_the_original_file_keeps_range_support() {
     let root = site.get_root(&format!("/p/{SLUG}")).await;
     assert_eq!(root.status, StatusCode::OK);
     let html = root.text();
-    assert!(html.contains("某某 邀请你观看"));
+    assert!(html.contains("某某 invites you to watch"));
     assert!(html.contains("<video controls preload=\"metadata\" playsinline"));
     assert!(html.contains(&format!("http://{HOST}/clip.mp4")));
     assert!(!html.contains("autoplay"));
@@ -742,7 +742,7 @@ async fn unknown_slug_is_a_rendered_404() {
         )
         .await;
     assert_eq!(reply.status, StatusCode::NOT_FOUND);
-    assert!(reply.text().contains("这个链接不存在，或者已经失效"));
+    assert!(reply.text().contains("This link does not exist or has expired"));
     assert_eq!(reply.header("x-content-type-options"), Some("nosniff"));
 }
 
@@ -792,8 +792,8 @@ async fn expired_anonymous_link_is_410() {
     let site = Site::build(|m| m.expires_at = Some("2026-09-06T00:00:00Z".into())).await;
     let reply = site.get("/").await;
     assert_eq!(reply.status, StatusCode::GONE);
-    assert!(reply.text().contains("已过期"));
-    assert!(reply.text().contains("24 小时"));
+    assert!(reply.text().contains("expired"));
+    assert!(reply.text().contains("24 hours"));
 }
 
 #[tokio::test]
@@ -808,7 +808,7 @@ async fn host_routing() {
             .await;
         assert_eq!(reply.status, StatusCode::OK, "{host}");
         let text = reply.text();
-        assert!(text.contains("广场上还没有作品"), "{host}");
+        assert!(text.contains("No projects on the plaza yet"), "{host}");
         assert!(text.contains("--public"), "{host}");
         assert!(text.contains(playtest_common::DEVELOPER_API_URL), "{host}");
         // 这一页是我们自己的，能锁死；脚本只放行带 nonce 的那段，图只从作品子域来。
@@ -1047,7 +1047,7 @@ async fn report_collects_a_reason_and_says_nothing_more() {
         )
         .await;
     assert_eq!(done.status, StatusCode::OK);
-    assert!(done.text().contains("已收到。"));
+    assert!(done.text().contains("Report received."));
 
     let events = site.events();
     assert_eq!(events[0]["type"], "report");

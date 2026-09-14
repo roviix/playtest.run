@@ -15,18 +15,35 @@ fn local(raw: &str) -> Option<OffsetDateTime> {
     Some(at.to_offset(UtcOffset::from_hms(OFFSET_HOURS, 0, 0).ok()?))
 }
 
-/// RFC 3339 → 「9 月 9 日」。版本那一行的日期，门禁页和邀请卡票根是同一种写法。
-pub fn day(raw: &str) -> Option<String> {
-    let at = local(raw)?;
-    Some(format!("{} 月 {} 日", at.month() as u8, at.day()))
+pub fn month_short(month: time::Month) -> &'static str {
+    match month {
+        time::Month::January => "Jan",
+        time::Month::February => "Feb",
+        time::Month::March => "Mar",
+        time::Month::April => "Apr",
+        time::Month::May => "May",
+        time::Month::June => "Jun",
+        time::Month::July => "Jul",
+        time::Month::August => "Aug",
+        time::Month::September => "Sep",
+        time::Month::October => "Oct",
+        time::Month::November => "Nov",
+        time::Month::December => "Dec",
+    }
 }
 
-/// RFC 3339 → 「9 月 10 日 20:59」。到期时间用：日期不够，玩家要知道还来得及不。
+/// RFC 3339 → 「Sep 9」.
+pub fn day(raw: &str) -> Option<String> {
+    let at = local(raw)?;
+    Some(format!("{} {}", month_short(at.month()), at.day()))
+}
+
+/// RFC 3339 → 「Sep 8, 20:59」.
 pub fn day_time(raw: &str) -> Option<String> {
     let at = local(raw)?;
     Some(format!(
-        "{} 月 {} 日 {:02}:{:02}",
-        at.month() as u8,
+        "{} {}, {:02}:{:02}",
+        month_short(at.month()),
         at.day(),
         at.hour(),
         at.minute()
@@ -37,35 +54,35 @@ pub fn day_time(raw: &str) -> Option<String> {
 /// 第二个是没有 JS 时直接显示的那串，带着时区免得被当成本地时间。
 pub fn deadline(raw: &str) -> Option<(String, String)> {
     let at = OffsetDateTime::parse(raw, &Rfc3339).ok()?;
-    let human = format!("{}（UTC+{OFFSET_HOURS}）", day_time(raw)?);
+    let human = format!("{} (UTC+{OFFSET_HOURS})", day_time(raw)?);
     Some((at.format(&Rfc3339).ok()?, human))
 }
 
-/// 「刚刚发布」「40 分钟前」「2 天前」。广场卡右下那件事实。
+/// 「Just now」「40m ago」「2d ago」.
 pub fn ago(then: OffsetDateTime, now: OffsetDateTime) -> String {
     let span = now - then;
     let minutes = span.whole_minutes();
     if minutes < 1 {
-        "刚刚发布".to_string()
+        "Just now".to_string()
     } else if minutes < 60 {
-        format!("{minutes} 分钟前")
+        format!("{minutes}m ago")
     } else if span.whole_hours() < 24 {
-        format!("{} 小时前", span.whole_hours())
+        format!("{}h ago", span.whole_hours())
     } else {
-        format!("{} 天前", span.whole_days().max(1))
+        format!("{}d ago", span.whole_days().max(1))
     }
 }
 
-/// 「还剩 5 小时」。匿名作品才有到期，广场页缓存 30 秒，误差一分钟以内。
+/// 「5h left」.
 pub fn remaining(until: OffsetDateTime, now: OffsetDateTime) -> String {
     let left = until - now;
     let minutes = left.whole_minutes();
     if minutes <= 0 {
-        "即将下线".to_string()
+        "Expiring soon".to_string()
     } else if minutes < 60 {
-        format!("还剩 {minutes} 分钟")
+        format!("{minutes}m left")
     } else {
-        format!("还剩 {} 小时", left.whole_hours())
+        format!("{}h left", left.whole_hours())
     }
 }
 
@@ -76,35 +93,35 @@ mod tests {
 
     #[test]
     fn dates_are_written_in_utc_plus_eight() {
-        assert_eq!(day("2026-09-08T20:30:00Z").as_deref(), Some("9 月 9 日"));
+        assert_eq!(day("2026-09-08T20:30:00Z").as_deref(), Some("Sep 9"));
         assert_eq!(
             day_time("2026-09-08T12:59:00Z").as_deref(),
-            Some("9 月 8 日 20:59")
+            Some("Sep 8, 20:59")
         );
         let (machine, human) = deadline("2026-09-08T04:30:00Z").unwrap();
         assert_eq!(machine, "2026-09-08T04:30:00Z");
-        assert_eq!(human, "9 月 8 日 12:30（UTC+8）");
+        assert_eq!(human, "Sep 8, 12:30 (UTC+8)");
         assert!(day("not a date").is_none());
     }
 
     #[test]
     fn relative_wording() {
         let now = datetime!(2026-09-08 04:00:00 UTC);
-        assert_eq!(ago(datetime!(2026-09-08 03:59:30 UTC), now), "刚刚发布");
-        assert_eq!(ago(datetime!(2026-09-08 03:20:00 UTC), now), "40 分钟前");
-        assert_eq!(ago(datetime!(2026-09-08 03:00:00 UTC), now), "1 小时前");
-        assert_eq!(ago(datetime!(2026-09-06 04:00:00 UTC), now), "2 天前");
+        assert_eq!(ago(datetime!(2026-09-08 03:59:30 UTC), now), "Just now");
+        assert_eq!(ago(datetime!(2026-09-08 03:20:00 UTC), now), "40m ago");
+        assert_eq!(ago(datetime!(2026-09-08 03:00:00 UTC), now), "1h ago");
+        assert_eq!(ago(datetime!(2026-09-06 04:00:00 UTC), now), "2d ago");
         assert_eq!(
             remaining(datetime!(2026-09-08 09:30:00 UTC), now),
-            "还剩 5 小时"
+            "5h left"
         );
         assert_eq!(
             remaining(datetime!(2026-09-08 04:20:00 UTC), now),
-            "还剩 20 分钟"
+            "20m left"
         );
         assert_eq!(
             remaining(datetime!(2026-09-08 03:00:00 UTC), now),
-            "即将下线"
+            "Expiring soon"
         );
     }
 }

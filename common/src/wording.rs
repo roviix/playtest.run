@@ -11,30 +11,30 @@ use crate::manifest::WorkKind;
 /// 对着一个数据看板说「邀请你试玩」是把话说错了。认不出引擎时也说「体验」：宁可少说一句。
 pub fn invite_verb(kind: WorkKind, is_game: bool) -> &'static str {
     match kind {
-        WorkKind::Article => "邀请你阅读",
-        WorkKind::Video => "邀请你观看",
-        WorkKind::Web if is_game => "邀请你试玩",
-        WorkKind::Web => "邀请你体验",
+        WorkKind::Article => "invites you to read",
+        WorkKind::Video => "invites you to watch",
+        WorkKind::Web if is_game => "invites you to play",
+        WorkKind::Web => "invites you to test",
     }
 }
 
 /// 按钮、卡片悬停等不带「邀请你」的短动作。
 pub fn action_verb(kind: WorkKind, is_game: bool) -> &'static str {
     match kind {
-        WorkKind::Article => "阅读",
-        WorkKind::Video => "观看",
-        WorkKind::Web if is_game => "试玩",
-        WorkKind::Web => "体验",
+        WorkKind::Article => "Read",
+        WorkKind::Video => "Watch",
+        WorkKind::Web if is_game => "Play",
+        WorkKind::Web => "Test",
     }
 }
 
 /// 招募与反馈署名所用的体验者称呼。
 pub fn audience_noun(kind: WorkKind, is_game: bool) -> &'static str {
     match kind {
-        WorkKind::Article => "读者",
-        WorkKind::Video => "观众",
-        WorkKind::Web if is_game => "试玩者",
-        WorkKind::Web => "体验者",
+        WorkKind::Article => "readers",
+        WorkKind::Video => "viewers",
+        WorkKind::Web if is_game => "playtesters",
+        WorkKind::Web => "testers",
     }
 }
 
@@ -44,11 +44,11 @@ mod tests {
 
     #[test]
     fn each_work_kind_uses_the_action_people_will_really_take() {
-        assert_eq!(invite_verb(WorkKind::Web, true), "邀请你试玩");
-        assert_eq!(invite_verb(WorkKind::Web, false), "邀请你体验");
-        assert_eq!(invite_verb(WorkKind::Article, false), "邀请你阅读");
-        assert_eq!(invite_verb(WorkKind::Video, false), "邀请你观看");
-        assert_eq!(action_verb(WorkKind::Article, false), "阅读");
-        assert_eq!(audience_noun(WorkKind::Video, false), "观众");
+        assert_eq!(invite_verb(WorkKind::Web, true), "invites you to play");
+        assert_eq!(invite_verb(WorkKind::Web, false), "invites you to test");
+        assert_eq!(invite_verb(WorkKind::Article, false), "invites you to read");
+        assert_eq!(invite_verb(WorkKind::Video, false), "invites you to watch");
+        assert_eq!(action_verb(WorkKind::Article, false), "Read");
+        assert_eq!(audience_noun(WorkKind::Video, false), "viewers");
     }
 }

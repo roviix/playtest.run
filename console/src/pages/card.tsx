@@ -14,13 +14,20 @@ export function CardTab({ site }: { site: Site }) {
 
   if (site.current_version === undefined) {
     return (
-      <Empty>
-        <p>上传第一版之后这里有卡。</p>
-      </Empty>
+      <Empty
+        icon={
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+        }
+        title="Invite cards ready upon publish"
+        description="High-resolution portrait and landscape sharing cards will generate automatically once you deploy your first version."
+      />
     );
   }
 
-  // 卡随版本重画，地址却是同一个，所以带上版本号绕开浏览器缓存。
   const tall = `${cardUrl(site.url)}?v=${site.current_version}`;
   const wide = `${cardWideUrl(site.url)}?v=${site.current_version}`;
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
@@ -29,7 +36,7 @@ export function CardTab({ site }: { site: Site }) {
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(link);
-      setCopied("已复制");
+      setCopied("Copied");
     } catch {
       setCopied(link);
     }
@@ -40,33 +47,33 @@ export function CardTab({ site }: { site: Site }) {
     try {
       await navigator.share({ title: site.title, url: link });
     } catch {
-      // 用户取消了，或者浏览器不让——都不算错。
+      // User cancelled or browser rejected.
     }
   }
 
   return (
     <div class="cards-page">
       <div class="cards-row">
-        <CardImage src={tall} ratio="1080 / 1350" caption="竖版 · 发到群里" />
-        <CardImage src={wide} ratio="1200 / 630" caption="横版 · 链接预览" />
+        <CardImage src={tall} ratio="1080 / 1350" caption="Portrait · For chats & social" />
+        <CardImage src={wide} ratio="1200 / 630" caption="Landscape · Link preview" />
       </div>
       <p class="row-actions">
         <a class="button" href={tall} target="_blank" rel="noreferrer">
-          打开竖版
+          Open Portrait
         </a>
         <a class="button" href={wide} target="_blank" rel="noreferrer">
-          打开横版
+          Open Landscape
         </a>
         <button class="button" type="button" onClick={copyLink}>
-          {copied ?? "复制链接"}
+          {copied ?? "Copy Link"}
         </button>
         {canShare ? (
           <button class="button primary" type="button" onClick={share}>
-            分享
+            Share
           </button>
         ) : null}
       </p>
-      <p class="muted">打开后右键或长按存图。卡随版本重画。</p>
+      <p class="muted">Right-click or long-press to save image. Cards update with each version.</p>
     </div>
   );
 }
@@ -77,14 +84,14 @@ function CardImage({ src, ratio, caption }: { src: string; ratio: string; captio
     <figure class="card-figure">
       {broken ? (
         <div class="card-image missing" style={`aspect-ratio:${ratio}`}>
-          <p class="muted">还在画。稍后刷新。</p>
+          <p class="muted">Rendering. Refresh shortly.</p>
         </div>
       ) : (
         <img
           class="card-image"
           style={`aspect-ratio:${ratio}`}
           src={src}
-          alt="邀请卡"
+          alt="Invite Card"
           onError={() => setBroken(true)}
         />
       )}

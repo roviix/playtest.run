@@ -16,15 +16,15 @@ for (const section of sections) {
   assert.ok(router.includes(`"${section}"`), `missing route: ${section}`);
   assert.equal([...docs.matchAll(new RegExp(`<Chapter name="${section}">`, "g"))].length, 1);
 }
-assert.ok(app.indexOf('if (route.name === "docs")') < app.indexOf('if (!hasToken)'));
+assert.ok(app.indexOf('route.name === "docs"') < app.indexOf('!me'));
 const publishCommands = [...publish.matchAll(/command: "([^"\n]+)"/g)].map((match) => match[1]);
 assert.equal(publishCommands.length, 3, "all three publish modes remain available");
 assert.ok(publishCommands.every((command) => !command.includes("--public")), "default publish must not opt into plaza");
 assert.ok(!home.includes("--public --seats"));
-assert.ok(docs.includes("默认发布不写图片"));
-assert.ok(docs.includes("不上广场 ≠ 私密访问"));
-assert.ok(docs.includes("--gate") && docs.includes("这个选项已撤出"));
-assert.ok(docs.includes("没有第二次确认"));
+assert.ok(docs.includes("Default publish does not save an image") || docs.includes("默认发布不写图片"));
+assert.ok(docs.includes("Unlisted ≠ Private access") || docs.includes("不上广场 ≠ 私密访问"));
+assert.ok(docs.includes("--gate") && (docs.includes("option has been removed") || docs.includes("这个选项已撤出")));
+assert.ok(docs.includes("no second confirmation") || docs.includes("没有第二次确认"));
 assert.ok(!docs.includes("https://playtest.run/console"));
 const metadata = spawnSync("cargo", ["metadata", "--no-deps", "--format-version", "1"], { cwd: root, encoding: "utf8" });
 assert.equal(metadata.status, 0, metadata.stderr);

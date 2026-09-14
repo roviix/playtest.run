@@ -353,7 +353,7 @@ font-weight=\"700\" fill=\"#ffffff\" fill-opacity=\"0.13\">{mark}</text>\n",
     }
 
     fn title(&self) -> String {
-        format!("《{}》", self.manifest.title)
+        self.manifest.title.clone()
     }
 
     /// 没封面时那个大字：作品名的头一个字。跳过引号书名号一类的符号，
@@ -377,10 +377,10 @@ font-weight=\"700\" fill=\"#ffffff\" fill-opacity=\"0.13\">{mark}</text>\n",
             .map(str::to_string)
     }
 
-    /// `v7 · 9 月 9 日`；匿名链接换成到期时间——那才是拿到这张卡的人需要知道的事。
+    /// `v7 · Sep 9`；匿名链接换成到期时间——那才是拿到这张卡的人需要知道的事。
     fn stamp(&self) -> String {
         if let Some(until) = self.manifest.expires_at.as_deref().and_then(when::day_time) {
-            return format!("这张邀请到 {until}");
+            return format!("Expires {until}");
         }
         let version = match self.version_label {
             Some(label) => label.to_string(),
@@ -397,7 +397,7 @@ font-weight=\"700\" fill=\"#ffffff\" fill-opacity=\"0.13\">{mark}</text>\n",
     fn seats(&self) -> Option<String> {
         match self.live.seats {
             Some(n) if n > 0 => Some(format!(
-                "在找 {n} 位{}",
+                "Seeking {n} {}",
                 audience_noun(self.manifest.kind, self.manifest.is_game())
             )),
             _ => None,
@@ -914,9 +914,9 @@ mod tests {
         assert!(svg.starts_with(
             "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1080\" height=\"1350\""
         ));
-        assert!(svg.contains("某某 邀请你试玩"));
-        assert!(svg.contains("《小球大冒险》"));
-        assert!(svg.contains("v7 · 9 月 9 日"));
+        assert!(svg.contains("某某 invites you to play"));
+        assert!(svg.contains("小球大冒险"));
+        assert!(svg.contains("v7 · Sep 9"));
         assert!(svg.contains("三关，五分钟，手机上也能玩。"));
         // 撕票线与二维码。
         assert!(svg.contains("stroke-dasharray"));
@@ -944,7 +944,7 @@ mod tests {
         live.seats = Some(10);
         live.joined = 6;
         let svg = card(&manifest(), &live, Shape::Portrait).svg();
-        assert!(svg.contains("在找 10 位试玩者"));
+        assert!(svg.contains("Seeking 10 playtesters"));
         // 已加入几位只在门禁页上说。卡是邀请函，不是进度条——「还差 4 位」是催促的口吻。
         for forbidden in ["已有", "6 位", "6/10", "6 / 10"] {
             assert!(!svg.contains(forbidden), "卡上不该有「{forbidden}」");
@@ -960,13 +960,13 @@ mod tests {
 
         m.kind = WorkKind::Article;
         let article = card(&m, &live, Shape::Portrait).svg();
-        assert!(article.contains("某某 邀请你阅读"));
-        assert!(article.contains("在找 10 位读者"));
+        assert!(article.contains("某某 invites you to read"));
+        assert!(article.contains("Seeking 10 readers"));
 
         m.kind = WorkKind::Video;
         let video = card(&m, &live, Shape::Portrait).svg();
-        assert!(video.contains("某某 邀请你观看"));
-        assert!(video.contains("在找 10 位观众"));
+        assert!(video.contains("某某 invites you to watch"));
+        assert!(video.contains("Seeking 10 viewers"));
     }
 
     #[test]
@@ -975,7 +975,7 @@ mod tests {
         m.expires_at = Some("2026-09-10T12:59:00Z".into());
         let live = SiteLive::empty("brisk-otter-41");
         let svg = card(&m, &live, Shape::Portrait).svg();
-        assert!(svg.contains("这张邀请到 9 月 10 日 20:59"));
+        assert!(svg.contains("Expires Sep 10, 20:59"));
         assert!(!svg.contains("v7"));
     }
 
@@ -1049,9 +1049,9 @@ mod tests {
         let live = SiteLive::empty("brisk-otter-41");
         let svg = card(&manifest(), &live, Shape::Wide).svg();
         assert!(svg.contains("width=\"1200\" height=\"630\""));
-        assert!(svg.contains("某某 邀请你试玩"));
-        assert!(svg.contains("《小球大冒险》"));
-        assert!(svg.contains("v7 · 9 月 9 日"));
+        assert!(svg.contains("某某 invites you to play"));
+        assert!(svg.contains("小球大冒险"));
+        assert!(svg.contains("v7 · Sep 9"));
         // 竖版的撕票线横着撕，横版的竖着撕，二维码在右侧。
         assert!(svg.contains("<line x1=\"560\""));
         assert!(svg.contains("<rect x=\"1016\""));
@@ -1063,9 +1063,9 @@ mod tests {
         m.version = 0;
         let live = SiteLive::empty("brisk-otter-41");
         let mut c = card(&m, &live, Shape::Portrait);
-        c.version_label = Some("在线");
+        c.version_label = Some("Online");
         let svg = c.svg();
-        assert!(svg.contains("在线 · 9 月 9 日"));
+        assert!(svg.contains("Online · Sep 9"));
         assert!(!svg.contains("v0"));
     }
 

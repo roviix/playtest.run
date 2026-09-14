@@ -65,7 +65,7 @@ pub async fn openapi_json() -> Json<Value> {
 pub async fn agent_json() -> Json<Value> {
     Json(json!({
         "name": "playtest",
-        "description": "Put a playable web build in front of real people and see what happened.",
+        "description": "Put what you're making in front of real people with one command — zero-friction previews, versioned feedback, and voluntary followers for your next iteration.",
         "documentation": format!("{DEVELOPER_API_URL}/llms.txt"),
         "openapi": format!("{DEVELOPER_API_URL}/openapi.json"),
         "skill": format!("{DEVELOPER_API_URL}/skill.md"),
@@ -82,30 +82,34 @@ fn short() -> String {
         "\
 # playtest
 
-One command puts a playable web build in front of real people, and tells you what happened.
-一条命令，把你手上这个能玩的版本放到别人面前，然后知道他们玩成了什么样。
+> Build in public. Show the work, not the hype.
+
+One command puts what you're making (web build, interactive prototype, article, or video) in front of real people. Zero-friction playtesting, versioned feedback, and followers for what's next.
 
 ## What it is
 
-A playtest link, not a hosting product. You publish a built web directory (or tunnel a running
-dev server) and get `https://<slug>.playtest.run`. Players open it and play — no account, no
-install. The developer gets a roster of who played, on what, where they stopped, and what they said.
+A work-centric build-in-public platform, not a generic hosting product or vanity social feed.
+You publish a built web directory (or tunnel a running dev server) and get `https://<slug>.playtest.run`
+or `https://playtest.run/p/<slug>`. Audience opens it and tries it — no account, no install.
+The creator gets a clean roster of who visited, on what, where they stopped, and what they said.
 
 ## When to use it
 
 - The user has a **playable or interactive web build** (game, Three.js scene, p5 sketch, WebXR
   demo, prototype) and wants people to try it.
 - The user has a **dev server running** and wants someone on another device or network to open it.
+- The user is **building in public** and wants versioned feedback rather than social media likes.
 - The user wants a **QR code or an invite card image** to drop into a group chat.
 
 ## When NOT to use it
 
 - Plain static hosting for a report, dashboard, docs site or landing page. That is a hosting
-  product's job, not this one. Links here are for *playtesting*, the root domain is a plaza of
+  product's job, not this one. Links here are for *iterative testing and build-in-public*, the root domain is a plaza of
   works looking for testers, and anonymous links expire in {anon_hours} hours.
 - Anything that needs server-side code. We never run user code. If the user has a backend,
   keep it on their machine and use `--backend` (hybrid mode).
 - Long-term production hosting or a custom domain. We do not do custom domains.
+- A vanity social network for posting text updates, daily streaks, or revenue screenshots. We focus strictly on the tangible work itself.
 
 ## The fastest path
 

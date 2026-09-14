@@ -502,8 +502,8 @@ pub fn live_key(slug: &str) -> String {
     format!("sites/{slug}/live.json")
 }
 
-/// 门禁页上最多显示几条公开反馈（REWRITE §3.3）。
-pub const PUBLIC_NOTES_ON_GATE: usize = 3;
+/// 门禁页上最多显示几条公开反馈与原声聊天（DESIGN §3.3、§3.5）。
+pub const PUBLIC_NOTES_ON_GATE: usize = 30;
 
 /// 一个作品**会变的那些**：控制面写、边缘只读、短缓存。
 ///

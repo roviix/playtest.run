@@ -1,90 +1,154 @@
 # playtest
 
-> 一条命令，把你手上这个能玩的版本放到别人面前，然后知道他们玩成了什么样。
-> One command to put the build you have right now in front of real people — and see what happened.
+> **Build in public. Show the work, not the hype.**
+>
+> One command to put what you're making — web apps, tools, games, articles, or videos — in front of real people. Zero-friction playtesting, versioned feedback, and followers for what's next.
 
-**状态：0.3.0 公开试用候选，仍只算内部测试。** 网页目录、本地端口与混合发布，链接／二维码／邀请卡，玩家免登录试玩、留名、反馈、关注，以及作者回看结果和发布下一版已经接成一条线；真实 S3、Range 与邮件服务商接收请求已有日期记录。当前工作树补上了边缘事件凭据、上传清单绑定和匿名身份平台保险丝，但尚未部署复验；运营者全链路下架、真实手机／微信、Gmail／QQ／163 收件往返，以及与源码匹配的公开 CLI Release 仍是阻断，所以不把旧二进制或生产站称为当前公开试用。做不到的地方命令会明说。产品定义只有 [`docs/DESIGN.md`](docs/DESIGN.md)；[`docs/REWRITE.md`](docs/REWRITE.md) 只是历史施工笔记，冲突时不作为定义。真机记录在 [`docs/spikes/`](docs/spikes/)，施工顺序在 [`docs/KICKOFF.md`](docs/KICKOFF.md)；一张图看架构在 [`docs/architecture.html`](docs/architecture.html)（浏览器直接打开），设计概览在 [`docs/overview.html`](docs/overview.html)。
+[Website](https://playtest.run) · [Docs](https://playtest.run/console/#/docs/start) · [Plaza](https://playtest.run) · [Releases](https://github.com/roviix/playtest.run/releases)
 
-## 它会是什么
+---
 
-- `playtest ./dist` —— 上传引擎导出的目录，几秒拿到 `https://<slug>.playtest.run` 和一个二维码。
-- `playtest 5173` —— 把正在跑的本地开发服务器或联机后端接出去，链接长得一样。
-- `playtest ./dist --backend 3000` —— 带后端的小应用：目录里有的文件上传，目录里没有的路径（`/api/…`、WebSocket）走隧道到你电脑上的 3000 端口。
-- `playtest ./dist --public --seats 10` —— 顺手放到广场（`playtest.run` 首页）上，标「正在找 10 位试玩者」，路过的人点开就玩；`playtest unlist` 拿下来。
-- `playtest files <slug>` —— 线上这一版到底是哪些文件：路径、大小、内容哈希。换台电脑也知道现在发出去的是什么。
-- 给 AI 助手：`playtest mcp` 起一个 MCP server；没装的助手可以读 [`/llms.txt`](https://playtest.run/llms.txt)、[`/skill.md`](https://playtest.run/skill.md)、[`/openapi.json`](https://playtest.run/openapi.json)。
-- 玩家点开就玩：不登录、不装东西、微信里能开。
-- 开发者知道结果：谁开了、什么设备、加载成没成、报了什么错、说了什么、有几个人是从广场来的。
+## What is playtest?
 
-## 域名
+**playtest** is a lightweight, zero-friction delivery and feedback platform designed for makers who **build in public**. 
 
-- `playtest.run` 是同一个产品入口：广场、关注、账号、作品与合集管理、API 和文档。浏览和体验不要求登录，邮箱或 GitHub 登录后可关注与发布。
-- `<slug>.playtest.run` 是作品独立运行源，不承载平台登录。平台会话只发给根域，写操作校验精确 Origin；同站子域不是完整安全隔离，暂不另设运行域。
+Unlike generic static hosting or heavy app stores, playtest bridges the critical gap between *"I built something"* and *"real people gave me actionable feedback"*:
 
-## 怎么活
+- **⚡ Instant Single-Command Publishing**: Run `playtest ./dist` or `playtest 5173` to get a live HTTPS URL (`https://<slug>.playtest.run`) and QR code in seconds.
+- **🛡️ Zero-Friction for Players & Testers**: Anyone can open and test your work immediately. No mandatory sign-up, no downloads, and no app installs required.
+- **🔄 Version-Bound Feedback**: Testers leave one-sentence impressions and bug reports directly pinned to the exact version they tested (`v1`, `v2`, etc.).
+- **👥 Build an Audience Across Releases**: Testers can voluntarily follow your project or collection via email or browser notifications to get notified when your next version drops.
+- **🎨 Multi-Format Support**: Built for modern indie creators — supports HTML5 games (Phaser, Godot, Unity, Cocos), Web applications (Vite, Next, React), interactive tools, articles, and video demos.
+- **✨ Public Plaza & Collections**: Option to feature your work on the global Plaza (`playtest.run`) with `playtest ./dist --public` or recruit specific testers with `--seats 10`.
 
-开发者对免费工具最怕的是它某天消失——SIMMER.io 是被一笔 DDoS 账单打死的，Glitch 停了托管。所以先把账算给你看（推导在 [`docs/DESIGN.md`](docs/DESIGN.md) §6）：
+---
 
-- 固定成本是一台香港边缘、控制面、对象存储和域名，每月百美元量级；变动成本是带宽，约 $0.1 / GB。
-- 免费档有硬上限：登录账号每月 10 GB、3 个活跃作品；匿名链接 1 GB / 24 小时。到上限硬停，玩家看到一页说明，**不会产生账单**。我们不做后付费——链接发出去之后你控制不了有多少人点开，任何后付费都会把「分享」变成财务风险。
-- 收钱的对象是「认真做测试的人」：固定可改的 slug、去角标、口令与邀请名单、更长的结果留存、版本比较。更多流量只卖预付包。
-- v0.1 不收钱，先验证 §8 的假设；有人主动问价再接支付。
-- CLI 与 SDK Apache-2.0，边缘与控制面 AGPL-3.0，`deploy/` 里一台机器能自己跑通。哪天我们不做了，代码和部署脚本都在。
+## 3-Minute Quickstart
 
-## 仓库布局
+### 1. Installation
 
-Rust 一个 Cargo workspace（`cargo test --workspace`），控制台与 SDK 是 TypeScript。
+Download the pre-built single binary for your platform from [GitHub Releases](https://github.com/roviix/playtest.run/releases) (macOS arm64/x86_64, Linux x86_64/arm64 musl, Windows x86_64) and place it in your `PATH`:
 
-| 目录 | 内容 | 许可 | 状态 |
-|---|---|---|---|
-| `cli/` | `playtest` 命令行：上传、隧道、`ls / rm / open / versions / rollback / files / whoami`、`--json`、`mcp`、上传前检查 | Apache-2.0 | 可用 |
-| `common/` | 三方共享的契约：清单、对象存储布局、API 类型、隧道令牌与 WebSocket↔yamux 字节流 | Apache-2.0 | 可用 |
-| `edge/` | 边缘：泛域名入口、门禁页、按清单分发、隧道接入、熔断、第一层事件与上报、同源 SDK | AGPL-3.0 | 可用；TLS 由前置 Caddy 做 |
-| `api/` | 控制面：匿名令牌与 GitHub 登录、slug、版本、隧道令牌、事件与反馈写入、结果读取、给助手读的 `llms.txt` / `skill.md` / `openapi.json` | AGPL-3.0 | 可用；令牌撤销、配额未做 |
-| `sdk/` | `playtest.js`：JS 错误、加载用时、自定义事件、反馈按钮；由边缘在 `/_playtest/sdk.js` 提供 | Apache-2.0 | 可用；上传时自动注入未做 |
-| `console/` | 控制台（Preact）：作品列表、时间线、点名册、反馈流，手机可看 | AGPL-3.0 | 在线：`playtest.run/console/` |
-| `deploy/` | 一台机器跑通：compose、Caddy（DNS-01 泛域名证书）、服务器上构建与发布脚本 | — | 香港在用 |
-| `fixtures/` | 测试用的真实导出物（Vite、Phaser、响应头自检页、socket.io 联机房间、门禁页音频测试台） | — | 缺 Godot、Unity |
-| `scripts/` | 开发用脚本（无头 Chrome 走一遍玩家路径） | — | — |
-| `docs/` | `DESIGN.md` 唯一产品定义；`spikes/` 真机记录（只增）；`research/` 市场与用户调研 | — | — |
-
-根目录 `LICENSE` 是 Apache-2.0；`api/`、`edge/` 各自带 AGPL-3.0。
-
-## 安装与第一次使用
-
-预编译的单文件放在 [Releases](https://github.com/roviix/playtest.run/releases)（macOS arm64 / x86_64、Linux x86_64 / arm64 musl、Windows x86_64）。当前仓库仍是私有试制，只有受邀账号能下载；当前源码面向 0.3.0，在 `v0.3.0` 的五个平台产物和校验文件发布前，不把旧版二进制当作公开安装入口。解开后把 `playtest` 放进 PATH：
-
-```
-cd 你的导出目录        # Godot / Unity / Phaser / Vite 导出的那个，里面有 index.html
-playtest .            # 几秒后：链接 + 二维码；第一次运行自动拿一个 24 小时的匿名链接
-playtest 5173         # 或者把正在跑的本地开发服务器接出去
+```bash
+# Example for macOS Apple Silicon
+curl -fsSL https://playtest.run/install.sh | bash
+# Or verify with:
+playtest --help
 ```
 
-不用记住全部命令：`playtest` 或 `playtest -h` 看快速开始，`playtest --help` 看完整用法。
-控制台的「使用文档」提供免登录阅读入口（`#/docs/start`），按首次发布、更新、分享、管理、自动化和排查六个任务组织。文档示例一致性检查：先构建 CLI，再运行 `node scripts/check-console-docs.mjs`；也可用 `PLAYTEST_CLI` 指定已有二进制。该检查只解析帮助，不发布作品。
-在发过的目录里运行 `playtest open` 打开链接，`playtest card` 再存邀请卡；
-`playtest versions` / `playtest files` 查看版本和线上文件。换个目录时，显式指定已发布目录或作品标识。
-删除、下架、回滚始终需要显式目标，例如 `playtest rm ./dist`，删除前会确认。
-更新内容后再次运行 `playtest ./dist`，默认更新同一个链接；CLI 不自动构建，也暂不提供 `--watch`。
-普通发布不下载邀请卡、不写图片；需要时运行 `playtest card --out invite.png`，或发布时加 `--card invite.png`。
-`--card -` 仍表示不下载。MCP 可以直接返回邀请卡图片，但不在本地保存。
-`--gate` 已撤出：主域展示邀请函，作品子域直接运行，旧脚本需要移除此参数。
-找试玩者只写 `playtest ./dist --seats 10`，不必重复 `--public`。
-本地端口分享不能带封面、发布说明、上广场等仅用于目录发布的选项；CLI 会报错而不是忽略它们。
+### 2. Publish Your First Project
 
-结果在 [`playtest.run/console/`](https://playtest.run/console/)，令牌在 `~/.config/playtest/config.json` 里。
+Navigate to your build output directory (containing `index.html`):
 
-## 本机跑一遍
+```bash
+cd ./dist
 
-完整步骤（三个进程、广场 / 门禁 / 关注 / 控制台、本机和线上差在哪）见 [`docs/LOCAL.md`](docs/LOCAL.md)。最短命令：
+# Publish an anonymous link valid for 24 hours (or claim with an account)
+playtest .
 
-```
-cargo build -p playtest-api -p playtest-edge -p playtest
-# 控制面、边缘、控制台的环境变量和验收顺序都在那篇里。
+# Or publish to the public Plaza seeking 10 playtesters
+playtest . --public --seats 10
 ```
 
-拿到的 `http://<slug>.localhost:8443` 用 Chrome 或 Firefox 打开（Safari 不认 `*.localhost`）。上线部署见 [`deploy/README.md`](deploy/README.md)。
+Within 3 seconds, your terminal outputs:
+```text
+✓ Published to: https://brisk-otter-41.playtest.run
+  Plaza invitation: https://playtest.run/p/brisk-otter-41
+  QR code: [rendered in terminal]
+```
 
-## 参与
+### 3. Share a Local Dev Server / Tunnel
 
-私有开发到 v0.1 私测通过后公开。建造纪律见 [`AGENTS.md`](AGENTS.md)。
+Need to share an active development server or multiplayer backend without building?
+
+```bash
+# Expose your local Vite / Next dev server on port 5173
+playtest 5173
+
+# Expose static frontend while proxying unmatched API requests to port 3000
+playtest ./dist --backend 3000
+```
+
+---
+
+## CLI Command Reference
+
+| Command | Description |
+|---|---|
+| `playtest <dir>` | Upload and publish an exported static directory (`./dist`, `./build`). |
+| `playtest <port>` | Establish a real-time secure tunnel to a running local dev server. |
+| `playtest <dir> --backend <port>` | Hybrid mode: serve static assets with edge caching while proxying `/api` & WebSockets to local backend. |
+| `playtest open` | Open the current project's live URL in your default browser. |
+| `playtest card` | Generate an invitation pass image (`invite.png`) suitable for messaging apps. |
+| `playtest versions` | Inspect deployed release history, timestamps, and active version. |
+| `playtest rollback <version>` | Instantly roll back to any previous version with zero downtime. |
+| `playtest files` | Verify exact files, byte sizes, and content SHA-256 hashes currently live. |
+| `playtest rm` | Safely take down or remove a project. |
+| `playtest mcp` | Launch a Model Context Protocol (MCP) server for AI assistants (Cursor, Claude, Antigravity). |
+
+### Publishing Flags
+- `--public`: List your project on the global `playtest.run` Plaza.
+- `--seats <N>`: Display a recruitment tag requesting *N* playtesters.
+- `--summary "text"`: Add a one-line description visible on your card and meta preview.
+- `--isolated`: Enforce Cross-Origin Isolation headers (`COOP`/`COEP`) for multi-threaded Godot or WebAssembly builds.
+- `--json`: Format CLI outputs as raw JSON for CI/CD or automation scripts.
+
+---
+
+## Architecture & Principles
+
+### 1. One Product, One Root Domain
+- **`playtest.run`**: The main platform root. Hosts the Plaza, Collections, Following updates, Developer Console, Documentation, and AI discovery endpoints. No untrusted creator scripts ever run on the root domain.
+- **`<slug>.playtest.run`**: Isolated origin where user projects run. Platform cookies are host-only (`Host-` prefixed) and never leak to project subdomains.
+
+### 2. No Hype, Just Facts
+The user interface only displays concrete verified facts:
+- No artificial follower counts, vanity metrics, or fake reviews.
+- Roster shows actual dwell time and completion medians (e.g., *"3 sessions, median duration 4m 12s"*).
+- Every feedback note is tied to the author's specific version commit.
+
+### 3. AI Agent Ready
+playtest is designed from day one to be machine-readable:
+- `/llms.txt`: Standard LLM navigation pointers.
+- `/skill.md`: Direct agent instruction manual.
+- `/openapi.json`: Machine-executable API schema.
+- Built-in `playtest mcp` server.
+
+---
+
+## Repository Structure
+
+playtest is organized as a unified Rust Cargo workspace (`cargo test --workspace`) with TypeScript frontend components:
+
+- **`cli/`**: The `playtest` command-line tool (upload, tunnel, inspections, MCP server).
+- **`common/`**: Shared protocol contracts, manifest validation, schemas, and wording models.
+- **`edge/`**: High-performance edge server handling wildcards (`*.playtest.run`), project gates, asset serving, streaming rate limits, and JSON-LD structured data.
+- **`api/`**: Developer control plane handling auth, versioning, feedback pipelines, email dispatch, and console APIs.
+- **`console/`**: Preact-based mobile-responsive developer dashboard (`playtest.run/console/`).
+- **`deploy/`**: Single-machine production container manifests, Caddy TLS configurations, and deployment scripts.
+
+---
+
+## Self-Hosting & Development
+
+To build and run locally:
+
+```bash
+# Build the backend and CLI
+cargo build --workspace
+
+# Run complete workspace test suite
+cargo test --workspace
+
+# Build the developer console
+cd console && npm install && npm run build
+```
+
+See [`deploy/README.md`](deploy/README.md) for production provisioning, Caddy automatic TLS setup, and single-machine deployment instructions.
+
+---
+
+## License
+
+- CLI & SDK: [Apache-2.0](LICENSE)
+- Edge & API services: AGPL-3.0

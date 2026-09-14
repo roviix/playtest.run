@@ -26,8 +26,8 @@ TARGET="${TARGET:-all}"
 BUILD_ON="${BUILD_ON:-server}"
 PLATFORM="${PLATFORM:-linux/arm64}"
 TAG="${TAG:-$(date -u +%Y%m%d-%H%M%S)}"
-SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 "$HOST")
-RSYNC=(rsync -az -e "ssh -o BatchMode=yes")
+SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=5 "$HOST")
+RSYNC=(rsync -az -e "ssh -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=5")
 
 case "$TARGET" in all|server|caddy|console|none) ;; *) echo "TARGET 只能是 all / server / caddy / console / none，不是「$TARGET」" >&2; exit 2 ;; esac
 case "$BUILD_ON" in server|local) ;; *) echo "BUILD_ON 只能是 server 或 local，不是「$BUILD_ON」" >&2; exit 2 ;; esac

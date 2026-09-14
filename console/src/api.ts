@@ -107,6 +107,10 @@ export class ApiError extends Error {
 
 async function call<T>(path: string, init: RequestInit = {}, notifyExpired = true): Promise<T> {
   const headers = new Headers(init.headers);
+  const localToken = typeof localStorage !== "undefined" ? localStorage.getItem("playtest.token") : null;
+  if (localToken && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${localToken.trim()}`);
+  }
   if (init.body) headers.set("Content-Type", "application/json");
 
   let response: Response;

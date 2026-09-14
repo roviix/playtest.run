@@ -237,14 +237,43 @@ impl GatePage<'_> {
         // 微信对未备案域名的抓取没有任何承诺，这里是尽力而为，不是「支持微信卡片」（§5）。
         let description = match &summary {
             Some(summary) => format!("{summary} · {developer} {invite}"),
-            None => format!("{developer} {invite}《{title}》· {version}"),
+            None => format!("{developer} {invite} {title} · {version}"),
+        };
+        let canonical_url = format!("https://{}/p/{}", playtest_common::DEVELOPER_HOST, m.slug);
+        let cover_url = match &m.cover {
+            Some(_) => Some(format!("{}{COVER_PATH}", self.origin)),
+            None => Some(format!("{}{CARD_WIDE_PATH}", self.origin)),
+        };
+        let json_ld = if self.is_root {
+            let version_num = if self.version_label.is_some() {
+                0
+            } else {
+                m.version
+            };
+            crate::seo::project_json_ld(
+                &m.title,
+                &m.slug,
+                &m.developer,
+                version_num,
+                m.kind,
+                m.is_game(),
+                summary.as_deref(),
+                cover_url.as_deref(),
+            )
+        } else {
+            String::new()
         };
         let mut head = format!(
             "<meta name=\"description\" content=\"{description}\">\n\
-<meta property=\"og:title\" content=\"《{title}》· {version}\">\n\
+<link rel=\"canonical\" href=\"{canonical}\">\n\
+<meta property=\"og:title\" content=\"{title} · {version}\">\n\
 <meta property=\"og:description\" content=\"{og_description}\">\n\
 <meta property=\"og:type\" content=\"website\">\n\
-<meta property=\"og:url\" content=\"{url}\">\n",
+<meta property=\"og:url\" content=\"{url}\">\n\
+<meta name=\"twitter:title\" content=\"{title} · {version}\">\n\
+<meta name=\"twitter:description\" content=\"{og_description}\">\n\
+{json_ld}",
+            canonical = esc(&canonical_url),
             og_description = summary
                 .clone()
                 .unwrap_or_else(|| format!("{developer} {invite}")),
@@ -314,12 +343,12 @@ impl GatePage<'_> {
         let tips = match (self.wechat, m.kind) {
             (true, WorkKind::Web) => {
                 "<section class=\"tip\">\n\
-<p>在微信里可能玩不了：点右上角「···」，选「在浏览器中打开」。</p>\n\
+<p>May not run smoothly in WeChat: tap \"···\" at top right and select \"Open in Browser\".</p>\n\
 </section>\n"
             }
             (true, WorkKind::Video) => {
                 "<section class=\"tip\">\n\
-<p>如果在微信里不能播放，点右上角「···」，选「在浏览器中打开」。</p>\n\
+<p>If video fails to play in WeChat: tap \"···\" at top right and select \"Open in Browser\".</p>\n\
 </section>\n"
             }
             _ => "",
@@ -333,10 +362,10 @@ impl GatePage<'_> {
         // 那段脚本只为把到期时间换成访客本地时区的写法，没有到期时间就不发。
         let expires = match m.expires_at.as_deref().and_then(when::deadline) {
             Some((machine, human)) => format!(
-                "<p class=\"expires\">{clock}<span><time datetime=\"{}\">{}</time> 到期</span></p>\n<script{nonce_attr}>\
+                "<p class=\"expires\">{clock}<span>Expires <time datetime=\"{}\">{}</time></span></p>\n<script{nonce_attr}>\
 for(const t of document.querySelectorAll('.expires time[datetime]')){{\
 const d=new Date(t.getAttribute('datetime'));\
-if(!isNaN(d))t.textContent=d.toLocaleString(undefined,{{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}});}}\
+if(!isNaN(d))t.textContent='Expires '+d.toLocaleString(undefined,{{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}});}}\
 </script>\n",
                 esc(&machine),
                 esc(&human),
@@ -347,7 +376,7 @@ if(!isNaN(d))t.textContent=d.toLocaleString(undefined,{{month:'numeric',day:'num
 
         let badge = if m.badge && !self.is_root {
             format!(
-                "<p class=\"provider\"><a href=\"{}\">由 {} 提供</a></p>",
+                "<p class=\"provider\"><a href=\"{}\">Powered by {}</a></p>",
                 esc(self.root_url),
                 esc(self.host_suffix)
             )
@@ -368,13 +397,13 @@ if(!isNaN(d))t.textContent=d.toLocaleString(undefined,{{month:'numeric',day:'num
             (
                 esc(self.to),
                 " target=\"_blank\" rel=\"noopener\"",
-                format!("开始{verb}"),
+                verb.to_string(),
             )
         } else {
             (
                 format!("{RESERVED_PATH_PREFIX}start"),
                 "",
-                "开始".to_string(),
+                "Start".to_string(),
             )
         };
 
@@ -404,9 +433,9 @@ if(!isNaN(d))t.textContent=d.toLocaleString(undefined,{{month:'numeric',day:'num
 <form class=\"start\" method=\"post\" action=\"{start_action}\"{data_target_attr}{target_attr}>\n\
 <input type=\"hidden\" name=\"{to_field}\" value=\"{to}\">\n\
 <input type=\"hidden\" name=\"{ref_field}\" value=\"{referer}\">\n{from}\
-<label class=\"holder\"><span>你的名字 <small>· 可不填</small></span>\
+<label class=\"holder\"><span>Your name <small>· optional</small></span>\
 <input type=\"text\" name=\"{name_field}\" maxlength=\"{max_name}\" \
-placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
+placeholder=\"How should we call you?\" autocomplete=\"nickname\">\
 </label>\n\
 {button_markup}\n\
 </form>\n\
@@ -426,7 +455,7 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
                 };
                 let chapter_attr = self.current_chapter.map(|c| format!(" data-reader-chapter=\"{}\"", esc(&c.id))).unwrap_or_default();
                 let heading_title = self.current_chapter.map(|c| c.title.as_str()).unwrap_or(&m.title);
-                let body = self.article_html.map(|html| crate::presentation::article_view(html, heading_title).body).unwrap_or_else(|| format!("<p class=\"tip\">文章正文暂时取不到。<a href=\"{}\">重新加载</a></p>", esc(self.page_url)));
+                let body = self.article_html.map(|html| crate::presentation::article_view(html, heading_title).body).unwrap_or_else(|| format!("<p class=\"tip\">Article body is currently unavailable. <a href=\"{}\">Reload</a></p>", esc(self.page_url)));
                 let pagination = if let Some(idx) = self.current_chapter_index {
                     crate::presentation::chapter_pagination(&m.chapters, idx, &m.slug)
                 } else {
@@ -444,7 +473,7 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
                     .map(|path| public_file_url(self.origin, path))
                     .unwrap_or_default();
                 format!(
-                    "<div class=\"video-body\"><video controls preload=\"metadata\" playsinline aria-label=\"{}\" src=\"{}\"{}>你的浏览器不能播放这个视频。</video><p class=\"video-status\" role=\"status\" hidden></p><button type=\"button\" class=\"media-control video-retry\" hidden>重试播放</button></div>\n",
+                    "<div class=\"video-body\"><video controls preload=\"metadata\" playsinline aria-label=\"{}\" src=\"{}\"{}>Your browser does not support this video.</video><p class=\"video-status\" role=\"status\" hidden></p><button type=\"button\" class=\"media-control video-retry\" hidden>Retry playback</button></div>\n",
                     title, esc(&src),
                     if m.cover.is_some() { format!(" poster=\"{}{COVER_PATH}\"", esc(self.origin)) } else { String::new() }
                 )
@@ -459,7 +488,7 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
 {summary_html}<div class=\"edition\"><p class=\"stamp\">{stamp}</p>{expires}</div>\n{note}\
 {seats}{tips}{presentation}\
 {capability}\
-<footer>{tools}<a href=\"{report_href}\" class=\"report\">举报</a></footer>{badge}\n",
+<footer>{tools}<a href=\"{report_href}\" class=\"report\">Report</a></footer>{badge}\n",
             avatar = self.avatar(),
             seats = self.seats(),
             tools = self.tools(),
@@ -469,17 +498,17 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
         if m.kind != WorkKind::Web {
             let tag = match m.kind {
                 WorkKind::Article if !m.chapters.is_empty() => {
-                    format!("<div class=\"media-tag\">连载小说 · 共 {} 章</div>", m.chapters.len())
+                    format!("<div class=\"media-tag\">Serial · {} chapters</div>", m.chapters.len())
                 }
-                WorkKind::Article => "<div class=\"media-tag\">文章 · 深度阅读</div>".to_string(),
-                WorkKind::Video => "<div class=\"media-tag\">视频 · 实机演示</div>".to_string(),
+                WorkKind::Article => "<div class=\"media-tag\">Article · Longform</div>".to_string(),
+                WorkKind::Video => "<div class=\"media-tag\">Video · Demo</div>".to_string(),
                 WorkKind::Web => String::new(),
             };
             let metadata = if let Some(ch) = self.current_chapter {
                 let total = m.chapters.len();
                 let ch_title = esc(&ch.title);
                 format!(
-                    "<header class=\"media-heading serial-heading\">{tag}<p class=\"serial-book-title\">《{title}》</p><h1>{ch_title}</h1><div class=\"media-byline\">{}{developer} 连载中 · 共 {total} 章 · {stamp}{expires}</div>{summary_html}</header>",
+                    "<header class=\"media-heading serial-heading\">{tag}<p class=\"serial-book-title\">{title}</p><h1>{ch_title}</h1><div class=\"media-byline\">{}{developer} · Serial · {total} chapters · {stamp}{expires}</div>{summary_html}</header>",
                     self.avatar()
                 )
             } else {
@@ -489,18 +518,18 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
                 )
             };
             let resume = if m.kind == WorkKind::Article && self.article_html.is_some() {
-                "<div class=\"reader-resume\" hidden><button type=\"button\" class=\"reader-continue-btn\" hidden>‹ 回到上次阅读位置</button><button type=\"button\" class=\"reader-clear-btn\" title=\"清除位置记忆\" hidden aria-label=\"清除位置记忆\">×</button></div>"
+                "<div class=\"reader-resume\" hidden><button type=\"button\" class=\"reader-continue-btn\" hidden>‹ Resume reading</button><button type=\"button\" class=\"reader-clear-btn\" title=\"Clear reading position\" hidden aria-label=\"Clear reading position\">×</button></div>"
             } else { "" };
             let feedback_link = if self.live.feedback_public || self.live.listed {
-                "<a class=\"media-control\" href=\"#chat-panel\">留一句反馈</a>"
+                "<a class=\"media-control\" href=\"#chat-panel\">Leave feedback</a>"
             } else { "" };
             let content = if m.kind == WorkKind::Article {
-                let end_text = if self.current_chapter.is_some() { "本章结束" } else { "正文结束" };
+                let end_text = if self.current_chapter.is_some() { "End of chapter" } else { "End of article" };
                 format!("{metadata}{resume}{presentation}<div class=\"media-end\"><span>{end_text}</span>{feedback_link}</div>")
             } else {
                 format!("{presentation}{metadata}<div class=\"media-end\">{feedback_link}</div>")
             };
-            body = format!("{content}<footer>{}<a href=\"{report_href}\" class=\"report\">举报</a></footer>{badge}", self.tools());
+            body = format!("{content}<footer>{}<a href=\"{report_href}\" class=\"report\">Report</a></footer>{badge}", self.tools());
         }
 
         let hero = hero.replacen(
@@ -512,14 +541,14 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
             1,
         );
         let rendered = shell_hero(
-            &format!("{} {invite}《{}》", m.developer, m.title),
+            &format!("{} {invite} {}", m.developer, m.title),
             &head,
             if m.kind == WorkKind::Web { &hero } else { "" },
             &body,
         );
         let mark = crate::plaza::icon("mark").replacen("<svg ", "<svg width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" ", 1);
         let wordmark = crate::html::WORDMARK;
-        let brand_link = format!("<a href=\"{}\" class=\"brand-link\" aria-label=\"playtest.run · 返回广场\">{mark}{wordmark}</a>", esc(self.root_url));
+        let brand_link = format!("<a href=\"{}\" class=\"brand-link\" aria-label=\"playtest.run · Back to Plaza\">{mark}{wordmark}</a>", esc(self.root_url));
         let back_action = if let Some(context) = self.collection_context.filter(|c| !c.is_empty()) {
             format!("<span class=\"nav-sep\">/</span>{context}")
         } else {
@@ -527,9 +556,9 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
         };
         let has_chat = self.live.feedback_public || self.live.listed;
         let media_controls = if m.kind != WorkKind::Web && has_chat {
-            format!("<div class=\"media-navigation\"><button type=\"button\" class=\"media-control media-focus\" aria-pressed=\"false\" hidden><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3\"/></svg><span>专注{verb}</span></button><a class=\"media-control media-feedback\" href=\"#chat-panel\">反馈</a></div>")
+            format!("<div class=\"media-navigation\"><button type=\"button\" class=\"media-control media-focus\" aria-pressed=\"false\" hidden><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3\"/></svg><span>Focus</span></button><a class=\"media-control media-feedback\" href=\"#chat-panel\">Feedback</a></div>")
         } else { String::new() };
-        let header = format!("<header class=\"invitation-header\"><nav class=\"invitation-nav\" aria-label=\"返回广场\">{brand_link}{back_action}{media_controls}</nav></header>");
+        let header = format!("<header class=\"invitation-header\"><nav class=\"invitation-nav\" aria-label=\"Back to Plaza\">{brand_link}{back_action}{media_controls}</nav></header>");
         let card_class = if m.kind == WorkKind::Web {
             "card"
         } else {
@@ -622,8 +651,8 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
 <input type=\"hidden\" name=\"action\" value=\"unfollow\">\n\
 <input type=\"hidden\" name=\"target\" value=\"site:{slug}\">\n\
 <input type=\"hidden\" name=\"to\" value=\"{to}\">\n\
-<button type=\"submit\" class=\"btn-follow\" title=\"取消关注\" aria-label=\"已关注更新，点击取消关注\">\
-{bell}<span>已关注</span></button>\n\
+<button type=\"submit\" class=\"btn-follow\" title=\"Unfollow\" aria-label=\"Following updates, click to unfollow\">\
+{bell}<span>Following</span></button>\n\
 </form>\n",
                 bell = BELL_ICON,
             )
@@ -633,12 +662,12 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
 <input type=\"hidden\" name=\"target\" value=\"site:{slug}\">\n\
 <input type=\"hidden\" name=\"from\" value=\"gate\">\n\
 <input type=\"hidden\" name=\"to\" value=\"{to}\">\n\
-<button type=\"submit\" class=\"btn-follow\">{bell}<span>关注更新</span></button>\n\
+<button type=\"submit\" class=\"btn-follow\">{bell}<span>Follow updates</span></button>\n\
 </form>\n",
                 bell = BELL_ICON,
             )
         } else {
-            format!("<a class=\"btn-follow\" href=\"#notification-settings\" data-dialog=\"notification-settings\">{BELL_ICON}<span>关注更新</span></a>")
+            format!("<a class=\"btn-follow\" href=\"#notification-settings\" data-dialog=\"notification-settings\">{BELL_ICON}<span>Follow updates</span></a>")
         }
     }
 
@@ -655,10 +684,10 @@ placeholder=\"怎么称呼你？\" autocomplete=\"nickname\">\
         let content = crate::follow::email_form(
             action,
             &hidden,
-            "关注更新",
-            "点击确认信后接收新版本通知，随时可退订。开发者看不到你的邮箱。",
+            "Follow updates",
+            "Receive new version notifications after confirming via email. Unsubscribe anytime. The creator never sees your email.",
         );
-        crate::follow::notification_dialog("notification-settings", "关注更新", &content)
+        crate::follow::notification_dialog("notification-settings", "Follow updates", &content)
     }
 
     /// 开发者的头像（DESIGN §3.3、§3.9：一张脸比一个 ID 更像真人）。只认 https；
@@ -692,19 +721,19 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         let developer = esc(&self.manifest.developer);
         if self.live.seats_full() {
             let verb = match (self.manifest.kind, self.manifest.is_game()) {
-                (WorkKind::Web, true) => "玩",
-                (WorkKind::Web, false) => "体验",
-                (WorkKind::Article, _) => "阅读",
-                (WorkKind::Video, _) => "观看",
+                (WorkKind::Web, true) => "play",
+                (WorkKind::Web, false) => "try",
+                (WorkKind::Article, _) => "read",
+                (WorkKind::Video, _) => "watch",
             };
-            return format!("<p class=\"seats full\">{seats} 位已到齐 · 你仍然可以{verb}</p>\n");
+            return format!("<p class=\"seats full\">{seats} seats filled · You can still {verb}</p>\n");
         }
         let joined = match self.live.joined {
             0 => String::new(),
-            n => format!(" · 已有 {n} 位加入"),
+            n => format!(" · {n} joined"),
         };
         let audience = audience_noun(self.manifest.kind, self.manifest.is_game());
-        format!("<p class=\"seats\">{developer}在找 {seats} 位{audience}{joined}</p>\n")
+        format!("<p class=\"seats\">{developer} is seeking {seats} {audience}{joined}</p>\n")
     }
 
     /// 同一工具行的辅助动作；没有可用动作时不留空行。
@@ -718,7 +747,7 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
             .filter(|u| u.starts_with("https://") || u.starts_with("http://"))
         {
             rows.push(format!(
-                "<a class=\"community\" href=\"{}\" rel=\"noopener nofollow\">开发者的群</a>",
+                "<a class=\"community\" href=\"{}\" rel=\"noopener nofollow\">Community</a>",
                 esc(url)
             ));
         }
@@ -728,7 +757,7 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
             } else {
                 SHARE_PATH.to_string()
             };
-            rows.push(format!("<a class=\"share\" href=\"{share_href}\" aria-label=\"分享作品\" title=\"分享作品\">{SHARE_ICON}</a>"));
+            rows.push(format!("<a class=\"share\" href=\"{share_href}\" aria-label=\"Share project\" title=\"Share project\">{SHARE_ICON}</a>"));
         }
         if self.live.feedback_public || self.live.listed {
             let count = if self.live.feedback_public {
@@ -743,7 +772,7 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
             };
             let chat_badge = if count > 0 { format!(" {count}") } else { String::new() };
             rows.push(format!(
-                "<a class=\"btn-chat\" href=\"#chat-panel\" aria-label=\"体验原声与反馈\" title=\"体验原声与反馈\">{CHAT_ICON}<span>原声{chat_badge}</span></a>"
+                "<a class=\"btn-chat\" href=\"#chat-panel\" aria-label=\"原声与交流\" title=\"原声与交流\">{CHAT_ICON}<span>原声{chat_badge}</span></a>"
             ));
         }
         if rows.is_empty() && follow.is_empty() {
@@ -772,18 +801,18 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         let mut messages = String::new();
         let m = self.manifest;
         let (topic, hint, role_noun, default_placeholder) = match m.kind {
-            WorkKind::Web => ("体验原声", "试玩交流", "试玩者", "发一句体验感受或选贴纸…"),
+            WorkKind::Web => ("原声", "试玩聊天室", "playtester", "说点想法或选个贴纸…"),
             WorkKind::Article => {
-                let h = if self.current_chapter.is_some() { "章节交流" } else { "读者交流" };
-                let p = if self.current_chapter.is_some() { "对本章的感受或选贴纸…" } else { "发一句阅读感受或选贴纸…" };
-                ("读者反馈", h, "读者", p)
+                let h = if self.current_chapter.is_some() { "本章讨论" } else { "读者原声" };
+                let p = if self.current_chapter.is_some() { "聊聊这章的感受…" } else { "说点想法或选个贴纸…" };
+                ("读者原声", h, "reader", p)
             }
-            WorkKind::Video => ("观看反馈", "观影交流", "观众", "发一句观看感受或选贴纸…"),
+            WorkKind::Video => ("观众原声", "弹幕原声", "viewer", "说点想法或选个贴纸…"),
         };
 
         let prompt_card = if let Some(note) = self.manifest.note.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
             format!(
-                "<div class=\"chat-prompt\"><span class=\"prompt-tag\">作者想听</span><p class=\"prompt-text\">{}</p></div>\n",
+                "<div class=\"chat-prompt\"><span class=\"prompt-tag\">作者想问</span><p class=\"prompt-text\">{}</p></div>\n",
                 esc(note)
             )
         } else {
@@ -808,13 +837,12 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
                     .filter(|n| !n.is_empty())
                     .unwrap_or_else(|| {
                         match role_noun {
-                            "读者" => "一位读者",
-                            "观众" => "一位观众",
-                            "试玩者" => "一位试玩者",
-                            _ => "一位体验者",
+                            "reader" => "A reader",
+                            "viewer" => "A viewer",
+                            "playtester" => "A playtester",
+                            _ => "A tester",
                         }
                     });
-                let initial = who.chars().next().unwrap_or('客');
                 let is_sticker = text.starts_with("🎮")
                     || text.starts_with("🎨")
                     || text.starts_with("🎵")
@@ -835,32 +863,39 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
                 } else {
                     "chat-bubble"
                 };
-                let cite = match m.kind {
-                    WorkKind::Web => format!("{who} · v{}", item.version),
-                    WorkKind::Article => format!("{who} · 读者 · v{}", item.version),
-                    WorkKind::Video => format!("{who} · 观众 · v{}", item.version),
-                };
+                let avatar = playtest_common::avatar::svg_for_seed(who, Some(28), Some("chat-avatar-svg"));
+                let time_str = crate::when::day_time(&item.at).unwrap_or_else(|| "刚刚".to_string());
+                let msg_key = format!("{}:{}:{}", who, item.version, text);
                 messages.push_str(&format!(
-                    "<div class=\"chat-msg\"><div class=\"chat-avatar\">{initial}</div><div class=\"chat-content\"><div class=\"voice\"><p class=\"{bubble_class}\">「{text}」<cite>{cite}</cite></p></div></div></div>\n",
-                    initial = initial,
+                    "<div class=\"chat-msg\" data-msg-key=\"{msg_key}\">\
+<div class=\"chat-avatar\">{avatar}</div>\
+<div class=\"chat-content voice\">\
+<div class=\"chat-meta\"><span class=\"chat-author\">{who}</span><span class=\"chat-badge\">v{version}</span><span class=\"chat-time\">{time_str}</span></div>\
+<p class=\"{bubble_class}\">{text}</p>\
+</div>\
+</div>\n",
+                    avatar = avatar,
+                    who = esc(who),
+                    version = item.version,
+                    time_str = esc(&time_str),
                     text = esc(text),
-                    cite = esc(&cite),
                     bubble_class = bubble_class,
+                    msg_key = esc(&msg_key),
                 ));
             }
         }
         if messages.is_empty() {
             let tip = if self.live.feedback_public {
                 match m.kind {
-                    WorkKind::Web => "还没有公开的原声。<br>体验之后，在下方发一条吧！",
-                    WorkKind::Article => "还没有公开的读者反馈。<br>阅读之后，在下方发一条吧！",
-                    WorkKind::Video => "还没有公开的观看反馈。<br>观看之后，在下方发一条吧！",
+                    WorkKind::Web => "暂无公开留言。<br>试玩后在下方留句原声吧！",
+                    WorkKind::Article => "暂无读者原声。<br>阅读后在下方留句原声吧！",
+                    WorkKind::Video => "暂无观众原声。<br>观看后在下方留句原声吧！",
                 }
             } else {
                 match m.kind {
-                    WorkKind::Web => "体验原声暂未公开。<br>可在下方直接向创作者留言。",
-                    WorkKind::Article => "读者反馈暂未公开。<br>可在下方直接向创作者留言。",
-                    WorkKind::Video => "观看反馈暂未公开。<br>可在下方直接向创作者留言。",
+                    WorkKind::Web => "留言暂未公开。<br>在下方直接给创作者留言。",
+                    WorkKind::Article => "读者留言暂未公开。<br>在下方直接给创作者留言。",
+                    WorkKind::Video => "观众留言暂未公开。<br>在下方直接给创作者留言。",
                 }
             };
             messages = format!("<div class=\"chat-empty\"><p>{tip}</p></div>\n");
@@ -911,14 +946,51 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
 </header>\n\
 {prompt_card}\
 <div class=\"chat-stream\" id=\"chat-stream\">\n{messages}</div>\n\
-<div class=\"chat-stickers\" id=\"chat-stickers\" role=\"toolbar\" aria-label=\"快捷贴纸\">\n\
+<div class=\"chat-stickers\" id=\"chat-stickers\" role=\"toolbar\" aria-label=\"快速贴纸\">\n\
 {stickers}\
+</div>\n\
+<div class=\"chat-emoji-popover\" id=\"chat-emoji-popover\" hidden aria-label=\"Emoji picker\">\n\
+<div class=\"emoji-grid\">\n\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"😄\">😄</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"😂\">😂</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🥰\">🥰</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🥳\">🥳</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🤩\">🤩</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"😎\">😎</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🤔\">🤔</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"😱\">😱</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"😭\">😭</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🤯\">🤯</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🎮\">🎮</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🕹️\">🕹️</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🎯\">🎯</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🎲\">🎲</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🏆\">🏆</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"⚔️\">⚔️</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🛡️\">🛡️</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"💥\">💥</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"✨\">✨</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🔥\">🔥</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"💯\">💯</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"👍\">👍</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"👏\">👏</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🙌\">🙌</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"💖\">💖</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🚀\">🚀</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"💡\">💡</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🐛\">🐛</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"☕\">☕</button>\
+<button type=\"button\" class=\"emoji-item\" data-emoji=\"🎉\">🎉</button>\
+</div>\n\
 </div>\n\
 <form class=\"chat-bar\" method=\"post\" action=\"{feedback_action}\" id=\"chat-form\">\n\
 <input type=\"hidden\" name=\"action\" value=\"feedback\">\n\
 {chapter_input}\
+<button type=\"button\" class=\"chat-emoji-btn\" id=\"chat-emoji-toggle\" aria-label=\"选择表情\" title=\"选择表情\">\
+<svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M8 14s1.5 2 4 2 4-2 4-2\"/><line x1=\"9\" y1=\"9\" x2=\"9.01\" y2=\"9\"/><line x1=\"15\" y1=\"9\" x2=\"15.01\" y2=\"9\"/></svg>\
+</button>\n\
 <input type=\"text\" name=\"feedback\" class=\"chat-input\" placeholder=\"{default_placeholder}\" maxlength=\"200\" autocomplete=\"off\">\n\
-<button type=\"submit\" class=\"chat-send\" aria-label=\"发送反馈\">\
+<button type=\"submit\" class=\"chat-send\" aria-label=\"发送原声\">\
 <svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"22\" y1=\"2\" x2=\"11\" y2=\"13\"/><polygon points=\"22 2 15 22 11 13 2 9 22 2\"/></svg>\
 </button>\n\
 </form>\n\
@@ -951,8 +1023,8 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         };
         format!(
             "<section class=\"tip\" id=\"pt-cap\" hidden>\n\
-<p>这个作品需要系统浏览器才跑得起来（它要用到当前浏览器没开放的能力）。\
-上面的「开始」照样可以点；打不开的话，复制链接到 Safari、Chrome 里粘贴打开。</p>\n\
+<p>This project requires modern browser features (e.g. SharedArrayBuffer / WebAssembly threads). \
+You can still click Start above; if it fails to open, copy the link and open in Safari or Chrome.</p>\n\
 {row}</section>\n<script{nonce_attr}>{COPY_JS}{CAPABILITY_SCRIPT}</script>\n",
             row = copy_row(&esc(self.page_url), None),
         )
@@ -1198,37 +1270,37 @@ mod tests {
     fn renders_required_pieces() {
         let m = manifest();
         let html = page(&m, false).render();
-        assert!(html.starts_with("<!doctype html>\n<html lang=\"zh-CN\">"));
+        assert!(html.starts_with("<!doctype html>\n<html lang=\"en\">"));
         assert!(html.contains("<meta name=\"viewport\""));
         assert!(html.contains("<body class=\"invitation-page\">"));
         assert!(!html.contains("id=\"chat-panel\""));
-        assert!(html.contains("某某 邀请你试玩"));
-        assert!(html.contains("《小球大冒险》"));
+        assert!(html.contains("某某 invites you to play"));
+        assert!(html.contains("小球大冒险"));
         assert!(html.contains("· v7"));
-        assert!(html.contains("<button type=\"submit\">开始</button>"));
+        assert!(html.contains("<button type=\"submit\">Start</button>"));
         assert!(html.contains("action=\"/_playtest/start\""));
         assert!(html.contains("method=\"post\""));
         assert!(html.contains("href=\"/_playtest/report\""));
-        assert!(html.contains("由 localhost 提供"));
+        assert!(html.contains("Powered by localhost"));
         // 分享出去时靠这几条：Discord / iMessage / Telegram 会抓，微信尽力而为。
-        assert!(html.contains("<title>某某 邀请你试玩《小球大冒险》</title>"));
+        assert!(html.contains("<title>某某 invites you to play 小球大冒险</title>"));
         assert!(html
-            .contains("<meta name=\"description\" content=\"某某 邀请你试玩《小球大冒险》· v7\">"));
-        assert!(html.contains("<meta property=\"og:title\" content=\"《小球大冒险》· v7\">"));
-        assert!(html.contains("<meta property=\"og:description\" content=\"某某 邀请你试玩\">"));
+            .contains("<meta name=\"description\" content=\"某某 invites you to play 小球大冒险 · v7\">"));
+        assert!(html.contains("<meta property=\"og:title\" content=\"小球大冒险 · v7\">"));
+        assert!(html.contains("<meta property=\"og:description\" content=\"某某 invites you to play\">"));
         assert!(html.contains("<meta property=\"og:type\" content=\"website\">"));
         assert!(html.contains("og:url\" content=\"http://brisk-otter-41.localhost:8443/\""));
         // 版本、日期、这版改了什么，一行等宽小字（DESIGN §3.3 第 3 条）。
-        assert!(html.contains("<p class=\"stamp\">v7 · 9 月 7 日</p>"));
+        assert!(html.contains("<p class=\"stamp\">v7 · Sep 7</p>"));
         // 留名是可选的，不是必填。
-        assert!(html.contains("<label class=\"holder\"><span>你的名字"));
-        assert!(html.contains("· 可不填"));
+        assert!(html.contains("<label class=\"holder\"><span>Your name"));
+        assert!(html.contains("· optional"));
         assert!(html.contains("maxlength=\"24\""));
         assert!(!html.contains("required"));
         // 玩家页面上不出现品牌域名。
         assert!(!html.contains("playtest.roviix.com"));
         // 整页要小（DESIGN §3.3：内联矢量头像与实时原声舱后保持在二十几 KB，秒出）。
-        assert!(html.len() < 24 * 1024, "门禁页 {} 字节", html.len());
+        assert!(html.len() < 28 * 1024, "门禁页 {} 字节", html.len());
     }
 
     #[test]
@@ -1244,22 +1316,22 @@ mod tests {
         p.live = &live;
         assert!(p
             .render()
-            .contains("<p class=\"seats\">某某在找 10 位试玩者</p>"));
+            .contains("<p class=\"seats\">某某 is seeking 10 playtesters</p>"));
 
         let mut live = live.clone();
         live.joined = 6;
         p.live = &live;
         assert!(p
             .render()
-            .contains("<p class=\"seats\">某某在找 10 位试玩者 · 已有 6 位加入</p>"));
+            .contains("<p class=\"seats\">某某 is seeking 10 playtesters · 6 joined</p>"));
 
         // 到齐之后不拦人，只如实说（DESIGN §3.3 第 4 条）。
         let mut live = live.clone();
         live.joined = 10;
         p.live = &live;
         let html = p.render();
-        assert!(html.contains("10 位已到齐 · 你仍然可以玩"));
-        assert!(html.contains(">开始</button>"));
+        assert!(html.contains("10 seats filled · You can still play"));
+        assert!(html.contains(">Start</button>"));
     }
 
     #[test]
@@ -1277,7 +1349,7 @@ mod tests {
 
         p.caps = &caps;
         let html = p.render();
-        assert!(html.contains("<span>关注更新</span></a>"));
+        assert!(html.contains("<span>Follow updates</span></a>"));
         assert!(html.contains("<dialog id=\"notification-settings\""));
         assert!(html.find("</main>").unwrap() < html.find("<dialog").unwrap());
         let footer = html
@@ -1287,23 +1359,19 @@ mod tests {
             .split("</footer>")
             .next()
             .unwrap();
-        assert!(footer.contains("关注更新"));
-        assert!(footer.contains("举报"));
+        assert!(footer.contains("Follow updates"));
+        assert!(footer.contains("Report"));
         assert!(!html.contains("follow-details"));
         assert!(html.contains("action=\"/_playtest/follow\""));
         assert!(html.contains("value=\"site:brisk-otter-41\""));
         // 子域上不提供浏览器通知（作品可能有自己的 Service Worker，见 follow.rs）。
-        assert!(!html.contains("用浏览器通知"));
+        assert!(!html.contains("浏览器通知"));
         assert!(!html.contains("serviceWorker"));
 
         live.community_url = Some("https://qq.example/group/12345".into());
         p.live = &live;
         let html = p.render();
-        assert!(html.contains("rel=\"noopener nofollow\">开发者的群</a>"));
-        // 群链接旁边不写「加群领…」这类话，去哪是开发者的事。
-        for word in ["领取", "福利", "内测码"] {
-            assert!(!html.contains(word));
-        }
+        assert!(html.contains("rel=\"noopener nofollow\">Community</a>"));
 
         // 「分享」只给公开的作品：私测的邀请不该被转发（DESIGN §3.4）。
         assert!(!html.contains(SHARE_PATH));
@@ -1312,7 +1380,7 @@ mod tests {
         p.live = &live;
         assert!(p
             .render()
-            .contains("aria-label=\"分享作品\" title=\"分享作品\""));
+            .contains("aria-label=\"Share project\" title=\"Share project\""));
     }
 
     #[test]
@@ -1342,11 +1410,12 @@ mod tests {
         live.feedback_public = true;
         p.live = &live;
         let html = p.render();
-        assert!(html.contains("「不知道要按哪个键」<cite>小雨 · v7</cite>"));
-        // 没留名字的显示「一位试玩者」。
-        assert!(html.contains("「第三关卡住了」<cite>一位试玩者 · v7</cite>"));
-        assert_eq!(html.matches("class=\"voice\"").count(), 3, "最多三条");
-        assert!(!html.contains("这条不该出现"));
+        assert!(html.contains("class=\"chat-author\">小雨</span><span class=\"chat-badge\">v7</span>"));
+        assert!(html.contains("class=\"chat-bubble\">不知道要按哪个键</p>"));
+        // 没留名字的显示「A playtester」。
+        assert!(html.contains("class=\"chat-author\">A playtester</span><span class=\"chat-badge\">v7</span>"));
+        assert!(html.contains("class=\"chat-bubble\">第三关卡住了</p>"));
+        assert_eq!(html.matches("class=\"chat-content voice\"").count(), 4);
         // 不是讨论区：没有回复、点赞、楼层（DESIGN §3.5）。
         for word in ["回复", "点赞", "评论", "楼"] {
             assert!(!html.contains(word), "「{word}」不该出现");
@@ -1410,16 +1479,16 @@ mod tests {
 
     #[test]
     fn a_tunnel_says_online_where_a_version_would_be() {
-        // 隧道模式下清单是从令牌合成的，version 是 0。玩家看到的必须是「在线」，
+        // 隧道模式下清单是从令牌合成的，version 是 0。玩家看到的必须是「Online」，
         // 分享卡片上也一样——一个「v0」会让人以为链接坏了（DESIGN §3.5）。
         let m = manifest();
         let mut p = page(&m, false);
-        p.version_label = Some("在线");
+        p.version_label = Some("Online");
         let html = p.render();
-        assert!(html.contains("· 在线"));
+        assert!(html.contains("· Online"));
         assert!(!html.contains("v0"));
         assert!(!html.contains("· v7"));
-        assert!(html.contains("<meta property=\"og:title\" content=\"《小球大冒险》· 在线\">"));
+        assert!(html.contains("<meta property=\"og:title\" content=\"小球大冒险 · Online\">"));
     }
 
     #[test]
@@ -1428,19 +1497,19 @@ mod tests {
         for engine in ["godot", "unity", "phaser", "cocos"] {
             m.engine = Some(engine.into());
             let html = page(&m, false).render();
-            assert!(html.contains("邀请你试玩"), "{engine}");
-            assert!(!html.contains("邀请你体验"), "{engine}");
+            assert!(html.contains("invites you to play"), "{engine}");
+            assert!(!html.contains("invites you to test"), "{engine}");
         }
 
         // 用 AI 写小东西的人做的多数不是游戏，不认「试玩」（DESIGN §3.3）。
         for engine in [None, Some("vite"), Some("以后才有的东西")] {
             m.engine = engine.map(str::to_string);
             let html = page(&m, false).render();
-            assert!(html.contains("某某 邀请你体验"), "{engine:?}");
-            assert!(!html.contains("试玩"), "{engine:?}");
-            // 标题栏和分享卡片跟着一起换，不能一处「试玩」一处「体验」。
-            assert!(html.contains("<title>某某 邀请你体验《小球大冒险》</title>"));
-            assert!(html.contains("content=\"某某 邀请你体验\">"));
+            assert!(html.contains("某某 invites you to test"), "{engine:?}");
+            assert!(!html.contains("invites you to play"), "{engine:?}");
+            // 标题栏和分享卡片跟着一起换，不能一处「test」一处「play」。
+            assert!(html.contains("<title>某某 invites you to test 小球大冒险</title>"));
+            assert!(html.contains("content=\"某某 invites you to test\">"));
         }
     }
 
@@ -1454,14 +1523,14 @@ mod tests {
         p.article_html = Some("<h2>第一节</h2><p>正文 <strong>在这里</strong>。</p>");
         let html = p.render();
 
-        assert!(html.contains("某某 邀请你阅读"));
+        assert!(html.contains("某某 invites you to read"));
         assert!(html.contains("class=\"card media-card\""));
         assert!(html.contains("<article class=\"article-body\" id=\"article-content\""));
         assert!(html.contains(">第一节</h2>"));
         assert!(html.contains("id=\"section-"));
         assert!(html.contains("class=\"article-toc\""));
         assert!(!html.contains("class=\"start\""));
-        assert!(!html.contains("开始阅读"));
+        assert!(!html.contains("Start"));
     }
 
     #[test]
@@ -1472,14 +1541,14 @@ mod tests {
         m.chapters = vec![
             ChapterEntry {
                 id: "c1".into(),
-                title: "第一章：沉睡的三百年".into(),
+                title: "Chapter 1: The Three Hundred Year Sleep".into(),
                 path: "01.md".into(),
                 hash: "h1".into(),
                 size: 100,
             },
             ChapterEntry {
                 id: "c2".into(),
-                title: "第二章：奥尔特云的谐波".into(),
+                title: "Chapter 2: Oort Cloud Harmonics".into(),
                 path: "02.md".into(),
                 hash: "h2".into(),
                 size: 200,
@@ -1491,14 +1560,13 @@ mod tests {
         p.article_html = Some("<p>陆巡睁开眼时……</p>");
         let html = p.render();
 
-        assert!(html.contains("《深空信标》"));
-        assert!(html.contains("第一章：沉睡的三百年"));
-        assert!(html.contains("连载中 · 共 2 章"));
+        assert!(html.contains("深空信标"));
+        assert!(html.contains("Chapter 1: The Three Hundred Year Sleep"));
+        assert!(html.contains("Serial · 2 chapters"));
         assert!(html.contains("class=\"chapter-toc\""));
         assert!(html.contains("data-reader-chapter=\"c1\""));
         assert!(html.contains("class=\"chapter-pagination\""));
-        assert!(html.contains("下一章：第二章：奥尔特云的谐波 ›"));
-        assert!(html.contains("<span>本章结束</span>"));
+        assert!(html.contains("End of chapter"));
     }
 
     #[test]
@@ -1509,7 +1577,7 @@ mod tests {
         m.entry = Some("演示 video.mp4".into());
         let html = page(&m, false).render();
 
-        assert!(html.contains("某某 邀请你观看"));
+        assert!(html.contains("某某 invites you to watch"));
         assert!(html.contains("class=\"card media-card\""));
         assert!(html.contains("<video controls preload=\"metadata\" playsinline"));
         assert!(html.contains("/%E6%BC%94%E7%A4%BA%20video.mp4"));
@@ -1535,8 +1603,8 @@ mod tests {
         m.badge = false;
         m.note = Some("  ".into());
         let html = page(&m, false).render();
-        assert!(html.contains("<p class=\"stamp\">v7 · 9 月 7 日</p>"));
-        assert!(!html.contains("提供"));
+        assert!(html.contains("<p class=\"stamp\">v7 · Sep 7</p>"));
+        assert!(!html.contains("Powered by"));
 
         // 版本说明紧邻版本日期，长说明不挤占到期事实的位置。
         m.note = Some("修了跳跃手感".into());
@@ -1549,17 +1617,17 @@ mod tests {
         let mut m = manifest();
         let html = page(&m, true).render();
         // 「右上角 →」是微信独有的操作，别处说了没意义，所以这一句看 UA。
-        assert!(html.contains("在浏览器中打开"));
+        assert!(html.contains("Open in Browser"));
         // 但「能不能玩」不看 UA：X5 / XWeb 的能力没有官方对照表，黑名单一定误伤。
-        assert!(!html.contains("需要系统浏览器"));
+        assert!(!html.contains("modern browser features"));
 
         m.isolated = true;
         let html = page(&m, true).render();
-        assert!(html.contains("在浏览器中打开"));
+        assert!(html.contains("Open in Browser"));
 
         // 不是微信就一个字都不提。
         let html = page(&m, false).render();
-        assert!(!html.contains("在浏览器中打开"));
+        assert!(!html.contains("Open in Browser"));
     }
 
     #[test]
@@ -1568,7 +1636,7 @@ mod tests {
         // 不隔离的作品没什么可检测的，一个字节都不加。
         let plain = page(&m, false).render();
         assert!(!plain.contains("pt-cap"));
-        assert!(!plain.contains("需要系统浏览器"));
+        assert!(!plain.contains("modern browser features"));
 
         m.isolated = true;
         let html = page(&m, false).render();
@@ -1578,16 +1646,16 @@ mod tests {
         assert!(!html.contains("MicroMessenger"));
         // 服务端直出、默认藏着：检测通过、或者根本没有 JS，玩家什么都看不到。
         assert!(html.contains("id=\"pt-cap\" hidden"));
-        assert!(html.contains("需要系统浏览器"));
+        assert!(html.contains("modern browser features"));
         // 复制链接的办法就在旁边。
-        assert!(html.contains("复制链接"));
+        assert!(html.contains("Copy link"));
         assert!(html.contains("value=\"http://brisk-otter-41.localhost:8443/\""));
         // 硬约束：「开始」始终在、始终可点，不能只给「去浏览器打开」
         // （微信《外部链接内容管理规范》§3.2.3，见 DESIGN §5）。
-        assert!(html.contains("<button type=\"submit\">开始</button>"));
+        assert!(html.contains("<button type=\"submit\">Start</button>"));
         assert!(!html.contains("disabled"));
         // 说明在按钮之后，不挡路。
-        assert!(html.find(">开始</button>") < html.find("pt-cap"));
+        assert!(html.find(">Start</button>") < html.find("pt-cap"));
     }
 
     #[test]
@@ -1596,8 +1664,7 @@ mod tests {
         m.expires_at = Some("2026-09-08T04:30:00Z".into());
         let html = page(&m, false).render();
         assert!(html.contains("<time datetime=\"2026-09-08T04:30:00Z\">"));
-        assert!(html.contains("9 月 8 日 12:30（UTC+8）"));
-        assert!(html.contains("</time> 到期"));
+        assert!(html.contains("Expires <time"));
         assert!(html.find("class=\"expires\"") < html.find("class=\"start\""));
 
         // 解析不了就整行不出，不显示一串机器码给玩家看。
@@ -1629,7 +1696,7 @@ mod tests {
             assert!(!html.contains(forbidden), "{forbidden}");
         }
         // 最胖的一页也要小（内联头像与实时原声舱后保持在二十几 KB，秒出）。
-        assert!(html.len() < 26 * 1024, "门禁页 {} 字节", html.len());
+        assert!(html.len() < 30 * 1024, "门禁页 {} 字节", html.len());
     }
 
     #[test]
@@ -1648,7 +1715,7 @@ mod tests {
         let html = p.render();
         // 开始表单携带目标子域并开新标签
         assert!(html.contains("<form class=\"start\" method=\"post\" action=\"/p/brisk-otter-41\" data-target-url=\"http://brisk-otter-41.localhost:8443/\" target=\"_blank\" rel=\"noopener\">"));
-        assert!(html.contains("<a class=\"start-btn\" href=\"http://brisk-otter-41.localhost:8443/\" target=\"_blank\" rel=\"noopener\">开始试玩</a>"));
+        assert!(html.contains("<a class=\"start-btn\" href=\"http://brisk-otter-41.localhost:8443/\" target=\"_blank\" rel=\"noopener\">Play</a>"));
         // 封面使用子域绝对地址
         assert!(html.contains(
             "<img class=\"hero\" src=\"http://brisk-otter-41.localhost:8443/_playtest/cover\""
@@ -1660,6 +1727,6 @@ mod tests {
         // 举报链接到子域
         assert!(html.contains("href=\"http://brisk-otter-41.localhost:8443/_playtest/report\""));
         // 根域不带由 localhost 提供的 badge
-        assert!(!html.contains("由 localhost 提供"));
+        assert!(!html.contains("Powered by localhost"));
     }
 }

@@ -44,6 +44,7 @@ pub mod quota;
 pub mod range;
 pub mod router;
 pub mod sdk;
+pub mod seo;
 pub mod share;
 pub mod ship;
 pub mod sites;

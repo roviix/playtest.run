@@ -491,9 +491,9 @@ async fn a_player_plays_what_is_running_on_the_developers_machine() {
             gate.header("content-type"),
             Some("text/html; charset=utf-8")
         );
-        assert!(gate.text().contains("某某 邀请你体验"));
-        assert!(gate.text().contains("《小球大冒险》"));
-        assert!(gate.text().contains("· 在线"), "版本位置该是「在线」");
+        assert!(gate.text().contains("某某 invites you to test"));
+        assert!(gate.text().contains("小球大冒险"));
+        assert!(gate.text().contains("· Live"), "版本位置该是「Live」");
         assert!(!gate.text().contains("v0"), "玩家不该看到合成清单里那个 v0");
         assert!(!gate.text().contains("roviix.com"));
         // 门禁页是我们渲染的，开发者的 HTML 一个字节都还没出去。
@@ -622,7 +622,7 @@ async fn the_offline_page_remembers_who_was_here() {
         // 没连过的 slug 就是不存在，不是「离线」——离线要有人在线过才说得出口。
         let unknown = navigate(edge.addr, "/", None).await;
         assert_eq!(unknown.status, StatusCode::NOT_FOUND);
-        assert!(unknown.text().contains("这个链接不存在"));
+        assert!(unknown.text().contains("This link does not exist or has expired"));
 
         let cli = FakeCli::connect(&edge, &edge.token("jti-1", |_| {}), dev).await;
         edge.wait_online().await;
@@ -637,9 +637,9 @@ async fn the_offline_page_remembers_who_was_here() {
             Some("text/html; charset=utf-8")
         );
         let html = offline.text();
-        assert!(html.contains("某某 的电脑暂时不在线"));
-        assert!(html.contains("《小球大冒险》"));
-        assert!(html.contains("上次在线"));
+        assert!(html.contains("某某 is currently offline"));
+        assert!(html.contains("小球大冒险"));
+        assert!(html.contains("Last online"));
         assert!(html.contains("<time datetime=\""));
         assert!(!html.contains(playtest_common::DEVELOPER_HOST));
 
@@ -673,7 +673,7 @@ async fn a_hybrid_tunnel_takes_only_what_the_manifest_does_not_have() {
         let gate = navigate_root(edge.addr, &format!("/p/{SLUG}")).await;
         assert_eq!(gate.status, StatusCode::OK);
         assert!(gate.text().contains("· v7"), "{}", gate.text());
-        assert!(!gate.text().contains("· 在线"));
+        assert!(!gate.text().contains("· Live"));
         assert!(!gate.text().contains("后端自己的首页"));
 
         // 2. 点「开始」之后 303 重定向到作品子域；进入子域是上传的首页，不是后端的首页；静态文件也从清单给。
@@ -764,7 +764,7 @@ async fn a_hybrid_tunnel_takes_only_what_the_manifest_does_not_have() {
         assert_eq!(api.header("cache-control"), Some("no-store"));
         let body = error_body(&api);
         assert_eq!(body.code, ErrorCode::BackendOffline);
-        assert!(body.message.contains("不在线"), "{}", body.message);
+        assert!(body.message.contains("offline"), "{}", body.message);
         assert_eq!(
             send(edge.addr, request(Method::POST, "/api/score", &[], "1"))
                 .await
@@ -839,7 +839,7 @@ async fn a_dead_dev_server_is_a_rendered_502() {
 
         let reply = navigate(edge.addr, "/", Some("pt_gate=1")).await;
         assert_eq!(reply.status, StatusCode::BAD_GATEWAY);
-        assert!(reply.text().contains("开发者那边没有响应"));
+        assert!(reply.text().contains("No response from developer machine"));
         // 完整的一页，不是裸状态码。
         assert!(reply.text().starts_with("<!doctype html>"));
         assert!(!reply.text().contains(playtest_common::DEVELOPER_HOST));

@@ -37,7 +37,7 @@ fn search_is_shareable_escaped_and_available_without_scripts() {
         false,
     );
     assert!(!html.contains("<script>bad"));
-    assert!(html.contains("清空搜索"));
+    assert!(html.contains("Clear search"));
 }
 
 #[test]
@@ -54,7 +54,7 @@ fn popularity_is_separate_and_does_not_buy_search_rank() {
             < html.find("data-slug=\"first-pelican\"").unwrap()
     );
     assert!(!html.contains("class=\"tag ad\""));
-    assert!(html.contains("会话数不等于真人数"));
+    assert!(html.contains("Sessions do not equal unique people"));
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn collection_explains_provenance_and_keeps_player_paths_on_player_domain() {
     );
     assert!(html.contains("红色鹈鹕"));
     assert!(!html.contains("<h2>蓝色鹈鹕</h2>"));
-    assert!(html.contains("投稿 v1 · 当前 v2"));
+    assert!(html.contains("Submitted v1 · Current v2"));
     assert!(!html.contains("<script>unsafe()"));
     assert!(html.contains("&lt;script&gt;unsafe()"));
     assert!(!html.contains("playtest.roviix.com"));
@@ -81,7 +81,7 @@ fn collection_explains_provenance_and_keeps_player_paths_on_player_domain() {
     assert!(html.contains("?collection=pelican&amp;from=collection"));
     let context = discovery::context(&plaza, "first-pelican", Some("pelican"));
     assert!(context.contains("/c/pelican"));
-    assert!(context.contains("返回"));
+    assert!(context.contains("Back to"));
     assert!(discovery::context(&plaza, "first-pelican", Some("missing")).is_empty());
 }
 
@@ -112,8 +112,8 @@ fn expired_entries_disappear_from_cards_filters_and_context() {
         &Capabilities::default(),
         None,
     );
-    assert!(html.contains("已结束"));
-    assert!(!html.contains("我也来做一个"));
+    assert!(html.contains("Ended"));
+    assert!(!html.contains("Submit a Project"));
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn pages_are_bounded_and_queries_survive_navigation() {
         false,
     );
     assert_eq!(html.matches("class=\"tile\"").count(), 6);
-    assert!(html.contains("第 2 / 2 页"));
+    assert!(html.contains("Page 2 of 2"));
     assert!(html.contains("sort=hot&amp;page=1"));
 }
 

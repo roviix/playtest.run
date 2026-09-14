@@ -53,9 +53,33 @@ pub fn session_owner(conn: &Connection, token: &str) -> rusqlite::Result<Option<
 }
 
 pub async fn caller(state: &AppState, headers: &HeaderMap) -> ApiResult<Option<Caller>> {
-    let Some(token) = read_cookie(headers, cookie_name(secure(state))) else { return Ok(None); };
     let conn = state.db().read().await;
-    Ok(session_owner(&conn, token)?)
+    if let Some(token) = read_cookie(headers, cookie_name(secure(state))) {
+        if let Some(caller) = session_owner(&conn, token)? {
+            return Ok(Some(caller));
+        }
+    }
+    if let Some(token) = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|raw| {
+        let (scheme, value) = raw.split_once(' ')?;
+        if scheme.eq_ignore_ascii_case("bearer") { Some(value.trim()) } else { None }
+    }) {
+        let token_hash = hash::hash_bytes(token.as_bytes());
+        if let Some(owner) = db::find_token_owner(&conn, &token_hash)? {
+            let expired = owner.token_expires_at.as_deref().is_some_and(clock::is_expired)
+                || owner.user_expires_at.as_deref().is_some_and(clock::is_expired);
+            if !expired {
+                return Ok(Some(Caller {
+                    user_id: owner.user_id,
+                    kind: UserKind::from_db(&owner.kind),
+                    display_name: owner.display_name,
+                    login: owner.login,
+                    avatar_url: owner.avatar_url,
+                    expires_at: owner.user_expires_at,
+                }));
+            }
+        }
+    }
+    Ok(None)
 }
 
 pub fn create_session(conn: &Connection, user_id: &str) -> rusqlite::Result<String> {

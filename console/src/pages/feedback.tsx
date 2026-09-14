@@ -13,9 +13,9 @@ import { audience, label, moment, seconds } from "../words";
 import { Empty, Failed, Loading } from "./status";
 
 const STATUS_TEXT: Record<FeedbackStatus, string> = {
-  new: "还没看",
-  seen: "看过了",
-  done: "处理完了",
+  new: "New",
+  seen: "Reviewed",
+  done: "Resolved",
 };
 
 export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
@@ -31,9 +31,15 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
 
   if (data.items.length === 0) {
     return (
-      <Empty>
-        <p>还没有反馈。</p>
-      </Empty>
+      <Empty
+        icon={
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        }
+        title="No feedback collected yet"
+        description="When players try your build and leave impressions or bug reports on the door page, their quotes will appear here."
+      />
     );
   }
 
@@ -43,7 +49,7 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
       const updated = await api.updateFeedback(slug, item.id, request);
       setChanged((all) => ({ ...all, [item.id]: updated }));
     } catch (err) {
-      setFailed(err instanceof ApiError ? err.message : "没改成。");
+      setFailed(err instanceof ApiError ? err.message : "Failed to update.");
     }
   }
 
@@ -53,8 +59,8 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
     <>
       <p class="tab-lead muted">
         {feedbackPublic
-          ? "公开反馈开着：门禁页显示最近 3 条。"
-          : "公开反馈关着：只有你看得到。"}
+          ? "Public feedback is on: Door page displays the 3 latest entries."
+          : "Public feedback is off: Only you can see feedback."}
       </p>
       {failed ? <p class="notice">{failed}</p> : null}
       <ul class="quotes">
@@ -64,10 +70,9 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
             <li key={item.id} class={`quote-card ${item.status}`}>
               <p class="quote">{item.text}</p>
               <p class="muted quote-meta">
-                {/* 没留名字的人也是一个人，不显示会话 id——那是给点名册对行用的。 */}
-                <b class="who">{item.name ?? `一位${audience(site.kind)}`}</b> · v{item.version} · {moment(item.ts)} ·{" "}
+                <b class="who">{item.name ?? `A ${audience(site.kind)}`}</b> · v{item.version} · {moment(item.ts)} ·{" "}
                 {label(item.device)} {label(item.browser)}
-                {item.seconds_in !== undefined ? ` · 进入 ${seconds(item.seconds_in)}` : ""}
+                {item.seconds_in !== undefined ? ` · In ${seconds(item.seconds_in)}` : ""}
               </p>
               <p class="row-actions">
                 <span class={`tag-pill ${item.status === "new" ? "warn" : "plain"}`}>
@@ -75,29 +80,29 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
                 </span>
                 {feedbackPublic ? (
                   <span class={`tag-pill ${item.public ? "good" : "plain"}`}>
-                    {item.public ? "公开中" : "已隐藏"}
+                    {item.public ? "Public" : "Hidden"}
                   </span>
                 ) : null}
                 {item.status === "new" ? (
                   <button class="button small" type="button" onClick={() => patch(item, { status: "seen" })}>
-                    看过了
+                    Mark Reviewed
                   </button>
                 ) : null}
                 {item.status !== "done" ? (
                   <button class="button small" type="button" onClick={() => patch(item, { status: "done" })}>
-                    处理完了
+                    Resolve
                   </button>
                 ) : (
                   <button class="button small quiet" type="button" onClick={() => patch(item, { status: "new" })}>
-                    退回
+                    Reopen
                   </button>
                 )}
                 {feedbackPublic ? (
                   <button class="button small quiet" type="button" onClick={() => patch(item, { public: !item.public })}>
-                    {item.public ? "隐藏" : "恢复"}
+                    {item.public ? "Hide" : "Unhide"}
                   </button>
                 ) : null}
-                <a href={href({ name: "site", slug, tab: "roster", version: item.version })}>看这一版的人 →</a>
+                <a href={href({ name: "site", slug, tab: "roster", version: item.version })}>View roster for this version →</a>
               </p>
             </li>
           );

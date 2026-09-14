@@ -21,41 +21,41 @@ pub fn offline(seen: &LastSeen) -> String {
     let title = esc(&seen.title);
     let when = match readable(&seen.at) {
         Some((machine, human)) => format!(
-            "<p class=\"meta\">上次在线 <time datetime=\"{}\">{}</time></p>\n{LOCAL_TIME_SCRIPT}",
+            "<p class=\"meta\">Last online <time datetime=\"{}\">{}</time></p>\n{LOCAL_TIME_SCRIPT}",
             esc(&machine),
             esc(&human)
         ),
         // 时间读不懂就只说「上次在线过」，不把一串机器码摆给玩家看。
-        None => "<p class=\"meta\">上次在线的时间没记下来</p>\n".to_string(),
+        None => "<p class=\"meta\">Last online time not recorded</p>\n".to_string(),
     };
     let body = format!(
-        "<p class=\"by\">{developer} 的电脑暂时不在线</p>\n<h1>《{title}》</h1>\n\
-<p class=\"lead\">这个作品是从开发者自己的电脑上直接放出来的。他开着的时候你就能玩，现在没开着。</p>\n\
+        "<p class=\"by\">{developer} is currently offline</p>\n<h1>{title}</h1>\n\
+<p class=\"lead\">This project is hosted directly from the developer's machine. You can play when they are online, but they are currently offline.</p>\n\
 {when}\
-<p class=\"lead\">过一会儿再点开一次，或者告诉发链接给你的人。</p>\n"
+<p class=\"lead\">Please try again later, or let the creator know.</p>\n"
     );
-    shell(&format!("{} 的电脑暂时不在线", seen.developer), "", &body)
+    shell(&format!("{} is currently offline", seen.developer), "", &body)
 }
 
 /// 同时在场的人超过了这个档位的上限（[`playtest_common::tunnel::Claims::max_players`]）。
 pub fn busy() -> String {
-    let body = "<h1>现在人太多了，稍后再试</h1>\n\
-<p class=\"lead\">同时在玩的人已经到了这个作品的上限。等一会儿再点一次，多半就进得去了。</p>\n";
-    shell("现在人太多了", "", body)
+    let body = "<h1>Too many players right now, please try again soon</h1>\n\
+<p class=\"lead\">Concurrent players have reached this project's limit. Please wait a moment and try again.</p>\n";
+    shell("Too many players", "", body)
 }
 
 /// 隧道在，但开发者机器上那个进程没接。多半是他把 dev server 关了、或者端口填错了。
 pub fn unreachable() -> String {
-    let body = "<h1>开发者那边没有响应</h1>\n\
-<p class=\"lead\">他的电脑连着，但要给你的那个程序没有回应。过一会儿再试，或者告诉发链接给他的人。</p>\n";
-    shell("开发者那边没有响应", "", body)
+    let body = "<h1>No response from developer machine</h1>\n\
+<p class=\"lead\">The machine is connected, but the development server is not responding. Try again later or notify the creator.</p>\n";
+    shell("No response", "", body)
 }
 
 /// 请求送进去了，但迟迟没有响应头。
 pub fn timed_out() -> String {
-    let body = "<h1>开发者那边超时了</h1>\n\
-<p class=\"lead\">请求送到了他的电脑上，但等了很久没有回音。刷新一次试试。</p>\n";
-    shell("等了太久", "", body)
+    let body = "<h1>Request timed out</h1>\n\
+<p class=\"lead\">The request reached the developer machine, but took too long to respond. Try refreshing the page.</p>\n";
+    shell("Request timed out", "", body)
 }
 
 /// 把 RFC 3339 换成人能读的。第一个值给 `<time datetime>`，第二个是没有 JS 时显示的那串。
@@ -64,8 +64,8 @@ fn readable(raw: &str) -> Option<(String, String)> {
     let at = OffsetDateTime::parse(raw, &Rfc3339).ok()?;
     let local = at.to_offset(UtcOffset::from_hms(FALLBACK_OFFSET_HOURS, 0, 0).ok()?);
     let human = format!(
-        "{}月{}日 {:02}:{:02}（UTC+{}）",
-        local.month() as u8,
+        "{} {}, {:02}:{:02} (UTC+{})",
+        crate::when::month_short(local.month()),
         local.day(),
         local.hour(),
         local.minute(),
@@ -102,11 +102,11 @@ mod tests {
     #[test]
     fn says_who_what_and_when() {
         let html = offline(&seen("2026-09-07T04:40:00Z"));
-        assert!(html.contains("某某 的电脑暂时不在线"));
-        assert!(html.contains("《小球大冒险》"));
-        assert!(html.contains("上次在线 <time datetime=\"2026-09-07T04:40:00Z\">"));
-        assert!(html.contains("9月7日 12:40（UTC+8）"));
-        assert!(html.contains("<title>某某 的电脑暂时不在线</title>"));
+        assert!(html.contains("某某 is currently offline"));
+        assert!(html.contains("小球大冒险"));
+        assert!(html.contains("Last online <time datetime=\"2026-09-07T04:40:00Z\">"));
+        assert!(html.contains("Sep 7, 12:40 (UTC+8)"));
+        assert!(html.contains("<title>某某 is currently offline</title>"));
         // 玩家页面上不出现品牌域名，也不出现我们内部的说法。
         assert!(!html.contains(playtest_common::DEVELOPER_HOST));
         for word in ["隧道", "yamux", "上游", "WebSocket"] {
@@ -118,7 +118,7 @@ mod tests {
     fn a_time_we_cannot_read_never_reaches_the_player() {
         let html = offline(&seen("刚才"));
         assert!(!html.contains("刚才"));
-        assert!(html.contains("上次在线"));
+        assert!(html.contains("Last online"));
         assert!(!html.contains("<time"));
     }
 
@@ -136,12 +136,12 @@ mod tests {
     #[test]
     fn the_other_three_pages_are_complete_html() {
         for html in [busy(), unreachable(), timed_out()] {
-            assert!(html.starts_with("<!doctype html>\n<html lang=\"zh-CN\">"));
+            assert!(html.starts_with("<!doctype html>\n<html lang=\"en\">"));
             assert!(html.contains("<h1>"));
             assert!(!html.contains(playtest_common::DEVELOPER_HOST));
         }
-        assert!(busy().contains("现在人太多了"));
-        assert!(unreachable().contains("开发者那边没有响应"));
-        assert!(timed_out().contains("开发者那边超时了"));
+        assert!(busy().contains("Too many players"));
+        assert!(unreachable().contains("No response"));
+        assert!(timed_out().contains("Request timed out"));
     }
 }

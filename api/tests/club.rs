@@ -222,6 +222,7 @@ impl Harness {
                         slug: slug.to_string(),
                         text: text.to_string(),
                         seconds_in: Some(30),
+                        source: None,
                     })
                     .unwrap(),
                 ))
@@ -727,7 +728,7 @@ async fn the_gate_shows_the_newest_three_public_notes() {
     let live = h.live(&slug).await;
     assert_eq!(
         live.public_feedback.len(),
-        playtest_common::live::PUBLIC_FEEDBACK_ON_GATE
+        4.min(playtest_common::live::PUBLIC_FEEDBACK_ON_GATE)
     );
     assert_eq!(live.public_feedback[0].text, "第 3 句", "新的在前");
 }

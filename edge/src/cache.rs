@@ -137,6 +137,12 @@ impl<K: Eq + Hash + Clone, V> CachedMap<K, V> {
         entries.insert(key, (Instant::now(), value));
     }
 
+    pub fn invalidate(&self, key: &K) {
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.remove(key);
+        }
+    }
+
     #[cfg(test)]
     fn len(&self) -> usize {
         self.entries.lock().unwrap().len()

@@ -22,6 +22,33 @@ function launch(binary, environment) {
   const child = spawn(resolve(root, `target/debug/${binary}`), [], { cwd: root, env: { ...process.env, ...environment }, stdio: ['ignore', 'pipe', 'pipe'] });
   const log = createWriteStream(resolve(data, `${binary}.log`));
   child.stdout.pipe(log); child.stderr.pipe(log);
+
+  let buffer = '';
+  const monitor = (chunk) => {
+    buffer += chunk.toString();
+    if (buffer.includes('---- 信到这里为止 ----') || (buffer.includes('email_token=') && buffer.includes('\n\n'))) {
+      const mail = buffer;
+      buffer = '';
+      const urlMatch = mail.match(/https?:\/\/[^\s]+/);
+      console.log('\n' + '━'.repeat(64));
+      console.log('📬  【本地模拟邮件】已生成登录链接：');
+      for (const line of mail.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('发件人:') || trimmed.startsWith('收件人:') || trimmed.startsWith('主题:')) {
+          console.log(`    ${trimmed}`);
+        }
+      }
+      if (urlMatch) {
+        console.log(`\n👉  点击或复制链接直接登录（可 Cmd/Ctrl 点击）：`);
+        console.log(`    \x1b[36m\x1b[1m${urlMatch[0]}\x1b[0m`);
+      }
+      console.log('━'.repeat(64) + '\n');
+    }
+    if (buffer.length > 50000) buffer = buffer.slice(-10000);
+  };
+  child.stdout.on('data', monitor);
+  child.stderr.on('data', monitor);
+
   child.on('exit', code => { if (!stopping) { console.error(`${binary} stopped: ${code}; logs: ${data}`); stop(); } });
   children.push(child);
 }
@@ -43,9 +70,14 @@ launch('playtest-api', { PLAYTEST_API_LISTEN: `127.0.0.1:${apiPort}`, PLAYTEST_D
 launch('playtest-edge', { PLAYTEST_EDGE_LISTEN: `127.0.0.1:${edgePort}`, PLAYTEST_DATA_DIR: data, PLAYTEST_HOST_SUFFIX: 'localhost', PLAYTEST_PUBLIC_SCHEME: 'http', PLAYTEST_STORAGE_BACKEND: 'fs', PLAYTEST_API_INTERNAL_URL: `http://127.0.0.1:${apiPort}`, PLAYTEST_API_PUBLIC_URL: origin, PLAYTEST_EDGE_INGEST_TOKEN: 'local-unified-ingest-test-only-00000' });
 
 const server = createServer((request, response) => {
-  const url = new URL(request.url, origin);
   const host = (request.headers.host || '').split(':')[0];
-  const platform = host === 'localhost' || host === '127.0.0.1';
+  if (host === '127.0.0.1') {
+    response.writeHead(302, { location: `http://localhost:${basePort}${request.url}` });
+    response.end();
+    return;
+  }
+  const url = new URL(request.url, origin);
+  const platform = host === 'localhost';
   if (platform && url.pathname.startsWith('/console/')) {
     const relative = decodeURIComponent(url.pathname.slice('/console/'.length));
     const directory = resolve(root, 'console/dist');
@@ -69,4 +101,16 @@ while (Date.now() < deadline) {
   await new Promise(accept => setTimeout(accept, 100));
 }
 if (!ready) { console.error(`服务没有启动成功，请检查 ${data} 中的日志。`); stop(); process.exitCode = 1; }
-console.log(JSON.stringify({ origin, data, github: '本地替身，不是真实 GitHub', email: '仅日志，不向外发送邮件' }));
+console.log(`
+┌─────────────────────────────────────────────────────────────┐
+│  🚀 playtest.run 本地统一开发环境已就绪                      │
+├─────────────────────────────────────────────────────────────┤
+│  • 控制台地址:   \x1b[32m${origin}/console/\x1b[0m
+│  • 发现与主站:   \x1b[32m${origin}/\x1b[0m
+│  • 本地数据目录: ${data}
+│
+│  【登录方式说明】
+│  1. 邮箱登录: 页面输入任意邮箱，登录链接将直接在下方终端打印
+│  2. GitHub:   本地替身已就绪，点击「使用 GitHub 继续」直接登录
+└─────────────────────────────────────────────────────────────┘
+`);

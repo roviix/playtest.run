@@ -211,7 +211,7 @@ try {
   await until(() => evaluate("!!document.querySelector('.restore-follow')"), "关注页登录入口");
   shots.push(await screenshot("follow-empty-desktop"));
   await click('a.restore-follow');
-  await until(() => evaluate("location.hash==='#follow-login' || !!document.querySelector('#follow-login[open]')"), "登录弹窗打开");
+  await until(() => evaluate("location.hash==='#follow-login' || !!document.querySelector('#follow-login[open], #account-login[open]')"), "登录弹窗打开");
   shots.push(await screenshot("follow-login-dialog"));
   await click('.dialog-close-btn');
   await click('a.nav-item[href="/collections"]');

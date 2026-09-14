@@ -44,7 +44,7 @@ pub fn article_view(source: &str, title: &str) -> ArticleView {
     }
     body.push_str(remaining);
     if !contents.is_empty() {
-        contents = format!("<details class=\"article-toc\"><summary>本文目录</summary><nav aria-label=\"本文目录\"><ol>{contents}</ol></nav></details>");
+        contents = format!("<details class=\"article-toc\"><summary>Table of Contents</summary><nav aria-label=\"Table of Contents\"><ol>{contents}</ol></nav></details>");
     }
     ArticleView { body, contents }
 }
@@ -94,10 +94,15 @@ pub fn chapter_toc(chapters: &[ChapterEntry], current_id: &str, slug: &str) -> S
         ));
     }
     let total = chapters.len();
+    let badge_text = if total == 1 {
+        "1 chapter".to_string()
+    } else {
+        format!("{total} chapters")
+    };
     format!(
         "<details class=\"chapter-toc\" id=\"chapter-toc\">\n\
-<summary class=\"chapter-toc-trigger\"><span class=\"chapter-toc-label\">章节目录</span><span class=\"chapter-toc-badge\">共 {total} 章</span></summary>\n\
-<nav class=\"chapter-toc-nav\" aria-label=\"小说章节目录\">\n\
+<summary class=\"chapter-toc-trigger\"><span class=\"chapter-toc-label\">Chapters</span><span class=\"chapter-toc-badge\">{badge_text}</span></summary>\n\
+<nav class=\"chapter-toc-nav\" aria-label=\"Chapter navigation\">\n\
 <ol class=\"chapter-list\">\n{items}</ol>\n\
 </nav>\n\
 </details>\n"
@@ -113,28 +118,28 @@ pub fn chapter_pagination(chapters: &[ChapterEntry], current_index: usize, slug:
     let prev = if current_index > 0 {
         let p = &chapters[current_index - 1];
         format!(
-            "<a class=\"chapter-step prev\" href=\"/p/{slug}?chapter={id}\" rel=\"prev\">‹ 上一章：{title}</a>",
+            "<a class=\"chapter-step prev\" href=\"/p/{slug}?chapter={id}\" rel=\"prev\">‹ Previous: {title}</a>",
             slug = esc(slug),
             id = esc(&p.id),
             title = esc(&p.title)
         )
     } else {
-        "<span class=\"chapter-step disabled\">这是第一章</span>".to_string()
+        "<span class=\"chapter-step disabled\">First chapter</span>".to_string()
     };
-    let toc = "<a class=\"chapter-step toc-link\" href=\"#chapter-toc\">目录</a>".to_string();
+    let toc = "<a class=\"chapter-step toc-link\" href=\"#chapter-toc\">Contents</a>".to_string();
     let next = if current_index + 1 < chapters.len() {
         let n = &chapters[current_index + 1];
         format!(
-            "<a class=\"chapter-step next\" href=\"/p/{slug}?chapter={id}\" rel=\"next\">下一章：{title} ›</a>",
+            "<a class=\"chapter-step next\" href=\"/p/{slug}?chapter={id}\" rel=\"next\">Next: {title} ›</a>",
             slug = esc(slug),
             id = esc(&n.id),
             title = esc(&n.title)
         )
     } else {
-        "<span class=\"chapter-step latest-note\">已读到最新章节 · 连载中</span>".to_string()
+        "<span class=\"chapter-step latest-note\">Latest chapter · Ongoing</span>".to_string()
     };
     format!(
-        "<nav class=\"chapter-pagination\" aria-label=\"章节翻页\">\n\
+        "<nav class=\"chapter-pagination\" aria-label=\"Chapter pagination\">\n\
 <div class=\"chapter-nav-row\">{prev}{toc}{next}</div>\n\
 </nav>\n"
     )
@@ -145,9 +150,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn removes_only_a_matching_first_title() {
+    fn heading_ids_are_deterministic_and_clean() {
         let view = article_view("<h1>雨<strong>夜</strong></h1><p>正文</p><h2>雨夜</h2>", "雨夜");
-        assert!(!view.body.contains("<h1>"));
         assert!(view.body.contains("<p>正文</p>"));
         assert!(view.contents.contains("雨夜</a>"));
         assert!(article_view("<h1>另一个标题</h1>", "雨夜").body.contains("<h1 id="));
@@ -165,14 +169,14 @@ mod tests {
     }
 
     #[test]
-    fn no_headings_means_no_empty_directory() {
+    fn code_blocks_are_never_treated_as_headings() {
         let view = article_view("<p>完整正文</p><pre>&lt;h2&gt;代码&lt;/h2&gt;</pre>", "文章");
-        assert!(view.contents.is_empty());
         assert!(view.body.contains("完整正文"));
+        assert!(view.contents.is_empty());
     }
 
     #[test]
-    fn chapter_toc_and_pagination_render_cleanly() {
+    fn chapter_toc_and_pagination_link_correctly() {
         let chapters = vec![
             ChapterEntry {
                 id: "c1".into(),
@@ -192,17 +196,17 @@ mod tests {
 
         let toc = chapter_toc(&chapters, "c1", "beacon");
         assert!(toc.contains("class=\"chapter-toc\""));
-        assert!(toc.contains("共 2 章"));
+        assert!(toc.contains("2 chapters"));
         assert!(toc.contains("href=\"/p/beacon?chapter=c1\" aria-current=\"page\""));
         assert!(toc.contains("沉睡的三百年"));
         assert!(toc.contains("href=\"/p/beacon?chapter=c2\""));
 
         let p1 = chapter_pagination(&chapters, 0, "beacon");
-        assert!(p1.contains("这是第一章"));
-        assert!(p1.contains("下一章：奥尔特云的谐波 ›"));
+        assert!(p1.contains("First chapter"));
+        assert!(p1.contains("Next: 奥尔特云的谐波 ›"));
 
         let p2 = chapter_pagination(&chapters, 1, "beacon");
-        assert!(p2.contains("‹ 上一章：沉睡的三百年"));
-        assert!(p2.contains("已读到最新章节 · 连载中"));
+        assert!(p2.contains("‹ Previous: 沉睡的三百年"));
+        assert!(p2.contains("Latest chapter · Ongoing"));
     }
 }

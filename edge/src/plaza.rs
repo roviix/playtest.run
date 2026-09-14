@@ -69,13 +69,20 @@ pub struct View<'a> {
 }
 
 pub fn render(view: &View<'_>) -> String {
-    let head =
-        "<meta name=\"description\" content=\"正在找人试玩的作品。点开玩一会儿，不用注册。\">\n\
-<meta property=\"og:title\" content=\"playtest.run\">\n\
-<meta property=\"og:description\" content=\"创作者把作品放到这里，路过的人可以体验、阅读或观看。\">\n\
-<meta property=\"og:type\" content=\"website\">\n";
+    let head = format!(
+        "<meta name=\"description\" content=\"Build in public. Show the work, not the hype. Instant delivery for web apps, tools, articles, and videos. Test instantly without signing up.\">\n\
+<link rel=\"canonical\" href=\"https://{host}/\">\n\
+<meta property=\"og:title\" content=\"playtest · Show the work, not the hype\">\n\
+<meta property=\"og:description\" content=\"Creators push work in progress with one command. Testers play, read, or watch with zero friction and leave versioned feedback.\">\n\
+<meta property=\"og:type\" content=\"website\">\n\
+<meta property=\"og:url\" content=\"https://{host}/\">\n\
+<meta name=\"twitter:card\" content=\"summary_large_image\">\n\
+<meta name=\"twitter:title\" content=\"playtest · Show the work, not the hype\">\n\
+<meta name=\"twitter:description\" content=\"Build in public with zero friction. Push your web app, tool, article, or video to real people and collect versioned feedback.\">\n",
+        host = playtest_common::DEVELOPER_HOST,
+    );
 
-    wrap("playtest.run", head, Here::Plaza, &wall(view))
+    wrap("playtest · Show the work, not the hype", &head, Here::Plaza, &wall(view))
 }
 
 /// 人在这一域上的哪一间房。栏上那一项标成当前。
@@ -109,27 +116,40 @@ pub fn wrap(title: &str, head: &str, here: Here, main: &str) -> String {
 fn rail(here: Here) -> String {
     let plaza = match here {
         Here::Plaza | Here::Collections => format!(
-            "<a class=\"nav-item active\" href=\"/\" aria-current=\"page\">{icon}广场<span class=\"nav-dot\"></span></a>",
+            "<a class=\"nav-item active\" href=\"/\" aria-current=\"page\">{icon}Plaza<span class=\"nav-dot\"></span></a>",
             icon = icon("grid")
         ),
         Here::Mine => format!(
-            "<a class=\"nav-item\" href=\"/\">{icon}广场</a>",
+            "<a class=\"nav-item\" href=\"/\">{icon}Plaza</a>",
             icon = icon("grid")
         ),
     };
     let mine = match here {
         Here::Plaza | Here::Collections => format!(
-            "<a class=\"nav-item\" href=\"{}\">{icon}关注</a>",
+            "<a class=\"nav-item\" href=\"{}\">{icon}Following</a>",
             root_paths::ME,
             icon = icon("bell")
         ),
         Here::Mine => format!(
-            "<a class=\"nav-item active\" href=\"{}\" aria-current=\"page\">{icon}关注<span class=\"nav-dot\"></span></a>",
+            "<a class=\"nav-item active\" href=\"{}\" aria-current=\"page\">{icon}Following<span class=\"nav-dot\"></span></a>",
             root_paths::ME,
             icon = icon("bell")
         ),
     };
-    let management = format!("<a class=\"nav-item\" href=\"/console/#/\" data-manage>{}我的作品</a><a class=\"nav-item\" href=\"/console/#/collections\" data-manage>{}我的合集</a>", icon("grid"), icon("grid"));
+    let collections = match here {
+        Here::Collections => format!(
+            "<a class=\"nav-item active\" href=\"/collections\" aria-current=\"page\">{icon}Collections<span class=\"nav-dot\"></span></a>",
+            icon = icon("grid")
+        ),
+        Here::Plaza | Here::Mine => format!(
+            "<a class=\"nav-item\" href=\"/collections\">{icon}Collections</a>",
+            icon = icon("grid")
+        ),
+    };
+    let management = format!(
+        "<a class=\"nav-item\" href=\"/console/#/\" data-manage>{}My Projects</a>",
+        icon("grid")
+    );
     let publish_link = if matches!(here, Here::Collections) {
         "/#publish-dialog"
     } else {
@@ -138,15 +158,15 @@ fn rail(here: Here) -> String {
     format!(
         "<aside class=\"sidebar\">\n\
 <div>\
-<a class=\"brand\" href=\"/\" aria-label=\"playtest.run 首页\">\
+<a class=\"brand\" href=\"/\" aria-label=\"playtest.run Home\">\
 <span class=\"mark\" aria-hidden=\"true\">{mark}</span>\
 {wordmark}</a>\n\
-<nav class=\"nav\" aria-label=\"页面\">{plaza}{mine}{management}</nav>\
+<div class=\"sidebar-action\"><a class=\"publish\" href=\"{publish_link}\">{plus}Publish Project</a></div>\n\
+<nav class=\"nav\" aria-label=\"Navigation\">{plaza}{collections}{mine}{management}</nav>\
 </div>\n\
 <div class=\"sidebar-footer\">\
-<a class=\"publish\" href=\"{publish_link}\">{plus}发布作品</a>\
-<a class=\"nav-item\" href=\"/console/#/docs/start\">{book}使用文档</a>\
-<a class=\"nav-item account\" href=\"/console/?login=1\" data-account-login><span class=\"account-name\">登录</span></a>\
+<a class=\"nav-item\" href=\"/console/#/docs/start\">{book}Docs</a>\
+<a class=\"nav-item account\" href=\"/console/?login=1\" data-account-login><span class=\"account-name\">Sign in</span></a>\
 </div>\n\
 </aside>\n",
         mark = crate::html::MARK,
@@ -156,11 +176,35 @@ fn rail(here: Here) -> String {
     )
 }
 
+pub(crate) fn hero() -> String {
+    format!(
+        "<section class=\"plaza-hero\">\n\
+<div class=\"hero-badge\"><span class=\"hero-dot\" aria-hidden=\"true\"></span>Build in Public</div>\n\
+<h1 class=\"hero-title\">Show the work, not the hype.</h1>\n\
+<p class=\"hero-sub\">Deploy games and web builds in seconds. Real playtesters, zero friction, and versioned feedback for your next release.</p>\n\
+<div class=\"hero-actions\">\n\
+<a class=\"hero-btn primary\" href=\"#publish-dialog\">Publish Project</a>\n\
+<div class=\"hero-command\" title=\"Click to copy\">\
+<b aria-hidden=\"true\">$</b>\
+<code>playtest ./dist --public</code>\
+<button class=\"copy-command\" type=\"button\" aria-label=\"Copy command\" title=\"Copy command\" data-hero-copy data-copy-text=\"playtest ./dist --public\">\
+<svg class=\"icon copy-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"8\" y=\"8\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3\"/></svg>\
+<svg class=\"icon copied-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg>\
+<span class=\"hero-copy-text\">Copy</span>\
+</button>\
+</div>\n\
+</div>\n\
+</section>\n"
+    )
+}
+
 /// 下部作品网格：100% 全宽响应式排布。
 /// 顺序是推广位（最多几张、永远带标）、正在找人测的、其余按时间。
 /// 一个作品只出现一次；推广位有限，多出来的按普通作品排——广场不因为付了钱就变长。
 fn wall(view: &View<'_>) -> String {
-    let mut out = String::from("<div class=\"content\">\n<header class=\"workspace-head\"><div><h1>广场</h1></div></header>\n");
+    let mut out = String::from("<div class=\"content\">\n");
+    out.push_str(&hero());
+    out.push_str("<h1 class=\"sr-only\">Plaza</h1>\n");
     if view.plaza.items.is_empty() {
         out.push_str(&empty_body());
         out.push_str("</div>\n");
@@ -181,7 +225,7 @@ fn wall(view: &View<'_>) -> String {
         .iter()
         .filter(|i| !i.seeking && !promoted.contains(&i.slug.as_str()));
 
-    out.push_str("<section class=\"grid\" aria-label=\"公开试玩作品\">\n");
+    out.push_str("<section class=\"grid\" aria-label=\"Public playtest works\">\n");
     for item in &boosted {
         out.push_str(&tile(item, true, view.now));
     }
@@ -194,8 +238,8 @@ fn wall(view: &View<'_>) -> String {
 }
 
 fn empty_body() -> String {
-    "<section class=\"empty-plaza\"><p>广场上还没有作品。</p>\
-<p class=\"lead\"><code>playtest ./dist --public</code> 会把作品放到这里。</p></section>\n"
+    "<section class=\"empty-plaza\"><p>No projects on the plaza yet.</p>\
+<p class=\"lead\"><code>playtest ./dist --public</code> will put your project here.</p></section>\n"
         .to_string()
 }
 
@@ -224,9 +268,9 @@ pub(crate) fn tile(item: &PlazaItem, on_slot: bool, now: OffsetDateTime) -> Stri
         ),
     };
     let tag = if on_slot {
-        "<span class=\"tag ad\">推广</span>"
+        "<span class=\"tag ad\">Featured</span>"
     } else if item.seeking {
-        "<span class=\"tag\">正在找人测</span>"
+        "<span class=\"tag\">Seeking testers</span>"
     } else {
         ""
     };
@@ -290,7 +334,7 @@ loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\">",
 fn blurb(item: &PlazaItem) -> String {
     let line = match item.blurb() {
         Some(Blurb::Seeking(note)) => format!(
-            "<span class=\"seek-k\">这次想测</span> {}",
+            "<span class=\"seek-k\">Testing</span> {}",
             esc(note.trim())
         ),
         Some(Blurb::Summary(summary)) => esc(summary.trim()),
@@ -305,12 +349,12 @@ fn blurb(item: &PlazaItem) -> String {
 /// 时间解析不出来就退到版本号——那也是一句真话，好过在卡上留一块空白。
 fn fact(item: &PlazaItem, now: OffsetDateTime) -> String {
     match item.fact() {
-        Fact::Seats { joined, seats } => format!("{joined} / {seats} 位"),
+        Fact::Seats { joined, seats } => format!("{joined} / {seats} joined"),
         Fact::Expires { at } => match OffsetDateTime::parse(&at, &Rfc3339) {
             Ok(at) => when::remaining(at, now),
             Err(_) => format!("v{}", item.version),
         },
-        Fact::Players { count } => format!("{count} 次开始"),
+        Fact::Players { count } => format!("{count} played"),
         Fact::Updated { at } => match OffsetDateTime::parse(&at, &Rfc3339) {
             Ok(updated) => when::ago(updated, now),
             Err(_) => format!("v{}", item.version),
@@ -320,7 +364,7 @@ fn fact(item: &PlazaItem, now: OffsetDateTime) -> String {
 
 fn fact_hint(item: &PlazaItem) -> String {
     if matches!(item.fact(), Fact::Players { .. }) {
-        format!(" title=\"近 {PLAYERS_WINDOW_DAYS} 天点击开始的去重会话\"")
+        format!(" title=\"Unique sessions clicking start in the past {PLAYERS_WINDOW_DAYS} days\"")
     } else {
         String::new()
     }
@@ -328,38 +372,38 @@ fn fact_hint(item: &PlazaItem) -> String {
 fn publish_sheet() -> String {
     format!(
         "<dialog id=\"publish-dialog\" class=\"overlay\" aria-labelledby=\"publish-title\">\n\
-<a class=\"overlay-back\" href=\"#\" tabindex=\"-1\" aria-label=\"关闭\"></a>\n\
+<a class=\"overlay-back\" href=\"#\" tabindex=\"-1\" aria-label=\"Close\"></a>\n\
 <div class=\"sheet publish-sheet\">\n\
 <div class=\"dialog-head\">\
-<div class=\"dialog-title-wrap\"><span class=\"dialog-mark\" aria-hidden=\"true\">{mark}</span><h2 id=\"publish-title\">发布作品</h2></div>\
-<a class=\"close\" href=\"#\" autofocus aria-label=\"关闭\">{close}</a></div>\n\
+<div class=\"dialog-title-wrap\"><span class=\"dialog-mark\" aria-hidden=\"true\">{mark}</span><h2 id=\"publish-title\">Publish Project</h2></div>\
+<a class=\"close\" href=\"#\" autofocus aria-label=\"Close\">{close}</a></div>\n\
 <div class=\"pub\">\n\
-<div class=\"publish-tabs\" role=\"group\" aria-label=\"发布方式\">\n\
+<div class=\"publish-tabs\" role=\"group\" aria-label=\"Publish mode\">\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-static\" checked>\n\
-<label for=\"tab-static\">导出目录</label>\n\
+<label for=\"tab-static\">Export Directory</label>\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-local\">\n\
-<label for=\"tab-local\">本地端口</label>\n\
+<label for=\"tab-local\">Local Port</label>\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-backend\">\n\
-<label for=\"tab-backend\">带后端服务</label>\n\
+<label for=\"tab-backend\">With Backend</label>\n\
 </div>\n\
 <div class=\"cli\">\n\
-<div class=\"cli-bar\"><div class=\"cli-info\"><span class=\"cli-dots\" aria-hidden=\"true\"></span><span class=\"cli-meta\">bash · 命令行发布</span></div>\
-<button class=\"copy-command\" type=\"button\" aria-label=\"复制命令\" title=\"复制命令\" data-copy-command hidden>\
+<div class=\"cli-bar\"><div class=\"cli-info\"><span class=\"cli-dots\" aria-hidden=\"true\"></span><span class=\"cli-meta\">CLI publish</span></div>\
+<button class=\"copy-command\" type=\"button\" aria-label=\"Copy command\" title=\"Copy command\" data-copy-command hidden>\
 <svg class=\"icon copy-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"8\" y=\"8\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3\"/></svg>\
-<svg class=\"icon copied-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg><span class=\"copy-text\">复制</span></button></div>\n\
-<div class=\"codebox\" id=\"panel-static\" tabindex=\"0\" role=\"region\" aria-label=\"发布命令\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span></code></div>\n\
-<div class=\"codebox\" id=\"panel-local\" tabindex=\"0\" role=\"region\" aria-label=\"发布命令\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">3000</span></code></div>\n\
-<div class=\"codebox\" id=\"panel-backend\" tabindex=\"0\" role=\"region\" aria-label=\"发布命令\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span> <span class=\"f\">--backend</span> <span class=\"a\">8000</span></code></div>\n\
-<p class=\"leg\" id=\"leg-static\">{info}<span>先构建项目，将 <code>./dist</code> 换成你的游戏打包导出目录。</span></p>\n\
-<p class=\"leg\" id=\"leg-local\">{info}<span>先启动本地服务，并在分享期间保持终端运行。</span></p>\n\
-<p class=\"leg\" id=\"leg-backend\">{info}<span>静态目录照常发布，未匹配的请求转到本地后端。</span></p>\n\
+<svg class=\"icon copied-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg><span class=\"copy-text\">Copy</span></button></div>\n\
+<div class=\"codebox\" id=\"panel-static\" tabindex=\"0\" role=\"region\" aria-label=\"Publish command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span></code></div>\n\
+<div class=\"codebox\" id=\"panel-local\" tabindex=\"0\" role=\"region\" aria-label=\"Publish command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">3000</span></code></div>\n\
+<div class=\"codebox\" id=\"panel-backend\" tabindex=\"0\" role=\"region\" aria-label=\"Publish command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span> <span class=\"f\">--backend</span> <span class=\"a\">8000</span></code></div>\n\
+<p class=\"leg\" id=\"leg-static\">{info}<span>Build your project and replace <code>./dist</code> with your export folder.</span></p>\n\
+<p class=\"leg\" id=\"leg-local\">{info}<span>Start your local dev server and keep the terminal session open.</span></p>\n\
+<p class=\"leg\" id=\"leg-backend\">{info}<span>Static assets are cached on the edge; unmatched routes proxy to your backend.</span></p>\n\
 </div>\n\
 <p class=\"pub-status\" role=\"status\"></p>\n\
 </div>\n\
 <div class=\"pub-foot\">\
-<a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">{dl}下载 CLI</a>\
-<a href=\"{usage}\" target=\"_blank\" rel=\"noopener\">{book}使用方法</a>\
-<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">前往控制台{out}</a>\
+<a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">{dl}Download CLI</a>\
+<a href=\"{usage}\" target=\"_blank\" rel=\"noopener\">{book}Documentation</a>\
+<a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">Developer Console{out}</a>\
 </div>\n\
 </div>\n\
 </dialog>\n",
@@ -463,18 +507,18 @@ mod tests {
     fn a_card_is_one_link_with_only_these_things_on_it() {
         let plaza = wall_of(vec![item("brisk-otter-41")]);
         let html = render(&view(&plaza));
-        assert!(html.starts_with("<!doctype html>\n<html lang=\"zh-CN\">"));
+        assert!(html.starts_with("<!doctype html>\n<html lang=\"en\">"));
         assert!(html.contains(
             "<a class=\"tile\" href=\"/p/brisk-otter-41\" data-slug=\"brisk-otter-41\">"
         ));
         assert!(html.contains("新手引导看得懂吗"));
-        assert!(html.contains("这次想测"));
+        assert!(html.contains("Testing"));
         assert!(!html.contains("三关，五分钟，手机上也能玩。"));
         assert!(html.contains("某某"));
-        assert!(html.contains("<span class=\"tag\">正在找人测</span>"));
-        assert!(html.contains("<span class=\"verb\">试玩"));
+        assert!(html.contains("<span class=\"tag\">Seeking testers</span>"));
+        assert!(html.contains("<span class=\"verb\">Play"));
         assert!(!html.contains("即刻试玩"));
-        assert!(html.contains("6 / 10 位"));
+        assert!(html.contains("6 / 10 joined"));
         assert!(!html.contains("人玩过"));
         assert!(!html.contains("还剩"));
         assert!(html.contains("<div class=\"cover word\" style=\"--h:"));
@@ -482,7 +526,7 @@ mod tests {
         assert!(html.contains("><b>小</b><i>brisk-otter-41</i></div>"));
         // 名额那一件事实带一条进度线：6 / 10 就是 60%。
         assert!(
-            html.contains("<span class=\"fact seats\" style=\"--p:60%\"><i></i>6 / 10 位</span>")
+            html.contains("<span class=\"fact seats\" style=\"--p:60%\"><i></i>6 / 10 joined</span>")
         );
         assert!(html.contains("<h2>小球大冒险</h2>"));
         assert!(!html.contains("class=\"type\""));
@@ -513,9 +557,9 @@ mod tests {
         assert!(!html.contains("<script"));
         assert!(!html.contains("localStorage"));
         assert!(html.contains("aria-current=\"page\""));
-        assert!(html.contains("广场<span class=\"nav-dot\"></span>"));
+        assert!(html.contains("Plaza<span class=\"nav-dot\"></span>"));
         assert!(html.contains(&format!("href=\"{}\"", root_paths::ME)));
-        assert!(html.contains("关注</a>"));
+        assert!(html.contains("Following</a>"));
         assert!(!html.contains("<i>01</i>"));
         assert!(!html.contains("class=\"hero\""));
         assert!(!html.contains("来玩点，还没定稿的"));
@@ -527,19 +571,19 @@ mod tests {
         assert!(!html.contains("LESS LAUNCH"));
         assert!(!html.contains("brand-icon"));
         assert!(!html.contains("发布我的作品"));
-        assert!(html.contains(">发布作品</a>"));
+        assert!(html.contains(">Publish Project</a>"));
         assert!(!html.contains("class=\"toolbar\""));
         assert!(!html.contains("class=\"topbar\""));
         assert!(!html.contains("class=\"breadcrumb\""));
         assert!(!html.contains("点开就玩，不用注册"));
         assert!(html.contains("href=\"#publish-dialog\""));
-        assert!(html.contains("id=\"publish-title\">发布作品</h2>"));
+        assert!(html.contains("id=\"publish-title\">Publish Project</h2>"));
         assert!(!html.contains("把作品递给第一位玩家"));
         assert!(!html.contains("链接可以直接分享，玩家不用注册。"));
         assert!(html.contains("class=\"mark-svg\""));
         assert!(html.contains("class=\"sidebar\""));
         assert!(html.contains(crate::html::WORDMARK));
-        assert!(html.contains("aria-label=\"playtest.run 首页\""));
+        assert!(html.contains("aria-label=\"playtest.run Home\""));
         assert!(!html.contains("<span class=\"mark\" aria-hidden=\"true\">p"));
         assert!(!html.contains("class=\"steps\""));
         assert!(!html.contains("--seek"));
@@ -553,15 +597,15 @@ mod tests {
             "Tab 在终端舱上方"
         );
         assert!(html.contains("class=\"pub-foot\""));
-        assert!(html.contains(">下载 CLI</a>"));
-        assert!(html.contains(">使用方法</a>"));
-        assert!(html.contains("for=\"tab-static\">导出目录</label>"));
+        assert!(html.contains(">Download CLI</a>"));
+        assert!(html.contains(">Documentation</a>"));
+        assert!(html.contains("for=\"tab-static\">Export Directory</label>"));
         assert!(html
             .contains("<span class=\"k\">playtest</span> <span class=\"a\">./dist</span></code>"));
         assert!(html.contains("<span class=\"k\">playtest</span> <span class=\"a\">3000</span>"));
         assert!(html.contains("<span class=\"f\">--backend</span> <span class=\"a\">8000</span>"));
         assert!(
-            html.contains("aria-label=\"复制命令\" title=\"复制命令\" data-copy-command hidden>")
+            html.contains("aria-label=\"Copy command\" title=\"Copy command\" data-copy-command hidden>")
         );
         assert!(
             html.find("data-copy-command").unwrap() < html.find("id=\"panel-static\"").unwrap()
@@ -571,7 +615,7 @@ mod tests {
         assert!(html.contains(&format!(
             "href=\"{DEVELOPER_API_URL}/console/\" target=\"_blank\" rel=\"noopener\">"
         )));
-        assert_eq!(html.matches(DEVELOPER_API_URL).count(), 1);
+        assert_eq!(html.matches(&format!("{DEVELOPER_API_URL}/console/")).count(), 1);
         for word in [
             "最多人玩",
             "筛选",
@@ -601,9 +645,9 @@ mod tests {
         let quiet = html.find("data-slug=\"quiet-one\"").expect("其余");
         assert!(paid < seeking && seeking < quiet);
         assert_eq!(html.matches("data-slug=\"paid-one\"").count(), 1);
-        assert!(html.contains("<span class=\"tag ad\">推广</span>"));
+        assert!(html.contains("<span class=\"tag ad\">Featured</span>"));
         let paid_card = &html[paid..seeking];
-        assert!(!paid_card.contains("正在找人测"));
+        assert!(!paid_card.contains("Seeking testers"));
         let quiet_card = &html[quiet..];
         assert!(!quiet_card.contains("class=\"tag\""));
     }
@@ -649,17 +693,17 @@ mod tests {
     fn one_fact_per_card_in_this_order() {
         let now = datetime!(2026-09-08 04:00:00 UTC);
         let mut it = item("x");
-        assert_eq!(fact(&it, now), "6 / 10 位");
+        assert_eq!(fact(&it, now), "6 / 10 joined");
 
         it.seeking = false;
-        assert_eq!(fact(&it, now), "还剩 16 小时");
+        assert_eq!(fact(&it, now), "16h left");
 
         it.expires_at = None;
-        assert_eq!(fact(&it, now), "12 次开始");
+        assert_eq!(fact(&it, now), "12 played");
         assert!(fact_hint(&it).contains(&PLAYERS_WINDOW_DAYS.to_string()));
 
         it.players = 0;
-        assert_eq!(fact(&it, now), "1 小时前");
+        assert_eq!(fact(&it, now), "1h ago");
         assert!(fact_hint(&it).is_empty());
 
         it.updated_at = "not-a-date".into();
@@ -670,7 +714,7 @@ mod tests {
         it.updated_at = "2026-09-08T03:00:00Z".into();
         it.expires_at = None;
         it.players = 0;
-        assert_eq!(fact(&it, now), "1 小时前");
+        assert_eq!(fact(&it, now), "1h ago");
     }
 
     /// 关注广场只在关注页里办。栏上、卡上都不放第二扇门。
@@ -683,7 +727,7 @@ mod tests {
         assert!(!html.contains(&format!("action=\"{}\"", root_paths::FOLLOW)));
         assert!(!html.contains("value=\"site:brisk-otter-41\""));
         assert!(html.contains(&format!("href=\"{}\"", root_paths::ME)));
-        assert!(html.contains("关注</a>"));
+        assert!(html.contains("Following</a>"));
     }
 
     #[test]
@@ -735,12 +779,12 @@ mod tests {
         assert!(html.contains("<h2>小球大冒险</h2>"));
         assert_eq!(html.matches("小球大冒险").count(), 1);
         assert!(!html.contains("cover word"));
-        assert!(html.contains("<span class=\"verb\">体验"));
+        assert!(html.contains("<span class=\"verb\">Test"));
         assert!(!html.contains("即刻体验"));
         assert!(!html.contains("class=\"tag\""));
         assert!(!html.contains("这次想测"));
         assert!(!html.contains("class=\"type\""));
-        assert!(html.contains("1 小时前"));
+        assert!(html.contains("1h ago"));
         assert!(!html.contains("人玩过"));
         // 不是名额那一件事实，就没有进度线。
         assert!(!html.contains("class=\"fact seats\""));
@@ -786,7 +830,7 @@ mod tests {
     fn empty_plaza_says_so() {
         let plaza = Plaza::default();
         let html = render(&view(&plaza));
-        assert!(html.contains("广场上还没有作品"));
+        assert!(html.contains("No projects on the plaza yet"));
         assert!(!html.contains("class=\"grid\""));
         assert!(html.contains("--public"));
         assert!(!html.contains("来玩点，还没定稿的"));

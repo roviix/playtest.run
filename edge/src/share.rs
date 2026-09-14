@@ -35,21 +35,21 @@ impl SharePage<'_> {
 <style>.shot{display:block;width:100%;height:auto;aspect-ratio:1080/1350;background:#0e1014;\
 border-bottom:1px solid var(--line)}</style>\n";
         let hero = format!(
-            "<img class=\"shot\" src=\"{CARD_PATH}\" alt=\"{title} 的邀请卡\" width=\"1080\" height=\"1350\">\n"
+            "<img class=\"shot\" src=\"{CARD_PATH}\" alt=\"Invitation card for {title}\" width=\"1080\" height=\"1350\">\n"
         );
         let body = format!(
-            "<h1>把这张卡发出去</h1>\n\
-<p class=\"lead\">长按图片保存，或者直接发到群里。卡上的二维码就是这条链接。</p>\n\
-{row}<button type=\"button\" id=\"pt-share\" data-title=\"{title}\" hidden>分享</button>\n\
-<div class=\"more\"><a href=\"{CARD_PATH}\" download=\"playtest-{slug}.png\">保存图片</a>\
-<a href=\"/\">回到作品</a></div>\n\
-<footer><a href=\"{RESERVED_PATH_PREFIX}report\">有问题？举报</a></footer>\n\
+            "<h1>Share this card</h1>\n\
+<p class=\"lead\">Long-press or click to save image, or share directly. The QR code on the card links here.</p>\n\
+{row}<button type=\"button\" id=\"pt-share\" data-title=\"{title}\" hidden>Share</button>\n\
+<div class=\"more\"><a href=\"{CARD_PATH}\" download=\"playtest-{slug}.png\">Save image</a>\
+<a href=\"/\">Back to project</a></div>\n\
+<footer><a href=\"{RESERVED_PATH_PREFIX}report\">Report an issue</a></footer>\n\
 <script>{COPY_JS}{SCRIPT}</script>\n",
             slug = esc(&m.slug),
-            row = copy_row(&link, Some("作品链接")),
+            row = copy_row(&link, Some("Project link")),
         );
         Some(shell_hero(
-            &format!("《{}》的邀请卡", m.title),
+            &format!("{} · Invitation Card", m.title),
             head,
             &hero,
             &body,
@@ -127,10 +127,10 @@ mod tests {
         assert!(html.contains("<img class=\"shot\" src=\"/_playtest/card.png\""));
         assert!(html.contains("download=\"playtest-brisk-otter-41.png\""));
         assert!(html.contains("value=\"http://localhost:8443/p/brisk-otter-41\""));
-        assert!(html.contains(">复制链接</button>"));
+        assert!(html.contains(">Copy link</button>"));
         // 系统分享默认藏着：没有 navigator.share 的浏览器上它不该占位。
         assert!(html.contains("id=\"pt-share\" data-title=\"小球大冒险\" hidden"));
-        assert!(html.contains("<title>《小球大冒险》的邀请卡</title>"));
+        assert!(html.contains("<title>小球大冒险 · Invitation Card</title>"));
         // 除了那张卡，一个外部资源都不加载。
         for forbidden in [
             "<script src",
@@ -141,7 +141,7 @@ mod tests {
             assert!(!html.contains(forbidden), "{forbidden}");
         }
         assert!(!html.contains(playtest_common::DEVELOPER_HOST));
-        assert!(html.len() < 16 * 1024, "分享页 {} 字节", html.len());
+        assert!(html.len() < 20 * 1024, "分享页 {} 字节", html.len());
     }
 
     #[test]

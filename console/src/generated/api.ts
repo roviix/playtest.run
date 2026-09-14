@@ -239,6 +239,8 @@ export type FeedbackRequest = {
   seconds_in?: number;
   session: string;
   slug: string;
+  /** 反馈来源：如 "gate"（门禁页交流舱）。SDK 发送时为 None。 */
+  source?: string;
   text: string;
 };
 

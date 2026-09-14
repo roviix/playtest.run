@@ -696,6 +696,7 @@ async fn feedback_is_one_sentence_and_stops_at_three() {
                 slug: slug.clone(),
                 text: "不知道要按哪个键".to_string(),
                 seconds_in: Some(47),
+                source: None,
             },
         )
         .await
@@ -743,6 +744,7 @@ async fn feedback_is_one_sentence_and_stops_at_three() {
                     slug: slug.clone(),
                     text: "再说一句".to_string(),
                     seconds_in: None,
+                    source: None,
                 },
             )
             .await
@@ -759,6 +761,7 @@ async fn feedback_is_one_sentence_and_stops_at_three() {
                 slug: slug.clone(),
                 text: "第四句".to_string(),
                 seconds_in: None,
+                source: None,
             },
         )
         .await
@@ -780,6 +783,7 @@ async fn feedback_is_one_sentence_and_stops_at_three() {
                 slug: slug.clone(),
                 text: "   ".to_string(),
                 seconds_in: None,
+                source: None,
             },
         )
         .await
@@ -795,6 +799,7 @@ async fn feedback_is_one_sentence_and_stops_at_three() {
             slug: slug.clone(),
             text: "长".repeat(ingest::MAX_FEEDBACK_CHARS + 500),
             seconds_in: Some(u32::MAX),
+            source: None,
         },
     )
     .await

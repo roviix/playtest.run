@@ -39,7 +39,7 @@ pub const HANDSHAKE_TAIL: &str = "tunnel";
 ///
 /// 上传路径显示 `v7`，隧道路径没有版本可显示（DESIGN §3.5：隧道只有「在线 / 离线」和会话）。
 /// 显示合成清单里那个 `v0` 会让玩家以为自己拿到了一个坏链接。
-pub const ONLINE_LABEL: &str = "在线";
+pub const ONLINE_LABEL: &str = "Live";
 
 /// 隧道模式下这一次请求要不要先出门禁页。
 ///

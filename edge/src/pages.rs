@@ -12,56 +12,56 @@ use crate::html::{esc, shell};
 /// slug 不存在、被删了、或者压根不是一个合法的名字。
 /// 不区分「没有」和「已删除」：区分了就等于给人一个扫描哪些名字被占的接口。
 pub fn not_found() -> String {
-    let body = "<h1>这个链接不存在，或者已经失效</h1>\n\
-<p class=\"lead\">检查一下地址有没有抄漏，或者找发链接给你的人再要一次。</p>\n";
-    shell("这个链接不存在", "", body)
+    let body = "<h1>This link does not exist or has expired</h1>\n\
+<p class=\"lead\">Please check the URL, or ask the person who shared it for a new link.</p>\n";
+    shell("Link not found", "", body)
 }
 
 /// 作品在，但请求的文件不在这个版本里。
 pub fn file_not_found() -> String {
-    let body = "<h1>这个页面不在这个版本里</h1>\n\
-<p class=\"lead\">作品还在，只是这条地址没有对应的文件。回到首页试试。</p>\n\
-<footer><a href=\"/\">回到首页</a></footer>\n";
-    shell("页面不存在", "", body)
+    let body = "<h1>Page not found in this version</h1>\n\
+<p class=\"lead\">The project is online, but this URL does not match any file in this release. Try returning to the home page.</p>\n\
+<footer><a href=\"/\">Return to home</a></footer>\n";
+    shell("Page not found", "", body)
 }
 
 /// 匿名链接到期（DESIGN §3.2：不登录也能拿到一个 24 小时的链接）。
 pub fn gone() -> String {
-    let body = "<h1>这个匿名链接已过期</h1>\n\
-<p class=\"lead\">免登录的链接有效期 24 小时，现在已经过了。找发链接给你的人再发一个新的。</p>\n";
-    shell("链接已过期", "", body)
+    let body = "<h1>This anonymous link has expired</h1>\n\
+<p class=\"lead\">Anonymous links are valid for 24 hours and have now expired. Ask the creator for a new link.</p>\n";
+    shell("Link expired", "", body)
 }
 
 /// 清单指着一个取不到的 blob——对象存储被删了一半之类。玩家侧只能如实说坏了。
 pub fn broken() -> String {
-    let body = "<h1>这个文件取不出来</h1>\n\
-<p class=\"lead\">作品在，但它的一个文件在我们这边坏了。稍后再试，或者告诉发链接给你的人。</p>\n";
-    shell("文件取不出来", "", body)
+    let body = "<h1>Unable to load this file</h1>\n\
+<p class=\"lead\">The project is online, but a file is corrupted on our end. Please try again later or notify the creator.</p>\n";
+    shell("File unavailable", "", body)
 }
 
 /// 当前无法确认作品是否存在或仍有权访问。503 与 404 分开，恢复后浏览器和 CDN 才会重试。
 pub fn unavailable() -> String {
-    let body = "<h1>作品暂时取不出来</h1>\n\
-<p class=\"lead\">我们暂时连不上作品存储，不能确认这份内容现在是否允许访问。稍后再试，你的设备没有问题。</p>\n";
-    shell("作品暂时不可用", "", body)
+    let body = "<h1>Project temporarily unavailable</h1>\n\
+<p class=\"lead\">We cannot reach project storage right now to verify access. Please try again shortly; your device is fine.</p>\n";
+    shell("Temporarily unavailable", "", body)
 }
 
 pub fn untrusted_action() -> String {
     shell(
-        "请从作品邀请页操作",
+        "Please open from invitation page",
         "",
-        "<h1>请从作品邀请页操作</h1><p class=\"lead\">这个请求不是从本站发出的。请回到作品邀请页再试。</p><footer><a href=\"/\">回到广场</a></footer>",
+        "<h1>Please open from invitation page</h1><p class=\"lead\">This request did not originate from this site. Please return to the invitation page and try again.</p><footer><a href=\"/\">Return to Plaza</a></footer>",
     )
 }
 
 pub const REPORT_REASONS: &[(&str, &str)] = &[
-    ("phishing", "假冒别人、骗账号或骗钱"),
-    ("malware", "病毒、恶意脚本或有害下载"),
-    ("adult", "色情、暴力或其它不适宜的内容"),
-    ("infringement", "抄袭或侵犯版权"),
-    ("harassment", "针对具体的人的攻击或骚扰"),
-    ("broken", "打不开、加载不出来"),
-    ("other", "其它"),
+    ("phishing", "Phishing, impersonation, or scam"),
+    ("malware", "Malware, malicious scripts, or harmful downloads"),
+    ("adult", "Sexually explicit, violent, or inappropriate content"),
+    ("infringement", "Copyright infringement or plagiarism"),
+    ("harassment", "Targeted harassment or abuse"),
+    ("broken", "Broken link or fails to load"),
+    ("other", "Other issues"),
 ];
 
 pub fn report_form() -> String {
@@ -74,23 +74,23 @@ pub fn report_form() -> String {
         ));
     }
     let body = format!(
-        "<h1>举报这个作品</h1>\n\
-<p class=\"lead\">告诉我们这里出了什么事。不用留下你是谁。</p>\n\
+        "<h1>Report this project</h1>\n\
+<p class=\"lead\">Tell us what happened. You can remain anonymous.</p>\n\
 <form method=\"post\" action=\"{prefix}report\">\n\
-<label>是什么问题<select name=\"reason\">{options}</select></label>\n\
-<label>还想补充点什么（可以不填）<textarea name=\"detail\" rows=\"5\" maxlength=\"2000\"></textarea></label>\n\
-<button type=\"submit\">提交</button>\n\
+<label>What is the issue?<select name=\"reason\">{options}</select></label>\n\
+<label>Additional details (optional)<textarea name=\"detail\" rows=\"5\" maxlength=\"2000\"></textarea></label>\n\
+<button type=\"submit\">Submit</button>\n\
 </form>\n\
-<footer><a href=\"/\">返回作品</a></footer>\n",
+<footer><a href=\"/\">Back to project</a></footer>\n",
         prefix = RESERVED_PATH_PREFIX,
     );
-    shell("举报这个作品", "", &body)
+    shell("Report this project", "", &body)
 }
 
 /// 举报收下之后。**不承诺处理时限**：服务条款还没有，承诺了就是虚报（AGENTS 第 4 条）。
 pub fn report_done() -> String {
-    let body = "<h1>已收到。</h1>\n<footer><a href=\"/\">返回作品</a></footer>\n";
-    shell("已收到", "", body)
+    let body = "<h1>Report received.</h1>\n<footer><a href=\"/\">Back to project</a></footer>\n";
+    shell("Report received", "", body)
 }
 
 /// 这个 slug 这一小时的流量用完了（DESIGN §4.8 的每小时熔断）。
@@ -98,11 +98,10 @@ pub fn report_done() -> String {
 /// 说清三件事：不是作品被下架、不是玩家做错了什么、过一会儿真的能好。
 /// 不说「被刷了」「触发风控」这种词——玩家既不知道也帮不上忙（AGENTS 第 8 条）。
 pub fn over_quota() -> String {
-    let body = "<h1>这个作品这一小时的流量用完了</h1>\n\
-<p class=\"lead\">过一会儿再点一次就好。作品还在，也没有被下架——这是我们给每个作品设的每小时上限，\
-免得一个人的作品被刷爆之后连累别人。</p>\n\
-<p class=\"lead\">要是等了很久还这样，告诉发链接给你的人。</p>\n";
-    shell("这一小时的流量用完了", "", body)
+    let body = "<h1>Hourly traffic limit reached for this project</h1>\n\
+<p class=\"lead\">Please check back in a little while. The project is still here and has not been taken down — this is an hourly safeguard we place on every project to prevent runaway traffic.</p>\n\
+<p class=\"lead\">If this persists after some time, let the creator know.</p>\n";
+    shell("Hourly limit reached", "", body)
 }
 
 #[cfg(test)]
@@ -131,7 +130,7 @@ mod tests {
     #[test]
     fn over_quota_says_it_comes_back() {
         let html = over_quota();
-        assert!(html.contains("过一会儿再点一次"));
+        assert!(html.contains("check back in a little while"));
         // 不吓唬玩家，也不说他们插不上手的内部词。
         for word in ["熔断", "配额", "风控", "封禁", "DDoS"] {
             assert!(!html.contains(word), "「{word}」不是给玩家看的词");
@@ -149,9 +148,9 @@ mod tests {
     #[test]
     fn report_done_makes_no_promise() {
         let html = report_done();
-        assert!(html.contains("已收到。"));
-        for word in ["24 小时", "工作日", "尽快处理", "我们会在"] {
-            assert!(!html.contains(word), "不承诺处理时限");
+        assert!(html.contains("Report received."));
+        for word in ["24 hours", "business day", "as soon as possible", "we will"] {
+            assert!(!html.contains(word), "No promised timeline");
         }
     }
 }

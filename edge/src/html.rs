@@ -113,7 +113,7 @@ pub fn enhance(html: String, nonce: &str) -> String {
 /// 原来各写了一遍、一字不差。写成 ES5、每一步都能失败：没有 JS 时那个只读输入框自己就是
 /// 「复制链接」的办法。`i` 是只读输入框，`b` 是按钮；成功了按钮上的字换成「已复制」。
 pub const COPY_JS: &str = "function ptCopy(i,b){b.onclick=function(){i.focus();i.select();i.setSelectionRange(0,i.value.length);\
-var ok=function(){b.textContent='已复制'};\
+var ok=function(){b.textContent='Copied'};\
 var old=function(){try{document.execCommand('copy');ok()}catch(e){}};\
 if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(i.value).then(ok,old)}else{old()}}}";
 
@@ -124,7 +124,7 @@ pub fn copy_row(url_escaped: &str, aria_label: Option<&str>) -> String {
         .unwrap_or_default();
     format!(
         "<p class=\"row\"><input id=\"pt-url\" readonly value=\"{url_escaped}\"{label}>\
-<button type=\"button\" id=\"pt-copy\">复制链接</button></p>\n"
+<button type=\"button\" id=\"pt-copy\">Copy link</button></p>\n"
     )
 }
 
@@ -137,7 +137,7 @@ pub fn shell(title: &str, head: &str, body: &str) -> String {
 /// `hero` 是已经拼好的 HTML（调用方负责转义）；空字符串就是没有封面。
 pub fn shell_hero(title: &str, head: &str, hero: &str, body: &str) -> String {
     format!(
-        "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n\
+        "<!doctype html>\n<html lang=\"en\">\n<head>\n\
 <meta charset=\"utf-8\">\n\
 <meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n\
 <title>{title}</title>\n\
@@ -152,7 +152,7 @@ pub fn shell_hero(title: &str, head: &str, hero: &str, body: &str) -> String {
 /// 不套卡片的整页外壳，广场与关注页用：左边一条栏，右边一面墙。
 pub fn page(title: &str, head: &str, body: &str) -> String {
     format!(
-        "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n\
+        "<!doctype html>\n<html lang=\"en\">\n<head>\n\
 <meta charset=\"utf-8\">\n\
 <meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n\
 <title>{title}</title>\n\
@@ -179,12 +179,12 @@ mod tests {
 
     #[test]
     fn each_page_carries_only_its_two_layers_and_they_stay_small() {
-        // 卡页 ~10.5 KB：含整套门禁卡与右侧悬浮实时原声舱（含微信式全屏聊天与试玩贴纸），无外链脚本，整页在 16 KB 以内。
-        // 整页 23 KB：广场的墙、栏、卡、发布说明（终端舱）都在里面，没有一条卡页的规则。
+        // 卡页 ~15 KB：含整套门禁卡与右侧悬浮实时原声舱（含微信式全屏聊天、表情盘与试玩贴纸），无外链脚本，样式在 16 KB 以内。
+        // 整页 26 KB：广场的墙、栏、卡、Slogan Hero、发布说明（终端舱）都在里面，没有一条卡页的规则。
         let card = BASE.len() + CARD.len();
         let page = BASE.len() + PAGE.len();
-        assert!(card < 28 * 512, "卡页样式 {card} 字节");
-        assert!(page < 23 * 1024, "整页样式 {page} 字节");
+        assert!(card < 32 * 512, "卡页样式 {card} 字节");
+        assert!(page < 26 * 1024, "整页样式 {page} 字节");
         assert!(
             PAGE.contains(".publish-sheet{width:min(34rem,100%)"),
             "发布说明独立使用 34rem 紧凑阅读宽度"

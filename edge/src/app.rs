@@ -35,9 +35,11 @@ use crate::paths::{self, AcceptEncoding, Resolved, Served};
 use crate::plaza::{self, PlazaCache};
 use crate::range::{self, Range};
 use crate::router::{self, reserved_tail, Reserved, Root};
+use crate::seo;
 use crate::share::SharePage;
 use crate::tunnel::{self, Tunnels};
 use crate::{breaker, pages, sites::SiteState, sites::SiteStore};
+use time::OffsetDateTime;
 
 /// 门禁 cookie 活 24 小时：一次点开在一天内不再重复出现（DESIGN §3.3）。
 const GATE_MAX_AGE: u64 = 24 * 60 * 60;
@@ -209,6 +211,11 @@ async fn root(
         Root::Llms => llms_pointer(),
         Root::FaviconSvg => favicon_svg(parts.method == Method::HEAD),
         Root::FaviconIco => favicon_ico(parts.method == Method::HEAD),
+        Root::Robots => seo::robots_txt(),
+        Root::Sitemap => {
+            let plaza = app.plaza.get().await;
+            seo::sitemap_xml(&plaza, OffsetDateTime::now_utc())
+        }
     };
     response
 }
@@ -276,13 +283,17 @@ async fn project_door(
             } else if text.is_empty() || text.chars().count() > 200 {
                 Err(400)
             } else {
-                follow::submit_feedback(
+                let res = follow::submit_feedback(
                     app.config.api_internal_url.as_deref(),
                     &manifest.slug,
                     &sid,
                     &feedback_text,
                 )
-                .await
+                .await;
+                if res.is_ok() {
+                    app.live.invalidate(&manifest.slug);
+                }
+                res
             };
             let (status, message) = match result {
                 Ok(()) => (StatusCode::OK, "反馈已送达。是否公开由作者决定。"),
@@ -363,6 +374,34 @@ async fn project_door(
                 .into_response();
         }
         return (StatusCode::SEE_OTHER, headers).into_response();
+    }
+
+    let is_chat_feed = parts.uri.query().is_some_and(|q| q.contains("chat=1") || q.contains("chat_feed=1"));
+    let is_json_accept = header_str(&parts.headers, "accept").is_some_and(|a| a.contains("application/json"));
+    if is_chat_feed || (parts.method == Method::GET && is_json_accept) {
+        if is_chat_feed {
+            app.live.invalidate(&manifest.slug);
+        }
+        let live = app.live.get(&manifest.slug).await;
+        let messages = live.public_feedback.iter().take(playtest_common::live::PUBLIC_FEEDBACK_ON_GATE).map(|item| {
+            let who = item.name.as_deref().map(str::trim).filter(|n| !n.is_empty()).unwrap_or("A tester");
+            let avatar = playtest_common::avatar::svg_for_seed(who, Some(28), Some("chat-avatar-svg"));
+            let time_str = crate::when::day_time(&item.at).unwrap_or_else(|| "刚刚".to_string());
+            serde_json::json!({
+                "who": who,
+                "text": item.text,
+                "version": item.version,
+                "time": time_str,
+                "avatar": avatar,
+            })
+        }).collect::<Vec<_>>();
+        let mut headers = base_headers();
+        put(&mut headers, "cache-control", "no-cache, no-store, must-revalidate");
+        return (StatusCode::OK, headers, axum::Json(serde_json::json!({
+            "ok": true,
+            "count": messages.len(),
+            "messages": messages,
+        }))).into_response();
     }
 
     let live = app.live.get(&manifest.slug).await;
@@ -564,6 +603,7 @@ async fn project_door(
 fn llms_pointer() -> Response {
     let body = format!(
         "# playtest\n\n\
+         Build in public. Show the work, not the hype.\n\n\
          This host serves the player side: the works themselves, the gate page, the plaza.\n\
          There is nothing here for you to call.\n\n\
          Everything an assistant needs — what this is, when not to use it, the CLI, the MCP\n\
@@ -1086,7 +1126,7 @@ async fn beyond_manifest(
         return tunnel::error(
             StatusCode::SERVICE_UNAVAILABLE,
             ErrorCode::BackendOffline,
-            "开发者的电脑暂时不在线：页面能打开，但后端接不上。",
+            "The developer machine is currently offline: static pages load, but the backend is unreachable.",
         );
     }
     if parts.method != Method::GET && parts.method != Method::HEAD {
@@ -1717,6 +1757,7 @@ async fn blob(
     // 记账放在真的要发字节的时候：304、416、HEAD 都不算。
     app.breaker.record(&manifest.slug, length);
     let object_range = (length != total).then_some(start..start + length);
+
     let object = match app
         .sites
         .store()
@@ -1741,7 +1782,7 @@ async fn blob(
             );
         }
     };
-    // S3 与本地文件都走同一条流；Range 由源站读取，80 MB `.data` 不进整包内存。
+
     (status, headers, Body::from_stream(object.into_stream())).into_response()
 }
 

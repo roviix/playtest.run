@@ -81,54 +81,66 @@ async fn save(
     let now = clock::now();
     let at = clock::format(now);
 
-    let mut conn = state.db().lock().await;
-    let version =
-        current_version(&conn, &slug)?.ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?;
+    let is_chat = request.source.as_deref() == Some("gate") || request.source.as_deref() == Some("chat");
+    let max_allowed = if is_chat {
+        ingest::MAX_CHAT_PER_SESSION
+    } else {
+        ingest::MAX_FEEDBACK_PER_SESSION
+    };
 
-    let tx = conn.transaction()?;
-    let already = count_for_session(&tx, &request.session)?;
-    if already >= ingest::MAX_FEEDBACK_PER_SESSION {
-        return Err(ApiError::public(
-            StatusCode::TOO_MANY_REQUESTS,
-            ErrorCode::QuotaExceeded,
-            ENOUGH,
-        ));
-    }
+    let (version, already) = {
+        let mut conn = state.db().lock().await;
+        let version =
+            current_version(&conn, &slug)?.ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?;
 
-    touch_session(
-        &tx,
-        &Seen {
-            id: &request.session,
-            slug: &slug,
-            version,
-            at: &at,
-            ua,
-            referer: None,
-            from: None,
-            plaza_host: "",
-            return_before: &clock::format(now - Duration::minutes(RETURN_AFTER_MINUTES)),
-        },
-    )?;
-    tx.execute(
-        "INSERT INTO feedback
-             (session_id, slug, version, ts, text, seconds_in, device, browser, screenshot_hash, status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, 'new')",
-        params![
-            request.session,
-            slug,
-            version,
-            at,
-            text,
-            request.seconds_in.and_then(sane_seconds),
-            client.map(|c| c.device),
-            client.map(|c| c.browser),
-        ],
-    )?;
-    tx.commit()?;
+        let tx = conn.transaction()?;
+        let already = count_for_session(&tx, &request.session)?;
+        if already >= max_allowed {
+            return Err(ApiError::public(
+                StatusCode::TOO_MANY_REQUESTS,
+                ErrorCode::QuotaExceeded,
+                ENOUGH,
+            ));
+        }
+
+        touch_session(
+            &tx,
+            &Seen {
+                id: &request.session,
+                slug: &slug,
+                version,
+                at: &at,
+                ua,
+                referer: None,
+                from: None,
+                plaza_host: "",
+                return_before: &clock::format(now - Duration::minutes(RETURN_AFTER_MINUTES)),
+            },
+        )?;
+        tx.execute(
+            "INSERT INTO feedback
+                 (session_id, slug, version, ts, text, seconds_in, device, browser, screenshot_hash, status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, 'new')",
+            params![
+                request.session,
+                slug,
+                version,
+                at,
+                text,
+                request.seconds_in.and_then(sane_seconds),
+                client.map(|c| c.device),
+                client.map(|c| c.browser),
+            ],
+        )?;
+        tx.commit()?;
+        (version, already)
+    };
 
     tracing::info!(slug = %slug, version, "收到一条反馈");
+    crate::live::publish(state, &slug).await;
+
     Ok(Json(FeedbackAccepted {
-        remaining: ingest::MAX_FEEDBACK_PER_SESSION - already - 1,
+        remaining: max_allowed.saturating_sub(already + 1),
     }))
 }
 

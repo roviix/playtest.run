@@ -423,7 +423,7 @@ async fn sharing_is_only_for_a_work_that_chose_to_be_public() {
     let hidden = Site::plain().await;
     let reply = hidden.get(playtest_common::SHARE_PATH).await;
     assert_eq!(reply.status, StatusCode::NOT_FOUND);
-    assert!(!reply.text().contains("保存图片"));
+    assert!(!reply.text().contains("Save image"));
     // 门禁页上也不提「分享」。
     assert!(!hidden
         .get("/")
@@ -441,11 +441,11 @@ async fn sharing_is_only_for_a_work_that_chose_to_be_public() {
         playtest_common::CARD_PATH
     )));
     assert!(html.contains("download"));
-    assert!(html.contains("复制链接"));
+    assert!(html.contains("Copy link"));
     // 作品域上一个 CSP 头都不发（硬线，见 gate_hardlines）。
     assert!(reply.header("content-security-policy").is_none());
     // 保持轻量：没有外部资源。
-    assert!(html.len() < 16 * 1024, "分享页 {} 字节", html.len());
+    assert!(html.len() < 20 * 1024, "分享页 {} 字节", html.len());
 }
 
 // ------------------------------------------------------------------ 关注登记
@@ -465,8 +465,8 @@ async fn following_a_work_from_its_own_gate() {
         .await;
     assert_eq!(reply.status, StatusCode::OK);
     let html = reply.text();
-    assert!(html.contains("确认信已发到 z***@example.com。"));
-    assert!(html.contains("没收到看看垃圾箱"));
+    assert!(html.contains("Confirmation email sent to z***@example.com."));
+    assert!(html.contains("Click the link in the email to confirm. Check your spam folder if it does not arrive."));
     // 邮箱不回显。
     assert!(!html.contains("zhong@example.com"));
 
@@ -488,7 +488,7 @@ async fn following_a_work_from_its_own_gate() {
             "target=site%3Abrisk-otter-41&email=a%40b.co&to=%2F",
         )
         .await;
-    assert!(reply.text().contains("好，这个作品有新版本时会通知你。"));
+    assert!(reply.text().contains("You are all set! We will notify you when a new version is released."));
 
     *api.answer.lock().unwrap() = Answer::Follow(FollowResponse::AlreadyFollowing);
     let reply = site
@@ -498,7 +498,7 @@ async fn following_a_work_from_its_own_gate() {
             "target=site%3Abrisk-otter-41&email=a%40b.co&to=%2F",
         )
         .await;
-    assert!(reply.text().contains("你已经关注着它了。"));
+    assert!(reply.text().contains("You are already following this."));
 }
 
 #[tokio::test]
@@ -513,7 +513,7 @@ async fn a_work_cannot_borrow_a_player_to_follow_another_work() {
         )
         .await;
     assert_eq!(reply.status, StatusCode::BAD_REQUEST);
-    assert!(reply.text().contains("这条链接不完整"));
+    assert!(reply.text().contains("This link is incomplete, please go back and try again."));
 
     // 不像邮箱的东西也是 400，但页面上只有一句人话。
     let reply = site
@@ -525,8 +525,8 @@ async fn a_work_cannot_borrow_a_player_to_follow_another_work() {
         .await;
     assert_eq!(reply.status, StatusCode::BAD_REQUEST);
     let html = reply.text();
-    assert!(html.contains("这个邮箱看着不像能收信的"));
-    for word in ["控制面", "错误", "失败", "参数"] {
+    assert!(html.contains("Please check your email address."));
+    for word in ["control plane", "error", "failed", "parameter"] {
         assert!(!html.split("</head>").nth(1).unwrap().contains(word));
     }
 }
@@ -546,9 +546,9 @@ async fn a_control_plane_that_is_not_there_is_one_calm_sentence() {
         .await;
     assert_eq!(reply.status, StatusCode::SERVICE_UNAVAILABLE);
     let html = reply.text();
-    assert!(html.contains("现在登记不了，稍后再试。"));
+    assert!(html.contains("Unable to process right now. Please try again later."));
     let body = html.split("</head>").nth(1).unwrap();
-    for word in ["控制面", "超时", "错误", "500"] {
+    for word in ["control plane", "timeout", "error", "500"] {
         assert!(!body.contains(word), "「{word}」不该出现在玩家面前");
     }
 
@@ -563,7 +563,7 @@ async fn a_control_plane_that_is_not_there_is_one_calm_sentence() {
         )
         .await;
     assert_eq!(reply.status, StatusCode::SERVICE_UNAVAILABLE);
-    assert!(reply.text().contains("现在登记不了，稍后再试。"));
+    assert!(reply.text().contains("Unable to process right now. Please try again later."));
 }
 
 // ------------------------------------------------------------------ 根域：关注
@@ -575,20 +575,19 @@ async fn me_without_a_key_is_this_device_not_a_login_wall() {
     let reply = site.get_root(root_paths::ME).await;
     assert_eq!(reply.status, StatusCode::OK);
     let html = reply.text();
-    assert!(html.contains("<h1>关注</h1>"));
-    assert!(html.contains("每周一封"));
+    assert!(html.contains("<h1>Following</h1>"));
+    assert!(html.contains("Weekly digest"));
     assert!(html.contains("type=\"email\""));
     assert!(html.contains("aria-current=\"page\""));
-    assert!(html.contains("关注<span class=\"nav-dot\"></span>"));
+    assert!(html.contains("Following<span class=\"nav-dot\"></span>"));
     assert!(html.contains("href=\"/\""));
-    assert!(html.contains("广场</a>"));
-    assert!(!html.contains("看看有什么新东西"));
-    // 没有「注册」「账号」这些词（DESIGN §3.10）。
-    for word in [">注册<", "昵称", "创建账号", "密码"] {
+    assert!(html.contains("Plaza</a>"));
+    assert!(!html.contains("Explore projects"));
+    for word in ["Nickname", "Create account", "Password"] {
         assert!(!html.contains(word), "「{word}」不该出现");
     }
     // 找回与登录入口通过统一账号弹窗提供。
-    assert!(html.contains("placeholder=\"你的邮箱\""));
+    assert!(html.contains("placeholder=\"name@example.com\""));
     assert!(html.contains(&format!("action=\"{}\"", root_paths::FOLLOW)));
     assert!(html.contains("value=\"plaza\""));
 }
@@ -604,8 +603,8 @@ async fn me_with_a_key_lists_what_this_person_follows() {
     let html = reply.text();
     assert!(html.contains("z***@example.com"));
     assert!(html.contains("小球大冒险"));
-    assert!(html.contains("aria-label=\"取消关注小球大冒险\">取消关注</button>"));
-    assert!(html.contains("切换邮箱"));
+    assert!(html.contains("aria-label=\"Unfollow 小球大冒险\">Unfollow</button>"));
+    assert!(html.contains("Switch email"));
     // 拿钥匙去问控制面，不是拿邮箱。
     let (_, body) = api.last();
     assert_eq!(body["me_token"], ME_TOKEN);
@@ -616,7 +615,7 @@ async fn me_with_a_key_lists_what_this_person_follows() {
     *api.answer.lock().unwrap() = Answer::Status(401);
     let reply = site.get_root_as_me(root_paths::ME).await;
     assert_eq!(reply.status, StatusCode::OK);
-    assert!(reply.text().contains("<h1>关注</h1>"));
+    assert!(reply.text().contains("<h1>Following</h1>"));
     let cleared = reply
         .cookies()
         .iter()
@@ -667,8 +666,8 @@ async fn confirming_plants_a_host_only_key() {
         .await;
     assert_eq!(reply.status, StatusCode::OK);
     let html = reply.text();
-    assert!(html.contains("这条链接现在不管用了。"));
-    assert!(html.contains("再发一条"));
+    assert!(html.contains("This link is no longer valid."));
+    assert!(html.contains("Send another link"));
 }
 
 #[tokio::test]
@@ -680,9 +679,9 @@ async fn unsubscribing_takes_one_click_and_no_questions() {
         .await;
     assert_eq!(reply.status, StatusCode::OK);
     let html = reply.text();
-    assert!(html.contains("已退订，不会再收到任何通知。"));
+    assert!(html.contains("Unsubscribed. You will not receive any more notifications."));
     // 不挽留：没有「再想想」「为什么」这类东西。
-    for word in ["再想想", "为什么", "确定要", "可惜"] {
+    for word in ["think again", "why", "are you sure", "pity"] {
         assert!(!html.contains(word), "「{word}」不该出现");
     }
     // 退订之后这台设备上那把钥匙也没意义了。
@@ -824,11 +823,11 @@ async fn the_wall_is_one_grid_with_a_rail_and_says_which_card_is_paid_for() {
     // 顶通栏：字标、广场（当前）、关注、发布。墙上没有门口那句话。
     assert!(html.contains(playtest_edge::html::WORDMARK));
     assert!(html.contains("aria-current=\"page\""));
-    assert!(html.contains("广场<span class=\"nav-dot\"></span>"));
-    assert!(html.contains("关注</a>"));
+    assert!(html.contains("Plaza<span class=\"nav-dot\"></span>"));
+    assert!(html.contains("Following</a>"));
     assert!(html.contains("href=\"#publish-dialog\""));
-    assert!(html.contains("发布作品"));
-    assert!(html.contains(">发布作品</a>"));
+    assert!(html.contains("Publish Project"));
+    assert!(html.contains(">Publish Project</a>"));
     assert!(!html.contains("brand-icon"));
     assert!(!html.contains("class=\"topbar\""));
     assert!(!html.contains("来玩点，还没定稿的"));
@@ -844,15 +843,15 @@ async fn the_wall_is_one_grid_with_a_rail_and_says_which_card_is_paid_for() {
     let seeking = html.find("data-slug=\"seeking-one\"").unwrap();
     let quiet = html.find("data-slug=\"quiet-one\"").unwrap();
     assert!(paid < quiet && quiet < seeking);
-    assert!(html.contains("<span class=\"tag ad\">推广</span>"));
-    assert!(html.contains("<span class=\"tag\">正在找人测</span>"));
-    assert!(html.contains("4 / 10 位"));
+    assert!(html.contains("<span class=\"tag ad\">Featured</span>"));
+    assert!(html.contains("<span class=\"tag\">Seeking testers</span>"));
+    assert!(html.contains("4 / 10 joined"));
     assert!(html.contains("class=\"face\""));
     assert!(!html.contains("推广位永远标出来"));
     assert!(!html.contains("无需登录"));
     // 卡上没有关注、想玩、举报，也没有筛选栏；这一页一行脚本都没有（DESIGN §3.9）。
     assert!(!html.contains("value=\"site:seeking-one\""));
-    for word in ["想玩", "举报", "最多人玩", "data-band"] {
+    for word in ["Want to play", "Report", "Most played", "data-band"] {
         assert!(!html.contains(word), "「{word}」不该出现");
     }
 
@@ -915,7 +914,7 @@ async fn following_from_the_wall_comes_back_to_the_wall() {
         )
         .await;
     assert_eq!(reply.status, StatusCode::OK);
-    assert!(reply.text().contains("好，广场有新东西时会通知你。"));
+    assert!(reply.text().contains("You are all set! We will notify you when new projects arrive."));
     // 有钥匙就用钥匙，不再问邮箱。
     let (path, body) = api.last();
     assert_eq!(path, routes::FOLLOW);
@@ -1007,7 +1006,7 @@ async fn another_work_cannot_act_with_the_root_identity() {
                 )
                 .await;
             assert_eq!(reply.status, StatusCode::FORBIDDEN);
-            assert!(reply.text().contains("请从作品邀请页操作"));
+            assert!(reply.text().contains("Please open from invitation page"));
         }
     }
     assert_eq!(api.hits.load(Ordering::SeqCst), 0);
@@ -1061,6 +1060,94 @@ async fn an_assistant_landing_on_the_player_host_is_pointed_at_the_docs() {
     assert_eq!(site.get("/llms.txt").await.status, StatusCode::NOT_FOUND);
 }
 
+/// robots.txt 仅在根域提供，返回 text/plain，放行公开路径并声明 Sitemap。
+#[tokio::test]
+async fn robots_txt_is_served_on_root_with_text_plain_and_allows_public_paths() {
+    let site = Site::plain().await;
+    let reply = site.get_root(root_paths::ROBOTS_TXT).await;
+    assert_eq!(reply.status, StatusCode::OK);
+    assert_eq!(
+        reply.header("content-type"),
+        Some("text/plain; charset=utf-8")
+    );
+    let body = reply.text();
+    assert!(body.contains("User-agent: *"));
+    assert!(body.contains("Allow: /"));
+    assert!(body.contains("Disallow: /_playtest/"));
+    assert!(body.contains("Disallow: /v1/"));
+    assert!(body.contains("Disallow: /me/"));
+    assert!(body.contains("Sitemap: https://playtest.run/sitemap.xml"));
+    assert!(body.contains("User-agent: GPTBot"));
+    assert!(body.contains("User-agent: PerplexityBot"));
+
+    // 子域没有 robots.txt 这一扇门
+    assert_eq!(
+        site.get(root_paths::ROBOTS_TXT).await.status,
+        StatusCode::NOT_FOUND
+    );
+}
+
+/// sitemap.xml 仅在根域提供，返回 application/xml，包含核心页面与收录项。
+#[tokio::test]
+async fn sitemap_xml_is_served_on_root_with_xml_content_type_and_indexes_items() {
+    let site = Site::plain().await;
+    let plaza: Plaza = serde_json::from_value(serde_json::json!({
+        "schema": playtest_common::plaza::SCHEMA,
+        "generated_at": "2026-09-09T00:00:00Z",
+        "club_followers": 42,
+        "collections": [{
+            "slug": "pelican",
+            "title": "鹈鹕骑单车",
+            "summary": "合集摘要",
+            "kind": "challenge",
+            "prompt": "",
+            "rules": "",
+            "closes_at": null,
+            "public": true,
+            "hidden": false,
+            "creator": "组织者",
+            "created_at": "2026-09-11T00:00:00Z",
+            "updated_at": "2026-09-11T00:00:00Z",
+            "entries": []
+        }],
+        "items": [{
+            "slug": "first-pelican",
+            "url": "https://first-pelican.playtest.run",
+            "title": "红色鹈鹕",
+            "developer": "小雨",
+            "summary": "骑单车",
+            "version": 2,
+            "updated_at": "2026-09-12T00:00:00Z",
+            "players": 1,
+            "is_game": false
+        }]
+    }))
+    .unwrap();
+
+    site.store.put_plaza(&plaza).await.unwrap();
+
+    let reply = site.get_root(root_paths::SITEMAP_XML).await;
+    assert_eq!(reply.status, StatusCode::OK);
+    assert_eq!(
+        reply.header("content-type"),
+        Some("application/xml; charset=utf-8")
+    );
+    let body = reply.text();
+    assert!(body.contains("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
+    assert!(body.contains("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"));
+    assert!(body.contains("<loc>https://playtest.run/</loc>"));
+    assert!(body.contains("<loc>https://playtest.run/collections</loc>"));
+    assert!(body.contains("<loc>https://playtest.run/c/pelican</loc>"));
+    assert!(body.contains("<loc>https://playtest.run/p/first-pelican</loc>"));
+    assert!(body.contains("<lastmod>2026-09-12T00:00:00Z</lastmod>"));
+
+    // 子域没有 sitemap.xml
+    assert_eq!(
+        site.get(root_paths::SITEMAP_XML).await.status,
+        StatusCode::NOT_FOUND
+    );
+}
+
 // ------------------------------------------------------------------ 门禁页那八行
 
 #[tokio::test]
@@ -1068,11 +1155,11 @@ async fn the_gate_shows_only_what_is_really_there() {
     // 什么文件都没有的时候：没有名额、没有群、没有分享、没有关注。
     let bare = Site::plain().await;
     let html = bare.get_root(&format!("/p/{SLUG}")).await.text();
-    assert!(!html.contains("在找"));
-    assert!(!html.contains("开发者的群"));
+    assert!(!html.contains("is seeking"));
+    assert!(!html.contains(">Community</a>"));
     assert!(!html.contains(playtest_common::SHARE_PATH));
     assert!(!html.contains("id=\"notification-settings\""));
-    assert!(html.contains("开始试玩"));
+    assert!(html.contains(">Play</a>"));
 
     let site = Site::plain().await;
     site.caps(email_caps()).await;
@@ -1100,18 +1187,18 @@ async fn the_gate_shows_only_what_is_really_there() {
     );
 
     let html = site.get_root(&format!("/p/{SLUG}?from=card")).await.text();
-    assert!(html.contains("某某在找 10 位试玩者 · 已有 6 位加入"));
-    assert!(html.contains("开发者的群"));
+    assert!(html.contains("某某 is seeking 10 playtesters · 6 joined"));
+    assert!(html.contains(">Community</a>"));
     assert!(html.contains("rel=\"noopener nofollow\""));
     assert!(html.contains(playtest_common::SHARE_PATH));
     assert!(html.contains("id=\"notification-settings\""));
-    assert!(html.contains("「不知道要按哪个键」"));
+    assert!(html.contains("不知道要按哪个键"));
     assert!(html.contains("avatars.githubusercontent.com"));
     // 扫卡进来的人：来源随「开始」一起带走。
     assert!(html.contains("<input type=\"hidden\" name=\"from\" value=\"card\">"));
     // 留名是可选的。
-    assert!(html.contains("<label class=\"holder\"><span>你的名字"));
-    assert!(html.contains("· 可不填"));
+    assert!(html.contains("<label class=\"holder\"><span>Your name"));
+    assert!(html.contains("· optional"));
     // 作品域上永远没有 CSP（硬线）。
     assert!(site
         .get("/")

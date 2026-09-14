@@ -39,7 +39,17 @@ export function App() {
     const returnTo = query.get("return_to") ?? undefined;
     history.replaceState(null, "", `${location.pathname}${location.hash}`);
     if (code && state) {
-      exchangeGitHubCode(code, state).then((result) => location.replace(result.return_to)).catch((error: Error) => {
+      exchangeGitHubCode(code, state).then(async (result) => {
+        await refresh();
+        setExchanging(false);
+        setLogin(null);
+        const dest = result.return_to || "/console/";
+        if (dest.startsWith("/console/#")) {
+          location.hash = dest.slice("/console/".length);
+        } else if (dest !== location.pathname && dest !== `${location.pathname}${location.hash}`) {
+          location.replace(dest);
+        }
+      }).catch((error: Error) => {
         setExchanging(false);
         setLogin({ target: route, error: error.message });
         void refresh();
@@ -75,15 +85,28 @@ export function App() {
     if (!emailToken || confirming) return;
     setConfirming(true);
     setError("");
-    try { const result = await account.confirmEmail(emailToken); location.replace(result.return_to); }
-    catch (error) { setError(error instanceof Error ? error.message : "登录未完成，请重试。"); }
-    finally { setConfirming(false); }
+    try {
+      const result = await account.confirmEmail(emailToken);
+      setEmailToken(null);
+      await refresh();
+      setLogin(null);
+      const dest = result.return_to || "/console/";
+      if (dest.startsWith("/console/#")) {
+        location.hash = dest.slice("/console/".length);
+      } else if (dest !== location.pathname && dest !== `${location.pathname}${location.hash}`) {
+        location.replace(dest);
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Sign in incomplete, please try again.");
+    } finally {
+      setConfirming(false);
+    }
   }
 
   async function logout() {
     setError("");
     try { await account.logout(); setIdentity((previous) => previous ? { ...previous, account: null } : null); }
-    catch (error) { setError(error instanceof Error ? error.message : "退出失败，请重试。"); }
+    catch (error) { setError(error instanceof Error ? error.message : "Sign out failed, please try again."); }
   }
 
   function navigate(event: MouseEvent, target: Route) {
@@ -94,8 +117,8 @@ export function App() {
   }
 
   let content;
-  if (emailToken) content = <section class="auth-empty"><BrandMark /><h1>{emailPreview?.link ? "关联邮箱" : "继续登录 playtest"}</h1><p class="muted">{emailPreview ? `${emailPreview.email} · 确认后返回刚才的页面。` : "正在检查登录链接…"}</p><button class="button primary" disabled={confirming || !emailPreview} onClick={confirmEmail}>{confirming ? "正在确认…" : emailPreview?.link ? "确认关联" : "确认登录"}</button><button class="button quiet" onClick={() => { setEmailToken(null); setError(""); setLogin({ target: route }); }}>重新发送登录链接</button></section>;
-  else if (exchanging || loading && route.name !== "docs") content = <p class="muted stage-note" role="status">正在连接…</p>;
+  if (emailToken) content = <section class="auth-empty"><BrandMark /><h1>{emailPreview?.link ? "Link Email" : "Sign in to playtest"}</h1><p class="muted">{emailPreview ? `${emailPreview.email} · Confirm to return to your previous page.` : "Verifying sign-in link…"}</p><button class="button primary" disabled={confirming || !emailPreview} onClick={confirmEmail}>{confirming ? "Confirming…" : emailPreview?.link ? "Confirm Link" : "Confirm Sign in"}</button><button class="button quiet" onClick={() => { setEmailToken(null); setError(""); setLogin({ target: route }); }}>Resend sign-in link</button></section>;
+  else if (exchanging || loading && route.name !== "docs") content = <p class="muted stage-note" role="status">Connecting…</p>;
   else if (route.name === "docs") content = <DocsPage section={route.section} />;
   else if (!me) content = <LoginRequired route={route} onLogin={() => { setLogin({ target: route }); if (!identity) void refresh(); }} />;
   else if (route.name === "token") content = <TokenPage identity={identity!} onRefresh={refresh} onLogout={logout} />;
@@ -106,9 +129,9 @@ export function App() {
 
   return <div class="shell">
     <Rail route={route} me={me} onNavigate={navigate} />
-    <a class="skip-link" href="#main-content" onClick={(event) => { event.preventDefault(); document.getElementById("main-content")?.focus(); }}>跳到内容</a>
+    <a class="skip-link" href="#main-content" onClick={(event) => { event.preventDefault(); document.getElementById("main-content")?.focus(); }}>Skip to content</a>
     <main class="stage" id="main-content" tabIndex={-1}>
-      {error ? <p class="notice" role="alert">{error} {!emailToken ? <button class="button quiet" onClick={refresh}>重试</button> : null}</p> : null}
+      {error ? <p class="notice" role="alert">{error} {!emailToken ? <button class="button quiet" onClick={refresh}>Retry</button> : null}</p> : null}
       {content}
     </main>
     {login ? <LoginDialog request={login} available={identity} onClose={() => setLogin(null)} /> : null}
@@ -118,19 +141,21 @@ export function App() {
 function Rail({ route, me, onNavigate }: { route: Route; me: Me | null; onNavigate: (event: MouseEvent, target: Route) => void }) {
   const mine = route.name === "sites" || route.name === "site";
   return <aside class="sidebar">
-    <a class="brand" href="/" aria-label="playtest 首页"><span class="mark" aria-hidden="true" dangerouslySetInnerHTML={{ __html: mark }} /><span dangerouslySetInnerHTML={{ __html: wordmark }} /></a>
-    <nav class="rail-nav" aria-label="页面">
-      <a class="nav-item" href="/"><NavIcon kind="grid" />广场</a>
-      <a class="nav-item" href="/me"><NavIcon kind="bell" />关注</a>
-      <a class={`nav-item ${mine ? "active" : ""}`} aria-current={mine ? "page" : undefined} href={href({ name: "sites" })} onClick={(event) => onNavigate(event, { name: "sites" })}><NavIcon kind="grid" />我的作品</a>
-      <a class={`nav-item ${route.name === "collections" ? "active" : ""}`} aria-current={route.name === "collections" ? "page" : undefined} href={href({ name: "collections" })} onClick={(event) => onNavigate(event, { name: "collections" })}><NavIcon kind="folder" />我的合集</a>
+    <a class="brand" href="/" aria-label="playtest home"><span class="mark" aria-hidden="true" dangerouslySetInnerHTML={{ __html: mark }} /><span dangerouslySetInnerHTML={{ __html: wordmark }} /></a>
+    <div class="sidebar-action">
+      <Publish />
+    </div>
+    <nav class="rail-nav" aria-label="Pages">
+      <a class="nav-item" href="/"><NavIcon kind="grid" />Plaza</a>
+      <a class="nav-item" href="/me"><NavIcon kind="bell" />Following</a>
+      <a class={`nav-item ${mine ? "active" : ""}`} aria-current={mine ? "page" : undefined} href={href({ name: "sites" })} onClick={(event) => onNavigate(event, { name: "sites" })}><NavIcon kind="grid" />My Works</a>
+      <a class={`nav-item ${route.name === "collections" ? "active" : ""}`} aria-current={route.name === "collections" ? "page" : undefined} href={href({ name: "collections" })} onClick={(event) => onNavigate(event, { name: "collections" })}><NavIcon kind="folder" />My Collections</a>
     </nav>
     <div class="rail-bottom">
-      <Publish />
-      <a class={`nav-item ${route.name === "docs" ? "active" : ""}`} href={href({ name: "docs", section: "start" })} aria-current={route.name === "docs" ? "page" : undefined}><NavIcon kind="book" />使用文档</a>
+      <a class={`nav-item ${route.name === "docs" ? "active" : ""}`} href={href({ name: "docs", section: "start" })} aria-current={route.name === "docs" ? "page" : undefined}><NavIcon kind="book" />Documentation</a>
       <a class={`nav-item account ${route.name === "token" ? "active" : ""}`} href={href({ name: "token" })} onClick={(event) => onNavigate(event, { name: "token" })}>
         {me?.avatar_url ? <img class="avatar" src={me.avatar_url} alt="" /> : <NavIcon kind="person" />}
-        <span class="account-name">{me?.display_name ?? "登录"}</span>
+        <span class="account-name">{me?.display_name ?? "Sign in"}</span>
       </a>
     </div>
   </aside>;

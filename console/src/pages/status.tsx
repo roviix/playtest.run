@@ -10,7 +10,7 @@ import { ApiError, AUTH_REQUEST_EVENT } from "../api";
 import { href } from "../router";
 
 export function Loading() {
-  return <div class="loading" role="status" aria-live="polite"><span class="muted">正在加载…</span><div class="skeleton" aria-hidden="true"><span /><span /><span /></div></div>;
+  return <div class="loading" role="status" aria-live="polite"><span class="muted">Loading…</span><div class="skeleton" aria-hidden="true"><span /><span /><span /></div></div>;
 }
 
 export function Failed({ error, onRetry }: { error: ApiError; onRetry: () => void }) {
@@ -19,7 +19,7 @@ export function Failed({ error, onRetry }: { error: ApiError; onRetry: () => voi
       <div class="notice">
         <p>{error.message}</p>
         <p>
-          <button class="button small" type="button" onClick={() => window.dispatchEvent(new Event(AUTH_REQUEST_EVENT))}>登录</button>
+          <button class="button small" type="button" onClick={() => window.dispatchEvent(new Event(AUTH_REQUEST_EVENT))}>Sign in</button>
         </p>
       </div>
     );
@@ -29,14 +29,34 @@ export function Failed({ error, onRetry }: { error: ApiError; onRetry: () => voi
       <p>{error.message}</p>
       <p>
         <button class="button small" onClick={onRetry}>
-          再试一次
+          Try again
         </button>
-        <a class="docs-context-link" href={href({ name: "docs", section: "troubleshoot" })}>查看连接与身份排查 →</a>
+        <a class="docs-context-link" href={href({ name: "docs", section: "troubleshoot" })}>Troubleshooting guide →</a>
       </p>
     </div>
   );
 }
 
-export function Empty({ children }: { children: ComponentChildren }) {
-  return <div class="empty">{children}</div>;
+export function Empty({
+  icon,
+  title,
+  description,
+  action,
+  children,
+}: {
+  icon?: ComponentChildren;
+  title?: string;
+  description?: string;
+  action?: ComponentChildren;
+  children?: ComponentChildren;
+}) {
+  return (
+    <div class="empty">
+      {icon ? <div class="empty-icon" aria-hidden="true">{icon}</div> : null}
+      {title ? <h3 class="empty-title">{title}</h3> : null}
+      {description ? <p class="empty-desc">{description}</p> : null}
+      {action ? <div class="empty-action">{action}</div> : null}
+      {children}
+    </div>
+  );
 }

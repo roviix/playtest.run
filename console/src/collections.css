@@ -1,1 +1,1068 @@
-.collection-workspace{max-width:1120px}.collection-back{display:inline-block;margin-bottom:20px;color:var(--soft);text-decoration:none;font-size:14px}.collection-list-tools{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:28px 0}.collection-list-tools input{min-width:220px}.collection-switch{display:flex;gap:8px}.collection-switch button{background:transparent;color:var(--soft)}.collection-switch button[aria-pressed=true]{background:var(--card2);color:var(--fg);border-color:var(--line2)}.collection-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.collection-list-card{padding:24px;display:flex;flex-direction:column;min-height:210px;text-decoration:none;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:16px;transition:border-color .15s,transform .15s;min-width:0}.collection-list-card:hover{border-color:var(--line2);transform:translateY(-2px)}.collection-list-card>span{font-size:12px;color:var(--soft)}.collection-list-card h2{font-size:21px;line-height:1.45;margin:15px 0 8px;overflow-wrap:anywhere}.collection-list-card p{font-size:14px;color:var(--dim);margin:0;overflow-wrap:anywhere}.collection-list-card footer{display:flex;justify-content:space-between;gap:12px;margin-top:auto;padding-top:24px;font-size:12px;color:var(--soft)}.collection-blank{text-align:center;padding:64px 24px;border:1px dashed var(--line2);border-radius:16px}.collection-blank h2{font-size:24px;font-weight:500}.collection-blank p{color:var(--soft);font-size:14px}.collection-panel{margin:24px 0;border:1px solid var(--line);border-radius:14px;padding:24px;background:var(--card)}.collection-panel>h2{font-size:18px;margin:0 0 18px}.collection-panel>summary{font-size:15px;cursor:pointer;min-height:32px}.collection-editor{max-width:720px;margin:16px 0}.collection-editor fieldset{border:0;padding:0;margin:0;min-width:0}.collection-editor legend{font-size:18px;margin-bottom:16px}.collection-editor label{display:flex;flex-direction:column;gap:9px;font-size:13px;color:var(--soft);margin-bottom:20px}.collection-editor input,.collection-editor select,.collection-editor textarea{width:100%;min-height:44px;background:var(--bg);border:1px solid var(--line2);border-radius:9px;padding:11px 13px;color:var(--fg);font:inherit;font-size:15px}.collection-editor textarea{resize:vertical;line-height:1.65}.collection-editor input:focus-visible,.collection-editor textarea:focus-visible,.collection-editor select:focus-visible{outline:2px solid var(--soft);outline-offset:2px}.collection-editor :disabled{opacity:.6;cursor:not-allowed}.collection-editor .collection-check{flex-direction:row;align-items:center}.collection-check input{width:18px;min-height:18px;accent-color:#fff}.collection-editor .muted{font-size:13px;line-height:1.7}.collection-error{color:#f0c8c4;background:#2a1c20;border:1px solid #62393e;border-radius:10px;padding:12px 16px;font-size:14px;display:flex;align-items:center;gap:14px;justify-content:space-between}.collection-notice{color:#ccdacf;background:#17241e;border:1px solid #3d5645;padding:12px 16px;border-radius:10px;font-size:14px}.collection-callout{padding:16px 20px;background:var(--card2);border:1px solid var(--line);border-radius:10px;font-size:14px;color:var(--soft);line-height:1.8}.collection-callout a{color:var(--fg);display:inline-block;margin-left:8px}.collection-entry-list{list-style:none;margin:0;padding:0}.collection-entry-list li{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:16px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}.collection-entry-list a{color:var(--fg);text-decoration:none}.collection-entry-list p{margin:6px 0 0;font-size:12px;color:var(--dim)}.collection-entry-list button{flex-shrink:0}.collection-panel pre,.collection-preserve{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.8;max-height:400px;overflow:auto}.collection-danger{display:flex;gap:24px;align-items:center;justify-content:space-between;color:var(--dim);font-size:13px;margin:32px 0}.collection-danger button{color:#edc4bf}.collection-workspace .workspace-head{gap:16px;flex-wrap:wrap}.collection-workspace button,.collection-workspace .button{min-height:44px;cursor:pointer}.collection-workspace .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}@media(max-width:1000px){.collection-list{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.collection-list{grid-template-columns:1fr}.collection-list-tools{align-items:stretch;flex-direction:column}.collection-list-tools input{width:100%}.collection-panel{padding:18px}.collection-entry-list li{gap:10px}.collection-danger{align-items:flex-start;flex-direction:column}.collection-switch button{flex:1}.collection-error{align-items:flex-start;flex-direction:column}}
+/* ==========================================================================
+   控制台 · 合集与创作挑战样式规范 (DESIGN §3.15, §3.13)
+   采用黑曜石微浮雕、冷翡翠聚焦核心、高品质卡片景深与克制的内容层级。
+   ========================================================================== */
+
+.collection-workspace {
+  width: 100%;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ 返回导航与顶栏 */
+
+.collection-workspace .back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 20px;
+  min-height: 36px;
+  font-size: 14px;
+  color: var(--dim);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.collection-workspace .back-link:hover {
+  color: var(--fg);
+}
+
+.collection-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.collection-header-info h1 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+  line-height: 1.3;
+  margin: 0 0 4px;
+}
+
+.collection-header-info p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--dim);
+  line-height: 1.6;
+}
+
+.collection-header-count {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--card2);
+  border: 1px solid var(--line2);
+  color: var(--soft);
+}
+
+.collection-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------------ 身份展台 (Identity Hero) */
+
+.collection-identity {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 20px;
+}
+
+.collection-emblem {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  background: radial-gradient(circle at 30% 30%, #1e2029 0%, #121318 100%);
+  border: 1px solid var(--line2);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.collection-emblem svg {
+  width: 26px;
+  height: 26px;
+}
+
+.collection-identity-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.collection-identity-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.collection-identity-body h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--fg);
+  margin: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.collection-identity-slug {
+  font-size: 13px;
+  color: var(--dim);
+  font-family: var(--mono);
+}
+
+.collection-identity-summary {
+  margin: 8px 0 12px;
+  font-size: 14px;
+  color: var(--soft);
+  line-height: 1.65;
+  max-width: 72ch;
+  overflow-wrap: anywhere;
+}
+
+.collection-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.collection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  color: var(--soft);
+}
+
+.collection-chip.good {
+  color: var(--accent);
+  background: rgba(117, 205, 181, 0.08);
+  border-color: var(--accent-line);
+}
+
+.collection-chip.warn {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: var(--warn-line);
+}
+
+.collection-chip.pulse::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  animation: collection-pulse 2.2s infinite ease-in-out;
+}
+
+@keyframes collection-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.6; }
+}
+
+/* ------------------------------------------------------------------ 工具栏与搜索 */
+
+.collection-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 20px 0 24px;
+  flex-wrap: wrap;
+}
+
+.collection-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 260px;
+  max-width: 360px;
+  flex: 1 1 260px;
+}
+
+.collection-search-icon {
+  position: absolute;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: var(--faint);
+  pointer-events: none;
+}
+
+.collection-search-input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 32px 0 36px;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--fg);
+  background: var(--rail);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.collection-search-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.collection-search-clear {
+  position: absolute;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.collection-search-clear:hover {
+  color: var(--fg);
+}
+
+/* ------------------------------------------------------------------ 新建合集面板 (Creation Card) */
+
+.collection-create-card {
+  margin: 0 0 28px;
+  padding: 24px 28px;
+  background: radial-gradient(circle at 10% 0%, #16171d 0%, #0f1013 100%);
+  border: 1px solid var(--line2);
+  border-radius: 16px;
+  box-shadow: 0 12px 36px -12px rgba(0, 0, 0, 0.6);
+  animation: collection-slide-down 0.2s ease-out;
+}
+
+@keyframes collection-slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.collection-create-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.collection-create-head h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--fg);
+}
+
+.collection-create-head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+/* 组织形态单选卡 (Radio Cards) */
+
+.collection-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.collection-type-option {
+  position: relative;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.08s;
+}
+
+.collection-type-option:hover {
+  border-color: var(--line2);
+  background: var(--card2);
+}
+
+.collection-type-option.active {
+  border-color: var(--accent);
+  background: rgba(117, 205, 181, 0.04);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.collection-type-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--rail);
+  border: 1px solid var(--line2);
+  display: grid;
+  place-items: center;
+  color: var(--soft);
+  flex-shrink: 0;
+}
+
+.collection-type-option.active .collection-type-icon {
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: rgba(117, 205, 181, 0.1);
+}
+
+.collection-type-info h3 {
+  font-size: 14.5px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--fg);
+}
+
+.collection-type-info p {
+  font-size: 12.5px;
+  color: var(--dim);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* 表单与公开开关卡 */
+
+.collection-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.collection-form .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.collection-form .field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.collection-form .field-hint {
+  font-size: 12px;
+  color: var(--faint);
+  font-weight: normal;
+}
+
+.collection-form input[type="text"],
+.collection-form input[type="search"],
+.collection-form input[type="datetime-local"],
+.collection-form select,
+.collection-form textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  color: var(--fg);
+  background: var(--rail);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  min-height: 40px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.collection-form textarea {
+  min-height: 72px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.collection-form input:focus-visible,
+.collection-form select:focus-visible,
+.collection-form textarea:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.collection-form :disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.collection-slug-preview {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--rail);
+  overflow: hidden;
+}
+
+.collection-slug-prefix {
+  padding: 0 10px;
+  font-size: 12.5px;
+  color: var(--faint);
+  font-family: var(--mono);
+  background: rgba(255, 255, 255, 0.02);
+  border-right: 1px solid var(--line);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.collection-slug-preview input {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.collection-toggle-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  user-select: none;
+}
+
+.collection-toggle-card:hover {
+  border-color: var(--line2);
+}
+
+.collection-toggle-info h4 {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0 0 2px;
+  color: var(--fg);
+}
+
+.collection-toggle-info p {
+  font-size: 12.5px;
+  color: var(--dim);
+  margin: 0;
+}
+
+.collection-switch-pill {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: #25262c;
+  border: 1px solid var(--line2);
+  transition: background 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+
+.collection-switch-pill::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--soft);
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.2s;
+}
+
+.collection-toggle-card.active .collection-switch-pill {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.collection-toggle-card.active .collection-switch-pill::after {
+  transform: translateX(20px);
+  background: var(--accent-ink);
+}
+
+.collection-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* ------------------------------------------------------------------ 合集卡片网格 (List Cards) */
+
+.collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 18px;
+}
+
+.collection-card {
+  display: flex;
+  flex-direction: column;
+  padding: 22px 24px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  text-decoration: none;
+  color: var(--fg);
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+
+.collection-card:hover {
+  border-color: var(--line2);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -10px rgba(0, 0, 0, 0.5);
+}
+
+.collection-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.collection-card-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--soft);
+  font-weight: 500;
+}
+
+.collection-card-type svg {
+  width: 14px;
+  height: 14px;
+  color: var(--accent);
+}
+
+.collection-card h2 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 8px;
+  line-height: 1.4;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+.collection-card-summary {
+  font-size: 13.5px;
+  color: var(--dim);
+  line-height: 1.6;
+  margin: 0 0 14px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.collection-card-prompt {
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid var(--line2);
+  border-radius: 0 6px 6px 0;
+  font-size: 12px;
+  color: var(--soft);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.collection-card-footer {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.collection-card-footer .creator {
+  color: var(--soft);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-card-footer .count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--dim);
+  font-weight: 500;
+}
+
+.collection-card:hover .collection-card-footer .count {
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ 空状态 (Empty States) */
+
+.collection-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 56px 24px;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px dashed var(--line2);
+  border-radius: 16px;
+  margin: 20px 0;
+}
+
+.collection-empty-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--card2);
+  border: 1px solid var(--line2);
+  display: grid;
+  place-items: center;
+  color: var(--dim);
+  margin-bottom: 16px;
+}
+
+.collection-empty h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: var(--fg);
+}
+
+.collection-empty p {
+  font-size: 14px;
+  color: var(--dim);
+  max-width: 44ch;
+  line-height: 1.6;
+  margin: 0 0 20px;
+}
+
+/* ------------------------------------------------------------------ 详情页选项卡与主内容 */
+
+.collection-tabs-nav {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.collection-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--dim);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.collection-tab-btn:hover {
+  color: var(--fg);
+}
+
+.collection-tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.collection-tab-badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--card2);
+  color: var(--soft);
+}
+
+.collection-tab-btn.active .collection-tab-badge {
+  background: rgba(117, 205, 181, 0.15);
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ 投稿工作舱 (Submission Panel) */
+
+.collection-panel {
+  padding: 22px 24px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  margin-bottom: 24px;
+}
+
+.collection-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.collection-panel-head h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collection-panel-head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.collection-submission-status {
+  padding: 12px 16px;
+  background: rgba(117, 205, 181, 0.05);
+  border: 1px solid var(--accent-line);
+  border-radius: 10px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.collection-submission-status span {
+  font-size: 13.5px;
+  color: var(--soft);
+}
+
+.collection-submission-status strong {
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ 作品条目列表 (Entries Stream) */
+
+.collection-entries-section {
+  margin: 20px 0;
+}
+
+.collection-entries-section h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 14px;
+  color: var(--fg);
+}
+
+.collection-entry-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.collection-entry-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.collection-entry-item:hover {
+  border-color: var(--line2);
+  background: var(--card2);
+}
+
+.collection-entry-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  flex: 1;
+}
+
+.collection-entry-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: var(--rail);
+  border: 1px solid var(--line2);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: var(--mono);
+  flex-shrink: 0;
+}
+
+.collection-entry-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.collection-entry-info-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.collection-entry-link {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--fg);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.collection-entry-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.collection-entry-ver {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--mono);
+  background: var(--rail);
+  border: 1px solid var(--line2);
+  color: var(--soft);
+}
+
+.collection-entry-note {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--dim);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.collection-entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------ 挑战题目展台 (Prompt Canvas) */
+
+.collection-prompt-canvas {
+  margin: 0 0 20px;
+  padding: 20px 22px;
+  background: #0d0e12;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.collection-prompt-canvas-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.collection-prompt-canvas-head h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--soft);
+}
+
+.collection-prompt-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--fg);
+  margin: 0;
+  font-family: inherit;
+}
+
+.collection-rules-card {
+  margin-top: 14px;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.collection-rules-card h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: var(--soft);
+}
+
+.collection-rules-card p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--dim);
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ 提示与错误提示 */
+
+.collection-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-line);
+  border-radius: 10px;
+  color: #ffb8b0;
+  font-size: 13.5px;
+  margin-bottom: 16px;
+}
+
+.collection-notice {
+  padding: 12px 16px;
+  background: rgba(117, 205, 181, 0.08);
+  border: 1px solid var(--accent-line);
+  border-radius: 10px;
+  color: var(--accent);
+  font-size: 13.5px;
+  margin-bottom: 16px;
+}
+
+.collection-callout {
+  padding: 14px 18px;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 13.5px;
+  color: var(--soft);
+  line-height: 1.7;
+  margin: 16px 0;
+}
+
+.collection-callout a {
+  color: var(--accent);
+  text-decoration: underline;
+  margin-left: 6px;
+}
+
+/* ------------------------------------------------------------------ 危险操作区 (Danger Zone) */
+
+.collection-danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 22px;
+  background: rgba(255, 123, 107, 0.04);
+  border: 1px solid var(--danger-line);
+  border-radius: 12px;
+  margin-top: 32px;
+}
+
+.collection-danger-info h4 {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--danger);
+  margin: 0 0 3px;
+}
+
+.collection-danger-info p {
+  font-size: 13px;
+  color: var(--dim);
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ 响应式适配 */
+
+@media (max-width: 768px) {
+  .collection-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .collection-header-actions {
+    justify-content: stretch;
+  }
+  .collection-header-actions .button {
+    flex: 1;
+  }
+  .collection-type-grid {
+    grid-template-columns: 1fr;
+  }
+  .collection-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .collection-search-wrap {
+    max-width: 100%;
+  }
+  .collection-grid {
+    grid-template-columns: 1fr;
+  }
+  .collection-identity {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .collection-entry-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .collection-entry-actions {
+    align-self: flex-end;
+    margin-top: 6px;
+  }
+  .collection-danger-zone {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+

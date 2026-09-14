@@ -43,6 +43,9 @@ pub const MAX_FEEDBACK_CHARS: usize = 2000;
 /// 一个会话最多能提几条反馈。防的是刷，不是防说话——玩家想再说一句还有两次机会。
 pub const MAX_FEEDBACK_PER_SESSION: u32 = 3;
 
+/// 门禁页实时原声交流舱单会话发言上限（DESIGN §3.5）。
+pub const MAX_CHAT_PER_SESSION: u32 = 30;
+
 /// SDK 能报的事件类型。不在这张表里的一律拒绝：这个端点不鉴权，能落进库的形状必须是闭集。
 pub mod kind {
     /// 加载分阶段完成，`data.ms` 是「打开到首帧」的毫秒数。
@@ -209,6 +212,9 @@ pub struct FeedbackRequest {
     /// 玩家进来多少秒了。SDK 自己算，用来在点名册里显示「进入 47 秒」。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seconds_in: Option<u32>,
+    /// 反馈来源：如 "gate"（门禁页交流舱）。SDK 发送时为 None。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// 收下了几条。被形状挡掉的不算在里面，但整批不会因为一条坏的就全退。

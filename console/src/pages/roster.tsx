@@ -14,16 +14,16 @@ import { clock, label, moment, seconds, sourceLabel } from "../words";
 import { Empty, Failed, Loading } from "./status";
 
 const KINDS: Record<string, string> = {
-  gate_view: "看到门禁页",
-  start: "点了开始",
-  html_view: "打开页面",
-  report: "举报",
-  breaker_trip: "熔断",
-  resource_fail: "资源没加载出来",
-  load: "首帧",
-  input: "有输入",
-  error: "错误",
-  event: "自定义事件",
+  gate_view: "Saw door page",
+  start: "Clicked start",
+  html_view: "Opened page",
+  report: "Reported",
+  breaker_trip: "Circuit breaker tripped",
+  resource_fail: "Resource load failed",
+  load: "First frame",
+  input: "Input received",
+  error: "Error",
+  event: "Custom event",
 };
 
 type Tag = { text: string; tone: "warn" | "good" | "plain" };
@@ -41,16 +41,24 @@ export function RosterTab({
 
   if (version === undefined) {
     return (
-      <Empty>
-        <p>还没有版本。</p>
-      </Empty>
+      <Empty
+        icon={
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+        }
+        title="No versions published yet"
+        description="Run playtest in your project folder to upload your first build and start receiving visitors."
+      />
     );
   }
 
   return (
     <>
       <div class="roster-bar">
-        <nav class="chips-nav" aria-label="版本">
+        <nav class="chips-nav" aria-label="Version">
           {versions.map((one) => (
             <a
               key={one.version}
@@ -64,10 +72,10 @@ export function RosterTab({
         </nav>
         <div class="switch">
           <button class={sort === "dwell" ? "on" : ""} onClick={() => setSort("dwell")} type="button">
-            停留最短在前
+            Shortest dwell first
           </button>
           <button class={sort === "time" ? "on" : ""} onClick={() => setSort("time")} type="button">
-            最近打开在前
+            Recently opened first
           </button>
         </div>
       </div>
@@ -88,19 +96,27 @@ function Rows({ slug, version, sort }: { slug: string; version: number; sort: Ro
 
   if (data.sessions.length === 0) {
     return (
-      <Empty>
-        <p>v{version} 还没有人打开。</p>
-      </Empty>
+      <Empty
+        icon={
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+        }
+        title={`No visits on v${version} yet`}
+        description="Share your link with playtesters. As players open the page, their sessions, device info, and dwell times will appear here."
+      />
     );
   }
 
-  // 首帧要 SDK 才报得出来。整版一个人都没报过，就不能把每一行都标成「没等到首帧」。
   const anyFirstFrame = data.sessions.some((session) => session.first_frame);
 
   return (
     <>
       {anyFirstFrame ? null : (
-        <p class="notice soft">没接 playtest.js：看不到首帧、进度和错误。</p>
+        <p class="notice soft">playtest.js not integrated: unable to track first frame, progress, or errors.</p>
       )}
       <ul class="sessions">
         {data.sessions.map((session) => (
@@ -121,8 +137,6 @@ function Session({ session, anyFirstFrame }: { session: SessionRow; anyFirstFram
         <span class="dwell mono">{seconds(session.dwell_s)}</span>
         <span class="session-who">
           <span>
-            {/* 留了名字的人是这一行的主角；没留的仍然要有个能对上的记号，
-                所以退回会话 id 的头几位——展开之后看到的是同一个 id。 */}
             {session.name ? (
               <b class="who">{session.name}</b>
             ) : (
@@ -132,9 +146,9 @@ function Session({ session, anyFirstFrame }: { session: SessionRow; anyFirstFram
               · {label(session.device)} · {label(session.browser)} · {label(session.os)}
             </span>
           </span>
-          <span class="muted">{moment(session.at)} 打开</span>
+          <span class="muted">Opened {moment(session.at)}</span>
         </span>
-        <span class="muted expand">{open ? "收起" : "展开"}</span>
+        <span class="muted expand">{open ? "Collapse" : "Expand"}</span>
       </button>
 
       <p class="tags">
@@ -148,7 +162,7 @@ function Session({ session, anyFirstFrame }: { session: SessionRow; anyFirstFram
       {open ? (
         <div class="events">
           {events.length === 0 ? (
-            <p class="muted">没有事件。</p>
+            <p class="muted">No events.</p>
           ) : (
             <ol>
               {events.map((event, index) => (
@@ -164,9 +178,9 @@ function Session({ session, anyFirstFrame }: { session: SessionRow; anyFirstFram
             </ol>
           )}
           {session.more_events ? (
-            <p class="muted">只显示最早的 100 条。</p>
+            <p class="muted">Showing earliest 100 events only.</p>
           ) : null}
-          <p class="muted mono">会话 {session.id}</p>
+          <p class="muted mono">Session {session.id}</p>
         </div>
       ) : null}
     </li>
@@ -177,27 +191,25 @@ function tagsOf(session: SessionRow, anyFirstFrame: boolean): Tag[] {
   const tags: Tag[] = [];
 
   if (!session.entered) {
-    tags.push({ text: "没进到游戏", tone: "warn" });
+    tags.push({ text: "Did not enter game", tone: "warn" });
   } else if (session.first_frame) {
-    tags.push({ text: "进到游戏", tone: "plain" });
+    tags.push({ text: "Entered game", tone: "plain" });
   } else if (session.started && anyFirstFrame) {
-    tags.push({ text: "没等到首帧", tone: "warn" });
+    tags.push({ text: "Dropped before first frame", tone: "warn" });
   } else {
-    tags.push({ text: "点了开始", tone: "plain" });
+    tags.push({ text: "Clicked start", tone: "plain" });
   }
 
-  if (session.reached) tags.push({ text: `玩到「${session.reached}」`, tone: "good" });
-  if (session.errors > 0) tags.push({ text: `${session.errors} 个错误`, tone: "warn" });
-  if (session.feedback > 0) tags.push({ text: "留了话", tone: "good" });
-  if (session.is_return) tags.push({ text: "回头的", tone: "plain" });
-  // 「来自邀请卡」和「微信里打开」是两件事：扫卡的人多半也在微信里，两个都说
-  // 才答得上「我发出去的那张卡带来了谁」（common/src/ingest.rs 的 source_kind）。
+  if (session.reached) tags.push({ text: `Reached "${session.reached}"`, tone: "good" });
+  if (session.errors > 0) tags.push({ text: `${session.errors} error${session.errors > 1 ? "s" : ""}`, tone: "warn" });
+  if (session.feedback > 0) tags.push({ text: "Left feedback", tone: "good" });
+  if (session.is_return) tags.push({ text: "Returned", tone: "plain" });
   if (session.referrer_kind && session.referrer_kind !== "wechat") {
-    tags.push({ text: `来自${sourceLabel(session.referrer_kind)}`, tone: "plain" });
+    tags.push({ text: `From ${sourceLabel(session.referrer_kind)}`, tone: "plain" });
   }
-  if (session.wechat) tags.push({ text: "微信里打开", tone: "plain" });
+  if (session.wechat) tags.push({ text: "Opened in WeChat", tone: "plain" });
   if (session.last_input_after_s !== null && session.last_input_after_s !== undefined) {
-    tags.push({ text: `最后一次动手在进入后 ${seconds(session.last_input_after_s)}`, tone: "plain" });
+    tags.push({ text: `Last input ${seconds(session.last_input_after_s)} after entry`, tone: "plain" });
   }
 
   return tags;

@@ -68,31 +68,28 @@ export function SitePage({
 
   return (
     <>
-      <a class="back-link" href={href({ name: "sites" })}>← 所有作品</a>
+      <a class="back-link" href={href({ name: "sites" })}>← All Works</a>
       <Identity site={site} />
-      <a class="docs-context-link" href={href({ name: "docs", section: tab === "card" ? "share" : tab === "settings" ? "manage" : "publish" })}>
-        {tab === "card" ? "邀请卡与分享用法" : tab === "settings" ? "下架、回滚与删除的区别" : "如何发布新版本"} →
-      </a>
       {loaded.error ? <Failed error={loaded.error} onRetry={loaded.reload} /> : null}
       <Now site={site} results={results} />
-      <nav class="tabs" aria-label="作品页">
-        <TabLink slug={slug} tab="results" active={tab} text="结果" />
-        <TabLink slug={slug} tab="roster" active={tab} text="点名册" version={rosterVersion} />
-        <TabLink slug={slug} tab="feedback" active={tab} text="反馈" />
-        <TabLink slug={slug} tab="card" active={tab} text="邀请卡" />
-        <TabLink slug={slug} tab="settings" active={tab} text="设置" />
+      <nav class="tabs" aria-label="Project tabs">
+        <TabLink slug={slug} tab="results" active={tab} text="Results" />
+        <TabLink slug={slug} tab="roster" active={tab} text="Visitors" version={rosterVersion} />
+        <TabLink slug={slug} tab="feedback" active={tab} text="Feedback" />
+        <TabLink slug={slug} tab="card" active={tab} text="Invitation Card" />
+        <TabLink slug={slug} tab="settings" active={tab} text="Settings" />
       </nav>
-      {shown("results") ? <section class="tab-body" hidden={tab !== "results"} aria-label="结果">
+      {shown("results") ? <section class="tab-body" hidden={tab !== "results"} aria-label="Results">
         <ResultsTab slug={slug} site={site} results={results} onVersionsChanged={versionsChanged} />
       </section> : null}
-      {shown("roster") ? <section class="tab-body" hidden={tab !== "roster"} aria-label="点名册">
+      {shown("roster") ? <section class="tab-body" hidden={tab !== "roster"} aria-label="Visitors">
         <RosterTab slug={slug} version={rosterVersion} versions={results.data?.versions ?? []} />
       </section> : null}
-      {shown("feedback") ? <section class="tab-body" hidden={tab !== "feedback"} aria-label="反馈">
+      {shown("feedback") ? <section class="tab-body" hidden={tab !== "feedback"} aria-label="Feedback">
         <FeedbackTab slug={slug} site={site} />
       </section> : null}
-      {tab === "card" ? <section class="tab-body" aria-label="邀请卡"><CardTab site={site} /></section> : null}
-      {tab === "settings" ? <section class="tab-body" aria-label="设置">
+      {tab === "card" ? <section class="tab-body" aria-label="Invitation Card"><CardTab site={site} /></section> : null}
+      {tab === "settings" ? <section class="tab-body" aria-label="Settings">
         <SettingsTab site={site} plazaUrl={plazaUrl} onChanged={changed} onVersionsChanged={versionsChanged} />
       </section> : null}
     </>
@@ -133,26 +130,26 @@ function Identity({ site }: { site: Site }) {
   async function copy() {
     try {
       await navigator.clipboard.writeText(link);
-      setCopied("已复制");
+      setCopied("Copied");
     } catch {
       // 剪贴板要安全上下文加权限；拿不到就让人自己选中地址。
-      setCopied("请手动复制");
+      setCopied("Copy manually");
     }
     setTimeout(() => setCopied(null), 2500);
   }
 
   const chips: { text: string; tone: string }[] = [];
   chips.push({ text: workKind(site.kind), tone: "plain" });
-  if (site.current_version !== undefined) chips.push({ text: `v${site.current_version} · 当前`, tone: "good" });
-  else chips.push({ text: "还没有版本", tone: "plain" });
+  if (site.current_version !== undefined) chips.push({ text: `v${site.current_version} · Current`, tone: "good" });
+  else chips.push({ text: "No version yet", tone: "plain" });
   if (listing?.public) {
-    if (listing.hidden) chips.push({ text: "已从广场撤下", tone: "warn" });
-    else chips.push({ text: listing.seeking ? "在广场上 · 正在找人测" : "在广场上", tone: "" });
+    if (listing.hidden) chips.push({ text: "Unlisted", tone: "warn" });
+    else chips.push({ text: listing.seeking ? "On Plaza · Seeking Testers" : "On Plaza", tone: "" });
   }
-  if (listing && (listing.followers ?? 0) > 0) chips.push({ text: `${listing.followers} 人关注`, tone: "plain" });
-  if (listing?.seats) chips.push({ text: `${listing.joined ?? 0} / ${listing.seats} 位`, tone: "plain" });
+  if (listing && (listing.followers ?? 0) > 0) chips.push({ text: `${listing.followers} followers`, tone: "plain" });
+  if (listing?.seats) chips.push({ text: `${listing.joined ?? 0} / ${listing.seats} seats`, tone: "plain" });
   const remaining = left(site.expires_at);
-  if (remaining) chips.push({ text: `匿名链接 ${remaining}`, tone: "warn" });
+  if (remaining) chips.push({ text: `Anonymous · ${remaining}`, tone: "warn" });
 
   return (
     <header class="identity">
@@ -164,7 +161,7 @@ function Identity({ site }: { site: Site }) {
             {link.replace(/^https?:\/\//, "")}
           </a>
           <button class="button small" type="button" onClick={copy}>
-            {copied ?? "复制"}
+            {copied ?? "Copy"}
           </button>
         </p>
         <p class="chips">
@@ -185,9 +182,6 @@ const RECENT_WINDOW_MS = 60 * 60 * 1000;
 
 /**
  * 此刻这一行。「近一小时 3 个人打开 · 最新一条反馈 12 分钟前：『……』 · 这一版 3 个错误」。
- *
- * 控制面还没有专门的「近况」字段，这里从最新一版的会话里在浏览器侧数（DESIGN §3.13 如实写了）。
- * 没有近况就退到「最近一次打开是什么时候」；一个人都没来过就说下一步该做什么。
  */
 function Now({ site, results }: { site: Site; results: Loaded<SiteResults> }) {
   const current = site.current_version;
@@ -198,10 +192,30 @@ function Now({ site, results }: { site: Site; results: Loaded<SiteResults> }) {
   const feedback = useLoad(() => api.feedback(site.slug), [site.slug]);
 
   if (current === undefined) {
-    return <p class="now muted">还没有版本。</p>;
+    return (
+      <p class="now muted">
+        <span class="now-dot idle" aria-hidden="true" />
+        No version published yet.
+      </p>
+    );
   }
-  if (sessions.loading || feedback.loading || results.loading) return <p class="now muted" role="status">正在获取最近动态…</p>;
-  if (sessions.error || feedback.error || results.error) return <p class="now muted">最近动态暂时无法获取。<button class="button small" onClick={() => { sessions.reload(); feedback.reload(); results.reload(); }}>重试</button></p>;
+  if (sessions.loading || feedback.loading || results.loading) {
+    return (
+      <p class="now muted" role="status">
+        <span class="now-dot idle" aria-hidden="true" />
+        Loading recent activity…
+      </p>
+    );
+  }
+  if (sessions.error || feedback.error || results.error) {
+    return (
+      <p class="now muted">
+        <span class="now-dot idle" aria-hidden="true" />
+        Recent activity temporarily unavailable.
+        <button class="button small" onClick={() => { sessions.reload(); feedback.reload(); results.reload(); }}>Retry</button>
+      </p>
+    );
+  }
 
   const rows = sessions.data?.sessions ?? [];
   const now = Date.now();
@@ -209,38 +223,52 @@ function Now({ site, results }: { site: Site; results: Loaded<SiteResults> }) {
   const latest = newest(feedback.data?.items ?? []);
   const version: VersionResults | undefined = results.data?.versions.find((one) => one.version === current);
 
+  const hasErrors = (version?.errors.total ?? 0) > 0;
+  const isLive = recent > 0;
+  const dotState = hasErrors ? "warn" : isLive ? "live" : "idle";
+  const containerClass = `now ${hasErrors ? "has-warn" : isLive ? "has-live" : ""}`.trim();
+
   const bits: JSX.Element[] = [];
   if (recent > 0) {
     bits.push(
       <span key="recent" class="now-lead">
-        近一小时 <b>{recent}</b> 人打开
+        <b>{recent}</b> {recent === 1 ? "visitor" : "visitors"} in the last hour
       </span>,
     );
   } else if (rows.length > 0) {
-    bits.push(<span key="last">上次打开 {moment(rows[0].at)}</span>);
+    bits.push(<span key="last">Last opened {moment(rows[0].at)}</span>);
   } else if (version && version.opened > 0) {
-    bits.push(<span key="last">{version.last_at ? `上次打开 ${moment(version.last_at)}` : `这一版 ${version.opened} 人打开`}</span>);
+    bits.push(<span key="last">{version.last_at ? `Last opened ${moment(version.last_at)}` : `${version.opened} visitors on v${current}`}</span>);
   } else {
-    return <p class="now muted">这一版还没有人打开。</p>;
+    return (
+      <p class="now muted">
+        <span class="now-dot idle" aria-hidden="true" />
+        No visits on v{current} yet. Share the door link to invite first testers.
+      </p>
+    );
   }
+
   if (latest) {
     bits.push(
       <span key="fb">
-        最新反馈 {ago(latest.ts)}「{clip(latest.text, 24)}」
+        Latest feedback {ago(latest.ts)}: "{clip(latest.text, 24)}"
       </span>,
     );
   }
+
   if (version && version.errors.total > 0) {
+    const topError = version.errors.top?.[0]?.fingerprint;
+    const errorSnippet = topError ? ` (${clip(topError, 28)})` : "";
     bits.push(
       <span key="err" class="now-warn">
-        {version.errors.total} 个错误
+        ⚠️ {version.errors.total} {version.errors.total === 1 ? "error" : "errors"}{errorSnippet}
       </span>,
     );
   }
 
   return (
-    <p class="now">
-      <span class="now-dot" aria-hidden="true" />
+    <p class={containerClass}>
+      <span class={`now-dot ${dotState}`} aria-hidden="true" />
       {bits.map((bit, index) => (
         <span key={index} class="now-bit">
           {index > 0 ? <span class="now-sep"> · </span> : null}
