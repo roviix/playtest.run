@@ -28,6 +28,8 @@
       document.querySelector('main.media-card')?.setAttribute('inert', '');
       if (location.hash !== '#chat-panel') { history.pushState(null, '', '#chat-panel'); pushedFeedback = true; }
     }
+    const stream = panel.querySelector('.chat-stream, #chat-stream');
+    if (stream) { requestAnimationFrame(() => { stream.scrollTop = stream.scrollHeight; }); }
     panel.querySelector('.chat-input')?.focus({ preventScroll: true });
   };
   if (panel) {

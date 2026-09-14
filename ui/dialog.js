@@ -69,6 +69,23 @@
       }
     });
 
+    const scrollToBottom = () => {
+      if (stream) {
+        requestAnimationFrame(() => {
+          stream.scrollTop = stream.scrollHeight;
+        });
+      }
+    };
+    scrollToBottom();
+    window.addEventListener('hashchange', () => {
+      if (location.hash === '#chat-panel') scrollToBottom();
+    });
+    document.querySelectorAll('a[href="#chat-panel"]').forEach(link => {
+      link.addEventListener('click', () => {
+        setTimeout(scrollToBottom, 50);
+      });
+    });
+
     const appendMessage = ({ who, version, time, text, avatar, isSelf }) => {
       const key = `${who}:${version}:${text}`;
       if (seenKeys.has(key)) return false;

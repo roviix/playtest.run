@@ -379,6 +379,8 @@ fn publish_sheet() -> String {
 <label for=\"tab-local\">Local Port</label>\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-backend\">\n\
 <label for=\"tab-backend\">With Backend</label>\n\
+<input type=\"radio\" name=\"pub-mode\" id=\"tab-install\">\n\
+<label for=\"tab-install\">Install CLI</label>\n\
 </div>\n\
 <div class=\"cli\">\n\
 <div class=\"cli-bar\"><div class=\"cli-info\"><span class=\"cli-dots\" aria-hidden=\"true\"></span><span class=\"cli-meta\">CLI publish</span></div>\
@@ -388,14 +390,16 @@ fn publish_sheet() -> String {
 <div class=\"codebox\" id=\"panel-static\" tabindex=\"0\" role=\"region\" aria-label=\"Publish command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span></code></div>\n\
 <div class=\"codebox\" id=\"panel-local\" tabindex=\"0\" role=\"region\" aria-label=\"Publish command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">3000</span></code></div>\n\
 <div class=\"codebox\" id=\"panel-backend\" tabindex=\"0\" role=\"region\" aria-label=\"Publish command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span> <span class=\"f\">--backend</span> <span class=\"a\">8000</span></code></div>\n\
+<div class=\"codebox\" id=\"panel-install\" tabindex=\"0\" role=\"region\" aria-label=\"Install command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">curl</span> <span class=\"f\">-fsSL</span> <span class=\"a\">https://playtest.run/install.sh</span> <span class=\"f\">|</span> <span class=\"k\">bash</span></code></div>\n\
 <p class=\"leg\" id=\"leg-static\">{info}<span>Build your project and replace <code>./dist</code> with your export folder.</span></p>\n\
 <p class=\"leg\" id=\"leg-local\">{info}<span>Start your local dev server and keep the terminal session open.</span></p>\n\
 <p class=\"leg\" id=\"leg-backend\">{info}<span>Static assets are cached on the edge; unmatched routes proxy to your backend.</span></p>\n\
+<p class=\"leg\" id=\"leg-install\">{info}<span>Single binary for macOS &amp; Linux (Apple Silicon / Intel / ARM). Run in terminal to install.</span></p>\n\
 </div>\n\
 <p class=\"pub-status\" role=\"status\"></p>\n\
 </div>\n\
 <div class=\"pub-foot\">\
-<a href=\"{releases}\" target=\"_blank\" rel=\"noopener\">{dl}Download CLI</a>\
+<label for=\"tab-install\" class=\"foot-install-btn\">{dl}Install CLI (curl)</label>\
 <a href=\"{usage}\" target=\"_blank\" rel=\"noopener\">{book}Documentation</a>\
 <a href=\"{dev}/console/\" target=\"_blank\" rel=\"noopener\">Developer Console{out}</a>\
 </div>\n\
@@ -407,14 +411,13 @@ fn publish_sheet() -> String {
         dl = icon("download"),
         book = icon("book"),
         out = icon("out"),
-        releases = RELEASES_URL,
         usage = USAGE_URL,
         dev = DEVELOPER_API_URL,
     )
 }
 
-/// CLI 的下载处。它不是开发者域（AGENTS 第 7 条管的是登录、令牌、控制台），是公开的发布页。
-const RELEASES_URL: &str = "https://github.com/roviix/playtest.run/releases";
+/// CLI 的说明处。
+const _RELEASES_URL: &str = "https://github.com/roviix/playtest.run/releases";
 const USAGE_URL: &str = "https://github.com/roviix/playtest.run#readme";
 
 /// 页面上的几个图标，画在页面里：不靠外部字体、也不靠 `<use href>`
@@ -594,9 +597,11 @@ mod tests {
             "Tab 在终端舱上方"
         );
         assert!(html.contains("class=\"pub-foot\""));
-        assert!(html.contains(">Download CLI</a>"));
+        assert!(html.contains(">Install CLI (curl)</label>"));
+        assert!(html.contains("id=\"panel-install\""));
         assert!(html.contains(">Documentation</a>"));
         assert!(html.contains("for=\"tab-static\">Export Directory</label>"));
+        assert!(html.contains("for=\"tab-install\">Install CLI</label>"));
         assert!(html
             .contains("<span class=\"k\">playtest</span> <span class=\"a\">./dist</span></code>"));
         assert!(html.contains("<span class=\"k\">playtest</span> <span class=\"a\">3000</span>"));

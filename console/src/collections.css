@@ -10,20 +10,48 @@
 
 /* ------------------------------------------------------------------ 返回导航与顶栏 */
 
-.collection-workspace .back-link {
-  display: inline-flex;
+.collection-breadcrumb {
+  display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 20px;
-  min-height: 36px;
-  font-size: 14px;
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.collection-breadcrumb .back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--dim);
   text-decoration: none;
+  min-height: 32px;
   transition: color 0.15s ease;
 }
 
-.collection-workspace .back-link:hover {
+.collection-breadcrumb .back-link:hover {
   color: var(--fg);
+}
+
+.collection-breadcrumb .back-link .icon {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  fill: none;
+}
+
+.breadcrumb-sep {
+  color: var(--line2);
+  user-select: none;
+}
+
+.breadcrumb-title {
+  color: var(--soft);
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .collection-header-row {
@@ -109,23 +137,28 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .collection-identity-body h1 {
   font-size: 24px;
   font-weight: 600;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   color: var(--fg);
   margin: 0;
-  line-height: 1.3;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
 .collection-identity-slug {
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--dim);
   font-family: var(--mono);
+  background: var(--card2);
+  padding: 2px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  user-select: all;
 }
 
 .collection-identity-summary {

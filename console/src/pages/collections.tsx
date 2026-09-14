@@ -93,7 +93,17 @@ export function CollectionsPage({
     }
   }
 
-  const publicUrl = `${plazaUrl.replace(/\/+$/, "")}/c/${slug ?? ""}`;
+  const publicUrl = (() => {
+    if (!slug) return "";
+    const path = `/c/${slug}`;
+    if (plazaUrl.startsWith("http://") || plazaUrl.startsWith("https://")) {
+      return `${plazaUrl.replace(/\/+$/, "")}${path}`;
+    }
+    if (typeof window !== "undefined" && window.location?.origin) {
+      return `${window.location.origin}${path}`;
+    }
+    return path;
+  })();
 
   async function copyPublicUrl() {
     try {
@@ -113,9 +123,14 @@ export function CollectionsPage({
 
     return (
       <div class="collection-workspace">
-        <a class="back-link" href={collectionLink()}>
-          ← 我的合集
-        </a>
+        <nav class="collection-breadcrumb" aria-label="返回导航">
+          <a class="back-link" href={collectionLink()}>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+            <span>我的合集</span>
+          </a>
+          <span class="breadcrumb-sep" aria-hidden="true">/</span>
+          <span class="breadcrumb-title" title={selected.title}>{selected.title}</span>
+        </nav>
 
         {error ? (
           <div class="collection-error" role="alert">

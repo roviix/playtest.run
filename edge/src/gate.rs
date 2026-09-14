@@ -820,12 +820,14 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         };
 
         if self.live.feedback_public {
-            for item in self
+            let mut items: Vec<_> = self
                 .live
                 .public_feedback
                 .iter()
                 .take(PUBLIC_FEEDBACK_ON_GATE)
-            {
+                .collect();
+            items.reverse();
+            for item in items {
                 let text = item.text.trim();
                 if text.is_empty() {
                     continue;
@@ -1415,7 +1417,12 @@ mod tests {
         // 没留名字的显示「A playtester」。
         assert!(html.contains("class=\"chat-author\">A playtester</span><span class=\"chat-badge\">v7</span>"));
         assert!(html.contains("class=\"chat-bubble\">第三关卡住了</p>"));
-        assert_eq!(html.matches("class=\"chat-content voice\"").count(), 4);
+        // 时间正序（从旧到新，最新在最下）：
+        let pos_aji = html.find("手感很好").expect("阿吉的消息应在页面中");
+        let pos_anon = html.find("第三关卡住了").expect("匿名消息应在页面中");
+        let pos_rain = html.find("不知道要按哪个键").expect("小雨的消息应在页面中");
+        assert!(pos_aji < pos_anon && pos_anon < pos_rain, "聊天消息应按时间正序排列（最新在最底部）");
+
         // 不是讨论区：没有回复、点赞、楼层（DESIGN §3.5）。
         for word in ["回复", "点赞", "评论", "楼"] {
             assert!(!html.contains(word), "「{word}」不该出现");

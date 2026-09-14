@@ -92,8 +92,9 @@
 .discovery-segmented a{display:inline-flex;align-items:center;justify-content:center;min-height:28px;padding:0 14px;border-radius:6px;font-size:13px;font-weight:500;color:var(--dim);text-decoration:none;border:1px solid transparent;transition:all .16s ease}
 .discovery-segmented a:hover{color:var(--soft)}
 .discovery-segmented a[aria-current=page],.discovery-segmented a.active{color:#ffffff;background:#20242e;border-color:rgba(255,255,255,0.12);box-shadow:0 1px 4px rgba(0,0,0,0.3)}
-.discover-sort{display:inline-flex;align-items:center;gap:8px;font-size:13px;margin-left:auto}
-.sort-label{color:#52525b;font-size:12px;letter-spacing:-0.01em;user-select:none}
+.discover-sort{display:inline-flex;align-items:center;gap:6px;font-size:13px;margin-left:auto}
+.sort-icon{display:inline-flex;align-items:center;color:#71717a;opacity:0.75;user-select:none}
+.sort-icon .icon{width:13px;height:13px}
 .sort-options{display:inline-flex;align-items:center;gap:2px}
 .sort-item{display:inline-flex;align-items:center;min-height:26px;padding:2px 8px;border-radius:5px;text-decoration:none;font-size:13px;color:var(--dim);transition:all .15s ease}
 .sort-item:hover{color:var(--soft);background:rgba(255,255,255,0.04)}

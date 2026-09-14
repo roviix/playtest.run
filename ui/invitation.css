@@ -5,8 +5,10 @@ body{display:flex;flex-direction:column;align-items:center;padding:24px 16px 40p
 .invitation-nav .brand-link{gap:8px;display:inline-flex;align-items:center;flex-shrink:0;min-height:36px;color:var(--fg);text-decoration:none}.invitation-nav .brand-link .dot{fill:var(--accent,#75cdb5);stroke:none}
 .invitation-nav .wordmark{width:130px;height:25px}
 .nav-sep{color:var(--line2);font-weight:300;margin:0 2px}
-.invitation-back{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim);text-decoration:none;font-size:13px;padding:6px 8px;border-radius:6px;transition:.15s}
+.invitation-back{display:inline-flex;align-items:center;gap:5px;min-width:0;max-width:280px;color:var(--dim);text-decoration:none;font-size:13px;padding:4px 8px;border-radius:6px;transition:.15s}
 .invitation-back:hover{color:var(--fg);background:#ffffff14}
+.invitation-back .icon{width:13px;height:13px;flex-shrink:0;stroke:currentColor;stroke-width:2.2;fill:none}
+.invitation-back span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 main.card{position:relative;width:100%;max-width:420px;margin:auto;border:1px solid var(--line);border-radius:16px;background:var(--card);overflow:hidden;box-shadow:0 16px 40px -24px #000a;display:flex;flex-direction:column}
 .hero{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;border-bottom:1.5px dashed var(--line2);flex-shrink:0}
 img.hero{object-fit:cover;width:100%;aspect-ratio:16/10;height:auto;display:block}

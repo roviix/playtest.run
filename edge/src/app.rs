@@ -391,7 +391,7 @@ async fn project_door(
             app.live.invalidate(&manifest.slug);
         }
         let live = app.live.get(&manifest.slug).await;
-        let messages = live.public_feedback.iter().take(playtest_common::live::PUBLIC_FEEDBACK_ON_GATE).map(|item| {
+        let mut messages = live.public_feedback.iter().take(playtest_common::live::PUBLIC_FEEDBACK_ON_GATE).map(|item| {
             let who = item.name.as_deref().map(str::trim).filter(|n| !n.is_empty()).unwrap_or("A tester");
             let avatar = playtest_common::avatar::svg_for_seed(who, Some(28), Some("chat-avatar-svg"));
             let time_str = crate::when::day_time(&item.at).unwrap_or_else(|| "刚刚".to_string());
@@ -403,6 +403,7 @@ async fn project_door(
                 "avatar": avatar,
             })
         }).collect::<Vec<_>>();
+        messages.reverse();
         let mut headers = base_headers();
         put(&mut headers, "cache-control", "no-cache, no-store, must-revalidate");
         return (StatusCode::OK, headers, axum::Json(serde_json::json!({

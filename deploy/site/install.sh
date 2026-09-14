@@ -5,8 +5,25 @@ VERSION="${PLAYTEST_VERSION:-}"
 DESTINATION="${PLAYTEST_INSTALL_DIR:-$HOME/.local/bin}"
 REPOSITORY="roviix/playtest.run"
 
-fail() { printf '安装未完成：%s\n' "$*" >&2; exit 1; }
-[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]] || fail '请先指定发布版本，例如 PLAYTEST_VERSION=v0.3.0 bash install.sh；不要安装无法确认来源的 latest。'
+if [ -z "$VERSION" ]; then
+  if command -v curl >/dev/null; then
+    LATEST_REDIRECT="$(curl --silent --show-error --head --location --output /dev/null --write-out '%{url_effective}' "https://github.com/$REPOSITORY/releases/latest" 2>/dev/null || true)"
+    if [[ "$LATEST_REDIRECT" =~ /tag/(v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?)$ ]]; then
+      VERSION="${BASH_REMATCH[1]}"
+    fi
+  fi
+  if [ -z "$VERSION" ] && command -v curl >/dev/null; then
+    API_TAG="$(curl --silent --show-error --max-time 10 "https://api.github.com/repos/$REPOSITORY/releases/latest" 2>/dev/null | grep -m1 '"tag_name":' | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/' || true)"
+    if [[ "$API_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+      VERSION="$API_TAG"
+    fi
+  fi
+  if [ -z "$VERSION" ]; then
+    VERSION="v0.3.0"
+  fi
+fi
+
+[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]] || fail '未能确认有效的发布版本；可显式指定版本运行，例如 PLAYTEST_VERSION=v0.3.0 bash install.sh'
 [[ "$DESTINATION" = /* ]] || fail '安装目录必须是绝对路径。'
 for tool in uname tar mktemp; do command -v "$tool" >/dev/null || fail "缺少 $tool。"; done
 

@@ -139,7 +139,7 @@ fn sort_bar(query: &Query, base: &str) -> String {
     };
     format!(
         "<div class=\"discover-sort\" role=\"group\" aria-label=\"Sort projects\">\
-         <span class=\"sort-label\">Sort</span>\
+         <span class=\"sort-icon\" aria-hidden=\"true\" title=\"Sort\"><svg class=\"icon\" viewBox=\"0 0 24 24\" width=\"13\" height=\"13\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 6h18M7 12h10M10 18h4\"/></svg></span>\
          <nav class=\"sort-options\" aria-label=\"Sort options\">\
          <a href=\"{}\" class=\"sort-item{}\" {}>Latest</a>\
          <span class=\"sort-sep\" aria-hidden=\"true\">/</span>\
@@ -631,5 +631,5 @@ pub fn context(plaza: &Plaza, slug: &str, collection_slug: Option<&str>) -> Stri
     }) else {
         return String::new();
     };
-    format!("<a class=\"invitation-back collection-context\" href=\"{}\" title=\"Back to {}\">‹ 返回 {}</a>", esc(&collection.path()), esc(&collection.title), esc(&collection.title))
+    format!("<a class=\"invitation-back collection-context\" href=\"{}\" title=\"Back to {}\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m15 18-6-6 6-6\"/></svg><span>返回 {}</span></a>", esc(&collection.path()), esc(&collection.title), esc(&collection.title))
 }

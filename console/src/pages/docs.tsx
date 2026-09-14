@@ -205,9 +205,11 @@ export function DocsPage({ section }: { section: DocSection }) {
             <div class="doc-step">
               <div class="doc-step-head">
                 <span class="doc-step-badge">1</span>
-                <h3>Download & Install CLI</h3>
+                <h3>Install CLI</h3>
               </div>
-              <p>Visit <a href="https://github.com/roviix/playtest.run/releases" target="_blank" rel="noreferrer">GitHub Releases ↗</a> and download the binary matching your operating system and CPU architecture. Extract and place the <code>playtest</code> binary into your system PATH. On Windows, use <code>playtest.exe</code>.</p>
+              <p>Install via one-line command (macOS &amp; Linux):</p>
+              <CommandBlock command="curl -fsSL https://playtest.run/install.sh | bash" label="One-line install (macOS &amp; Linux)" />
+              <p>Or download pre-built binaries manually for your OS (macOS, Linux, Windows <code>playtest.exe</code>) from <a href="https://github.com/roviix/playtest.run/releases" target="_blank" rel="noreferrer">GitHub Releases ↗</a>.</p>
               <p>Open your terminal and verify the installation:</p>
               <CommandBlock command="playtest --version" label="Verify version" />
               <p>Standalone binary, works out of the box with zero runtime dependencies. If your terminal cannot find the command, check that the binary's directory is included in your PATH environment variable.</p>

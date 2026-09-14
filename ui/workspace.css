@@ -103,11 +103,11 @@ a{color:inherit;text-underline-offset:3px}
 .pub .k{font-weight:600;color:#75cdb5}.pub .a{color:#e4e4e7}.pub .f{color:var(--dim)}.pub .s{color:#fcd34d}
 .pub .leg{display:none;margin:0;padding:8px 14px;border-top:1px solid #ffffff09;font:13px/1.6 system-ui;color:var(--dim);align-items:center;gap:6px}
 .pub .leg code{padding:1px 4px;border-radius:4px;background:#ffffff0f;color:#d4d4d8;font:11.5px var(--mono)}
-.pub:has(#tab-static:checked) :is(#panel-static,#leg-static),.pub:has(#tab-local:checked) :is(#panel-local,#leg-local),.pub:has(#tab-backend:checked) :is(#panel-backend,#leg-backend),.pub .selected{display:flex}
+.pub:has(#tab-static:checked) :is(#panel-static,#leg-static),.pub:has(#tab-local:checked) :is(#panel-local,#leg-local),.pub:has(#tab-backend:checked) :is(#panel-backend,#leg-backend),.pub:has(#tab-install:checked) :is(#panel-install,#leg-install),.pub .selected{display:flex}
 .pub-status{position:absolute;width:1px;height:1px;top:0;left:0;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .pub-foot{display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px;margin-top:20px;padding-top:12px;border-top:1px solid var(--line);font:12px system-ui}
-.pub-foot a{display:inline-flex;align-items:center;gap:5px;color:var(--dim);transition:color 140ms}
-.pub-foot a:hover{color:var(--fg)}.pub-foot a:last-child{margin-left:auto;color:var(--soft)}.pub-foot a:last-child:hover{color:var(--accent)}
+.pub-foot :is(a,button,label){display:inline-flex;align-items:center;gap:5px;color:var(--dim);background:none;border:none;padding:0;cursor:pointer;font:inherit;text-decoration:none;transition:color 140ms}
+.pub-foot :is(a,button,label):hover{color:var(--fg)}.pub-foot :is(a,button,label).active{color:var(--accent)}.pub-foot :is(a,button,label):last-child{margin-left:auto;color:var(--soft)}.pub-foot :is(a,button,label):last-child:hover{color:var(--accent)}
 :is(.term-badge,.copy-command,.leg,.pub-foot) .icon{width:14px;height:14px}
 .pub .leg .icon{color:var(--dim);flex-shrink:0}
 .empty-plaza{padding:80px 24px;text-align:center;border:1px dashed var(--line2);border-radius:16px;color:var(--soft)}
