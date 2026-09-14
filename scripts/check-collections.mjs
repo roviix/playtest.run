@@ -49,12 +49,14 @@ const quote = value => `'${String(value).replaceAll("'", "''")}'`;
 const hash = value => createHash("sha256").update(value).digest("hex");
 let connection;
 let consoleServer;
+let edgeProcess;
+let apiProcess;
 try {
   const apiPort = await freePort();
   const edgePort = await freePort();
   const apiBase = `http://127.0.0.1:${apiPort}`;
   const playerBase = `http://localhost:${edgePort}`;
-  const apiProcess = launch(resolve(root, "target/debug/playtest-api"), [], {
+  apiProcess = launch(resolve(root, "target/debug/playtest-api"), [], {
     PLAYTEST_DATA_DIR: data, PLAYTEST_API_LISTEN: `127.0.0.1:${apiPort}`,
     PLAYTEST_EMAIL_PROVIDER: "log", PLAYTEST_PUBLIC_ROOT_URL: playerBase,
     PLAYTEST_SITE_URL_TEMPLATE: `http://{slug}.localhost:${edgePort}`,
@@ -62,7 +64,7 @@ try {
     PLAYTEST_EDGE_INGEST_TOKEN: "dev-edge-ingest-token-0000000000",
   });
   await until(async () => (await fetch(`${apiBase}/health`)).ok, "控制面启动").catch(error => { throw new Error(`${error}\n${apiProcess.logs.join("")}`); });
-  const edgeProcess = launch(resolve(root, "target/debug/playtest-edge"), [], {
+  edgeProcess = launch(resolve(root, "target/debug/playtest-edge"), [], {
     PLAYTEST_DATA_DIR: data, PLAYTEST_HOST_SUFFIX: "localhost", PLAYTEST_EDGE_LISTEN: `127.0.0.1:${edgePort}`,
     PLAYTEST_API_INTERNAL_URL: apiBase, PLAYTEST_API_PUBLIC_URL: apiBase,
     PLAYTEST_EDGE_INGEST_TOKEN: "dev-edge-ingest-token-0000000000",
@@ -279,6 +281,7 @@ try {
   await until(() => evaluate("document.body.innerText.includes('骑自行车的动画太丝滑了')"), "原声流即时上屏");
   await click('[data-sticker="🎨 美术惊艳"]');
   await until(() => evaluate("document.body.innerText.includes('美术惊艳')"), "贴纸点击即时上屏");
+  await until(() => evaluate("!document.querySelector('.feedback-status') || document.querySelector('.feedback-status').hidden"), "反馈无报错提示");
   shots.push(await screenshot("invitation-chat-submitted-desktop"));
   await viewport(390, 844);
   shots.push(await screenshot("invitation-standalone-mobile"));
@@ -335,6 +338,11 @@ try {
     console.log("本地演示保持运行；按 Ctrl-C 关闭本次启动的服务。未部署、未寄出真实邮件。");
     await new Promise(accept => { process.once("SIGINT", accept); process.once("SIGTERM", accept); });
   }
+} catch (error) {
+  console.error("RUN FAILURE:", error.message);
+  console.error("EDGE PROCESS LOGS:\n", edgeProcess?.logs?.slice(-30)?.join(""));
+  console.error("API PROCESS LOGS:\n", apiProcess?.logs?.slice(-30)?.join(""));
+  throw error;
 } finally {
   connection?.close();
   consoleServer?.close();

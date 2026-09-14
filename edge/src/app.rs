@@ -138,8 +138,9 @@ async fn handle(State(app): State<Arc<App>>, req: Request) -> Response {
         HostKind::Unknown => page(StatusCode::NOT_FOUND, pages::not_found(), None),
         HostKind::Site(slug) => {
             let head_only = parts.method == Method::HEAD;
+            let is_favicon = parts.uri.path() == "/favicon.ico" || parts.uri.path() == "/favicon.svg";
             let response = site(&app, &slug, &authority, parts, body).await;
-            if !response.status().is_success() {
+            if !response.status().is_success() || is_favicon {
                 return response;
             }
             match app.traffic.meter(&slug).await {
@@ -932,22 +933,34 @@ fn service_worker(head_only: bool) -> Response {
     (StatusCode::OK, headers, follow::SW_JS).into_response()
 }
 
-/// 根域上的矢量 Favicon。全站统一使用官方品牌准星图标。
+/// 根域与子域通用的矢量 Favicon。全站统一使用官方品牌准星图标。
 fn favicon_svg(head_only: bool) -> Response {
     let mut headers = base_headers();
     put(&mut headers, "content-type", "image/svg+xml");
     put(&mut headers, "cache-control", "public, max-age=86400, immutable");
+    put(&mut headers, "access-control-allow-origin", "*");
+    put(
+        &mut headers,
+        "content-length",
+        &crate::html::FAVICON_SVG.len().to_string(),
+    );
     if head_only {
         return (StatusCode::OK, headers).into_response();
     }
     (StatusCode::OK, headers, crate::html::FAVICON_SVG).into_response()
 }
 
-/// 根域上的点阵 Favicon 兜底。
+/// 根域与子域通用的点阵 Favicon 兜底。
 fn favicon_ico(head_only: bool) -> Response {
     let mut headers = base_headers();
     put(&mut headers, "content-type", "image/x-icon");
     put(&mut headers, "cache-control", "public, max-age=86400, immutable");
+    put(&mut headers, "access-control-allow-origin", "*");
+    put(
+        &mut headers,
+        "content-length",
+        &crate::html::FAVICON_ICO.len().to_string(),
+    );
     if head_only {
         return (StatusCode::OK, headers).into_response();
     }
@@ -1063,23 +1076,43 @@ async fn site(
     let manifest = match app.sites.resolve(slug).await {
         SiteState::Live(m) => m,
         SiteState::Expired(m) => {
-            return page(StatusCode::GONE, pages::gone(), Some((m.isolated, false)))
+            if parts.uri.path() == "/favicon.ico" {
+                return favicon_ico(parts.method == Method::HEAD);
+            }
+            if parts.uri.path() == "/favicon.svg" {
+                return favicon_svg(parts.method == Method::HEAD);
+            }
+            return page(StatusCode::GONE, pages::gone(), Some((m.isolated, false)));
         }
         SiteState::Unavailable => {
-            return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None)
+            if parts.uri.path() == "/favicon.ico" {
+                return favicon_ico(parts.method == Method::HEAD);
+            }
+            if parts.uri.path() == "/favicon.svg" {
+                return favicon_svg(parts.method == Method::HEAD);
+            }
+            return page(StatusCode::SERVICE_UNAVAILABLE, pages::unavailable(), None);
         }
         // 走到这里说明隧道不在线。一个作品可以既上传过又开过隧道，上面的 `Live` 分支
         // 因此排在离线页前面：给玩家一个能玩的旧版本，比给他一页「他不在线」有用。
-        SiteState::Missing => match app.tunnels.last_seen(slug).await {
-            Some(seen) => {
-                return tunnel::page(
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    tunnel::offline::offline(&seen),
-                    seen.isolated,
-                )
+        SiteState::Missing => {
+            if parts.uri.path() == "/favicon.ico" {
+                return favicon_ico(parts.method == Method::HEAD);
             }
-            None => return page(StatusCode::NOT_FOUND, pages::not_found(), None),
-        },
+            if parts.uri.path() == "/favicon.svg" {
+                return favicon_svg(parts.method == Method::HEAD);
+            }
+            match app.tunnels.last_seen(slug).await {
+                Some(seen) => {
+                    return tunnel::page(
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        tunnel::offline::offline(&seen),
+                        seen.isolated,
+                    );
+                }
+                None => return page(StatusCode::NOT_FOUND, pages::not_found(), None),
+            }
+        }
     };
 
     let ctx = Ctx::new(&parts, authority, slug, &app.config);
@@ -1629,6 +1662,12 @@ async fn serve_file(
     // 先查清单再看方法：清单里没有的路径在混合模式下归后端，POST 也要过去。
     match paths::resolve(manifest, &norm, ctx.accept_encoding, ctx.navigation) {
         Resolved::NotFound => {
+            if norm.candidate == "favicon.ico" {
+                return favicon_ico(parts.method == Method::HEAD);
+            }
+            if norm.candidate == "favicon.svg" {
+                return favicon_svg(parts.method == Method::HEAD);
+            }
             beyond_manifest(app, slug, authority, manifest, ctx, parts, body).await
         }
         _ if parts.method != Method::GET && parts.method != Method::HEAD => {

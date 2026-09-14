@@ -183,7 +183,8 @@
       input.value = '';
 
       try {
-        const resp = await fetch(this.action || window.location.href, {
+        const actionUrl = this.getAttribute('action') || window.location.href;
+        const resp = await fetch(actionUrl, {
           method: 'POST',
           headers: { 'Accept': 'application/json' },
           body: new URLSearchParams(formData)
