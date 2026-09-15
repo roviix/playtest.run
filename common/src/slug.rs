@@ -91,13 +91,13 @@ pub const RESERVED: &[&str] = &[
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum SlugError {
-    #[error("名字不能为空")]
+    #[error("the name can not be empty")]
     Empty,
-    #[error("名字太长：最多 {MAX_LEN} 个字符")]
+    #[error("the name is too long: {MAX_LEN} characters at most")]
     TooLong,
-    #[error("名字只能用小写字母、数字和连字符，且不能以连字符开头或结尾：{0}")]
+    #[error("a name can only use lowercase letters, digits and hyphens, and can not start or end with a hyphen: {0}")]
     BadChars(String),
-    #[error("这个名字保留着，不能用：{0}")]
+    #[error("this name is reserved and can not be used: {0}")]
     Reserved(String),
 }
 

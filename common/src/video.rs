@@ -15,13 +15,13 @@ pub struct VideoInfo {
 
 #[derive(Debug, thiserror::Error)]
 pub enum VideoError {
-    #[error("这个文件不是完整、可读取的 MP4：{0}")]
+    #[error("this file is not a complete, readable MP4: {0}")]
     Invalid(String),
-    #[error("这个 MP4 里没有视频轨。首批视频作品需要 H.264 视频，可带 AAC 音轨。")]
+    #[error("this MP4 has no video track. A video project needs H.264 video, optionally with an AAC audio track.")]
     NoVideo,
-    #[error("视频轨不是 H.264。首批只接受 MP4 容器里的 H.264，不会在后台偷偷转码。")]
+    #[error("the video track is not H.264. Only H.264 inside an MP4 container is accepted, and nothing is transcoded behind your back.")]
     UnsupportedVideo,
-    #[error("音轨不是 AAC。首批视频可以没有声音；有声音时需要 AAC。")]
+    #[error("the audio track is not AAC. A video can be silent, but if it has sound, that sound has to be AAC.")]
     UnsupportedAudio,
 }
 

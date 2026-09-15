@@ -25,9 +25,9 @@ use tokio_tungstenite::tungstenite::http::{header, HeaderName, HeaderValue, Requ
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum HandshakeError {
-    #[error("握手地址不对（{0}），应该像 wss://brisk-otter-41.playtest.run/_playtest/tunnel")]
+    #[error("bad handshake address ({0}); it should look like wss://brisk-otter-41.playtest.run/_playtest/tunnel")]
     BadUrl(String),
-    #[error("令牌里有不能放进 HTTP 头的字符")]
+    #[error("the token contains characters that can not go into an HTTP header")]
     BadToken,
 }
 
@@ -47,8 +47,8 @@ pub fn handshake_request(
         Some("ws") | Some("wss") => {}
         other => {
             return Err(HandshakeError::BadUrl(format!(
-                "协议是 {}，只认 ws 和 wss",
-                other.unwrap_or("空")
+                "the scheme is {}, and only ws and wss are accepted",
+                other.unwrap_or("empty")
             )))
         }
     }

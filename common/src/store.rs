@@ -96,7 +96,7 @@ impl StoreConfig {
                 let endpoint = env_opt(S3_ENDPOINT_ENV);
                 if let Some(endpoint) = &endpoint {
                     let url = reqwest::Url::parse(endpoint).map_err(|error| {
-                        anyhow::anyhow!("{S3_ENDPOINT_ENV} 不是完整 URL：{error}")
+                        anyhow::anyhow!("{S3_ENDPOINT_ENV} is not a complete URL: {error}")
                     })?;
                     anyhow::ensure!(
                         matches!(url.scheme(), "https" | "http")
@@ -106,7 +106,7 @@ impl StoreConfig {
                             && url.path() == "/"
                             && url.query().is_none()
                             && url.fragment().is_none(),
-                        "{S3_ENDPOINT_ENV} 必须是无账号、路径、查询参数或片段的 http(s) 根地址；凭据用 {S3_ACCESS_KEY_ENV} / {S3_SECRET_KEY_ENV}"
+                        "{S3_ENDPOINT_ENV} has to be a bare http(s) root with no userinfo, path, query or fragment. Pass credentials through {S3_ACCESS_KEY_ENV} / {S3_SECRET_KEY_ENV}"
                     );
                 }
                 let prefix = env_opt(S3_PREFIX_ENV)
@@ -114,18 +114,18 @@ impl StoreConfig {
                     .filter(|raw| !raw.is_empty());
                 if let Some(prefix) = &prefix {
                     Path::parse(prefix).map_err(|error| {
-                        anyhow::anyhow!("{S3_PREFIX_ENV} 不是安全的对象键前缀：{error}")
+                        anyhow::anyhow!("{S3_PREFIX_ENV} is not a safe object key prefix: {error}")
                     })?;
                 }
                 let access_key = env_opt(S3_ACCESS_KEY_ENV);
                 let secret_key = env_opt(S3_SECRET_KEY_ENV);
                 anyhow::ensure!(
                     access_key.is_some() == secret_key.is_some(),
-                    "{S3_ACCESS_KEY_ENV} 与 {S3_SECRET_KEY_ENV} 必须一起设置；都不设时使用实例 / 容器角色"
+                    "{S3_ACCESS_KEY_ENV} and {S3_SECRET_KEY_ENV} have to be set together. Leave both unset to use the instance or container role"
                 );
                 anyhow::ensure!(
                     env_opt(S3_SESSION_TOKEN_ENV).is_none() || access_key.is_some(),
-                    "{S3_SESSION_TOKEN_ENV} 不能单独设置"
+                    "{S3_SESSION_TOKEN_ENV} can not be set on its own"
                 );
                 Ok(Self::S3 {
                     bucket,
@@ -136,14 +136,14 @@ impl StoreConfig {
                 })
             }
             other => anyhow::bail!(
-                "{BACKEND_ENV} 只接受 fs 或 s3，现在是「{other}」；生产要用 S3 时必须显式写 s3"
+                "{BACKEND_ENV} accepts fs or s3, and this is {other}. Production on S3 has to say s3 explicitly"
             ),
         }
     }
 
     pub fn describe(&self) -> String {
         match self {
-            Self::Filesystem { root } => format!("本机文件系统 {}", root.display()),
+            Self::Filesystem { root } => format!("local filesystem at {}", root.display()),
             Self::S3 {
                 bucket,
                 region,
@@ -170,30 +170,30 @@ fn env_opt(key: &str) -> Option<String> {
 }
 
 fn required_env(key: &str) -> anyhow::Result<String> {
-    env_opt(key).ok_or_else(|| anyhow::anyhow!("{BACKEND_ENV}=s3 时必须设置 {key}"))
+    env_opt(key).ok_or_else(|| anyhow::anyhow!("{key} has to be set when {BACKEND_ENV}=s3"))
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
-    #[error("哈希格式不对：{0}")]
+    #[error("this hash is not in a valid format: {0}")]
     BadHash(String),
-    #[error("slug 不合法：{0}")]
+    #[error("invalid slug: {0}")]
     BadSlug(String),
-    #[error("对象内容不是合法 JSON：{key}：{source}")]
+    #[error("object {key} is not valid JSON: {source}")]
     BadJson {
         key: String,
         #[source]
         source: serde_json::Error,
     },
-    #[error("对象大得不合理：{key} 有 {size} 字节，上限是 {limit}")]
+    #[error("object {key} is implausibly large at {size} bytes; the limit is {limit}")]
     TooLarge { key: String, size: u64, limit: u64 },
-    #[error("读写对象存储失败：{key}：{source}")]
+    #[error("object storage failed on {key}: {source}")]
     Object {
         key: String,
         #[source]
         source: object_store::Error,
     },
-    #[error("读写上传临时文件失败：{key}：{source}")]
+    #[error("the upload temp file failed on {key}: {source}")]
     Io {
         key: String,
         #[source]
@@ -243,10 +243,16 @@ impl Store {
         match config {
             StoreConfig::Filesystem { root } => {
                 std::fs::create_dir_all(root).map_err(|error| {
-                    anyhow::anyhow!("建不了对象存储目录 {}：{error}", root.display())
+                    anyhow::anyhow!(
+                        "could not create the object storage directory {}: {error}",
+                        root.display()
+                    )
                 })?;
                 let backend = LocalFileSystem::new_with_prefix(root).map_err(|error| {
-                    anyhow::anyhow!("对象存储目录 {} 不能使用：{error}", root.display())
+                    anyhow::anyhow!(
+                        "the object storage directory {} is not usable: {error}",
+                        root.display()
+                    )
                 })?;
                 Ok(Self {
                     inner: Arc::new(backend),
@@ -265,7 +271,10 @@ impl Store {
                 temp_dir,
             } => {
                 std::fs::create_dir_all(temp_dir).map_err(|error| {
-                    anyhow::anyhow!("建不了上传临时目录 {}：{error}", temp_dir.display())
+                    anyhow::anyhow!(
+                        "could not create the upload temp directory {}: {error}",
+                        temp_dir.display()
+                    )
                 })?;
                 // object_store 使用 rustls-no-provider；全仓共用 ring，不再额外链接 AWS-LC。
                 let _ = rustls::crypto::ring::default_provider().install_default();
@@ -298,9 +307,9 @@ impl Store {
                         // 自定义 endpoint 默认使用 path-style；AWS 原生地址也接受这一形态。
                         .with_virtual_hosted_style_request(false);
                 }
-                let backend = builder
-                    .build()
-                    .map_err(|error| anyhow::anyhow!("S3 客户端配置不完整：{error}"))?;
+                let backend = builder.build().map_err(|error| {
+                    anyhow::anyhow!("the S3 client configuration is incomplete: {error}")
+                })?;
                 let inner: Arc<dyn ObjectStore> = match prefix {
                     Some(prefix) => Arc::new(PrefixStore::new(backend, Path::parse(prefix)?)),
                     None => Arc::new(backend),
@@ -332,7 +341,9 @@ impl Store {
     pub fn blob_path(&self, hash: &str) -> Result<PathBuf, StoreError> {
         Self::check_hash(hash)?;
         let root = self.local_root.as_ref().ok_or_else(|| {
-            StoreError::Unsupported("S3 对象没有本地路径；请走流式读取接口".to_string())
+            StoreError::Unsupported(
+                "an S3 object has no local path; use the streaming read interface".to_string(),
+            )
         })?;
         Ok(root.join(blob_key(hash)))
     }
@@ -391,7 +402,7 @@ impl Store {
             Ok(_) => {
                 let _ = self.remove_key(&key).await;
                 Err(StoreError::Unsupported(format!(
-                    "对象存储写入 {key} 后没有读回相同内容"
+                    "object storage did not read back the same content after writing {key}"
                 )))
             }
             Err(error) => {
@@ -429,12 +440,14 @@ impl Store {
         for meta in metas {
             let key = meta.location.to_string();
             let (source_size, source_hash) = self.checksum(&key).await?.ok_or_else(|| {
-                StoreError::Unsupported(format!("迁移时源对象 {key} 消失了，请停止写入后重跑"))
+                StoreError::Unsupported(format!(
+                    "source object {key} disappeared mid-migration; stop writes and run it again"
+                ))
             })?;
             if let Some(expected) = blob_hash_from_key(&key) {
                 if source_hash != expected {
                     return Err(StoreError::Unsupported(format!(
-                        "源 blob {key} 的内容哈希是 {source_hash}，与对象键不一致；不能把损坏对象迁过去"
+                        "source blob {key} hashes to {source_hash}, which does not match its key; a corrupt object will not be migrated"
                     )));
                 }
             }
@@ -448,7 +461,7 @@ impl Store {
                 }
                 if immutable_key(&key) {
                     return Err(StoreError::Unsupported(format!(
-                        "目标里已有内容不同的不可变对象 {key}；为防止覆盖另一份作品，迁移已停止"
+                        "the destination already holds a different immutable object at {key}; migration stopped rather than overwrite another project"
                     )));
                 }
             }
@@ -457,7 +470,7 @@ impl Store {
             let verified = destination.checksum(&key).await?;
             if verified != Some((source_size, source_hash.clone())) {
                 return Err(StoreError::Unsupported(format!(
-                    "目标对象 {key} 写后校验不一致；迁移已停止，旧存储没有改动"
+                    "destination object {key} failed verification after the write; migration stopped and the old storage is untouched"
                 )));
             }
             report.objects += 1;
@@ -817,7 +830,7 @@ impl Store {
     async fn copy_key_to(&self, key: &str, destination: &Store) -> Result<(), StoreError> {
         let Some(result) = self.get_key(key).await? else {
             return Err(StoreError::Unsupported(format!(
-                "迁移时源对象 {key} 消失了，请停止写入后重跑"
+                "source object {key} disappeared mid-migration; stop writes and run it again"
             )));
         };
         if result.meta.size == 0 {
@@ -1162,7 +1175,7 @@ mod tests {
             .await
             .unwrap_err()
             .to_string();
-        assert!(error.contains("不可变对象"), "{error}");
+        assert!(error.contains("immutable object"), "{error}");
     }
 
     #[tokio::test]

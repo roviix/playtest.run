@@ -211,7 +211,7 @@ mod tests {
     fn a_backslash_in_a_unix_filename_is_refused() {
         // Unix 上 `a\b.txt` 是一个文件名，不是两段路径；清单里不许有反斜杠。
         let err = manifest_path(Path::new("a\\b.txt")).unwrap_err();
-        assert!(err.contains("反斜杠"), "{err}");
+        assert!(err.contains("backslashes"), "{err}");
     }
 
     #[cfg(windows)]

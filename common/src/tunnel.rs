@@ -93,15 +93,15 @@ impl Claims {
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum TokenError {
-    #[error("令牌格式不对")]
+    #[error("the token is not in a valid format")]
     Malformed,
-    #[error("令牌版本 {0} 不认识")]
+    #[error("unknown token version: {0}")]
     UnknownVersion(String),
-    #[error("令牌签名不对")]
+    #[error("the token signature does not check out")]
     BadSignature,
-    #[error("令牌已过期")]
+    #[error("the token has expired")]
     Expired,
-    #[error("令牌还没到生效时间")]
+    #[error("the token is not valid yet")]
     NotYetValid,
 }
 

@@ -24,11 +24,11 @@ pub enum Role {
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum MuxError {
-    #[error("隧道已经关了")]
+    #[error("the tunnel is already closed")]
     Closed,
-    #[error("yamux 出错：{0}")]
+    #[error("yamux error: {0}")]
     Yamux(String),
-    #[error("角色不对：只有 Opener 能开流，只有 Acceptor 能收流")]
+    #[error("wrong role: only an Opener can open streams and only an Acceptor can accept them")]
     WrongRole,
 }
 

@@ -169,7 +169,7 @@ impl std::str::FromStr for OwnerKind {
         match s {
             "anon" => Ok(Self::Anon),
             "github" => Ok(Self::Github),
-            other => Err(format!("不认识的身份类型：{other}")),
+            other => Err(format!("unknown identity type: {other}")),
         }
     }
 }
@@ -210,7 +210,7 @@ impl std::str::FromStr for DeliveryMode {
             "upload" => Ok(Self::Upload),
             "tunnel" => Ok(Self::Tunnel),
             "hybrid" => Ok(Self::Hybrid),
-            other => Err(format!("不认识的交付方式：{other}")),
+            other => Err(format!("unknown delivery mode: {other}")),
         }
     }
 }
@@ -257,7 +257,7 @@ impl std::str::FromStr for Access {
             "link" => Ok(Self::Link),
             "password" => Ok(Self::Password),
             "invite" => Ok(Self::Invite),
-            other => Err(format!("不认识的访问方式：{other}")),
+            other => Err(format!("unknown access mode: {other}")),
         }
     }
 }

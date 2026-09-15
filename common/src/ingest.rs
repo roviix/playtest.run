@@ -165,17 +165,17 @@ pub mod source {
     pub const DIRECT: &str = "direct";
     pub const OTHER: &str = "other";
 
-    /// 控制台显示用的中文。
+    /// 控制台显示用的名字。
     pub fn label(kind: &str) -> &'static str {
         match kind {
-            CARD => "邀请卡",
-            NOTICE => "通知",
-            PLAZA => "广场",
-            COLLECTION => "合集",
-            WECHAT => "微信",
+            CARD => "invite card",
+            NOTICE => "notification",
+            PLAZA => "Plaza",
+            COLLECTION => "collection",
+            WECHAT => "WeChat",
             DISCORD => "Discord",
-            DIRECT => "直接打开",
-            _ => "其它",
+            DIRECT => "direct",
+            _ => "other",
         }
     }
 }
@@ -479,8 +479,8 @@ mod tests {
             "plaza"
         );
         assert_eq!(source_kind(None, "", true, ROOT), "wechat");
-        assert_eq!(source::label("card"), "邀请卡");
-        assert_eq!(source::label("whatever"), "其它");
+        assert_eq!(source::label("card"), "invite card");
+        assert_eq!(source::label("whatever"), "other");
     }
 
     #[test]

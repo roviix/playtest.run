@@ -127,7 +127,7 @@ impl std::str::FromStr for Plan {
             "anon" => Ok(Self::Anon),
             "free" => Ok(Self::Free),
             "pro" => Ok(Self::Pro),
-            other => Err(format!("不认识的档位：{other}")),
+            other => Err(format!("unknown plan: {other}")),
         }
     }
 }

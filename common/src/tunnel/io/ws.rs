@@ -446,7 +446,7 @@ where
         if this.write_closed || this.peer_closed {
             return Poll::Ready(Err(io::Error::new(
                 io::ErrorKind::BrokenPipe,
-                "WebSocket 已经关了，写不进去",
+                "the WebSocket is already closed, so nothing can be written",
             )));
         }
         if buf.is_empty() {

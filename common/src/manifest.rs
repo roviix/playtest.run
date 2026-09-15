@@ -39,7 +39,7 @@ impl std::str::FromStr for WorkKind {
             "web" => Ok(Self::Web),
             "article" => Ok(Self::Article),
             "video" => Ok(Self::Video),
-            other => Err(format!("不认识的作品形态：{other}")),
+            other => Err(format!("unknown project kind: {other}")),
         }
     }
 }
@@ -66,7 +66,7 @@ impl std::str::FromStr for GateMode {
             "always" => Ok(Self::Always),
             "never" => Ok(Self::Never),
             other => Err(format!(
-                "门禁页策略只能是 once、always 或 never，不认识「{other}」"
+                "The invitation page policy has to be once, always or never, not {other}"
             )),
         }
     }
@@ -120,13 +120,13 @@ pub const COVER_MIMES: &[&str] = &["image/png", "image/jpeg", "image/webp"];
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum CoverError {
-    #[error("封面的哈希格式不对")]
+    #[error("the cover hash is not in a valid format")]
     BadHash,
-    #[error("封面只能是 PNG、JPEG 或 WebP，这个是「{0}」")]
+    #[error("a cover has to be PNG, JPEG or WebP, and this one is {0}")]
     BadMime(String),
-    #[error("封面最多 {max} MB，这张有 {size} 字节")]
+    #[error("a cover can be at most {max} MB, and this one is {size} bytes")]
     TooLarge { size: u64, max: u64 },
-    #[error("封面是空的")]
+    #[error("the cover is empty")]
     Empty,
 }
 
@@ -306,17 +306,17 @@ impl Manifest {
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum PathError {
-    #[error("路径为空")]
+    #[error("the path is empty")]
     Empty,
-    #[error("路径不能以「/」开头：{0}")]
+    #[error("a path can not start with a slash: {0}")]
     LeadingSlash(String),
-    #[error("路径不能用反斜杠，请用「/」：{0}")]
+    #[error("a path can not use backslashes; use forward slashes: {0}")]
     Backslash(String),
-    #[error("路径里有空段、「.」或「..」：{0}")]
+    #[error("this path has an empty segment, a dot or a double dot: {0}")]
     BadSegment(String),
-    #[error("路径含控制字符：{0}")]
+    #[error("this path contains control characters: {0}")]
     ControlChar(String),
-    #[error("路径太长（超过 {max} 字节）：{path}")]
+    #[error("this path is longer than {max} bytes: {path}")]
     TooLong { path: String, max: usize },
 }
 
@@ -353,19 +353,19 @@ pub fn validate_path(path: &str) -> Result<(), PathError> {
 pub enum ManifestError {
     #[error(transparent)]
     Path(#[from] PathError),
-    #[error("路径重复：{0}")]
+    #[error("duplicate path: {0}")]
     DuplicatePath(String),
-    #[error("哈希格式不对：{0}")]
+    #[error("this hash is not in a valid format: {0}")]
     BadHash(String),
-    #[error("文件太多：{count} 个，上限 {max} 个")]
+    #[error("too many files: {count}, and the limit is {max}")]
     TooManyFiles { count: usize, max: usize },
-    #[error("单个文件太大：{path} 有 {size} 字节，上限 {max} 字节")]
+    #[error("this file is too large: {path} is {size} bytes, and the limit is {max} bytes")]
     FileTooLarge { path: String, size: u64, max: u64 },
-    #[error("这个版本总共 {total} 字节，上限 {max} 字节")]
+    #[error("this version is {total} bytes in total, and the limit is {max} bytes")]
     VersionTooLarge { total: u64, max: u64 },
-    #[error("清单格式版本 {0} 不认识")]
+    #[error("unknown manifest schema version: {0}")]
     UnknownSchema(u32),
-    #[error("作品形态与文件对不上：{0}")]
+    #[error("the project kind does not match its files: {0}")]
     BadPresentation(String),
 }
 
@@ -416,45 +416,43 @@ pub fn validate_manifest(m: &Manifest, max_total: u64) -> Result<(), ManifestErr
         WorkKind::Web => {
             if m.entry.is_some() || m.article.is_some() {
                 return Err(ManifestError::BadPresentation(
-                    "网页作品不能带文章或视频入口".into(),
+                    "a web project can not carry an article or video entry".into(),
                 ));
             }
         }
         WorkKind::Article => {
             let entry = m.entry.as_deref().ok_or_else(|| {
-                ManifestError::BadPresentation("文章缺少 Markdown 原稿入口".into())
+                ManifestError::BadPresentation("the article has no Markdown source entry".into())
             })?;
             if !entry.to_ascii_lowercase().ends_with(".md") || m.find(entry).is_none() {
                 return Err(ManifestError::BadPresentation(
-                    "文章入口必须指向这一版里的 .md 文件".into(),
+                    "the article entry has to point at a .md file in this version".into(),
                 ));
             }
-            let article = m
-                .article
-                .as_ref()
-                .ok_or_else(|| ManifestError::BadPresentation("文章缺少安全渲染产物".into()))?;
+            let article = m.article.as_ref().ok_or_else(|| {
+                ManifestError::BadPresentation("the article has no safely rendered output".into())
+            })?;
             if !crate::hash::is_valid_hex(&article.hash)
                 || article.size == 0
                 || article.size > limits::MAX_ARTICLE_HTML_BYTES
             {
                 return Err(ManifestError::BadPresentation(
-                    "文章安全渲染产物的哈希或大小不合法".into(),
+                    "the rendered article output has an invalid hash or size".into(),
                 ));
             }
         }
         WorkKind::Video => {
-            let entry = m
-                .entry
-                .as_deref()
-                .ok_or_else(|| ManifestError::BadPresentation("视频缺少 MP4 入口".into()))?;
+            let entry = m.entry.as_deref().ok_or_else(|| {
+                ManifestError::BadPresentation("the video has no MP4 entry".into())
+            })?;
             if !entry.to_ascii_lowercase().ends_with(".mp4") || m.find(entry).is_none() {
                 return Err(ManifestError::BadPresentation(
-                    "视频入口必须指向这一版里的 .mp4 文件".into(),
+                    "the video entry has to point at an .mp4 file in this version".into(),
                 ));
             }
             if m.files.len() != 1 || m.article.is_some() {
                 return Err(ManifestError::BadPresentation(
-                    "首批视频作品只接受一个 MP4 文件，封面另传".into(),
+                    "a video project currently takes exactly one MP4 file; the cover is uploaded separately".into(),
                 ));
             }
         }

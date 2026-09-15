@@ -175,7 +175,7 @@ impl std::str::FromStr for RosterSort {
             "dwell" => Ok(Self::Dwell),
             "time" => Ok(Self::Time),
             other => Err(format!(
-                "点名册只能按 dwell（停留最短在前）或 time（最近在前）排，不认识「{other}」"
+                "The roster can only be sorted by dwell (shortest stay first) or time (most recent first), not {other}"
             )),
         }
     }
@@ -287,7 +287,7 @@ impl std::str::FromStr for FeedbackStatus {
             "seen" => Ok(Self::Seen),
             "done" => Ok(Self::Done),
             other => Err(format!(
-                "反馈状态只能是 new、seen 或 done，不认识「{other}」"
+                "Feedback status has to be new, seen or done, not {other}"
             )),
         }
     }
