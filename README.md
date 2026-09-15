@@ -27,14 +27,14 @@ Unlike generic static hosting or heavy app stores, playtest bridges the critical
 
 ### 1. Installation
 
-Download the pre-built single binary for your platform from [GitHub Releases](https://github.com/roviix/playtest.run/releases) (macOS arm64/x86_64, Linux x86_64/arm64 musl, Windows x86_64) and place it in your `PATH`:
+One line on macOS or Linux (downloads the single binary, verifies its SHA-256, installs to `~/.local/bin`):
 
 ```bash
-# Example for macOS Apple Silicon
 curl -fsSL https://playtest.run/install.sh | bash
-# Or verify with:
-playtest --help
+playtest --version
 ```
+
+Windows, or if you prefer to install by hand: download the archive for your platform from [GitHub Releases](https://github.com/roviix/playtest.run/releases/latest) (macOS arm64/x86_64, Linux x86_64/arm64 musl, Windows x86_64) and put `playtest` on your `PATH`. Binaries are not yet code-signed; on macOS allow it once under *System Settings → Privacy & Security*.
 
 ### 2. Publish Your First Project
 

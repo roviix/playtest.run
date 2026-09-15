@@ -72,7 +72,8 @@ pub async fn agent_json() -> Json<Value> {
         "mcp": {
             "command": "playtest",
             "args": ["mcp"],
-            "install": "https://github.com/roviix/playtest.run/releases"
+            "install": "curl -fsSL https://playtest.run/install.sh | bash",
+            "install_windows": "https://github.com/roviix/playtest.run/releases/latest"
         }
     }))
 }
@@ -121,7 +122,8 @@ card as an image block in one call:
 Tools: `playtest_upload` (a built directory), `playtest_share` (a local port), `playtest_list`,
 `playtest_site`, `playtest_card`.
 
-Otherwise use the CLI (single binary, no runtime):
+Otherwise use the CLI (single binary, no runtime; install with
+`curl -fsSL https://playtest.run/install.sh | bash` on macOS / Linux):
 
     playtest ./dist            # upload a built directory -> link + QR (no image file written)
     playtest 5173              # tunnel a running dev server
@@ -300,7 +302,15 @@ description: >-
 
 ## Install
 
-Single binary, no runtime. Releases: https://github.com/roviix/playtest.run/releases
+Single binary, no runtime. macOS / Linux:
+
+```
+curl -fsSL https://playtest.run/install.sh | bash
+```
+
+Installs to `~/.local/bin/playtest` after a SHA-256 check. Windows: download the zip from
+https://github.com/roviix/playtest.run/releases/latest and put `playtest.exe` on PATH.
+Verify with `playtest --version`.
 
 Prefer the MCP server if you can run it — one call gives you the link, the QR text and the
 invite card image:

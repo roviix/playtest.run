@@ -30,7 +30,7 @@ if [ -z "$VERSION" ]; then
     fi
   fi
   if [ -z "$VERSION" ]; then
-    VERSION="v0.2.0"
+    VERSION="v0.3.0"
   fi
 fi
 
@@ -71,7 +71,7 @@ fi
 # 3. 若仍未下载成功，自动回退至 GitHub Releases 公开直链
 if [ "$DOWNLOADED" -eq 0 ]; then
   BASE="https://github.com/$REPOSITORY/releases/download/$VERSION"
-  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 180 "$BASE/$ARCHIVE" --output "$WORK/$ARCHIVE" || fail '下载失败。当前版本未在加速线路或 GitHub Releases 公开；请向邀请你的人确认版本和权限。'
+  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 180 "$BASE/$ARCHIVE" --output "$WORK/$ARCHIVE" || fail "下载失败：$ARCHIVE 在 $R2_BASE 与 GitHub Releases 都取不到。检查网络，或到 https://github.com/$REPOSITORY/releases 手动下载；也可指定版本重试：PLAYTEST_VERSION=$VERSION bash install.sh"
   curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 30 "$BASE/SHA256SUMS" --output "$WORK/SHA256SUMS" || fail '缺少校验文件，拒绝安装。'
 fi
 

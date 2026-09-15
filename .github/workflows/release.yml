@@ -3,7 +3,7 @@
 #
 #   git tag v0.1.0 && git push origin v0.1.0
 #
-# 私测阶段仓库是私有的，Release 只有协作者看得到；公开时同一套产物直接可见。
+# 同一批产物再传一份到 R2（dl.roviix.com），install.sh 优先从那里下载；VERSION 文件让 install.sh 不问 GitHub 就知道最新版本。
 name: release
 
 on:
@@ -73,29 +73,41 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-22.04
+    env:
+      # 步骤自己的 env 在它的 if 里看不见，secrets 在 if 里也不能直接用；先在 job 层算成一个布尔。
+      HAS_R2: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
       - name: 合并校验文件
         run: |
-          cd dist && cat *.sha256 > SHA256SUMS && rm -f *.sha256 && ls -la
+          cd dist && cat *.sha256 > SHA256SUMS && rm -f *.sha256
+          printf '%s\n' "$GITHUB_REF_NAME" > VERSION
+          ls -la
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
           generate_release_notes: true
           body: |
-            `playtest` 命令行的预编译包。解开后把 `playtest` 放到 PATH 里即可；macOS 第一次运行若被拦，
-            在「系统设置 → 隐私与安全性」里放行一次（私测阶段没有签名与公证）。
+            macOS / Linux 一行安装（自动选平台、校验 SHA-256、装到 `~/.local/bin`）：
+
+            ```
+            curl -fsSL https://playtest.run/install.sh | bash
+            ```
+
+            Windows 下载下面的 zip，把 `playtest.exe` 放到 PATH。macOS 第一次运行若被拦，
+            在「系统设置 → 隐私与安全性」里放行一次（尚未签名与公证）。
 
             边缘与控制面不发预编译包，部署方式见 `deploy/README.md`。
 
             `SHA256SUMS` 用于下载完整性校验；每个压缩包包含 `build-info.json`，记录标签、源码提交和目标平台。
-            尚未签名与公证，不把文件校验称为代码签名。私有仓库仍仅受邀账号可下载。
+            文件校验不是代码签名。
 
       - name: 上传安装包到 Cloudflare R2 (dl.roviix.com)
-        if: env.CLOUDFLARE_API_TOKEN != ''
+        if: env.HAS_R2 == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

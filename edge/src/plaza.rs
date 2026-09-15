@@ -420,7 +420,7 @@ fn publish_sheet() -> String {
             "Build and publish this project to playtest.run:\n\
 1. Ensure CLI is installed: curl -fsSL https://playtest.run/install.sh | bash\n\
 2. Publish: run playtest <dir> for static build with index.html (add --spa for SPA), or playtest <port> for local dev server. Optional: -n \"<name>\", -m \"<note>\".\n\
-3. Report back the playable link and QR code."
+3. Hand back the playable link and QR code."
         ),
     )
 }
