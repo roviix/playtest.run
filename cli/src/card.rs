@@ -101,7 +101,7 @@ pub async fn take(
         },
         // 写不下去（目录不在、只读、盘满了）也一样：卡还在服务器上，说一声去哪儿拿就行。
         Err(e) => {
-            crate::ui::say(&format!("邀请卡没能存下来：{e:#}"));
+            crate::ui::say(&format!("The invite card could not be saved: {e:#}"));
             Taken {
                 outcome: Outcome::Missing,
                 path: None,
@@ -116,12 +116,12 @@ pub async fn fetch_or_explain(site: &Site) -> Result<Vec<u8>> {
     let url = playtest_common::card_url(&site.url);
     fetch(&url).await.map_err(|why| match why {
         Unavailable::Unreachable(reason) => output::network(
-            format!("连不上 {url}：{reason}"),
-            "检查一下网络；作品链接本身能不能打开也顺便看看。",
+            format!("Can't reach {url}: {reason}"),
+            "Check your connection, and whether the project link itself opens.",
         ),
         Unavailable::NotReady(reason) => output::server_error(
-            format!("{url} 现在给不了邀请卡：{reason}"),
-            "作品刚发出去的话过几秒再试一次；一直这样就是这一版还没准备好。",
+            format!("{url} can't produce an invite card right now: {reason}"),
+            "If you just published, try again in a few seconds. If it keeps happening, this version is not ready yet.",
         ),
     })
 }
@@ -133,7 +133,7 @@ pub(crate) async fn fetch(url: &str) -> std::result::Result<Vec<u8>, Unavailable
         Err(e) => return Err(Unavailable::Unreachable(e.to_string())),
     };
     let mut attempts = ATTEMPTS;
-    let mut last = Unavailable::NotReady("还没试过".to_string());
+    let mut last = Unavailable::NotReady("not tried yet".to_string());
     let mut attempt = 0;
     while attempt < attempts {
         if attempt > 0 {
@@ -171,9 +171,9 @@ async fn once(http: &reqwest::Client, url: &str) -> std::result::Result<Vec<u8>,
         .to_string();
     if !mime.starts_with("image/png") {
         return Err(Unavailable::NotReady(format!(
-            "回来的是 {}，不是一张 PNG",
+            "got {} back, not a PNG",
             if mime.is_empty() {
-                "没说类型的东西"
+                "something with no content type"
             } else {
                 &mime
             }
@@ -185,7 +185,7 @@ async fn once(http: &reqwest::Client, url: &str) -> std::result::Result<Vec<u8>,
         .map_err(|e| Unavailable::Unreachable(root_cause(&e)))?;
     if !bytes.starts_with(PNG_MAGIC) {
         return Err(Unavailable::NotReady(
-            "说是 PNG，字节却不像一张 PNG".to_string(),
+            "claims to be a PNG, but the bytes are not one".to_string(),
         ));
     }
     Ok(bytes.to_vec())
@@ -194,7 +194,7 @@ async fn once(http: &reqwest::Client, url: &str) -> std::result::Result<Vec<u8>,
 /// reqwest 最外层那句只是把地址重复一遍，有用的是链条最里面那条。
 fn root_cause(e: &reqwest::Error) -> String {
     if e.is_timeout() {
-        return format!("等了 {} 秒还没回应", REQUEST_TIMEOUT.as_secs());
+        return format!("no response after {} seconds", REQUEST_TIMEOUT.as_secs());
     }
     let mut deepest: &dyn std::error::Error = e;
     while let Some(inner) = deepest.source() {
@@ -223,12 +223,12 @@ fn place_at(title: &str, slug: &str, out: Option<&Path>) -> PathBuf {
 pub fn save(path: &Path, png: &[u8]) -> Result<()> {
     if let Some(dir) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir)
-            .with_context(|| format!("建不了 {} 这个目录", dir.display()))?;
+            .with_context(|| format!("could not create the directory {}", dir.display()))?;
     }
-    std::fs::write(path, png).with_context(|| format!("写不了 {}", path.display()))
+    std::fs::write(path, png).with_context(|| format!("could not write {}", path.display()))
 }
 
-/// 邀请卡的文件名：`<作品名>-邀请卡.png`。
+/// 邀请卡的文件名：`<作品名>-invite.png`。
 ///
 /// 作品名是用户自己起的，可能带斜杠、换行、甚至控制字符——原样当文件名会写到别的目录里去，
 /// 或者在终端里显示成一团乱码。这里把这些拿掉；`\` `:` `*` 这些在 Windows 上根本不让用，
@@ -240,9 +240,9 @@ pub fn file_name(title: &str, slug: &str) -> String {
         stem = clean(slug);
     }
     if stem.is_empty() {
-        stem = "作品".to_string();
+        stem = "project".to_string();
     }
-    format!("{stem}-邀请卡.png")
+    format!("{stem}-invite.png")
 }
 
 fn clean(raw: &str) -> String {
@@ -260,7 +260,7 @@ fn clean(raw: &str) -> String {
         .to_string()
 }
 
-/// 打印用的路径。就在当前目录下就写成 `./跳一跳-邀请卡.png`——人照着这个去找文件，
+/// 打印用的路径。就在当前目录下就写成 `./jump-invite.png`——人照着这个去找文件，
 /// 一长串绝对路径反而看不清文件名。
 pub fn shown(path: &Path) -> String {
     let Ok(here) = std::env::current_dir() else {
@@ -283,23 +283,26 @@ mod tests {
 
     #[test]
     fn a_file_name_is_the_title_plus_two_words() {
-        assert_eq!(file_name("跳一跳", "brisk-otter-41"), "跳一跳-邀请卡.png");
+        assert_eq!(
+            file_name("Jump Jump", "brisk-otter-41"),
+            "Jump Jump-invite.png"
+        );
     }
 
     #[test]
     fn path_separators_and_control_characters_never_reach_the_file_system() {
         assert_eq!(
             file_name("a/b\\c", "brisk-otter-41"),
-            "abc-邀请卡.png",
+            "abc-invite.png",
             "斜杠会把文件写到别的目录里去"
         );
         assert_eq!(
-            file_name("换\n行\t了\u{7}", "brisk-otter-41"),
-            "换行了-邀请卡.png"
+            file_name("line\nbreak\there\u{7}", "brisk-otter-41"),
+            "linebreakhere-invite.png"
         );
         assert_eq!(
-            file_name("v1: 最终版?", "brisk-otter-41"),
-            "v1 最终版-邀请卡.png",
+            file_name("v1: final?", "brisk-otter-41"),
+            "v1 final-invite.png",
             "Windows 上不让用的那几个也拿掉"
         );
     }
@@ -309,17 +312,17 @@ mod tests {
         let long = "很".repeat(80);
         let name = file_name(&long, "brisk-otter-41");
         assert_eq!(name.chars().filter(|c| *c == '很').count(), MAX_NAME_CHARS);
-        assert!(name.ends_with("-邀请卡.png"), "{name}");
+        assert!(name.ends_with("-invite.png"), "{name}");
     }
 
-    /// 名字整个是路径分隔符时不能落到一个叫「-邀请卡.png」的隐形文件上。
+    /// 名字整个是路径分隔符时不能落到一个叫「-invite.png」的隐形文件上。
     #[test]
     fn a_title_that_cleans_away_to_nothing_falls_back_to_the_slug() {
         assert_eq!(
             file_name("///", "brisk-otter-41"),
-            "brisk-otter-41-邀请卡.png"
+            "brisk-otter-41-invite.png"
         );
-        assert_eq!(file_name("   ", "  "), "作品-邀请卡.png");
+        assert_eq!(file_name("   ", "  "), "project-invite.png");
     }
 
     #[test]

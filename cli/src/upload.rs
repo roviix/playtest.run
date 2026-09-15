@@ -72,7 +72,7 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     } = input;
     if files.is_empty() {
         return Err(output::bad_input(format!(
-            "{shown} 是空的，没有可以上传的文件。（以「.」开头的文件和目录不会上传。）"
+            "{shown} is empty, nothing to upload. (Files and directories starting with \".\" are never uploaded.)"
         )));
     }
 
@@ -80,8 +80,8 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
     let paths: Vec<String> = entries.iter().map(|e| e.path.clone()).collect();
     let total_bytes: u64 = entries.iter().map(|e| e.size).sum();
     ui::say(&format!(
-        "正在整理 {shown}：{} 个文件，{}",
-        entries.len(),
+        "Reading {shown}: {}, {}",
+        ui::count(entries.len() as u64, "file"),
         ui::bytes(total_bytes)
     ));
 
@@ -96,8 +96,8 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         .filter(|_| !cli_args.force)
     {
         let hint = match &blocker.hint {
-            Some(h) => format!("{h}。确定要照传就加 -y。"),
-            None => "确定要照传就加 -y。".to_string(),
+            Some(h) => format!("{h}. Add -y to upload it anyway."),
+            None => "Add -y to upload it anyway.".to_string(),
         };
         return Err(output::bad_input_with_hint(blocker.message.clone(), hint));
     }
@@ -159,15 +159,17 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
         Ok(prepared) => prepared,
         Err(e) if e.means_token_gone() && config.is_logged_in() => {
             return Err(anyhow::anyhow!(
-                "登录已经失效（{e}）。重新运行 playtest login。"
+                "Your login expired ({e}). Run playtest login again."
             ));
         }
         Err(e) if source == SlugSource::Remembered && e.means_anonymous_link_gone() => {
             if e.means_token_gone() {
-                ui::say("上次的匿名链接已过期（匿名链接只保留 24 小时），这是一个新链接。");
+                ui::say(
+                    "The last anonymous link expired (they only last 24 hours). This is a new one.",
+                );
                 new_anon_session(&mut client, &mut config, &config_path, &api).await?;
             } else {
-                ui::say("上次的作品已经不在了（匿名作品只保留 24 小时），这是一个新链接。");
+                ui::say("The project from last time is gone (anonymous projects only last 24 hours). This is a new link.");
             }
             slug = create_site(&client, &title).await?;
             config.remember(remember_key.clone(), slug.clone());
@@ -286,7 +288,7 @@ impl CoverFile {
     fn as_scanned(&self) -> ScannedFile {
         ScannedFile {
             entry: FileEntry {
-                path: "（封面）".to_string(),
+                path: "(cover)".to_string(),
                 hash: self.cover.hash.clone(),
                 size: self.cover.size,
             },
@@ -301,23 +303,23 @@ pub(crate) fn read_cover(path: &Path) -> Result<CoverFile> {
     let meta = match std::fs::metadata(path) {
         Ok(meta) => meta,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            bail!("找不到封面 {shown}。检查一下路径。")
+            bail!("Can't find the cover {shown}. Check the path.")
         }
-        Err(e) => return Err(e).with_context(|| format!("看不了封面 {shown}")),
+        Err(e) => return Err(e).with_context(|| format!("Can't read the cover {shown}")),
     };
     if !meta.is_file() {
-        bail!("封面 {shown} 不是一个文件。要一张 PNG、JPEG 或 WebP 图片。");
+        bail!("The cover {shown} is not a file. Give a PNG, JPEG or WebP image.");
     }
     if meta.len() > limits::MAX_COVER_BYTES {
         bail!(
-            "封面 {shown} 有 {}，最多 {} MB。缩一下再来——广场上一屏十几张封面，大了每个翻广场的人都在替它付流量。",
+            "The cover {shown} is {}, and the limit is {} MB. Shrink it first — the Plaza shows a dozen covers per screen, and everyone scrolling past pays for the bytes.",
             ui::bytes(meta.len()),
             limits::MAX_COVER_BYTES / limits::MIB
         );
     }
-    let bytes = std::fs::read(path).with_context(|| format!("读不了封面 {shown}"))?;
+    let bytes = std::fs::read(path).with_context(|| format!("Can't read the cover {shown}"))?;
     let Some(mime) = manifest::sniff_image_mime(&bytes) else {
-        bail!("封面 {shown} 不是 PNG、JPEG 或 WebP（看的是文件内容，不是扩展名）。SVG 和 GIF 都不收。");
+        bail!("The cover {shown} is not a PNG, JPEG or WebP (going by the bytes, not the extension). SVG and GIF are not accepted.");
     };
     let cover = Cover {
         hash: playtest_common::hash::hash_bytes(&bytes),
@@ -337,27 +339,30 @@ pub(crate) fn check_plaza_inputs(cli_args: &UploadArgs) -> Result<()> {
     if let Some(summary) = &cli_args.summary {
         if summary.chars().count() > limits::MAX_SUMMARY_CHARS {
             bail!(
-                "「一句话介绍」太长了，最多 {} 个字——广场卡片上只放得下两行。",
+                "--summary is too long. The limit is {} characters — a Plaza card only has room for two lines.",
                 limits::MAX_SUMMARY_CHARS
             );
         }
     }
     if let Some(note) = &cli_args.note {
         if note.trim().is_empty() {
-            bail!("-m 后面要跟一句话：这版改了什么，或者你想让来的人重点看什么。");
+            bail!("-m needs a sentence: what changed in this version, or what you want people to look at.");
         }
         if note.chars().count() > limits::MAX_NOTE_CHARS {
-            bail!("这一版的话太长了，最多 {} 个字。", limits::MAX_NOTE_CHARS);
+            bail!(
+                "The note for this version is too long. The limit is {} characters.",
+                limits::MAX_NOTE_CHARS
+            );
         }
     }
     if let Some(seats) = cli_args.seats {
         // 0 位试玩者是一句自相矛盾的话，多半是手滑；上限说出具体数字，不让人再试一次。
         if seats == 0 {
-            bail!("--seats 至少是 1。想取消找人测就别加这个参数。");
+            bail!("--seats has to be at least 1. Leave the flag out to stop seeking testers.");
         }
         if seats > limits::MAX_SEATS {
             bail!(
-                "--seats 最多 {}，你写了 {seats}。真要这么多人，分几批发更好组织。",
+                "--seats goes up to {}, you wrote {seats}. If you really want that many people, several smaller rounds are easier to run.",
                 limits::MAX_SEATS
             );
         }
@@ -374,12 +379,12 @@ fn check_community(url: &str) -> Result<()> {
     let trimmed = url.trim();
     if !(trimmed.starts_with("https://") || trimmed.starts_with("http://")) {
         bail!(
-            "--community 要一条 http:// 或 https:// 开头的链接，你给的是「{trimmed}」。\n微信群、QQ 群没有网址的话，把群二维码传成一张图片放在网上，给那张图的地址。"
+            "--community needs a link starting with http:// or https://, you gave \"{trimmed}\".\nIf your group has no URL, put its QR code somewhere on the web as an image and use that address."
         );
     }
     if trimmed.chars().count() > limits::MAX_COMMUNITY_URL_CHARS {
         bail!(
-            "群链接太长了，最多 {} 个字符。",
+            "That group link is too long. The limit is {} characters.",
             limits::MAX_COMMUNITY_URL_CHARS
         );
     }
@@ -391,16 +396,16 @@ fn resolve_dir(shown: &str) -> Result<PathBuf> {
     let meta = match std::fs::metadata(given) {
         Ok(meta) => meta,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            bail!("找不到 {shown}。检查一下路径；如果还没构建，先构建出这个目录。")
+            bail!("Can't find {shown}. Check the path; if you haven't built yet, build the directory first.")
         }
-        Err(e) => return Err(e).with_context(|| format!("看不了 {shown}")),
+        Err(e) => return Err(e).with_context(|| format!("Can't read {shown}")),
     };
     if !meta.is_dir() {
         bail!(
-            "{shown} 是一个文件。请给目录，不是文件——引擎导出的那个文件夹，里面通常有 index.html。"
+            "{shown} is a file. Give the directory instead — the folder your engine exported, the one with index.html in it."
         );
     }
-    std::fs::canonicalize(given).with_context(|| format!("看不了 {shown}"))
+    std::fs::canonicalize(given).with_context(|| format!("Can't read {shown}"))
 }
 
 async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
@@ -408,12 +413,12 @@ async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
     let meta = match std::fs::symlink_metadata(given) {
         Ok(meta) => meta,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            bail!("找不到 {shown}。检查一下路径；如果还没构建，先构建出要发布的内容。")
+            bail!("Can't find {shown}. Check the path; if you haven't built yet, build what you want to publish first.")
         }
-        Err(error) => return Err(error).with_context(|| format!("看不了 {shown}")),
+        Err(error) => return Err(error).with_context(|| format!("Can't read {shown}")),
     };
     if meta.file_type().is_symlink() {
-        bail!("{shown} 是符号链接。请直接给真实的目录、Markdown 或 MP4 文件。")
+        bail!("{shown} is a symlink. Point at the real directory, Markdown file or MP4 instead.")
     }
     if meta.is_dir() {
         let root = resolve_dir(shown)?;
@@ -460,7 +465,7 @@ async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
                         Path::new(&sf.entry.path)
                             .file_stem()
                             .and_then(|s| s.to_str())
-                            .unwrap_or("未命名章节")
+                            .unwrap_or("Untitled chapter")
                             .to_string()
                     });
 
@@ -507,8 +512,8 @@ async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
 
             let mut checked = inspect::Report::default();
             checked.findings.push(Finding::note(format!(
-                "这是一部连载作品：包含 {} 个章节，按文件名自然序编排",
-                chapters.len()
+                "This is a serial: {}, ordered by file name",
+                ui::count(chapters.len() as u64, "chapter")
             )));
 
             return Ok(UploadInput {
@@ -536,17 +541,17 @@ async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
         });
     }
     if !meta.is_file() {
-        bail!("{shown} 不是普通文件或目录，不能发布。")
+        bail!("{shown} is neither a regular file nor a directory, so it can't be published.")
     }
 
-    let source = std::fs::canonicalize(given).with_context(|| format!("看不了 {shown}"))?;
+    let source = std::fs::canonicalize(given).with_context(|| format!("Can't read {shown}"))?;
     let root = source
         .parent()
-        .ok_or_else(|| anyhow::anyhow!("{shown} 没有可用的所在目录"))?
+        .ok_or_else(|| anyhow::anyhow!("{shown} has no usable parent directory"))?
         .to_path_buf();
     let entry = source
         .file_name()
-        .ok_or_else(|| anyhow::anyhow!("{shown} 没有文件名"))?;
+        .ok_or_else(|| anyhow::anyhow!("{shown} has no file name"))?;
     let entry = scan::manifest_path(Path::new(entry)).map_err(anyhow::Error::msg)?;
     let extension = source
         .extension()
@@ -562,13 +567,13 @@ async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
         "md" => {
             if meta.len() > limits::MAX_ARTICLE_SOURCE_BYTES {
                 bail!(
-                    "Markdown 原稿太大了：{}；首批文章上限是 {} MiB。",
+                    "That Markdown source is too large: {}. The limit for articles right now is {} MiB.",
                     ui::bytes(meta.len()),
                     limits::MAX_ARTICLE_SOURCE_BYTES / limits::MIB
                 );
             }
             let markdown = std::fs::read_to_string(&source)
-                .with_context(|| format!("{shown} 不是可读取的 UTF-8 Markdown"))?;
+                .with_context(|| format!("{shown} is not readable as UTF-8 Markdown"))?;
             let article = playtest_common::article::inspect(&markdown, &entry)?;
             let mut paths = Vec::with_capacity(article.images.len() + 1);
             paths.push(entry.clone());
@@ -577,35 +582,37 @@ async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
                 WorkKind::Article,
                 paths,
                 article.title.or(fallback),
-                Finding::note("这是一篇 Markdown 文章；只会上传正文明确引用的本地图片"),
+                Finding::note(
+                    "This is a Markdown article; only the local images the text references get uploaded",
+                ),
             )
         }
         "mp4" => {
             let check = source.clone();
             let info = tokio::task::spawn_blocking(move || {
                 let mut file = std::fs::File::open(&check)
-                    .with_context(|| format!("读不了 {}", check.display()))?;
+                    .with_context(|| format!("Can't read {}", check.display()))?;
                 playtest_common::video::inspect(&mut file).map_err(anyhow::Error::from)
             })
             .await
-            .context("视频检查任务没跑完")??;
+            .context("The video check did not finish")??;
             (
                 WorkKind::Video,
                 vec![entry.clone()],
                 fallback,
                 Finding::note(format!(
-                    "这是 H.264 视频{}；播放器按需读取，不会自动播放",
+                    "This is an H.264 video{}; the player loads it on demand and does not autoplay",
                     if info.audio_tracks > 0 {
-                        "，带 AAC 音轨"
+                        " with an AAC audio track"
                     } else {
-                        "，没有音轨"
+                        " with no audio track"
                     }
                 )),
             )
         }
         _ => {
             bail!(
-                "{shown} 是一个文件。首批单文件作品只接受 .md 文章和 H.264/AAC 的 .mp4 视频；网页作品请给包含 index.html 的目录。"
+                "{shown} is a file. Single-file projects currently accept .md articles and H.264/AAC .mp4 videos only. For a web project, give the directory that has index.html in it."
             )
         }
     };
@@ -615,14 +622,14 @@ async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
             let mut head = [0u8; 16];
             let read = std::fs::File::open(&file.source)
                 .and_then(|mut source| source.read(&mut head))
-                .with_context(|| format!("读不了配图 {}", file.entry.path))?;
+                .with_context(|| format!("Can't read the image {}", file.entry.path))?;
             let actual = manifest::sniff_image_mime(&head[..read]);
             let expected = playtest_common::article::image_mime(&file.entry.path);
             if actual.is_none() || actual != expected {
                 bail!(
-                    "{} 的扩展名和实际图片格式对不上（实际是 {}），不能只改扩展名。",
+                    "The extension on {} does not match what the file really is ({}). Renaming the extension is not enough.",
                     file.entry.path,
-                    actual.unwrap_or("无法识别的格式")
+                    actual.unwrap_or("an unrecognised format")
                 );
             }
         }
@@ -630,8 +637,12 @@ async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
     let mut checked = inspect::Report::default();
     checked.findings.push(finding);
     ui::say(match kind {
-        WorkKind::Article => "文章发布路径正在实现验证中；尚未完成真实手机验收。",
-        WorkKind::Video => "视频发布路径正在实现验证中；尚未完成真实手机与移动网络验收。",
+        WorkKind::Article => {
+            "Publishing articles is still being verified; it has not been checked on a real phone yet."
+        }
+        WorkKind::Video => {
+            "Publishing videos is still being verified; it has not been checked on a real phone or a mobile network yet."
+        }
         WorkKind::Web => unreachable!(),
     });
     Ok(UploadInput {
@@ -651,13 +662,15 @@ fn check_kind_options(cli_args: &UploadArgs, kind: WorkKind) -> Result<()> {
         return Ok(());
     }
     if cli_args.backend.is_some() {
-        bail!("--backend 只用于网页目录；文章和视频没有需要转发到本机的后端。")
+        bail!("--backend is for web directories only; articles and videos have no backend to forward to.")
     }
     if cli_args.spa {
-        bail!("--spa 只用于网页目录；文章和视频由平台的阅读器或播放器展示。")
+        bail!("--spa is for web directories only; articles and videos are shown by the platform's reader or player.")
     }
     if cli_args.isolated != Isolation::Auto {
-        bail!("--isolated 只用于网页目录；文章和视频不执行作者脚本。")
+        bail!(
+            "--isolated is for web directories only; articles and videos never run author scripts."
+        )
     }
     // `-y` 只跳过交互确认；文章与视频的格式、安全检查仍在上面无条件执行，控制面还会再查一次。
     Ok(())
@@ -669,14 +682,17 @@ fn title_for_file(cli_args: &UploadArgs, hint: Option<&str>) -> Result<String> {
         None => hint
             .map(str::trim)
             .filter(|title| !title.is_empty())
-            .unwrap_or("未命名")
+            .unwrap_or("Untitled")
             .to_string(),
     };
     if title.is_empty() {
-        bail!("作品名不能是空的。");
+        bail!("The project name can't be empty.");
     }
     if title.chars().count() > limits::MAX_TITLE_CHARS {
-        bail!("作品名太长了，最多 {} 个字。", limits::MAX_TITLE_CHARS);
+        bail!(
+            "That project name is too long. The limit is {} characters.",
+            limits::MAX_TITLE_CHARS
+        );
     }
     Ok(title)
 }
@@ -732,40 +748,49 @@ fn choose_isolated(checked: &mut inspect::Report, cli_args: &UploadArgs) -> bool
         return cli_args.isolated == Isolation::On;
     };
     let head = if threads.is_certain() {
-        format!("这个构建用了多线程（{}）", threads.because())
+        format!("This build uses threads ({})", threads.because())
     } else {
-        format!("这个构建可能用了多线程（{}）", threads.because())
+        format!("This build may use threads ({})", threads.because())
     };
 
     if cli_args.isolated == Isolation::Off {
         return decided(
             checked,
             false,
-            Finding::warn(format!("{head}；你写了 --isolated=off，那就不开"))
-                .hint("玩家打开时多半会报错，去掉 --isolated=off 就能跑"),
+            Finding::warn(format!(
+                "{head}, and you wrote --isolated=off, so it stays off"
+            ))
+            .hint("Players will most likely see an error; drop --isolated=off and it runs"),
         );
     }
     if cli_args.isolated == Isolation::On {
         return decided(
             checked,
             true,
-            Finding::note(format!("{head}，--isolated 已经开着")),
+            Finding::note(format!("{head}, and --isolated is already on")),
         );
     }
     match ask_yes(&format!(
-        "{head}，需要 --isolated 才能在浏览器里跑。帮你开吗？[Y/n] "
+        "{head}, so it needs --isolated to run in a browser. Turn it on? [Y/n] "
     )) {
-        Some(true) => decided(checked, true, Finding::note("这一版开了 --isolated")),
+        Some(true) => decided(
+            checked,
+            true,
+            Finding::note("--isolated is on for this version"),
+        ),
         Some(false) => decided(
             checked,
             false,
-            Finding::warn("那就不开 --isolated").hint("玩家打开时多半会报错，下次加 --isolated"),
+            Finding::warn("Leaving --isolated off")
+                .hint("Players will most likely see an error; add --isolated next time"),
         ),
         None => decided(
             checked,
             true,
-            Finding::note(format!("{head}，已经自动加上 --isolated（跨源隔离）"))
-                .hint("不想要就加 --no-isolated"),
+            Finding::note(format!(
+                "{head}, so --isolated (cross-origin isolation) is on"
+            ))
+            .hint("Add --isolated=off if you don't want it"),
         ),
     }
 }
@@ -811,13 +836,16 @@ pub(crate) fn title_for(
     let title = match (&cli_args.name, page_title) {
         (Some(name), _) => name.trim().to_string(),
         (None, Some(page)) if generic_dir => page.to_string(),
-        (None, _) => dir_name.unwrap_or_else(|| "未命名".to_string()),
+        (None, _) => dir_name.unwrap_or_else(|| "Untitled".to_string()),
     };
     if title.is_empty() {
-        bail!("作品名不能是空的。");
+        bail!("The project name can't be empty.");
     }
     if title.chars().count() > limits::MAX_TITLE_CHARS {
-        bail!("作品名太长了，最多 {} 个字。", limits::MAX_TITLE_CHARS);
+        bail!(
+            "That project name is too long. The limit is {} characters.",
+            limits::MAX_TITLE_CHARS
+        );
     }
     Ok(title)
 }
@@ -871,7 +899,7 @@ fn check_note(cli_args: &UploadArgs) -> Result<()> {
     if let Some(note) = &cli_args.note {
         if note.chars().count() > limits::MAX_NOTE_CHARS {
             bail!(
-                "「这版改了什么」太长了，最多 {} 个字。",
+                "The note for this version is too long. The limit is {} characters.",
                 limits::MAX_NOTE_CHARS
             );
         }
@@ -941,12 +969,14 @@ pub(crate) async fn choose_site(
         Err(e) if e.means_token_gone() && config.is_logged_in() => {
             // 登录令牌被拒不能悄悄换成匿名的：那会把新作品发到一个 24 小时的身份下。
             return Err(anyhow::anyhow!(
-                "登录已经失效（{}）。重新运行 playtest login。",
+                "Your login expired ({}). Run playtest login again.",
                 e
             ));
         }
         Err(e) if e.means_token_gone() => {
-            ui::say("上次的匿名身份已经失效，换了一个新的。");
+            ui::say(
+                "The anonymous identity from last time expired, so this run picked up a new one.",
+            );
             new_anon_session(client, config, config_path, api).await?;
             create_site(client, title).await?
         }
@@ -989,18 +1019,30 @@ async fn send_missing(
     }
 
     if to_send.is_empty() {
-        ui::say(&format!("{total_files} 个文件服务器上都已经有了，不用传。"));
+        ui::say(&if total_files == 1 {
+            "That file is already on the server. Nothing to upload.".to_string()
+        } else {
+            format!("All {total_files} files are already on the server. Nothing to upload.")
+        });
         return Ok(());
     }
 
     // 用自己算出来的字节数而不是服务器给的 missing_bytes：这是真正会写出去的量，
     // 两者对不上时进度条该跟着实际走。
     let bytes_to_send: u64 = to_send.iter().map(|f| f.entry.size).sum();
-    ui::say(&format!(
-        "需要上传 {files_pending} 个文件（{}），其余 {} 个服务器上已有",
-        ui::bytes(bytes_to_send),
-        total_files - files_pending
-    ));
+    let already = total_files - files_pending;
+    let mut line = format!(
+        "Uploading {} ({})",
+        ui::count(files_pending as u64, "file"),
+        ui::bytes(bytes_to_send)
+    );
+    if already > 0 {
+        line.push_str(&format!(
+            ", {} already on the server",
+            ui::count(already as u64, "file")
+        ));
+    }
+    ui::say(&line);
 
     let progress = new_progress(bytes_to_send);
     let permits = Arc::new(Semaphore::new(UPLOAD_CONCURRENCY));
@@ -1031,7 +1073,7 @@ async fn send_missing(
             Err(e) if e.is_cancelled() => {}
             Err(e) => {
                 if failure.is_none() {
-                    failure = Some(anyhow::anyhow!("上传任务没跑完：{e}"));
+                    failure = Some(anyhow::anyhow!("An upload task did not finish: {e}"));
                 }
             }
         }
@@ -1050,7 +1092,7 @@ fn new_progress(total: u64) -> ProgressBar {
     let bar = ProgressBar::new(total);
     bar.set_style(
         ProgressStyle::with_template(
-            "{bar:28} {bytes}/{total_bytes}  {binary_bytes_per_sec}  剩 {eta}",
+            "{bar:28} {bytes}/{total_bytes}  {binary_bytes_per_sec}  {eta} left",
         )
         .unwrap_or_else(|_| ProgressStyle::default_bar()),
     );
@@ -1059,7 +1101,9 @@ fn new_progress(total: u64) -> ProgressBar {
 
 /// 边构建边上传时最常见的一种失败：文件在传的过程中被写了。
 fn changed_mid_upload(shown: &str) -> anyhow::Error {
-    output::bad_input(format!("上传时文件变了（{shown}），请等构建完成再运行。"))
+    output::bad_input(format!(
+        "{shown} changed while it was being uploaded. Wait for the build to finish, then run again."
+    ))
 }
 
 async fn put_with_retry(
@@ -1100,7 +1144,7 @@ async fn put_with_retry(
                 return Err(changed_mid_upload(shown));
             }
             // 套一层「哪个文件」，但让底下那个错保持原样——归类要靠它。
-            return Err(anyhow::Error::from(e).context(format!("传不上去 {shown}")));
+            return Err(anyhow::Error::from(e).context(format!("Could not upload {shown}")));
         }
         tokio::time::sleep(backoff).await;
         backoff *= 2;
@@ -1125,7 +1169,7 @@ mod tests {
         assert!(check_plaza_inputs(&args_with(Some(limits::MAX_SEATS), None)).is_ok());
 
         let err = check_plaza_inputs(&args_with(Some(0), None)).unwrap_err();
-        assert!(err.to_string().contains("至少是 1"), "{err}");
+        assert!(err.to_string().contains("at least 1"), "{err}");
 
         // 超了要把上限那个数说出来，不然只能再猜一次。
         let err = check_plaza_inputs(&args_with(Some(limits::MAX_SEATS + 1), None)).unwrap_err();
@@ -1161,7 +1205,7 @@ mod tests {
             "x".repeat(limits::MAX_COMMUNITY_URL_CHARS)
         );
         let err = check_plaza_inputs(&args_with(None, Some(&long))).unwrap_err();
-        assert!(err.to_string().contains("太长"), "{err}");
+        assert!(err.to_string().contains("too long"), "{err}");
     }
 
     #[tokio::test]
@@ -1172,7 +1216,7 @@ mod tests {
         let article = dir.path().join("post.md");
         std::fs::write(
             &article,
-            "# 一篇文章\n\n![配图](images/inside.png)\n\n[外链](https://example.com)",
+            "# An article\n\n![figure](images/inside.png)\n\n[link out](https://example.com)",
         )
         .unwrap();
         std::fs::write(images.join("inside.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
@@ -1183,7 +1227,7 @@ mod tests {
             .unwrap();
         assert_eq!(input.kind, WorkKind::Article);
         assert_eq!(input.entry.as_deref(), Some("post.md"));
-        assert_eq!(input.title_hint.as_deref(), Some("一篇文章"));
+        assert_eq!(input.title_hint.as_deref(), Some("An article"));
         assert_eq!(
             input
                 .files
@@ -1198,11 +1242,11 @@ mod tests {
     async fn markdown_native_html_is_rejected_before_networking() {
         let dir = tempfile::tempdir().unwrap();
         let article = dir.path().join("unsafe.md");
-        std::fs::write(&article, "# 标题\n\n<script>alert(1)</script>").unwrap();
+        std::fs::write(&article, "# Title\n\n<script>alert(1)</script>").unwrap();
         let error = match prepare_input(article.to_str().unwrap(), false).await {
             Ok(_) => panic!("带原生 HTML 的文章不该通过"),
             Err(error) => error,
         };
-        assert!(error.to_string().contains("原生 HTML"), "{error}");
+        assert!(error.to_string().contains("raw HTML"), "{error}");
     }
 }

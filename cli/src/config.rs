@@ -83,14 +83,14 @@ pub fn default_path() -> Result<PathBuf> {
     {
         let base = std::env::var_os("APPDATA")
             .filter(|v| !v.is_empty())
-            .context("找不到 %APPDATA%，没法保存配置")?;
+            .context("can not find %APPDATA%, so the config can not be saved")?;
         Ok(PathBuf::from(base).join("playtest").join("config.json"))
     }
     #[cfg(not(windows))]
     {
-        let base = std::env::var_os("HOME")
-            .filter(|v| !v.is_empty())
-            .context("找不到主目录（环境变量 HOME 是空的），没法保存配置")?;
+        let base = std::env::var_os("HOME").filter(|v| !v.is_empty()).context(
+            "can not find a home directory (HOME is empty), so the config can not be saved",
+        )?;
         Ok(PathBuf::from(base)
             .join(".config")
             .join("playtest")
@@ -101,10 +101,16 @@ pub fn default_path() -> Result<PathBuf> {
 /// 读配置。文件不在就当是全新的一台机器。
 pub fn load(path: &Path) -> Result<Config> {
     match std::fs::read(path) {
-        Ok(bytes) => serde_json::from_slice(&bytes)
-            .with_context(|| format!("配置文件读不懂：{}。删掉它再运行一次就好。", path.display())),
+        Ok(bytes) => serde_json::from_slice(&bytes).with_context(|| {
+            format!(
+                "the config file can not be parsed: {}. Delete it and run again.",
+                path.display()
+            )
+        }),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
-        Err(e) => Err(e).with_context(|| format!("读不了配置文件 {}", path.display())),
+        Err(e) => {
+            Err(e).with_context(|| format!("could not read the config file {}", path.display()))
+        }
     }
 }
 
@@ -112,15 +118,17 @@ pub fn load(path: &Path) -> Result<Config> {
 pub fn save(path: &Path, config: &Config) -> Result<()> {
     let dir = path
         .parent()
-        .with_context(|| format!("配置文件路径不对：{}", path.display()))?;
-    std::fs::create_dir_all(dir).with_context(|| format!("建不了配置目录 {}", dir.display()))?;
+        .with_context(|| format!("bad config file path: {}", path.display()))?;
+    std::fs::create_dir_all(dir)
+        .with_context(|| format!("could not create the config directory {}", dir.display()))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
     }
 
-    let body = serde_json::to_vec_pretty(config).context("配置写不成 JSON")?;
+    let body =
+        serde_json::to_vec_pretty(config).context("the config could not be turned into JSON")?;
     let tmp = path.with_extension("json.tmp");
     {
         let mut options = std::fs::OpenOptions::new();
@@ -132,12 +140,13 @@ pub fn save(path: &Path, config: &Config) -> Result<()> {
         }
         let mut file = options
             .open(&tmp)
-            .with_context(|| format!("写不了 {}", tmp.display()))?;
+            .with_context(|| format!("could not write {}", tmp.display()))?;
         file.write_all(&body)
             .and_then(|()| file.write_all(b"\n"))
-            .with_context(|| format!("写不了 {}", tmp.display()))?;
+            .with_context(|| format!("could not write {}", tmp.display()))?;
     }
-    std::fs::rename(&tmp, path).with_context(|| format!("保存不了配置文件 {}", path.display()))?;
+    std::fs::rename(&tmp, path)
+        .with_context(|| format!("could not save the config file {}", path.display()))?;
     Ok(())
 }
 
@@ -161,7 +170,7 @@ mod tests {
             login: None,
             sites: BTreeMap::new(),
         };
-        written.remember("/tmp/游戏/dist".into(), "brisk-otter-41".into());
+        written.remember("/tmp/game/dist".into(), "brisk-otter-41".into());
         written.remember("/tmp/other".into(), "keen-yak-7".into());
 
         save(&path, &written).unwrap();

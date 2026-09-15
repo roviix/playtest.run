@@ -49,7 +49,7 @@ pub enum Ended {
 pub async fn open(grant: &TunnelGrant, port: u16) -> Result<Wire, Next> {
     let request = handshake_request(&grant.connect_url, &grant.token, port).map_err(|e| {
         // 地址或令牌本身不对，重试多少次都一样。
-        Next::Stop(format!("连不了边缘：{e}"))
+        Next::Stop(format!("Can not reach the edge: {e}"))
     })?;
 
     // Nagle 会把小包攒起来再发，联机消息最怕这个；隧道上多数就是小包。
@@ -68,12 +68,14 @@ pub async fn open(grant: &TunnelGrant, port: u16) -> Result<Wire, Next> {
 /// 直接印出来第一次用的人看不懂；常见的那几种在这里换成人话，剩下的实在没法归类才带上原文。
 fn connect_reason(e: &WsError) -> String {
     let WsError::Io(io) = e else {
-        return format!("连不上边缘（{e}）");
+        return format!("Can not reach the edge ({e})");
     };
     match io.kind() {
-        std::io::ErrorKind::ConnectionRefused => "连不上边缘：那个地址上没有人接".to_string(),
-        std::io::ErrorKind::TimedOut => "连边缘超时".to_string(),
-        _ => "连不上边缘：网络不通".to_string(),
+        std::io::ErrorKind::ConnectionRefused => {
+            "Can not reach the edge: nothing is answering at that address".to_string()
+        }
+        std::io::ErrorKind::TimedOut => "Timed out reaching the edge".to_string(),
+        _ => "Can not reach the edge: no network".to_string(),
     }
 }
 
@@ -127,12 +129,12 @@ fn handshake_next(status: u16, body: Option<&ErrorBody>) -> Next {
     let said = body.map(|b| b.message.as_str()).unwrap_or_default();
     match status {
         // 令牌过期或者边缘不认它。换一张再来，不用退避——这不是网络的问题。
-        401 => Next::NewGrant("令牌到期了".to_string()),
+        401 => Next::NewGrant("the token expired".to_string()),
         // 同一个作品来了新的隧道，我们是被挤掉的那个。再连也只会一直得到 409（驱逐名单按
         // 令牌记），所以退出，两个进程才不会互相挤来挤去（DESIGN §4.3）。
-        409 if code == Some(ErrorCode::TunnelReplaced) => {
-            Next::Stop("另一个 playtest 进程接管了这个作品，这里退出。".to_string())
-        }
+        409 if code == Some(ErrorCode::TunnelReplaced) => Next::Stop(
+            "Another playtest process took over this project, so this one exits.".to_string(),
+        ),
         // 别的 4xx 都是「这次请求本身不对」：作品没了、令牌不是给这个 slug 的、被封了。
         400..=499 => Next::Stop(stop_reason(status, said)),
         _ => Next::Retry(retry_reason(status, said)),
@@ -141,29 +143,31 @@ fn handshake_next(status: u16, body: Option<&ErrorBody>) -> Next {
 
 fn stop_reason(status: u16, said: &str) -> String {
     if said.is_empty() {
-        format!("边缘不接这条隧道（HTTP {status}）。")
+        format!("The edge refused this tunnel (HTTP {status}).")
     } else {
-        format!("服务器说：{said}")
+        format!("The server said: {said}")
     }
 }
 
 fn retry_reason(status: u16, said: &str) -> String {
     if said.is_empty() {
-        format!("边缘暂时不可用（HTTP {status}）")
+        format!("The edge is temporarily unavailable (HTTP {status})")
     } else {
-        format!("边缘暂时不可用（{said}）")
+        format!("The edge is temporarily unavailable ({said})")
     }
 }
 
 /// 连着的时候断了，看边缘给的关闭码决定下一步（[`playtest_common::tunnel::close`]）。
 fn close_next(code: Option<u16>) -> Next {
     match code {
-        Some(close::REPLACED) => {
-            Next::Stop("另一个 playtest 进程接管了这个作品，这里退出。".to_string())
+        Some(close::REPLACED) => Next::Stop(
+            "Another playtest process took over this project, so this one exits.".to_string(),
+        ),
+        Some(close::REVOKED) => {
+            Next::Stop("This project was taken down, so the tunnel stops here.".to_string())
         }
-        Some(close::REVOKED) => Next::Stop("这个作品已被下架，隧道停在这里。".to_string()),
-        Some(close::TOKEN_EXPIRED) => Next::NewGrant("令牌到期了".to_string()),
-        _ => Next::Retry("和服务器断开了".to_string()),
+        Some(close::TOKEN_EXPIRED) => Next::NewGrant("the token expired".to_string()),
+        _ => Next::Retry("Disconnected from the server".to_string()),
     }
 }
 
@@ -252,7 +256,10 @@ mod tests {
     fn a_refused_connection_is_explained_in_chinese_not_in_errno() {
         let refused = WsError::Io(std::io::Error::from(std::io::ErrorKind::ConnectionRefused));
         let said = connect_reason(&refused);
-        assert_eq!(said, "连不上边缘：那个地址上没有人接");
+        assert_eq!(
+            said,
+            "Can not reach the edge: nothing is answering at that address"
+        );
         assert!(!said.contains("error"), "别把英文原文塞给用户：{said}");
     }
 
@@ -264,11 +271,13 @@ mod tests {
         let Next::Stop(said) = next else {
             unreachable!()
         };
-        assert!(said.contains("接管"), "{said}");
+        assert!(said.contains("took over"), "{said}");
 
         assert_eq!(
             close_next(Some(close::REPLACED)),
-            Next::Stop("另一个 playtest 进程接管了这个作品，这里退出。".into())
+            Next::Stop(
+                "Another playtest process took over this project, so this one exits.".into()
+            )
         );
     }
 
@@ -290,30 +299,33 @@ mod tests {
         let Next::Stop(said) = close_next(Some(close::REVOKED)) else {
             panic!("下架了不该重连");
         };
-        assert!(said.contains("下架"), "{said}");
+        assert!(said.contains("taken down"), "{said}");
     }
 
     #[test]
     fn anything_else_is_just_a_disconnection() {
         assert_eq!(
             close_next(None),
-            Next::Retry("和服务器断开了".into()),
+            Next::Retry("Disconnected from the server".into()),
             "对端没给状态码就直接断了，最常见的一种"
         );
         assert_eq!(
             close_next(Some(close::GOING_AWAY)),
-            Next::Retry("和服务器断开了".into())
+            Next::Retry("Disconnected from the server".into())
         );
-        assert_eq!(close_next(Some(1006)), Next::Retry("和服务器断开了".into()));
+        assert_eq!(
+            close_next(Some(1006)),
+            Next::Retry("Disconnected from the server".into())
+        );
     }
 
     #[test]
     fn the_servers_own_words_are_passed_through_when_it_refuses() {
-        let refused = body(ErrorCode::NotFound, "没有这个作品");
+        let refused = body(ErrorCode::NotFound, "no such project");
         let Next::Stop(said) = handshake_next(404, Some(&refused)) else {
             panic!("404 不该一直重连");
         };
-        assert_eq!(said, "服务器说：没有这个作品");
+        assert_eq!(said, "The server said: no such project");
     }
 
     #[test]

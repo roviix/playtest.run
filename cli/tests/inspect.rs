@@ -371,21 +371,24 @@ fn a_threaded_godot_export_turns_isolation_on_by_itself_and_says_so() {
     let work = tempfile::tempdir().unwrap();
     let looked = look_at(&godot_threaded(work.path()), &[]);
 
-    looked.about("看起来是 Godot 做的");
+    looked.about("Looks like a Godot build");
     // 硬证据来自 wasm 的字节，所以话里说的是「用了」而不是「可能用了」。
-    let threads = looked.about("多线程");
+    let threads = looked.about("threads");
     let message = threads["message"].as_str().unwrap();
     assert!(message.contains("index.wasm"), "{message}");
-    assert!(message.contains("共享的内存"), "{message}");
-    assert!(!message.contains("可能"), "有硬证据就别说可能：{message}");
-    looked.about("已经自动加上 --isolated");
+    assert!(message.contains("shared across threads"), "{message}");
+    assert!(
+        !message.contains("probably"),
+        "有硬证据就别说可能：{message}"
+    );
+    looked.about("--isolated");
     // 不是终端也不是 --json 都得自己拿主意，所以不能反过来问一句就卡在那里。
-    looked.silent_about("帮你开吗");
+    looked.silent_about("Turn it on?");
     // 说了就要做到：清单里 isolated 是真的。
     assert_eq!(looked.request["isolated"], true, "{}", looked.request);
     assert_eq!(looked.request["engine"], "godot", "{}", looked.request);
     // 四件产物都在，不该念叨少了什么。
-    looked.silent_about("没有 .pck");
+    looked.silent_about("no .pck");
 }
 
 /// `--isolated=off` 是明确拒绝：照办，但要说清楚玩家那边会怎样。
@@ -397,7 +400,9 @@ fn saying_no_to_isolation_is_obeyed_and_the_consequence_is_spelled_out() {
     let refused = looked.about("--isolated=off");
     assert_eq!(refused["level"], "warn", "{refused}");
     assert!(
-        refused["hint"].as_str().is_some_and(|h| h.contains("报错")),
+        refused["hint"]
+            .as_str()
+            .is_some_and(|h| h.contains("error")),
         "得说清楚不开的后果：{refused}"
     );
     assert_eq!(looked.request["isolated"], false, "{}", looked.request);
@@ -409,7 +414,7 @@ fn an_export_that_already_asked_for_isolation_is_just_acknowledged() {
     let work = tempfile::tempdir().unwrap();
     let looked = look_at(&godot_threaded(work.path()), &["--isolated=on"]);
 
-    assert_eq!(looked.levels_of("--isolated 已经开着"), "note");
+    assert_eq!(looked.levels_of("--isolated is already on"), "note");
     assert_eq!(looked.request["isolated"], true, "{}", looked.request);
 }
 
@@ -419,7 +424,7 @@ fn a_unity_export_with_decompression_fallback_is_flagged_as_the_slow_path() {
     let work = tempfile::tempdir().unwrap();
     let looked = look_at(&unity_unityweb(work.path()), &[]);
 
-    looked.about("看起来是 Unity 做的");
+    looked.about("Looks like a Unity build");
     let slow = looked.about("Decompression Fallback");
     assert_eq!(slow["level"], "warn", "{slow}");
     assert!(
@@ -429,8 +434,8 @@ fn a_unity_export_with_decompression_fallback_is_flagged_as_the_slow_path() {
         "得说在哪里关：{slow}"
     );
     // 只有 .unityweb 这一套，没有第二套可选。
-    looked.silent_about("两套压缩产物");
-    looked.silent_about("没有 .data");
+    looked.silent_about("Both compressed sets");
+    looked.silent_about("no .data");
     assert_eq!(looked.request["engine"], "unity", "{}", looked.request);
     // Unity 的导出不用跨源隔离，别顺手给人加上。
     assert_eq!(looked.request["isolated"], false, "{}", looked.request);
@@ -442,9 +447,9 @@ fn a_unity_export_with_brotli_only_gets_one_calm_line() {
     let work = tempfile::tempdir().unwrap();
     let looked = look_at(&unity_brotli(work.path()), &[]);
 
-    assert_eq!(looked.levels_of("压好的 .br / .gz"), "note");
+    assert_eq!(looked.levels_of("precompressed .br / .gz"), "note");
     looked.silent_about("Decompression Fallback");
-    looked.silent_about("两套压缩产物");
+    looked.silent_about("Both compressed sets");
     assert_eq!(looked.request["engine"], "unity", "{}", looked.request);
 }
 
@@ -466,7 +471,7 @@ fn an_index_html_one_level_down_is_a_blocker_that_names_the_right_directory() {
     assert_eq!(value["code"], "bad_input");
     let message = value["message"].as_str().unwrap();
     assert!(
-        message.contains("最外层没有 index.html") && message.contains("web/index.html"),
+        message.contains("No index.html at the top level") && message.contains("web/index.html"),
         "{value}"
     );
     let hint = value["hint"].as_str().unwrap();
@@ -481,7 +486,7 @@ fn an_index_html_one_level_down_is_a_blocker_that_names_the_right_directory() {
 
     // --force 照传，且那条发现仍然在 findings 里让人看见。
     let looked = look_at(&dir, &["-y"]);
-    let found = looked.about("最外层没有 index.html");
+    let found = looked.about("No index.html at the top level");
     assert_eq!(found["level"], "blocker", "{found}");
     assert!(looked.request["files"].as_array().unwrap().len() == 3);
 }
@@ -492,7 +497,7 @@ fn files_the_page_asks_for_but_nobody_uploaded_are_named() {
     let work = tempfile::tempdir().unwrap();
     let looked = look_at(&missing_reference(work.path()), &[]);
 
-    let found = looked.about("玩家那边会加载失败");
+    let found = looked.about("fail to load for players");
     assert_eq!(found["level"], "warn", "{found}");
     let message = found["message"].as_str().unwrap();
     assert!(message.contains("assets/game.js"), "{message}");
@@ -508,7 +513,7 @@ fn a_clean_web_app_is_recognised_and_otherwise_left_alone() {
     let looked = look_at(&vite_app(work.path()), &[]);
 
     assert_eq!(looked.findings.len(), 1, "{:#?}", looked.findings);
-    assert_eq!(looked.levels_of("看起来是 Vite 做的"), "note");
+    assert_eq!(looked.levels_of("Looks like a Vite build"), "note");
     // 清单里照实写 vite；「这算不算游戏」由门禁页那份名单判断，玩家会看到「体验」。
     assert_eq!(looked.request["engine"], "vite", "{}", looked.request);
     assert_eq!(looked.request["isolated"], false, "{}", looked.request);

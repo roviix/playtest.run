@@ -11,42 +11,42 @@ use clap::{Args, Parser, Subcommand};
 pub const DEFAULT_API: &str = playtest_common::DEVELOPER_API_URL;
 
 /// 帮助的头两行。第一次用的人只看这两行就够开始了。
-const EXAMPLES: &str = "playtest ./dist            把这个目录发出去，拿到链接和二维码
-playtest 5173              把本地开发服务器接出去，一直开着直到 Ctrl-C";
+const EXAMPLES: &str = "playtest ./dist            Publish this directory; get a link and a QR code
+playtest 5173              Share your local dev server, until you press Ctrl-C";
 
-pub const QUICK_HELP: &str = "把能玩的版本发给别人，不用先登录。
+pub const QUICK_HELP: &str = "Put a playable build in front of people. No login needed.
 
-用法：
-  playtest ./dist                 发布目录，得到链接和二维码
-  playtest 5173                   分享本地服务；关闭终端后链接下线
-  playtest ./dist -m \"改了新手引导\" 更新同一个链接
-  playtest ./dist --seats 10      放到广场，找 10 位试玩者
+Usage:
+  playtest ./dist                  Publish a directory; get a link and a QR code
+  playtest 5173                    Share a local server; the link goes offline with your terminal
+  playtest ./dist -m \"New tutorial\" Update the same link
+  playtest ./dist --seats 10       List it on the Plaza and look for 10 testers
 
-发布以后：
-  playtest open [目录或作品标识]  打开链接（默认当前目录）
-  playtest card [目录或作品标识]  再存一张邀请卡（默认当前目录）
-  playtest ls                    查看作品
-  playtest login                 用 GitHub 登录，保留作品
+After publishing:
+  playtest open [dir or project]   Open the link (defaults to the current directory)
+  playtest card [dir or project]   Save another invite card (defaults to the current directory)
+  playtest ls                      List your projects
+  playtest login                   Sign in with GitHub to keep your projects
 
-更多用法：playtest --help；单条命令：playtest card --help
-不自动构建项目；请发布包含 index.html 的导出目录。";
+More options: playtest --help; one command: playtest card --help
+Nothing is built for you. Publish the export directory that has index.html in it.";
 
 /// 帮助的最后一段。写脚本的人靠退出码分流，不该去猜错误文案。
-const EXIT_CODES: &str = "退出码：
-  0  做成了
-  1  没预料到的错误
-  2  命令写错了
-  3  需要登录，或者身份失效了
-  4  网络不通
-  5  服务端出错
-  6  给的东西有问题（目录不在、超限、不像导出物）
-  7  配额用完了";
+const EXIT_CODES: &str = "Exit codes:
+  0  Done
+  1  Unexpected error
+  2  Something wrong with the command
+  3  Login needed, or the identity expired
+  4  Network unreachable
+  5  Server error
+  6  Something wrong with what you gave (no such directory, over a limit, not an export)
+  7  Out of quota";
 
 #[derive(Debug, Parser)]
 #[command(
     name = "playtest",
     version,
-    about = "一条命令，把你手上这个能玩的版本放到别人面前",
+    about = "One command to put the build you have in front of other people",
     before_help = EXAMPLES,
     after_help = EXIT_CODES,
     // 不用 clap 的 args_conflicts_with_subcommands：它会让「参数之后不再认子命令」，
@@ -60,7 +60,7 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Command>,
 
-    /// JSON 输出，说明和进度走 stderr；本地端口分享持续输出事件，其他命令输出一个结果
+    /// JSON output; narration and progress go to stderr. Port sharing streams events, every other command prints one result
     #[arg(long, global = true)]
     pub json: bool,
 
@@ -70,82 +70,82 @@ pub struct Cli {
 
 #[derive(Debug, Default, Args)]
 pub struct UploadArgs {
-    /// 要发出去的目录（./dist），或者本地开发服务器的端口（5173）
-    #[arg(value_name = "目录或端口")]
+    /// Directory to publish (./dist), or the port your local dev server listens on (5173)
+    #[arg(value_name = "DIR|PORT")]
     pub target: Option<String>,
 
-    /// 作品名，玩家点开链接时看到（默认用目录名）
-    #[arg(short = 'n', long = "name", value_name = "作品名")]
-    #[arg(help_heading = "发布信息")]
+    /// Project name, shown when someone opens the link (defaults to the directory name)
+    #[arg(short = 'n', long = "name", value_name = "NAME")]
+    #[arg(help_heading = "Publishing")]
     pub name: Option<String>,
 
-    /// 这版改了什么、想让人重点看什么；邀请函、关注通知、广场卡上都是这一句（最多 280 字）
-    #[arg(short = 'm', long = "note", value_name = "一句话")]
-    #[arg(help_heading = "发布信息")]
+    /// What changed in this version, or what you want people to look at; used on the invitation page, in follow notifications and on the Plaza card (280 chars max)
+    #[arg(short = 'm', long = "note", value_name = "TEXT")]
+    #[arg(help_heading = "Publishing")]
     pub note: Option<String>,
 
-    /// 作品长期简介，省略时沿用已有内容（最多 140 字）
-    #[arg(long, value_name = "一句话")]
-    #[arg(help_heading = "邀请与招募")]
+    /// Longer-lived description of the project; kept as it was when omitted (140 chars max)
+    #[arg(long, value_name = "TEXT")]
+    #[arg(help_heading = "Invite and recruiting")]
     pub summary: Option<String>,
 
-    /// 封面图（PNG / JPEG / WebP，2 MB 以内）；邀请函的第一眼，分享出去时的卡片图
-    #[arg(long, value_name = "图片文件")]
-    #[arg(help_heading = "邀请与招募")]
+    /// Cover image (PNG / JPEG / WebP, up to 2 MB); the first thing on the invitation page, and the picture on the share card
+    #[arg(long, value_name = "IMAGE")]
+    #[arg(help_heading = "Invite and recruiting")]
     pub cover: Option<PathBuf>,
 
-    /// 展示在公开广场（默认不展示）；不影响持有链接者访问
+    /// Show it on the public Plaza (off by default); does not change who can open the link
     #[arg(long)]
-    #[arg(help_heading = "邀请与招募")]
+    #[arg(help_heading = "Invite and recruiting")]
     pub public: bool,
 
-    /// 想找几位试玩者；在广场上标「正在找人测」，邀请函和邀请卡上会写出来，留了名字的人算加入；蕴含 --public
-    #[arg(long, value_name = "人数", value_parser = clap::value_parser!(u32).range(1..))]
-    #[arg(help_heading = "邀请与招募")]
+    /// How many testers you want; marks the project seeking testers on the Plaza, says so on the invitation page and the invite card, and anyone who leaves a name counts as joined. Implies --public
+    #[arg(long, value_name = "COUNT", value_parser = clap::value_parser!(u32).range(1..))]
+    #[arg(help_heading = "Invite and recruiting")]
     pub seats: Option<u32>,
 
-    /// 你的群：QQ 群、微信群二维码页、Discord、Telegram 都行；玩家在邀请函和反馈之后看到「开发者的群」
-    #[arg(long, value_name = "链接")]
-    #[arg(help_heading = "邀请与招募")]
+    /// Your group chat: Discord, Telegram, a Matrix room, a page with a QR code — anything with a URL. Players see it on the invitation page and after leaving feedback
+    #[arg(long, value_name = "URL")]
+    #[arg(help_heading = "Invite and recruiting")]
     pub community: Option<String>,
 
-    /// 下载邀请卡到指定路径（默认不下载）；写 - 也不下载
-    #[arg(long = "card", value_name = "路径")]
-    #[arg(help_heading = "输出")]
+    /// Save the invite card to this path (not saved by default); - also means don't save
+    #[arg(long = "card", value_name = "PATH")]
+    #[arg(help_heading = "Output")]
     pub card: Option<String>,
 
-    /// 让页面跑在隔离环境里。auto（默认，看出要多线程就开）、on、off
-    #[arg(long, value_name = "开关", default_value = "auto", value_parser = parse_isolation)]
-    #[arg(help_heading = "运行设置")]
+    /// Serve the page cross-origin isolated. auto (default, on when the build looks threaded), on, off
+    #[arg(long, value_name = "MODE", default_value = "auto", value_parser = parse_isolation)]
+    #[arg(help_heading = "Runtime")]
     pub isolated: Isolation,
 
-    /// 导航请求找不到页面时回到 index.html；资源请求不回退（前端路由用）
+    /// Fall back to index.html for navigation requests that match no file; asset requests don't fall back (for client-side routing)
     #[arg(long)]
-    #[arg(help_heading = "运行设置")]
+    #[arg(help_heading = "Runtime")]
     pub spa: bool,
 
-    /// 更新指定作品；写 new 新建链接（默认更新这个目录上次发布的作品）
-    #[arg(long, value_name = "作品标识或 new")]
-    #[arg(help_heading = "发布信息")]
+    /// Publish to this project; write new for a fresh link (defaults to whatever this directory published last time)
+    #[arg(long, value_name = "PROJECT|new")]
+    #[arg(help_heading = "Publishing")]
     pub to: Option<String>,
 
-    /// 检查说「传上去一定打不开」时也照传（比如你知道 index.html 不在最外层是故意的）
+    /// Upload anyway when a check says it definitely won't open (say you nested index.html on purpose)
     #[arg(short = 'y', long = "yes")]
-    #[arg(help_heading = "运行设置")]
+    #[arg(help_heading = "Runtime")]
     pub force: bool,
 
-    /// 目录照常上传，目录里没有的路径（/api/…、WebSocket）走隧道到你电脑的这个端口（带后端的小应用用这个）
-    #[arg(long, value_name = "端口", value_parser = clap::value_parser!(u16).range(1..))]
-    #[arg(help_heading = "运行设置")]
+    /// Upload the directory as usual, and tunnel every path it doesn't contain (/api/…, WebSocket) to this port on your machine — for small apps with a backend
+    #[arg(long, value_name = "PORT", value_parser = clap::value_parser!(u16).range(1..))]
+    #[arg(help_heading = "Runtime")]
     pub backend: Option<u16>,
 
-    /// API 服务地址（自托管与开发内部使用；也可以设置环境变量 PLAYTEST_API）
-    #[arg(long, global = true, hide = true, value_name = "网址")]
+    /// API address (for self-hosting and internal development; the PLAYTEST_API environment variable works too)
+    #[arg(long, global = true, hide = true, value_name = "URL")]
     pub api: Option<String>,
 
-    /// 不画二维码
+    /// Don't draw the QR code
     #[arg(long = "no-qr")]
-    #[arg(help_heading = "输出")]
+    #[arg(help_heading = "Output")]
     pub no_qr: bool,
 }
 
@@ -199,82 +199,82 @@ impl UploadArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// 用 GitHub 登录一次；之后发的作品留下来，不再 24 小时后失效
+    /// Sign in with GitHub once; projects published after that stay, instead of expiring in 24 hours
     Login,
 
-    /// 撤销当前令牌并清除本机凭据，不删除作品；匿名作品请先登录接管
+    /// Revoke the current token and clear local credentials. Projects are not deleted; sign in first to take over anonymous ones
     Logout {
         #[arg(short = 'y', long)]
         yes: bool,
     },
 
-    /// 这个令牌是谁、什么档位、这台机器上有几个作品
+    /// Who this token belongs to, which plan, and how many projects are on this machine
     Whoami,
 
-    /// 线上这一版里到底有哪些文件：每个路径、多大、内容哈希
+    /// What is actually in a published version: every path, its size and its content hash
     Files {
-        #[arg(value_name = "目录或作品标识", default_value = ".")]
+        #[arg(value_name = "DIR|PROJECT", default_value = ".")]
         target: String,
 
-        /// 看某一版（默认看玩家现在看到的那一版）
-        #[arg(long, value_name = "版本")]
+        /// Look at one version (defaults to the one players see now)
+        #[arg(long, value_name = "VERSION")]
         version: Option<String>,
     },
 
-    /// 列出这台机器上发过的作品
+    /// List the projects published from this machine
     Ls,
 
-    /// 删掉一个作品，它的链接立刻打不开
+    /// Delete a project; its link stops working immediately
     Rm {
-        #[arg(value_name = "目录或作品标识")]
+        #[arg(value_name = "DIR|PROJECT")]
         slug: String,
 
-        /// 不问一句，直接删
+        /// Delete without asking
         #[arg(short = 'y', long = "yes")]
         yes: bool,
     },
 
-    /// 打印链接，并用系统浏览器打开
+    /// Print the link and open it in your browser
     Open {
-        #[arg(value_name = "目录或作品标识", default_value = ".")]
+        #[arg(value_name = "DIR|PROJECT", default_value = ".")]
         target: String,
     },
 
-    /// 列出一个作品发过的每一版，标出玩家现在看到的是哪一版
+    /// List every version of a project and mark the one players see now
     Versions {
-        #[arg(value_name = "目录或作品标识", default_value = ".")]
+        #[arg(value_name = "DIR|PROJECT", default_value = ".")]
         target: String,
     },
 
-    /// 让玩家看到的换回某一版；清单都在，一个字节不用重传
+    /// Put players back on an earlier version; the manifests are already there, so nothing is uploaded again
     Rollback {
-        #[arg(value_name = "目录或作品标识")]
+        #[arg(value_name = "DIR|PROJECT")]
         target: String,
 
-        /// 例如 3 或 v3
-        #[arg(value_name = "版本")]
+        /// For example 3 or v3
+        #[arg(value_name = "VERSION")]
         version: String,
     },
 
-    /// 下载邀请卡，存成 PNG；发到群里，别人长按识别就能玩
+    /// Download the invite card as a PNG; send it to a chat and anyone who scans it can play
     Card {
-        #[arg(value_name = "目录或作品标识", default_value = ".")]
+        #[arg(value_name = "DIR|PROJECT", default_value = ".")]
         target: String,
 
-        /// 存到哪（默认存到当前目录，叫「<作品名>-邀请卡.png」）
-        #[arg(long, value_name = "路径")]
+        /// Where to save it (defaults to <project name>-invite-card.png in the current directory)
+        #[arg(long, value_name = "PATH")]
         out: Option<PathBuf>,
     },
 
-    /// 把一个作品从广场上拿下来；它的链接照常能开
+    /// Take a project off the Plaza; its link keeps working
     Unlist {
-        #[arg(value_name = "目录或作品标识")]
+        #[arg(value_name = "DIR|PROJECT")]
         slug: String,
     },
 
-    /// 作为 MCP server 跑起来，让 Cursor / Claude Code 里的助手直接发链接
+    /// Run as an MCP server, so an assistant in Cursor / Claude Code can publish links directly
     Mcp {
-        /// 不跑服务，只打印一段可以粘进编辑器配置的 JSON
+        /// Don't run the server; just print JSON you can paste into your editor's config
         #[arg(long)]
         setup: bool,
     },
@@ -300,7 +300,7 @@ fn parse_isolation(s: &str) -> Result<Isolation, String> {
         "on" | "true" | "yes" => Ok(Isolation::On),
         "off" | "false" | "no" => Ok(Isolation::Off),
         other => Err(format!(
-            "只认 auto、on、off 三个词，不认识「{other}」。不写就是 auto：看出要多线程才开。"
+            "Only auto, on and off. Don't know \"{other}\". Leaving it out means auto: on only when the build looks threaded."
         )),
     }
 }

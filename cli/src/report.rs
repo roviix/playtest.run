@@ -151,9 +151,11 @@ impl Report {
     /// 人话模式。stdout 只放用户要拿走的东西（链接），叙述走 stderr（[`ui`] 管这件事）。
     pub fn human(&self) {
         match self {
-            Self::LoggedOut => ui::say("当前令牌已撤销或失效，本机凭据已清除。作品没有删除。"),
+            Self::LoggedOut => ui::say(
+                "The current token is revoked and the local credentials are gone. No projects were deleted.",
+            ),
             Self::Sites(sites) if sites.is_empty() => {
-                ui::say("你还没有作品。运行 playtest ./dist 发一个。");
+                ui::say("No projects yet. Run playtest ./dist to publish one.");
             }
             Self::Sites(sites) => {
                 for site in sites {
@@ -163,85 +165,90 @@ impl Report {
             Self::Opened { site, .. } => {
                 ui::out(&playtest_common::door_url(&site.url, &site.slug));
             }
-            Self::Removed { slug } => ui::say(&format!("已删掉 {slug}。")),
-            Self::KeptAfterAsking { .. } => ui::say("没有删。"),
+            Self::Removed { slug } => ui::say(&format!("Deleted {slug}.")),
+            Self::KeptAfterAsking { .. } => ui::say("Nothing deleted."),
             Self::Versions { slug, list } if list.versions.is_empty() => {
-                ui::say(&format!("{slug} 还没发过任何版本。"));
+                ui::say(&format!("{slug} has no versions yet."));
             }
             Self::Versions { slug, list } => {
                 for v in &list.versions {
-                    let mark = if v.current {
-                        "← 玩家现在看到的"
-                    } else {
-                        ""
-                    };
+                    let mark = if v.current { "← players see this" } else { "" };
                     let note = v
                         .note
                         .as_deref()
-                        .map(|n| format!("  「{n}」"))
+                        .map(|n| format!("  \"{n}\""))
                         .unwrap_or_default();
                     ui::say(&format!(
-                        "v{:<3} {}  {} 个文件 {}{}  {}",
+                        "v{:<3} {}  {} {}{}  {}",
                         v.version,
                         clock::human(&v.created_at),
-                        v.file_count,
+                        ui::count(u64::from(v.file_count), "file"),
                         ui::bytes(v.total_bytes),
                         note,
                         mark
                     ));
                 }
-                ui::say(&format!("换回某一版：playtest rollback {slug} <版本号>"));
+                ui::say(&format!(
+                    "Go back to one of them: playtest rollback {slug} <version>"
+                ));
             }
             Self::RolledBack { site, version } => {
-                ui::say(&format!("玩家现在看到的是《{}》v{}。", site.title, version));
+                ui::say(&format!(
+                    "Players now see \"{}\" v{}.",
+                    site.title, version
+                ));
                 ui::link(&playtest_common::door_url(&site.url, &site.slug));
             }
             Self::Unlisted { slug } => {
-                ui::say(&format!("已把 {slug} 从广场上拿下来了，链接照常能开。"));
+                ui::say(&format!(
+                    "Took {slug} off the Plaza. Its link still works."
+                ));
             }
             Self::Card { site, path } => {
                 ui::say(&format!(
-                    "《{}》的邀请卡已存到 {path}——发到群里，别人长按识别就能玩",
+                    "Invite card for \"{}\" saved to {path} — send it to a chat, anyone who scans it can play",
                     site.title
                 ));
             }
             Self::Nobody => {
-                ui::say("这台机器上还没有身份。运行 playtest ./dist 发一个，或者 playtest login。");
+                ui::say(
+                    "No identity on this machine yet. Run playtest ./dist to publish something, or playtest login.",
+                );
             }
             Self::Whoami { me, projects } => {
                 match me.login.as_deref() {
-                    Some(login) => ui::say(&format!("{}（GitHub @{login}）", me.display_name)),
+                    Some(login) => ui::say(&format!("{} (GitHub @{login})", me.display_name)),
                     None => ui::say(&format!(
-                        "{}——没登录。发出去的链接 {} 小时后失效；playtest login 之后就不会了。",
+                        "{} — not signed in. Links expire after {} hours; playtest login stops that.",
                         me.display_name,
                         playtest_common::ANON_LINK_TTL_HOURS
                     )),
                 }
                 if let Some(at) = &me.expires_at {
-                    ui::say(&format!("这个身份 {} 到期。", clock::human(at)));
+                    ui::say(&format!("This identity expires {}.", clock::human(at)));
                 }
                 if let Some(n) = projects {
-                    ui::say(&format!("{n} 个作品。"));
+                    ui::say(&format!("{}.", ui::count(u64::from(*n), "project")));
                 }
             }
             Self::Files(files) => {
                 if files.files.is_empty() {
                     ui::say(&format!(
-                        "{} v{} 里一个文件都没有。",
+                        "{} v{} has no files in it.",
                         files.slug, files.version
                     ));
                     return;
                 }
                 let mark = if files.current {
-                    "（玩家现在看到的）"
+                    " (players see this)"
                 } else {
                     ""
                 };
                 ui::say(&format!(
-                    "{} v{}{mark}：{} 个文件，共 {}",
+                    "{} v{}{mark}: {}, {} in total",
                     files.slug,
                     files.version,
-                    files.files.len(),
+                    ui::count(files.files.len() as u64, "file"),
                     ui::bytes(files.total_bytes)
                 ));
                 for f in &files.files {
@@ -262,16 +269,16 @@ impl Report {
 fn say_site(site: &Site) {
     let version = match site.current_version {
         Some(v) => format!("v{v}"),
-        None => "还没上传过版本".to_string(),
+        None => "no version uploaded yet".to_string(),
     };
-    ui::out(&format!("{}（{}）", site.title, version));
+    ui::out(&format!("{} ({})", site.title, version));
     ui::out(&format!(
         "  {}",
         playtest_common::door_url(&site.url, &site.slug)
     ));
-    ui::out(&format!("  slug：{}", site.slug));
+    ui::out(&format!("  slug: {}", site.slug));
     if let Some(expires_at) = &site.expires_at {
-        ui::out(&format!("  {} 后失效", clock::human(expires_at)));
+        ui::out(&format!("  expires {}", clock::human(expires_at)));
     }
     if let Some(line) = plaza_line(&site.listing) {
         ui::out(&format!("  {line}"));
@@ -279,9 +286,13 @@ fn say_site(site: &Site) {
     // 关注数原来要单开一条 `playtest followers` 才看得到——它是「下一版还有没有人来」
     // 的唯一读数，值得和链接放在一起。0 不说（DESIGN §3.5 的规矩）。
     if site.listing.followers > 0 {
+        let people = if site.listing.followers == 1 {
+            "1 person".to_string()
+        } else {
+            format!("{} people", site.listing.followers)
+        };
         ui::out(&format!(
-            "  {} 人关注着它，下一版发出去他们会收到通知",
-            site.listing.followers
+            "  Followed by {people}; they get a notice when you publish the next version"
         ));
     }
     ui::out("");
@@ -293,12 +304,15 @@ fn plaza_line(listing: &playtest_common::api::Listing) -> Option<String> {
         return None;
     }
     if listing.hidden {
-        return Some("在广场上被撤下了（被多人举报，等人复核）；链接照常能开".to_string());
+        return Some(
+            "Pulled from the Plaza (reported by several people, waiting on review); the link still works"
+                .to_string(),
+        );
     }
     Some(match (&listing.seeking, &listing.seek_note) {
-        (true, Some(note)) => format!("在广场上 · 正在找人测：{note}"),
-        (true, None) => "在广场上 · 正在找人测".to_string(),
-        (false, _) => "在广场上".to_string(),
+        (true, Some(note)) => format!("On the Plaza · seeking testers: {note}"),
+        (true, None) => "On the Plaza · seeking testers".to_string(),
+        (false, _) => "On the Plaza".to_string(),
     })
 }
 

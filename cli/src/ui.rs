@@ -20,7 +20,7 @@ pub fn blank() {
 
 /// 需要用户留意，但不影响继续跑。
 pub fn warn(line: &str) {
-    eprintln!("提醒：{line}");
+    eprintln!("Note: {line}");
 }
 
 /// 出错了，跑不下去。
@@ -64,6 +64,15 @@ pub fn print_qr(rendered: &str) {
     eprintln!("{rendered}");
 }
 
+/// `1 file` / `3 files`。中文不分单复数，英文要分；这里数的都是规则名词，加个 s 就够。
+pub fn count(n: u64, noun: &str) -> String {
+    if n == 1 {
+        format!("1 {noun}")
+    } else {
+        format!("{n} {noun}s")
+    }
+}
+
 /// `12.3 MB`。1024 进位。
 pub fn bytes(n: u64) -> String {
     const KIB: u64 = 1024;
@@ -94,6 +103,14 @@ pub fn confirm(question: &str) -> Option<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn counts_say_one_file_and_two_files() {
+        assert_eq!(count(0, "file"), "0 files");
+        assert_eq!(count(1, "file"), "1 file");
+        assert_eq!(count(2, "file"), "2 files");
+        assert_eq!(count(12, "tester"), "12 testers");
+    }
 
     #[test]
     fn byte_sizes_read_like_a_file_manager() {

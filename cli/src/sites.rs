@@ -11,14 +11,14 @@ use crate::ui;
 
 pub fn launch_browser(url: &str) {
     let Some(mut command) = browser_command(url) else {
-        ui::warn("不知道怎么在这个系统上开浏览器，复制上面的链接自己打开。");
+        ui::warn("No idea how to open a browser on this system. Copy the link above and open it yourself.");
         return;
     };
     // 浏览器自己的输出和我们的混在一起没有意义。
     command.stdout(Stdio::null()).stderr(Stdio::null());
     match command.status() {
         Ok(status) if status.success() => {}
-        _ => ui::warn("没能自动打开浏览器，复制上面的链接自己打开。"),
+        _ => ui::warn("Could not open a browser. Copy the link above and open it yourself."),
     }
 }
 

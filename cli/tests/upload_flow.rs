@@ -363,7 +363,7 @@ fn a_second_run_reuses_the_remembered_site_and_uploads_nothing() {
         "不该再传任何文件"
     );
     assert!(
-        stderr_of(&second).contains("都已经有了"),
+        stderr_of(&second).contains("already on the server"),
         "{}",
         stderr_of(&second)
     );
@@ -408,7 +408,7 @@ fn an_expired_anonymous_link_is_replaced_with_a_new_one() {
     let output = run_cli(home.path(), &api, &[dist.to_str().unwrap(), "--no-qr"]);
     assert!(output.status.success(), "{}", stderr_of(&output));
     assert!(
-        stderr_of(&output).contains("上次的匿名链接已过期"),
+        stderr_of(&output).contains("The last anonymous link expired"),
         "得告诉用户链接换了：{}",
         stderr_of(&output)
     );
@@ -450,7 +450,7 @@ fn a_file_that_changes_mid_upload_is_reported_not_retried_forever() {
     // 退出码 6：本地输入的问题（文件在上传中途变了）。
     assert_eq!(output.status.code(), Some(6), "{}", stderr_of(&output));
     assert!(
-        stderr_of(&output).contains("上传时文件变了"),
+        stderr_of(&output).contains("changed while it was being uploaded"),
         "{}",
         stderr_of(&output)
     );
@@ -472,7 +472,7 @@ fn login_with_no_control_plane_fails_like_everything_else() {
     let output = run_cli(home.path(), "http://127.0.0.1:1", &["login"]);
     assert_eq!(output.status.code(), Some(4), "{}", stderr_of(&output));
     assert!(
-        stderr_of(&output).contains("连不上服务器"),
+        stderr_of(&output).contains("Can't reach the server"),
         "{}",
         stderr_of(&output)
     );
@@ -492,7 +492,7 @@ fn a_missing_directory_and_a_plain_file_each_get_their_own_message() {
     // 退出码 6：给的东西有问题（见 `playtest --help` 尾部）。
     assert_eq!(output.status.code(), Some(6));
     assert!(
-        stderr_of(&output).contains("找不到"),
+        stderr_of(&output).contains("Can't find"),
         "{}",
         stderr_of(&output)
     );
@@ -502,7 +502,7 @@ fn a_missing_directory_and_a_plain_file_each_get_their_own_message() {
     let output = run_cli(home.path(), "http://127.0.0.1:1", &[file.to_str().unwrap()]);
     assert_eq!(output.status.code(), Some(6));
     assert!(
-        stderr_of(&output).contains("网页作品请给包含 index.html 的目录"),
+        stderr_of(&output).contains("give the directory that has index.html in it"),
         "{}",
         stderr_of(&output)
     );
@@ -516,7 +516,7 @@ fn a_missing_directory_and_a_plain_file_each_get_their_own_message() {
     );
     assert_eq!(output.status.code(), Some(6));
     assert!(
-        stderr_of(&output).contains("是空的"),
+        stderr_of(&output).contains("is empty"),
         "{}",
         stderr_of(&output)
     );
@@ -532,8 +532,8 @@ fn the_server_cannot_be_reached() {
     // 退出码 4：网络不通。
     assert_eq!(output.status.code(), Some(4));
     let stderr = stderr_of(&output);
-    assert!(stderr.contains("连不上服务器"), "{stderr}");
-    assert!(stderr.contains("请检查网络连接"), "{stderr}");
+    assert!(stderr.contains("Can't reach the server"), "{stderr}");
+    assert!(stderr.contains("Check your connection"), "{stderr}");
 }
 
 #[test]
@@ -558,7 +558,7 @@ fn uploads_a_directory_of_markdown_chapters_as_a_serialized_article() {
         &[novel_dir.to_str().unwrap(), "--no-qr", "-n", "星海漫游"],
     );
     assert!(output.status.success(), "{}", stderr_of(&output));
-    assert!(stderr_of(&output).contains("连载作品：包含 2 个章节"));
+    assert!(stderr_of(&output).contains("This is a serial: 2 chapters"));
 
     let prepared = fake.log.lock().unwrap().prepared.clone();
     assert_eq!(prepared.len(), 1);

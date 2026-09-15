@@ -249,8 +249,8 @@ impl Playtest {
             Ok(Err(_)) => {
                 let said = match task.await {
                     Ok(Err(e)) => e,
-                    Ok(Ok(())) => anyhow::anyhow!("隧道还没连上就结束了。"),
-                    Err(e) => anyhow::anyhow!("后台任务没跑起来：{e}"),
+                    Ok(Ok(())) => anyhow::anyhow!("The tunnel ended before it connected."),
+                    Err(e) => anyhow::anyhow!("A background task failed to start: {e}"),
                 };
                 return Ok(refuse(&said, started));
             }
@@ -258,7 +258,7 @@ impl Playtest {
                 task.abort();
                 return Ok(refuse(
                     &output::bad_input(format!(
-                        "等了 {} 秒还没连上，先放弃了。确认 {port} 端口上有东西在监听，网络能出去。",
+                        "No connection after {} seconds, so giving up. Check that something is listening on port {port} and that the network is reachable.",
                         SHARE_READY_TIMEOUT.as_secs()
                     )),
                     started,
@@ -310,13 +310,16 @@ pub async fn run(setup: bool, api: Option<String>) -> Result<()> {
         print_setup(api.as_deref());
         return Ok(());
     }
-    eprintln!("playtest 正在以 MCP server 的方式运行，等编辑器接进来（stdout 只走协议，说明都在这条流上）。");
+    eprintln!("playtest is running as an MCP server, waiting for an editor to connect. stdout carries the protocol only; everything readable goes here.");
     let service = Playtest::new(api)
         .serve(stdio())
         .await
-        .context("MCP 服务起不来")?;
-    let reason = service.waiting().await.context("MCP 连接断了")?;
-    eprintln!("MCP 连接结束：{reason:?}");
+        .context("the MCP server could not start")?;
+    let reason = service
+        .waiting()
+        .await
+        .context("the MCP connection dropped")?;
+    eprintln!("MCP connection closed: {reason:?}");
     Ok(())
 }
 
@@ -344,7 +347,7 @@ fn answer_with_card<T: serde::Serialize>(
             "image/png".to_string(),
         )),
         None => blocks.push(ContentBlock::text(format!(
-            "邀请卡这会儿还没渲染好，稍后在 {card_url} 能拿到，或者再调一次 playtest_card。"
+            "The invite card is not rendered yet. It will be at {card_url} shortly, or call playtest_card again."
         ))),
     }
     CallToolResult::success(blocks)
@@ -376,13 +379,15 @@ fn print_setup(api: Option<&str>) {
         }
     });
 
-    eprintln!("把下面这段放进编辑器的 MCP 配置里：");
-    eprintln!("  Cursor：这个项目用 .cursor/mcp.json，所有项目都用 ~/.cursor/mcp.json");
-    eprintln!("  Claude Code：项目根目录的 .mcp.json，或者 claude mcp add playtest -- <上面的 command 和 args>");
-    eprintln!("已经有别的 server 的话，只把 \"playtest\" 那一项加进 mcpServers 里。");
+    eprintln!("Put this into your editor's MCP config:");
+    eprintln!("  Cursor: .cursor/mcp.json for this project, ~/.cursor/mcp.json for every project");
+    eprintln!("  Claude Code: .mcp.json in the project root, or claude mcp add playtest -- <the command and args above>");
+    eprintln!(
+        "If you already run other servers, add just the \"playtest\" entry under mcpServers."
+    );
     eprintln!();
     println!("{}", output::to_json_pretty(&config));
     eprintln!();
-    eprintln!("装好之后在对话里说「把 ./dist 发出去」，助手会调 playtest_upload，把链接、二维码和邀请卡贴回来。");
-    eprintln!("一共五件事：上传目录、接出本地端口、列出作品、看一个作品此刻怎么样、拿邀请卡。");
+    eprintln!("Once it is wired up, say \"publish ./dist\" in chat: the assistant calls playtest_upload and hands back the link, QR code and invite card.");
+    eprintln!("Five tools: publish a directory, share a local port, list projects, check how one project is doing, fetch an invite card.");
 }

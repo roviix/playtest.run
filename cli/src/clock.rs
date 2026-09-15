@@ -39,14 +39,14 @@ pub fn remaining(s: &str, now: OffsetDateTime) -> Option<time::Duration> {
     (left > time::Duration::ZERO).then_some(left)
 }
 
-/// 「1 小时 20 分」「35 分钟」「不到 1 分钟」。分钟以下不说秒，那不是人做决定的粒度。
+/// 「1h 20m」「35 minutes」「under a minute」。分钟以下不说秒，那不是人做决定的粒度。
 pub fn human_duration(d: time::Duration) -> String {
     let minutes = d.whole_minutes();
     match (minutes / 60, minutes % 60) {
-        (0, 0) => "不到 1 分钟".to_string(),
-        (0, m) => format!("{m} 分钟"),
-        (h, 0) => format!("{h} 小时"),
-        (h, m) => format!("{h} 小时 {m} 分"),
+        (0, 0) => "under a minute".to_string(),
+        (0, m) => crate::ui::count(m as u64, "minute"),
+        (h, 0) => crate::ui::count(h as u64, "hour"),
+        (h, m) => format!("{h}h {m}m"),
     }
 }
 
@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn unparsable_input_is_passed_through() {
-        assert_eq!(human("明天"), "明天");
+        assert_eq!(human("tomorrow"), "tomorrow");
     }
 
     #[test]
@@ -92,14 +92,17 @@ mod tests {
         );
         assert_eq!(remaining("2026-09-08T03:30:00Z", now), None);
         assert_eq!(remaining("2026-09-08T03:00:00Z", now), None);
-        assert_eq!(remaining("明天", now), None);
+        assert_eq!(remaining("tomorrow", now), None);
     }
 
     #[test]
     fn durations_read_like_a_person_would_say_them() {
-        assert_eq!(human_duration(time::Duration::seconds(30)), "不到 1 分钟");
-        assert_eq!(human_duration(time::Duration::minutes(35)), "35 分钟");
-        assert_eq!(human_duration(time::Duration::minutes(120)), "2 小时");
-        assert_eq!(human_duration(time::Duration::minutes(80)), "1 小时 20 分");
+        assert_eq!(
+            human_duration(time::Duration::seconds(30)),
+            "under a minute"
+        );
+        assert_eq!(human_duration(time::Duration::minutes(35)), "35 minutes");
+        assert_eq!(human_duration(time::Duration::minutes(120)), "2 hours");
+        assert_eq!(human_duration(time::Duration::minutes(80)), "1h 20m");
     }
 }

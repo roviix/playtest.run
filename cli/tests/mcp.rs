@@ -226,11 +226,11 @@ fn sharing_a_port_with_nothing_on_it_says_exactly_that() {
     assert_eq!(body["ok"], false, "{body}");
     let message = body["message"].as_str().unwrap();
     assert!(
-        message.contains("监听") || message.contains("端口"),
+        message.contains("listening") || message.contains("port"),
         "要说清是端口的事：{message}"
     );
     assert!(
-        !message.contains("还没上线"),
+        !message.contains("not online yet"),
         "隧道早就能用了，不许低报：{message}"
     );
 }
@@ -268,7 +268,7 @@ fn the_tool_list_matches_what_the_cli_can_do() {
     // 描述里不许再有「还没上线」这种话——它是给助手读的，说错了它就不会用。
     let text = serde_json::to_string(tools).unwrap();
     assert!(!text.contains("NOT AVAILABLE"), "{text}");
-    assert!(!text.contains("还没上线"), "{text}");
+    assert!(!text.contains("not online yet"), "{text}");
 }
 
 #[test]
@@ -277,12 +277,16 @@ fn a_directory_that_is_not_there_comes_back_as_a_readable_failure() {
     let mut server = Server::start(home.path());
     handshake(&mut server);
 
-    let reply = server.call(2, "playtest_upload", json!({ "dir": "./这个目录不存在" }));
+    let reply = server.call(
+        2,
+        "playtest_upload",
+        json!({ "dir": "./no-such-directory" }),
+    );
     assert_eq!(reply["result"]["isError"], json!(true), "{reply}");
     let body = payload(&reply);
     assert_eq!(body["code"], "bad_input", "{body}");
     assert!(
-        body["message"].as_str().unwrap().contains("找不到"),
+        body["message"].as_str().unwrap().contains("Can't find"),
         "{body}"
     );
 }

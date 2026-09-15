@@ -229,7 +229,7 @@ async fn answer_one(mut socket: TcpStream) -> io::Result<()> {
     } else {
         (
             "text/plain; charset=utf-8",
-            format!("dev server 收到：{request_line}"),
+            format!("dev server got: {request_line}"),
         )
     };
 
@@ -425,7 +425,7 @@ fn a_players_request_reaches_the_dev_server_and_a_lost_link_comes_back() {
     // 玩家的请求走完了整条路：边缘 → CLI → dev server → 原路回去。
     let echoed = edge.echo().expect("假边缘没拿到回显");
     assert!(echoed.starts_with("HTTP/1.1 200 OK"), "{echoed}");
-    assert!(echoed.contains("dev server 收到：GET /echo"), "{echoed}");
+    assert!(echoed.contains("dev server got: GET /echo"), "{echoed}");
 
     // 玩家来了又走，两次都说了一声。
     let counts: Vec<u64> = events
@@ -445,7 +445,7 @@ fn a_players_request_reaches_the_dev_server_and_a_lost_link_comes_back() {
         "第一次退避该在 0.5–1 秒：{waited}"
     );
     assert!(
-        again["reason"].as_str().unwrap().contains("断开"),
+        again["reason"].as_str().unwrap().contains("Disconnected"),
         "{again}"
     );
 
@@ -453,7 +453,7 @@ fn a_players_request_reaches_the_dev_server_and_a_lost_link_comes_back() {
     let last = events.last().expect("总得有输出");
     assert_eq!(last["ok"], false, "{last}");
     assert!(
-        last["message"].as_str().unwrap().contains("接管"),
+        last["message"].as_str().unwrap().contains("took over"),
         "被挤掉要说人话：{last}"
     );
 
@@ -506,14 +506,14 @@ fn the_human_output_puts_the_link_on_stdout_and_everything_else_on_stderr() {
 
     let stderr = stderr_of(&output);
     for expected in [
-        "已连上",
-        "这是匿名链接",
+        "Connected. The link is live.",
+        "Anonymous link",
         "Vite",
         "server.hmr.clientPort = 443",
-        "按 Ctrl-C 结束",
-        "玩家连接：1",
-        "和服务器断开了",
-        "接管",
+        "Press Ctrl-C to stop",
+        "Player connections: 1",
+        "Disconnected from the server",
+        "took over",
     ] {
         assert!(
             stderr.contains(expected),
@@ -549,7 +549,7 @@ fn a_port_with_nothing_on_it_stops_before_asking_for_a_link() {
     let only = events.first().expect("该有一个失败对象");
     assert_eq!(only["ok"], false);
     let message = only["message"].as_str().unwrap();
-    assert!(message.contains("没有东西在监听"), "{message}");
+    assert!(message.contains("Nothing is listening"), "{message}");
     assert!(message.contains(&free_port.to_string()), "{message}");
     assert!(
         control.granted.lock().unwrap().is_empty(),

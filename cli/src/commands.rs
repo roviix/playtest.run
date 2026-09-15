@@ -16,7 +16,7 @@ use crate::{card, output, sites, ui};
 pub async fn look_up(target: &str, api: Option<&str>) -> Result<playtest_common::api::Site> {
     let session = Session::open(api)?;
     let slug = session.slug_of(target)?;
-    let client = session.client_or_say(&format!("没有 {slug} 可看"))?;
+    let client = session.client_or_say(&format!("no {slug} to look at"))?;
     Ok(client.get_site(&slug).await?)
 }
 
@@ -32,23 +32,23 @@ pub async fn ls(api: Option<&str>) -> Result<Report> {
 pub async fn logout(yes: bool, api: Option<&str>, ask: bool) -> Result<Report> {
     if !yes && !ask {
         return Err(output::usage(
-            "撤销令牌需要确认。使用 playtest logout -y --json；匿名作品请先登录接管。",
+            "Revoking the token needs confirmation. Use playtest logout -y --json. Claim anonymous projects with an account first.",
         ));
     }
     let mut session = Session::open(api)?;
     if session.config.api.as_deref() != Some(session.api.as_str()) {
         return Err(output::bad_input(
-            "这台机器的令牌不属于这个控制面，未发送或清除任何凭据。",
+            "This machine's token belongs to a different control plane. Nothing was sent or cleared.",
         ));
     }
     if session.config.token.is_none() {
         return Ok(Report::LoggedOut);
     }
     if !yes && ui::confirm(
-        "要撤销当前令牌吗？作品不会删除；匿名作品请先登录接管，否则会失去管理入口。输入 y 确认：",
+        "Revoke the current token? Projects are not deleted, but anonymous ones lose their only way in unless you claim them with an account first. Type y to confirm: ",
     ) != Some(true)
     {
-        return Err(output::bad_input("没有确认，当前令牌保持不变。"));
+        return Err(output::bad_input("Not confirmed. The token is unchanged."));
     }
     let mut client = crate::client::Client::new(&session.api)?;
     client.set_token(session.config.token.clone());
@@ -67,7 +67,7 @@ pub async fn logout(yes: bool, api: Option<&str>, ask: bool) -> Result<Report> {
 pub async fn open(target: &str, api: Option<&str>, launch: bool) -> Result<Report> {
     let session = Session::open(api)?;
     let slug = session.slug_of(target)?;
-    let client = session.client_or_say("没有链接可以打开")?;
+    let client = session.client_or_say("no link to open")?;
     let mut site = client.get_site(&slug).await?;
     site.url = playtest_common::door_url(&site.url, &site.slug);
     if launch {
@@ -86,18 +86,18 @@ pub async fn rm(slug: &str, yes: bool, api: Option<&str>, ask: bool) -> Result<R
     // 错的方向上，而问题其实是这条命令在机器模式下缺一个 -y。
     if !yes && !ask {
         return Err(output::usage(format!(
-            "--json 模式不会停下来问你。确定要删就加 -y：playtest rm {slug} -y --json"
+            "--json mode never stops to ask. Add -y if you are sure: playtest rm {slug} -y --json"
         )));
     }
 
     let mut session = Session::open(api)?;
     let resolved = session.slug_of(slug)?;
     let slug = resolved.as_str();
-    let client = session.client_or_say(&format!("没有 {slug} 可以删"))?;
+    let client = session.client_or_say(&format!("no {slug} to remove"))?;
 
     if !yes {
         match ui::confirm(&format!(
-            "要删掉 {slug} 吗？删了它的链接就打不开了。输入 y 确认："
+            "Remove {slug}? Its link stops working. Type y to confirm: "
         )) {
             Some(true) => {}
             Some(false) => {
@@ -107,7 +107,7 @@ pub async fn rm(slug: &str, yes: bool, api: Option<&str>, ask: bool) -> Result<R
             }
             None => {
                 return Err(output::bad_input(format!(
-                    "这里不是终端，没法问你确认。确定要删就加 -y：playtest rm {slug} -y"
+                    "Not a terminal, so I can not ask you to confirm. Add -y if you are sure: playtest rm {slug} -y"
                 )))
             }
         }
@@ -140,13 +140,15 @@ pub async fn files(target: &str, version: Option<&str>, api: Option<&str>) -> Re
     let wanted = version.map(parse_version).transpose()?;
     let session = Session::open(api)?;
     let slug = session.slug_of(target)?;
-    let client = session.client_or_say(&format!("没有 {slug} 可看"))?;
+    let client = session.client_or_say(&format!("no {slug} to look at"))?;
     let version = match wanted {
         Some(v) => v,
         None => {
             let site = client.get_site(&slug).await?;
             site.current_version.ok_or_else(|| {
-                output::bad_input(format!("{slug} 还没发过任何版本，线上什么都没有。"))
+                output::bad_input(format!(
+                    "{slug} has no published versions yet, so nothing is live."
+                ))
             })?
         }
     };
@@ -156,7 +158,7 @@ pub async fn files(target: &str, version: Option<&str>, api: Option<&str>) -> Re
 pub async fn versions(target: &str, api: Option<&str>) -> Result<Report> {
     let session = Session::open(api)?;
     let slug = session.slug_of(target)?;
-    let client = session.client_or_say(&format!("没有 {slug} 的版本可看"))?;
+    let client = session.client_or_say(&format!("no versions of {slug} to look at"))?;
     let list = client.list_versions(&slug).await?;
     Ok(Report::Versions { slug, list })
 }
@@ -166,7 +168,7 @@ pub async fn rollback(target: &str, version: &str, api: Option<&str>) -> Result<
     let number = parse_version(version)?;
     let session = Session::open(api)?;
     let slug = session.slug_of(target)?;
-    let client = session.client_or_say(&format!("没有 {slug} 可以回滚"))?;
+    let client = session.client_or_say(&format!("no {slug} to roll back"))?;
     let site = client.activate_version(&slug, number).await?;
     Ok(Report::RolledBack {
         site,

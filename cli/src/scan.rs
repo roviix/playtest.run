@@ -35,7 +35,8 @@ pub async fn scan_dir(root: &Path) -> Result<Vec<ScannedFile>> {
         .filter_entry(|e| e.depth() == 0 || !is_hidden(e));
 
     for entry in walker {
-        let entry = entry.with_context(|| format!("读不了 {} 里的东西", root.display()))?;
+        let entry =
+            entry.with_context(|| format!("could not read what is inside {}", root.display()))?;
         // 符号链接在 follow_links(false) 下 file_type().is_file() 是 false，连同管道、套接字一起跳过。
         if !entry.file_type().is_file() {
             continue;
@@ -58,11 +59,11 @@ pub async fn scan_dir(root: &Path) -> Result<Vec<ScannedFile>> {
         let permit = Arc::clone(&permits)
             .acquire_owned()
             .await
-            .context("排队算哈希时出错")?;
+            .context("failed while queueing files for hashing")?;
         tasks.spawn_blocking(move || {
             let _permit = permit;
-            let (hash, size) =
-                hash_file(&source).with_context(|| format!("读不了 {}", source.display()))?;
+            let (hash, size) = hash_file(&source)
+                .with_context(|| format!("could not read {}", source.display()))?;
             anyhow::Ok(ScannedFile {
                 entry: FileEntry { path, hash, size },
                 source,
@@ -72,7 +73,7 @@ pub async fn scan_dir(root: &Path) -> Result<Vec<ScannedFile>> {
 
     let mut files = Vec::new();
     while let Some(joined) = tasks.join_next().await {
-        files.push(joined.context("算哈希的任务没跑完")??);
+        files.push(joined.context("a hashing task did not finish")??);
     }
     files.sort_by(|a, b| a.entry.path.cmp(&b.entry.path));
     Ok(files)
@@ -81,24 +82,26 @@ pub async fn scan_dir(root: &Path) -> Result<Vec<ScannedFile>> {
 /// 单文件作品只打包明确列出的路径。文章靠它收原稿与正文实际引用的图片，不会顺手遍历
 /// 整个写作目录；视频则只有那一个 MP4。
 pub async fn scan_selected(root: &Path, paths: &[String]) -> Result<Vec<ScannedFile>> {
-    let root = std::fs::canonicalize(root).with_context(|| format!("看不了 {}", root.display()))?;
+    let root = std::fs::canonicalize(root)
+        .with_context(|| format!("could not inspect {}", root.display()))?;
     let mut files = Vec::with_capacity(paths.len());
     for path in paths {
         validate_path(path).map_err(|error| anyhow::anyhow!(error.to_string()))?;
         let source = root.join(path);
         let meta = std::fs::symlink_metadata(&source)
-            .with_context(|| format!("作品需要 {path}，但找不到这个文件"))?;
+            .with_context(|| format!("the project needs {path}, but that file is missing"))?;
         if meta.file_type().is_symlink() || !meta.is_file() {
-            anyhow::bail!("{path} 不是普通文件；单文件作品及其配图不能用符号链接或目录。")
+            anyhow::bail!("{path} is not a regular file. A single-file project and its images can not be symlinks or directories.")
         }
-        let canonical = std::fs::canonicalize(&source).with_context(|| format!("看不了 {path}"))?;
+        let canonical =
+            std::fs::canonicalize(&source).with_context(|| format!("could not inspect {path}"))?;
         if !canonical.starts_with(&root) {
-            anyhow::bail!("{path} 跳出了作品所在目录，不能上传。")
+            anyhow::bail!("{path} points outside the project directory, so it can not be uploaded.")
         }
         let shown = path.clone();
         let scanned = tokio::task::spawn_blocking(move || {
-            let (hash, size) =
-                hash_file(&canonical).with_context(|| format!("读不了 {}", canonical.display()))?;
+            let (hash, size) = hash_file(&canonical)
+                .with_context(|| format!("could not read {}", canonical.display()))?;
             anyhow::Ok(ScannedFile {
                 entry: FileEntry {
                     path: shown,
@@ -109,7 +112,7 @@ pub async fn scan_selected(root: &Path, paths: &[String]) -> Result<Vec<ScannedF
             })
         })
         .await
-        .context("算哈希的任务没跑完")??;
+        .context("a hashing task did not finish")??;
         files.push(scanned);
     }
     files.sort_by(|a, b| a.entry.path.cmp(&b.entry.path));
@@ -135,14 +138,14 @@ pub fn manifest_path(rel: &Path) -> Result<String, String> {
                 Some(part) => parts.push(part),
                 None => {
                     return Err(format!(
-                        "文件名不是 UTF-8，服务器存不了，改个名字再上传：{}",
+                        "This file name is not UTF-8 and the server can not store it. Rename it and upload again: {}",
                         rel.display()
                     ))
                 }
             },
             _ => {
                 return Err(format!(
-                    "这条路径跳出了上传目录，不能上传：{}",
+                    "This path points outside the upload directory, so it can not be uploaded: {}",
                     rel.display()
                 ))
             }

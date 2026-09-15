@@ -96,7 +96,7 @@ pub async fn serve(cli_args: &UploadArgs, port: u16, ready: oneshot::Sender<Onli
 pub async fn run_hybrid(cli_args: &UploadArgs, shown: &str, port: u16) -> Result<()> {
     if !probe::is_listening(port).await {
         return Err(output::bad_input(format!(
-            "端口 {port} 上没有东西在监听。先把后端跑起来，再运行 playtest {shown} --backend {port}。"
+            "Nothing is listening on port {port}. Start your backend first, then run playtest {shown} --backend {port}."
         )));
     }
     let report = upload::run(cli_args, shown).await?;
@@ -129,7 +129,7 @@ async fn run_with(
     // 1. 本地端口上得先有东西在听。没有的话拿到链接的人只会看到一片 502。
     if !probe::is_listening(port).await {
         return Err(anyhow!(
-            "端口 {port} 上没有东西在监听。先把你的开发服务器跑起来，再运行 playtest {port}。"
+            "Nothing is listening on port {port}. Start your dev server first, then run playtest {port}."
         ));
     }
     // 只请求这一次首页，之后再不主动碰本地端口。
@@ -210,7 +210,7 @@ async fn run_with(
                 if token_swaps > MAX_TOKEN_SWAPS {
                     // 一直说令牌不对，多半不是令牌的事。当普通断线处理，别空转。
                     let wait = backoff.next_wait();
-                    output::report_reconnecting(retries, wait, "连不上边缘");
+                    output::report_reconnecting(retries, wait, "can not reach the edge");
                     if stop.race(tokio::time::sleep(wait)).await.is_none() {
                         break Ok(());
                     }
@@ -336,7 +336,7 @@ fn validate_options(cli_args: &UploadArgs) -> Result<()> {
     }
     if !ignored.is_empty() {
         return Err(output::usage(format!(
-            "{} 不能用于本地端口分享。去掉这些选项后重试；要设置发布信息或放到广场，请先构建，再运行 playtest ./dist 加上这些选项。",
+            "{} can not be used when sharing a local port. Drop them and retry. To set publish details or list on the Plaza, build first, then run playtest ./dist with those options.",
             ignored.join("、")
         )));
     }
@@ -369,7 +369,7 @@ struct Control<'a> {
 
 impl<'a> Control<'a> {
     async fn start(args: &'a UploadArgs, backend: Option<Backend>) -> Result<Control<'a>> {
-        let here = std::env::current_dir().context("看不了当前目录")?;
+        let here = std::env::current_dir().context("could not read the current directory")?;
         let config_path = config::default_path()?;
         let mut config = config::load(&config_path)?;
         let api = args::api_base(args.api.as_deref(), config.api.as_deref());
@@ -439,7 +439,7 @@ impl<'a> Control<'a> {
             Ok(grant) => Ok(grant),
             Err(e) if recoverable && e.means_anonymous_link_gone() => {
                 if e.means_token_gone() {
-                    ui::say("上次的匿名身份已经失效（匿名身份只保留 24 小时），这是一个新链接。");
+                    ui::say("The previous anonymous identity expired (anonymous identities last 24 hours), so this is a new link.");
                     self.config.token = None;
                     upload::ensure_token(
                         &mut self.client,
@@ -449,7 +449,7 @@ impl<'a> Control<'a> {
                     )
                     .await?;
                 } else {
-                    ui::say("上次的作品已经不在了（匿名作品只保留 24 小时），这是一个新链接。");
+                    ui::say("The previous project is gone (anonymous projects last 24 hours), so this is a new link.");
                 }
                 self.claim_new_site().await?;
                 Ok(self.client.tunnel_grant(&self.slug, &request).await?)
@@ -473,7 +473,7 @@ impl<'a> Control<'a> {
                      重新跑一次 playtest 会给你一条新链接"
                         .to_string()
                 } else {
-                    "换新令牌失败，隧道停在这里".to_string()
+                    "Could not refresh the token, so the tunnel stops here".to_string()
                 };
                 anyhow::Error::from(e).context(sentence)
             })
@@ -590,7 +590,7 @@ mod tests {
     #[test]
     fn a_time_we_cannot_read_is_not_treated_as_expiring() {
         let mut grant = grant_expiring_in(60);
-        grant.expires_at = "下午三点".into();
+        grant.expires_at = "three in the afternoon".into();
         assert!(!expiring_soon(&grant), "看不懂就别没事换令牌");
     }
 }

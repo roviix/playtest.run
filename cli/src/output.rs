@@ -16,24 +16,24 @@
 //!  "elapsed_ms":5100,"timings":{"hash_ms":300,"prepare_ms":900,"upload_ms":3100,"commit_ms":800},
 //!  "expires_at":"2026-09-08T04:09:03Z","qr_text":"█▀▀▀▀▀█ …",
 //!  "card_url":"https://brisk-otter-41.playtest.run/_playtest/card.png",
-//!  "card_path":"./小球-邀请卡.png","seats":10,
+//!  "card_path":"./Bouncy Ball-invite-card.png","seats":10,
 //!  "plaza_url":"https://playtest.run/",
 //!  "console_url":"https://playtest.run/console/#/s/brisk-otter-41",
-//!  "findings":[{"level":"warn","message":"这个导出用到了 SharedArrayBuffer（线程）","hint":"加 --isolated"}]}
+//!  "findings":[{"level":"warn","message":"This export uses SharedArrayBuffer (threads)","hint":"Add --isolated"}]}
 //! {"ok":true,"action":"list","elapsed_ms":120,
-//!  "sites":[{"slug":"brisk-otter-41","url":"…","title":"小球","version":7,"followers":12,"expires_at":"…"}]}
+//!  "sites":[{"slug":"brisk-otter-41","url":"…","title":"Bouncy Ball","version":7,"followers":12,"expires_at":"…"}]}
 //! {"ok":true,"action":"remove","slug":"brisk-otter-41","elapsed_ms":90}
 //! {"ok":true,"action":"open","slug":"brisk-otter-41","url":"…","opened":false,"elapsed_ms":80}
-//! {"ok":true,"action":"card","slug":"brisk-otter-41","title":"小球","card_url":"…","card_path":"./小球-邀请卡.png","elapsed_ms":700}
-//! {"ok":true,"action":"followers","slug":"brisk-otter-41","title":"小球","followers":12,"elapsed_ms":80}
-//! {"ok":true,"action":"help","text":"…帮助全文…","elapsed_ms":1}
+//! {"ok":true,"action":"card","slug":"brisk-otter-41","title":"Bouncy Ball","card_url":"…","card_path":"./Bouncy Ball-invite-card.png","elapsed_ms":700}
+//! {"ok":true,"action":"followers","slug":"brisk-otter-41","title":"Bouncy Ball","followers":12,"elapsed_ms":80}
+//! {"ok":true,"action":"help","text":"…full help text…","elapsed_ms":1}
 //! ```
 //!
 //! 失败：
 //!
 //! ```json
-//! {"ok":false,"code":"quota_exceeded","message":"服务器说：这个版本太大了",
-//!  "hint":"匿名上传每个版本最多 200 MB。","elapsed_ms":800}
+//! {"ok":false,"code":"quota_exceeded","message":"Server says: this version is too large",
+//!  "hint":"Anonymous uploads are capped at 200 MB per version.","elapsed_ms":800}
 //! ```
 //!
 //! 几条约定：
@@ -285,24 +285,23 @@ pub fn classify(e: &anyhow::Error) -> Failure {
 
 fn classify_client(e: &client::Error) -> (Code, Option<String>) {
     match e {
-        client::Error::Transport { .. } => (
-            Code::Network,
-            Some("请检查网络连接后重试。".into()),
-        ),
+        client::Error::Transport { .. } => {
+            (Code::Network, Some("Check your connection and retry.".into()))
+        }
         client::Error::Local { .. } => (Code::BadInput, None),
         client::Error::Unexpected { .. } => (
             Code::ServerError,
-            Some("这个地址回的不是 playtest 控制面的格式。".into()),
+            Some("That address did not answer like the playtest control plane.".into()),
         ),
         client::Error::Server { status, body } => match body.code {
             ErrorCode::QuotaExceeded => (Code::QuotaExceeded, None),
             ErrorCode::Unauthorized | ErrorCode::TokenExpired => (
                 Code::NeedsLogin,
-                Some("匿名身份只保留 24 小时；再跑一次会自动换一个新的，链接也会是新的。想让作品留下来，playtest login。".into()),
+                Some("Anonymous identities last 24 hours. Running again picks up a new one, and the link will be new too. Run playtest login to keep your projects.".into()),
             ),
             ErrorCode::LoginUnavailable | ErrorCode::LoginFailed => (Code::NeedsLogin, None),
-            ErrorCode::Internal => (Code::ServerError, Some("过一会儿再试一次。".into())),
-            _ if *status >= 500 => (Code::ServerError, Some("过一会儿再试一次。".into())),
+            ErrorCode::Internal => (Code::ServerError, Some("Try again in a moment.".into())),
+            _ if *status >= 500 => (Code::ServerError, Some("Try again in a moment.".into())),
             _ => (Code::BadInput, None),
         },
     }
@@ -386,7 +385,7 @@ pub fn say_findings(findings: &[Finding]) {
     }
     for finding in findings {
         let line = match &finding.hint {
-            Some(hint) => format!("{}。{hint}", finding.message),
+            Some(hint) => format!("{}. {hint}", finding.message),
             None => finding.message.clone(),
         };
         match finding.level {
@@ -497,8 +496,8 @@ impl UploadReport {
     pub fn with_card(&mut self, taken: card::Taken) {
         if taken.outcome == card::Outcome::Missing {
             self.findings.push(
-                Finding::warn("作品已发布，但邀请卡未能保存")
-                    .hint(format!("运行 playtest card {} 重试", self.slug)),
+                Finding::warn("Project published, but the invite card could not be saved")
+                    .hint(format!("Run playtest card {} to try again", self.slug)),
             );
         }
         self.card = taken.outcome;
@@ -523,11 +522,11 @@ pub fn report_upload(report: &UploadReport) {
     }
     let kind = match report.kind {
         WorkKind::Web => "",
-        WorkKind::Article => "文章",
-        WorkKind::Video => "视频",
+        WorkKind::Article => "article ",
+        WorkKind::Video => "video ",
     };
     ui::say(&format!(
-        "已发布{kind}《{}》v{}",
+        "Published {kind}\"{}\" v{}",
         report.title, report.version
     ));
     ui::blank();
@@ -537,9 +536,9 @@ pub fn report_upload(report: &UploadReport) {
         if ui::can_draw_qr() {
             ui::print_qr(qr);
             ui::say(match report.kind {
-                WorkKind::Web => "手机扫码就能玩。",
-                WorkKind::Article => "手机扫码就能读。",
-                WorkKind::Video => "手机扫码就能看。",
+                WorkKind::Web => "Scan it to play on a phone.",
+                WorkKind::Article => "Scan it to read on a phone.",
+                WorkKind::Video => "Scan it to watch on a phone.",
             });
         }
     }
@@ -584,7 +583,7 @@ fn after_the_link(report: &UploadReport) -> Vec<(Tone, String)> {
         lines.push((Tone::Plain, seats_line(seats, report.kind)));
     }
     if let Some(expires_at) = &report.expires_at {
-        lines.push(expiry_line(expires_at, "想让它留下来：playtest login。"));
+        lines.push(expiry_line(expires_at, "Run playtest login to keep it."));
     }
     lines.push((Tone::Plain, console_line(&report.slug, report.kind)));
     lines
@@ -599,17 +598,17 @@ fn card_line(
     kind: WorkKind,
 ) -> Option<String> {
     let action = match kind {
-        WorkKind::Web => "玩",
-        WorkKind::Article => "读",
-        WorkKind::Video => "看",
+        WorkKind::Web => "play",
+        WorkKind::Article => "read",
+        WorkKind::Video => "watch",
     };
     match (outcome, path) {
         (card::Outcome::Saved, Some(path)) => Some(format!(
-            "邀请卡已存到 {path}——发到群里，别人长按识别就能{action}"
+            "Invite card saved to {path} — send it to a chat, anyone who scans it can {action}"
         )),
         // 存下来了却没有路径，是不可能的；真出现了也当没拿到说，别打一句半截的话。
         (card::Outcome::Saved, None) | (card::Outcome::Missing, _) => Some(format!(
-            "邀请卡未能保存，可重试 playtest card {slug}，或打开 {url}"
+            "Invite card could not be saved. Retry with playtest card {slug}, or open {url}"
         )),
         (card::Outcome::Skipped, _) => None,
     }
@@ -618,22 +617,25 @@ fn card_line(
 /// 「来的人玩成什么样」那一行。发完不说这句，「知道结果」这半个产品就没人知道在哪
 /// （`docs/spikes/2026-09-08-dogfood-mofish-airdrop.md` 第四节第 4 条）。
 fn console_line(slug: &str, kind: WorkKind) -> String {
-    let action = match kind {
-        WorkKind::Web => "玩成什么样",
-        WorkKind::Article => "读过后说了什么",
-        WorkKind::Video => "看过后说了什么",
+    let what = match kind {
+        WorkKind::Web => "See how people played",
+        WorkKind::Article => "See what readers said",
+        WorkKind::Video => "See what viewers said",
     };
-    format!("来的人{action}，控制台里看得见：{}", console_url(slug))
+    format!("{what} in the Developer Console: {}", console_url(slug))
 }
 
 /// 名额那一行（DESIGN §3.3 第 4 条）。「加入」的定义要说出来，不然发的人会以为是打开的人数。
 fn seats_line(seats: u32, kind: WorkKind) -> String {
     let audience = match kind {
-        WorkKind::Web => "试玩者",
-        WorkKind::Article => "读者",
-        WorkKind::Video => "观众",
+        WorkKind::Web => "tester",
+        WorkKind::Article => "reader",
+        WorkKind::Video => "viewer",
     };
-    format!("想找 {seats} 位{audience}，邀请函和邀请卡上都写着；留了名字的人算加入")
+    format!(
+        "Looking for {}, said on the invitation page and the invite card; anyone who leaves a name counts as joined",
+        ui::count(u64::from(seats), audience)
+    )
 }
 
 /// 匿名链接还剩不到这么久就要提醒：一场测试从发链接到大家点开常常要一两个小时，
@@ -647,7 +649,7 @@ fn expiry_line(expires_at: &str, about_login: &str) -> (Tone, String) {
         Some(left) if left < EXPIRY_WARNING => (
             Tone::Warn,
             format!(
-                "这条匿名链接只剩 {} 就失效（{}）。到期后再跑一次会拿到一条新链接，发出去的旧链接会打不开。",
+                "This anonymous link expires in {} ({}). After that, running again gives you a new link and the one you already sent stops working.",
                 clock::human_duration(left),
                 clock::human(expires_at)
             ),
@@ -655,7 +657,7 @@ fn expiry_line(expires_at: &str, about_login: &str) -> (Tone, String) {
         _ => (
             Tone::Plain,
             format!(
-                "这是匿名链接，{} 后失效。{about_login}",
+                "Anonymous link, expires {}. {about_login}",
                 clock::human(expires_at)
             ),
         ),
@@ -664,9 +666,9 @@ fn expiry_line(expires_at: &str, about_login: &str) -> (Tone, String) {
 
 pub fn plaza_line(plaza: &PlazaOut) -> String {
     match (plaza.public, plaza.seeking) {
-        (true, true) => format!("已放到广场上，标了「正在找人测」：{}", plaza.url),
-        (true, false) => format!("已放到广场上：{}", plaza.url),
-        (false, _) => "已从广场上拿下来，链接照常能开。".to_string(),
+        (true, true) => format!("On the Plaza, marked seeking testers: {}", plaza.url),
+        (true, false) => format!("On the Plaza: {}", plaza.url),
+        (false, _) => "Taken off the Plaza. The link still works.".to_string(),
     }
 }
 
@@ -744,7 +746,7 @@ pub async fn fetch_sites(api_flag: Option<&str>) -> Result<Vec<SiteOut>> {
 /// 一个作品现在什么样。MCP 那一侧用它（`playtest_get`）。
 pub async fn fetch_site(slug: &str, api_flag: Option<&str>) -> Result<SiteOut> {
     let session = Session::open(api_flag)?;
-    let client = session.client_or_say("先发一个")?;
+    let client = session.client_or_say("there is nothing to look up")?;
     Ok(client.get_site(slug).await?.into())
 }
 
@@ -759,9 +761,9 @@ pub async fn fetch_site(slug: &str, api_flag: Option<&str>) -> Result<SiteOut> {
 /// ```json
 /// {"event":"online","slug":"brisk-otter-41","url":"https://playtest.run/p/brisk-otter-41",
 ///  "expires_at":"2026-09-08T04:09:03Z","attempt":0,"elapsed_ms":1200,"qr_text":"█▀▀▀▀▀█ …",
-///  "findings":[{"level":"note","message":"检测到 Vite：…"}]}
+///  "findings":[{"level":"note","message":"Vite detected…"}]}
 /// {"event":"players","count":3}
-/// {"event":"reconnecting","attempt":2,"wait_ms":4000,"reason":"和服务器断开了"}
+/// {"event":"reconnecting","attempt":2,"wait_ms":4000,"reason":"Disconnected from the server"}
 /// {"event":"stopped","connections":12,"bytes":3407872}
 /// ```
 ///
@@ -830,8 +832,8 @@ impl OnlineReport {
     pub fn with_card(&mut self, taken: card::Taken) {
         if taken.outcome == card::Outcome::Missing {
             self.findings.push(
-                Finding::warn("作品已发布，但邀请卡未能保存")
-                    .hint(format!("运行 playtest card {} 重试", self.slug)),
+                Finding::warn("Project published, but the invite card could not be saved")
+                    .hint(format!("Run playtest card {} to try again", self.slug)),
             );
         }
         self.card = taken.outcome;
@@ -849,28 +851,28 @@ pub fn report_online(report: &OnlineReport) {
     if let Some(backend) = &report.backend {
         // 链接、二维码、有效期上传那一步刚说过，这里只说后端接上了没有。
         if report.attempt > 0 {
-            ui::say("后端已重连。");
+            ui::say("Backend reconnected.");
             return;
         }
         ui::say(&format!(
-            "后端已接上：目录里有的文件玩家直接从边缘拿，目录里没有的路径（比如 /api/…）都走到你电脑的 {} 端口。",
+            "Backend connected. Files in the directory are served from the edge; any other path (/api/… and friends) goes to port {} on your machine.",
             backend.port
         ));
-        ui::say("按 Ctrl-C 结束；结束后页面照常能开，只是那些路径会回「后端不在线」（503）。");
+        ui::say("Press Ctrl-C to stop. The page keeps working; those paths will answer \"backend offline\" (503).");
         return;
     }
     if report.attempt > 0 {
-        ui::say("已重连，链接没变。");
+        ui::say("Reconnected. Same link.");
         return;
     }
-    ui::say("已连上，这条链接现在能玩了。");
+    ui::say("Connected. The link is live.");
     ui::blank();
     ui::link(&report.url);
     ui::blank();
     if let Some(qr) = &report.qr_text {
         if ui::can_draw_qr() {
             ui::print_qr(qr);
-            ui::say("手机扫码就能玩。");
+            ui::say("Scan it to play on a phone.");
         }
     }
     if let Some(line) = card_line(
@@ -883,12 +885,12 @@ pub fn report_online(report: &OnlineReport) {
         ui::say(&line);
     }
     if let Some(expires_at) = &report.expires_at {
-        let (tone, line) = expiry_line(expires_at, "想让它留下来：playtest login。");
+        let (tone, line) = expiry_line(expires_at, "Run playtest login to keep it.");
         say_toned(tone, &line);
     }
     ui::say(&console_line(&report.slug, WorkKind::Web));
     say_findings(&report.findings);
-    ui::say("按 Ctrl-C 结束，结束后玩家会看到「开发者的电脑暂时不在线」。");
+    ui::say("Press Ctrl-C to stop. After that players see \"the developer's machine is offline\".");
 }
 
 #[derive(Debug, Serialize)]
@@ -906,7 +908,7 @@ pub fn report_players(count: usize) {
         });
         return;
     }
-    ui::say(&format!("玩家连接：{count}"));
+    ui::say(&format!("Player connections: {count}"));
 }
 
 #[derive(Debug, Serialize)]
@@ -917,7 +919,7 @@ struct ReconnectingEvent<'a> {
     reason: &'a str,
 }
 
-/// 断了，准备重连。`reason` 是一句中文，说清楚为什么断。
+/// 断了，准备重连。`reason` 是一句话，说清楚为什么断。
 pub fn report_reconnecting(attempt: u32, wait: std::time::Duration, reason: &str) {
     if is_json() {
         emit(&ReconnectingEvent {
@@ -929,10 +931,10 @@ pub fn report_reconnecting(attempt: u32, wait: std::time::Duration, reason: &str
         return;
     }
     if wait.is_zero() {
-        ui::say(&format!("{reason}，正在重连…"));
+        ui::say(&format!("{reason}. Reconnecting…"));
     } else {
         ui::say(&format!(
-            "{reason}，{} 秒后重连（第 {attempt} 次）",
+            "{reason}. Reconnecting in {}s (attempt {attempt})",
             seconds(wait.as_millis() as u64)
         ));
     }
@@ -957,13 +959,16 @@ pub fn report_stopped(connections: u64, bytes: u64, hybrid: bool) {
         return;
     }
     if hybrid {
-        ui::say("已停止。页面照常能开，目录里没有的路径现在回「后端不在线」。");
+        ui::say(
+            "Stopped. The page still works; paths outside the directory now answer \"backend offline\".",
+        );
     } else {
-        ui::say("已停止，链接现在显示离线。");
+        ui::say("Stopped. The link now shows as offline.");
     }
     if connections > 0 {
         ui::say(&format!(
-            "这次一共接了 {connections} 个玩家连接，转发 {}。",
+            "Handled {}, {} forwarded.",
+            ui::count(connections, "player connection"),
             ui::bytes(bytes)
         ));
     }
@@ -1010,7 +1015,7 @@ pub fn to_json_pretty<T: Serialize>(value: &T) -> String {
 
 fn unprintable(e: &serde_json::Error) -> String {
     format!(
-        r#"{{"ok":false,"code":"error","message":"结果写不成 JSON：{}","elapsed_ms":0}}"#,
+        r#"{{"ok":false,"code":"error","message":"Could not write the result as JSON: {}","elapsed_ms":0}}"#,
         e.to_string().replace('"', "'")
     )
 }
@@ -1025,7 +1030,7 @@ mod tests {
             status,
             body: ErrorBody {
                 code,
-                message: "服务器说的话".into(),
+                message: "what the server said".into(),
             },
         }
         .into()
@@ -1077,10 +1082,10 @@ mod tests {
 
     #[test]
     fn an_unclassified_error_keeps_its_whole_message() {
-        let e = anyhow::anyhow!("底下那层").context("上面这层");
+        let e = anyhow::anyhow!("the layer underneath").context("this layer on top");
         let failure = classify(&e);
         assert_eq!(failure.code, Code::Unexpected);
-        assert_eq!(failure.message, "上面这层: 底下那层");
+        assert_eq!(failure.message, "this layer on top: the layer underneath");
     }
 
     #[test]
@@ -1088,17 +1093,17 @@ mod tests {
         let already = as_bad_input(server(401, ErrorCode::TokenExpired));
         assert_eq!(classify(&already).code, Code::NeedsLogin);
 
-        let plain = as_bad_input(anyhow::anyhow!("找不到 ./dist"));
+        let plain = as_bad_input(anyhow::anyhow!("Can't find ./dist"));
         assert_eq!(classify(&plain).code, Code::BadInput);
-        assert_eq!(classify(&plain).message, "找不到 ./dist");
+        assert_eq!(classify(&plain).message, "Can't find ./dist");
     }
 
     #[test]
     fn failures_serialise_with_the_documented_field_names() {
-        let json = serde_json::to_value(classify(&usage("命令写错了"))).unwrap();
+        let json = serde_json::to_value(classify(&usage("That's not a command"))).unwrap();
         assert_eq!(json["ok"], false);
         assert_eq!(json["code"], "usage");
-        assert_eq!(json["message"], "命令写错了");
+        assert_eq!(json["message"], "That's not a command");
         assert!(json.get("hint").is_none(), "没有建议时不该有这个字段");
         assert!(json["elapsed_ms"].is_u64());
     }
@@ -1108,7 +1113,7 @@ mod tests {
         let report = UploadReport::new(
             "brisk-otter-41".into(),
             "https://brisk-otter-41.playtest.run".into(),
-            "小球大冒险".into(),
+            "Bouncy Ball".into(),
             7,
             Timings {
                 hash_ms: 300,
@@ -1118,7 +1123,10 @@ mod tests {
             },
             Some("2026-09-08T04:09:03Z".into()),
             None,
-            vec![Finding::warn("这个导出用到了 SharedArrayBuffer（线程）").hint("加 --isolated")],
+            vec![
+                Finding::warn("This export uses SharedArrayBuffer (threads)")
+                    .hint("Add --isolated"),
+            ],
         );
         let json = serde_json::to_value(&report).unwrap();
         assert_eq!(json["ok"], true);
@@ -1128,7 +1136,7 @@ mod tests {
         assert_eq!(json["version"], 7);
         assert_eq!(json["timings"]["upload_ms"], 3100);
         assert_eq!(json["findings"][0]["level"], "warn");
-        assert_eq!(json["findings"][0]["hint"], "加 --isolated");
+        assert_eq!(json["findings"][0]["hint"], "Add --isolated");
         assert!(json.get("qr_text").is_none(), "--no-qr 时不该有这个字段");
     }
 
@@ -1137,7 +1145,7 @@ mod tests {
         UploadReport::new(
             "brisk-otter-41".into(),
             "https://brisk-otter-41.playtest.run".into(),
-            "小球大冒险".into(),
+            "Bouncy Ball".into(),
             7,
             Timings::default(),
             None,
@@ -1168,7 +1176,7 @@ mod tests {
 
         report.with_card(card::Taken {
             outcome: card::Outcome::Saved,
-            path: Some("./小球大冒险-邀请卡.png".into()),
+            path: Some("./Bouncy Ball-invite-card.png".into()),
         });
         report.seats = Some(10);
         report.on_plaza(PlazaOut {
@@ -1178,7 +1186,7 @@ mod tests {
             seek_note: None,
         });
         let json = serde_json::to_value(&report).unwrap();
-        assert_eq!(json["card_path"], "./小球大冒险-邀请卡.png");
+        assert_eq!(json["card_path"], "./Bouncy Ball-invite-card.png");
         assert_eq!(json["seats"], 10);
         assert_eq!(json["plaza_url"], "https://playtest.run/");
         assert_eq!(json["plaza"]["seeking"], true);
@@ -1191,7 +1199,7 @@ mod tests {
         let site = SiteOut::from(Site {
             slug: "brisk-otter-41".into(),
             url: "https://brisk-otter-41.playtest.run".into(),
-            title: "小球大冒险".into(),
+            title: "Bouncy Ball".into(),
             kind: playtest_common::manifest::WorkKind::Web,
             current_version: Some(7),
             created_at: "2026-09-09T00:00:00Z".into(),
@@ -1217,7 +1225,7 @@ mod tests {
         Site {
             slug: "brisk-otter-41".into(),
             url: "https://brisk-otter-41.playtest.run".into(),
-            title: "小球大冒险".into(),
+            title: "Bouncy Ball".into(),
             kind: playtest_common::manifest::WorkKind::Web,
             current_version: Some(7),
             created_at: "2026-09-09T00:00:00Z".into(),
@@ -1233,13 +1241,13 @@ mod tests {
         report.expires_at = Some("2126-09-10T20:59:00Z".into());
         report.with_card(card::Taken {
             outcome: card::Outcome::Saved,
-            path: Some("./小球大冒险-邀请卡.png".into()),
+            path: Some("./Bouncy Ball-invite-card.png".into()),
         });
         report.on_plaza(PlazaOut {
             url: "https://playtest.run/".into(),
             public: true,
             seeking: true,
-            seek_note: Some("新手引导看得懂吗".into()),
+            seek_note: Some("Is the tutorial clear?".into()),
         });
         report.seats = Some(10);
 
@@ -1248,11 +1256,11 @@ mod tests {
             .map(|(_, line)| line)
             .collect();
         let heads = [
-            "邀请卡已存到",
-            "已放到广场上",
-            "想找 10 位",
-            "这是匿名链接",
-            "来的人玩成什么样",
+            "Invite card saved to",
+            "On the Plaza",
+            "Looking for 10 testers",
+            "Anonymous link",
+            "See how people played",
         ];
         assert_eq!(lines.len(), heads.len(), "{lines:#?}");
         for (line, head) in lines.iter().zip(heads) {
@@ -1271,7 +1279,7 @@ mod tests {
         assert_eq!(report.card, card::Outcome::Skipped);
         let lines = after_the_link(&report);
         assert!(
-            !lines.iter().any(|(_, line)| line.contains("邀请卡")),
+            !lines.iter().any(|(_, line)| line.contains("Invite card")),
             "{lines:#?}"
         );
         // 拿不到的时候要说去哪儿拿，不能装作没有这回事。

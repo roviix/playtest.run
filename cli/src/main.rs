@@ -50,7 +50,7 @@ fn main() -> ExitCode {
     output::set_json(cli.json);
     if cli.legacy_gate.is_some() {
         return output::report_failure(&output::classify(&output::usage(
-            "--gate 已撤出：主域始终展示邀请函，作品子域直接运行。请移除 --gate 及其值后重试。",
+            "--gate is gone: the root domain always shows the invitation page and the project subdomain runs the build directly. Remove --gate and its value, then retry.",
         )));
     }
 
@@ -58,7 +58,7 @@ fn main() -> ExitCode {
         Ok(runtime) => runtime,
         Err(e) => {
             return output::report_failure(&output::classify(&anyhow::anyhow!(
-                "起不来后台任务：{e}"
+                "could not start a background task: {e}"
             )))
         }
     };
@@ -106,7 +106,7 @@ fn first_line(rendered: &str) -> String {
     rendered
         .lines()
         .find(|line| !line.trim().is_empty())
-        .unwrap_or("命令写错了")
+        .unwrap_or("that command is not right")
         .trim_start_matches("error: ")
         .to_string()
 }
@@ -153,7 +153,7 @@ async fn run_default(cli: Cli, explicit_publish_options: bool) -> Result<()> {
     let Some(target) = cli.upload.target.clone() else {
         if output::is_json() || cli.upload.any_set() || explicit_publish_options {
             return Err(output::usage(
-                "没说要发什么。给一个目录（playtest ./dist），或者一个本地端口（playtest 5173）。",
+                "Nothing to publish. Give a directory (playtest ./dist) or a local port (playtest 5173).",
             ));
         }
         println!("{}", args::QUICK_HELP);
@@ -175,7 +175,7 @@ async fn run_default(cli: Cli, explicit_publish_options: bool) -> Result<()> {
         )),
         Target::Port(port) => tunnel::run(&cli.upload, port).await,
         Target::PortOutOfRange(raw) => Err(output::usage(format!(
-            "端口号要在 1 到 65535 之间，「{raw}」不是。如果这是一个目录的名字，写成 ./{raw}。"
+            "A port has to be between 1 and 65535, and {raw} is not. If that is a directory name, write it as ./{raw}."
         ))),
     }
 }

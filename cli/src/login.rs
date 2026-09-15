@@ -42,7 +42,7 @@ pub async fn run(api_flag: Option<&str>) -> Result<()> {
                 let who = me.login.as_deref().unwrap_or(&me.display_name);
                 if !machine {
                     ui::say(&format!(
-                        "这台机器已经登录为 @{who}。继续会换成这次登录的账号。"
+                        "This machine is already signed in as @{who}. Continuing replaces it with whichever account you sign in with now."
                     ));
                 }
             }
@@ -58,9 +58,9 @@ pub async fn run(api_flag: Option<&str>) -> Result<()> {
 
     let start = client.device_login_start().await?;
     if !machine {
-        ui::say(&format!("在浏览器里打开 {}", start.verification_uri));
-        ui::say(&format!("输入这个码：{}", start.user_code));
-        ui::say("登录 playtest 后，确认连接这台命令行。（Ctrl-C 取消）");
+        ui::say(&format!("Open {} in your browser", start.verification_uri));
+        ui::say(&format!("Enter this code: {}", start.user_code));
+        ui::say("Sign in to playtest, then confirm connecting this terminal. (Ctrl-C cancels)");
         sites::launch_browser(&start.verification_uri);
     } else {
         // 机器模式下 stdout 只能有最后那个对象，码和网址走 stderr，让调用方能转给人。
@@ -74,7 +74,7 @@ pub async fn run(api_flag: Option<&str>) -> Result<()> {
         tokio::time::sleep(interval).await;
         if Instant::now() >= deadline {
             bail!(
-                "这个码过期了（等了 {} 分钟）。重新运行 playtest login 拿一个新的。",
+                "That code expired after {} minutes. Run playtest login again for a new one.",
                 start.expires_in / 60
             );
         }
@@ -100,16 +100,17 @@ pub async fn run(api_flag: Option<&str>) -> Result<()> {
         return Ok(());
     }
 
-    ui::say(&format!("已登录：{}。", login.display_name));
+    ui::say(&format!("Signed in as {}.", login.display_name));
     match login.migrated_sites {
         0 => {}
         n => ui::say(&format!(
-            "{n} 个匿名作品已归入你的账号，链接不再 24 小时后失效；门禁页上的「匿名开发者」换成了 {}。",
+            "{} now belong to your account, so those links no longer expire after 24 hours. The invitation page credits {} instead of an anonymous developer.",
+            ui::count(u64::from(n), "anonymous project"),
             login.display_name
         )),
     }
     ui::say(&format!(
-        "作品与关注使用同一个账号：{DEVELOPER_API_URL}/console/"
+        "Projects and followers live under the same account: {DEVELOPER_API_URL}/console/"
     ));
     Ok(())
 }

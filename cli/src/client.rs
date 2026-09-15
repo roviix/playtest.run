@@ -69,13 +69,16 @@ impl std::fmt::Display for Error {
         match self {
             Error::Transport { api, source } => {
                 let reason = if source.is_timeout() {
-                    format!("等了 {} 秒没连上", CONNECT_TIMEOUT.as_secs())
+                    format!("no connection after {} seconds", CONNECT_TIMEOUT.as_secs())
                 } else {
                     root_cause(source)
                 };
-                write!(f, "连不上服务器（{api}）：{reason}。请检查网络连接。")
+                write!(
+                    f,
+                    "Can't reach the server ({api}): {reason}. Check your connection."
+                )
             }
-            Error::Server { body, .. } => write!(f, "服务器说：{}", body.message),
+            Error::Server { body, .. } => write!(f, "The server said: {}", body.message),
             Error::Unexpected { status, text } => {
                 let mut preview: String = text.chars().take(120).collect();
                 if text.chars().count() > 120 {
@@ -83,10 +86,10 @@ impl std::fmt::Display for Error {
                 }
                 write!(
                     f,
-                    "服务器返回了看不懂的内容（HTTP {status}）：{preview}。地址可能不是 playtest 控制面。"
+                    "The server returned something unreadable (HTTP {status}): {preview}. That address may not be a playtest control plane."
                 )
             }
-            Error::Local { path, source } => write!(f, "读不了 {}：{source}", path.display()),
+            Error::Local { path, source } => write!(f, "Can't read {}: {source}", path.display()),
         }
     }
 }
@@ -414,7 +417,10 @@ fn root_cause(e: &reqwest::Error) -> String {
 fn describe_status(status: StatusCode, bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes).trim().to_string();
     if text.is_empty() {
-        status.canonical_reason().unwrap_or("没有内容").to_string()
+        status
+            .canonical_reason()
+            .unwrap_or("no reason given")
+            .to_string()
     } else {
         text
     }
@@ -429,7 +435,7 @@ mod tests {
             status,
             body: ErrorBody {
                 code,
-                message: "这个版本太大了".into(),
+                message: "This version is too large.".into(),
             },
         }
     }
@@ -438,7 +444,7 @@ mod tests {
     fn server_messages_are_shown_verbatim() {
         assert_eq!(
             server(413, ErrorCode::QuotaExceeded).to_string(),
-            "服务器说：这个版本太大了"
+            "The server said: This version is too large."
         );
     }
 

@@ -75,9 +75,9 @@ impl Threads {
     /// 「为什么这么说」，跟在提示后面的括号里。
     pub fn because(&self) -> String {
         match self {
-            Self::SharedMemory(path) => format!("{path} 里申请了多个线程共享的内存"),
+            Self::SharedMemory(path) => format!("{path} asks for memory shared across threads"),
             Self::ScriptMentions(path) => {
-                format!("{path} 里提到 SharedArrayBuffer，但 wasm 的字节里没看出来，这是猜的")
+                format!("{path} mentions SharedArrayBuffer, but the wasm bytes do not show it, so this is a guess")
             }
         }
     }
@@ -119,7 +119,10 @@ pub fn inspect(input: Input<'_>, read: ReadPrefix<'_>) -> Report {
 
     let mut findings = Vec::new();
     if let Some(engine) = engine {
-        findings.push(Finding::note(format!("看起来是 {} 做的", engine.label())));
+        findings.push(Finding::note(format!(
+            "Looks like a {} build",
+            engine.label()
+        )));
     }
     findings.extend(index_placement(&here, &paths));
     if let Some(index) = index.as_deref() {
@@ -168,20 +171,20 @@ pub fn looks_like_source_tree(paths: &[String]) -> bool {
 pub fn explain_limit(error: &ManifestError, paths: &[String]) -> Option<String> {
     match error {
         ManifestError::VersionTooLarge { total, max } => Some(format!(
-            "这一版一共 {}，匿名上传一个版本最多 {}。要传更大的得先 playtest login。",
+            "This version is {} in total, and anonymous uploads are capped at {} per version. Run playtest login to publish something larger.",
             megabytes(*total),
             megabytes(*max)
         )),
         ManifestError::FileTooLarge { path, size, max } => Some(format!(
-            "{path} 有 {}，单个文件最多 {}。把它拆开导出，或者放到别处再从游戏里去取。",
+            "{path} is {}, and a single file can be at most {}. Split it during export, or host it elsewhere and fetch it from the game.",
             megabytes(*size),
             megabytes(*max)
         )),
         ManifestError::TooManyFiles { count, max } if looks_like_source_tree(paths) => Some(format!(
-            "{count} 个文件，上限 {max} 个。这看起来是源码目录，不是导出物；先构建（例如 npm run build），再上传 dist/。"
+            "{count} files, and the limit is {max}. This looks like a source directory rather than an export: build first (npm run build, for example), then upload dist/."
         )),
         ManifestError::TooManyFiles { count, max } => Some(format!(
-            "{count} 个文件，上限 {max} 个。只传引擎导出的那个目录，别把整个工程带上。"
+            "{count} files, and the limit is {max}. Upload only the directory your engine exported, not the whole project."
         )),
         _ => None,
     }
@@ -250,17 +253,17 @@ fn index_placement(here: &HashSet<&str>, paths: &[&str]) -> Option<Finding> {
         .min_by_key(|p| p.matches('/').count())
     else {
         return Some(
-            Finding::blocker("最外层没有 index.html，玩家点开链接会是 404")
-                .hint("引擎导出物一般都有；确认一下给的是不是导出目录"),
+            Finding::blocker("No index.html at the top level, so the link will 404 for players")
+                .hint("Engine exports normally have one. Check that this is the export directory"),
         );
     };
     let dir = nested.strip_suffix("/index.html")?;
     Some(
         Finding::blocker(format!(
-            "最外层没有 index.html，它在 {nested} 里，玩家点开链接会是 404"
+            "No index.html at the top level. It is inside {nested}, so the link will 404 for players"
         ))
         .hint(format!(
-            "把 {dir} 这一层直接传上来：playtest <刚才那个目录>/{dir}"
+            "Upload {dir} itself: playtest <that directory>/{dir}"
         )),
     )
 }
@@ -282,25 +285,25 @@ fn missing_references(index: &str, here: &HashSet<&str>, has_backend: bool) -> O
         .take(MAX_MISSING_SHOWN)
         .cloned()
         .collect::<Vec<_>>()
-        .join("、");
+        .join(", ");
     let rest = missing.len().saturating_sub(MAX_MISSING_SHOWN);
     let tail = if rest > 0 {
-        format!("，还有 {rest} 个")
+        format!(" and {rest} more")
     } else {
         String::new()
     };
     if has_backend {
         return Some(Finding::note(format!(
-            "index.html 引用了 {} 个目录里没有的路径，它们会交给你的后端：{shown}{tail}",
+            "index.html references {} paths that are not in the directory; they will go to your backend: {shown}{tail}",
             missing.len()
         )));
     }
     Some(
         Finding::warn(format!(
-            "index.html 要用 {} 个目录里没有的文件，玩家那边会加载失败：{shown}{tail}",
+            "index.html needs {} files that are not in the directory, so they will fail to load for players: {shown}{tail}",
             missing.len()
         ))
-        .hint("多半是导出时漏了，或者只传了其中一层；对一下引擎输出的那个目录是不是完整的"),
+        .hint("Most likely the export missed them, or only one level was uploaded. Check that the directory your engine wrote is complete"),
     )
 }
 
@@ -320,15 +323,15 @@ fn missing_engine_parts(paths: &[&str], index: Option<&str>) -> Option<Finding> 
         || index.is_some_and(|text| text.contains("GODOT_CONFIG"));
     if godot_export && bare(".wasm") && !bare(".pck") {
         return Some(
-            Finding::warn("这是 Godot 的网页导出，但目录里没有 .pck——游戏的内容都在那个文件里，玩家会一直卡在加载条上")
-                .hint("导出出来的那几个文件要一起传：.html、.js、.wasm、.pck，可能还有 .audio.worklet.js"),
+            Finding::warn("This is a Godot web export, but there is no .pck in the directory. The game content lives in that file, so players will sit on the loading bar")
+                .hint("Upload the exported files together: .html, .js, .wasm, .pck, and possibly .audio.worklet.js"),
         );
     }
     // `.loader.js` 是 Unity 网页导出一定有的那个文件。
     if bare(".loader.js") && !bare(".data") {
         return Some(
-            Finding::warn("这是 Unity 的网页导出，但目录里没有 .data——游戏的资源都在那个文件里，玩家会一直卡在加载条上")
-                .hint("把 Build 整个目录传上来：.loader.js、.framework.js、.wasm、.data 四件缺一不可"),
+            Finding::warn("This is a Unity web export, but there is no .data in the directory. The game assets live in that file, so players will sit on the loading bar")
+                .hint("Upload the whole Build directory: .loader.js, .framework.js, .wasm and .data are all required"),
         );
     }
     None
@@ -344,21 +347,21 @@ fn compression(paths: &[&str], index: Option<&str>, found: Option<Engine>) -> Ve
 
     if precompressed {
         out.push(Finding::note(
-            "目录里有压好的 .br / .gz，会按原样直接给玩家，由浏览器解压",
+            "The directory has precompressed .br / .gz files; they are served as-is and the browser decompresses them",
         ));
     }
     if fallback {
         let seen = if found == Some(Engine::Unity) {
-            "Unity 开着 Decompression Fallback"
+            "Unity has Decompression Fallback on"
         } else {
-            "目录里有 .unityweb，那是 Unity 开着 Decompression Fallback 才有的"
+            "The directory has .unityweb files, which Unity only writes with Decompression Fallback on"
         };
         out.push(
             Finding::warn(format!(
-                "{seen}，加载时由页面里的 JS 自己解压，比浏览器慢一截"
+                "{seen}, so the page decompresses them in JS at load time, which is slower than letting the browser do it"
             ))
             .hint(
-                "在 Player Settings → Publishing Settings 里关掉它重新导出会更快，Brotli 的响应头我们配好",
+                "Turning it off in Player Settings -> Publishing Settings and re-exporting is faster; we set the Brotli headers for you",
             ),
         );
     }
@@ -367,18 +370,22 @@ fn compression(paths: &[&str], index: Option<&str>, found: Option<Engine>) -> Ve
             .and_then(|html| html::config_value(html, "dataUrl"))
             .map(|url| {
                 let winner = if url.ends_with(".unityweb") {
-                    ".unityweb 那一套"
+                    "the .unityweb set"
                 } else {
-                    "压好的 .br / .gz 那一套"
+                    "the precompressed .br / .gz set"
                 };
-                format!("index.html 里的 dataUrl 指着 {url}，真正会用的是{winner}")
+                format!(
+                    "dataUrl in index.html points at {url}, so {winner} is what actually gets used"
+                )
             })
-            .unwrap_or_else(|| "index.html 里没找到 dataUrl，看不出用的是哪一套".to_string());
+            .unwrap_or_else(|| {
+                "No dataUrl found in index.html, so it is unclear which set gets used".to_string()
+            });
         out.push(
             Finding::warn(format!(
-                "两套压缩产物都在：.br / .gz 和 .unityweb。{pointing}"
+                "Both compressed sets are here: .br / .gz and .unityweb. {pointing}"
             ))
-            .hint("另一套是白传的，删掉能少传不少字节"),
+            .hint("One set is uploaded for nothing. Deleting it saves a lot of bytes"),
         );
     }
     out
@@ -389,14 +396,14 @@ fn wrong_directory(paths: &[&str], has_git_dir: bool) -> Vec<Finding> {
     let mut out = Vec::new();
     if paths.iter().any(|p| p.starts_with("node_modules/")) {
         out.push(
-            Finding::warn("目录里有 node_modules/，这看着是源码目录，不是构建出来的导出物")
-                .hint("先构建（例如 npm run build），再传 dist/ 那一层"),
+            Finding::warn("The directory has node_modules/, so this looks like source rather than a build output")
+                .hint("Build first (npm run build, for example), then upload the dist/ level"),
         );
     }
     if has_git_dir {
         out.push(
-            Finding::note("目录里有 .git/，看着像整个仓库而不是导出目录")
-                .hint("以「.」开头的东西不会上传；确认一下要发的是不是构建输出的那一层"),
+            Finding::note("The directory has .git/, so it looks like a whole repository rather than an export")
+                .hint("Anything starting with a dot is skipped. Check that you are publishing the build output level"),
         );
     }
     out
@@ -537,7 +544,7 @@ mod tests {
         let threads = dir.inspect().threads.expect("该猜到要多线程");
         assert!(!threads.is_certain());
         assert!(threads.because().contains("index.js"), "{threads:?}");
-        assert!(threads.because().contains("猜"), "{threads:?}");
+        assert!(threads.because().contains("guess"), "{threads:?}");
     }
 
     /// 41 字节的合法小模块（`fixtures/headers-lab` 里那个）不能被当成线程版。
@@ -564,7 +571,7 @@ mod tests {
         let dir = Dir::new(&[("main.js", b"console.log(1)")]);
         let report = dir.inspect();
         assert_eq!(
-            about(&report, "最外层没有 index.html").level,
+            about(&report, "No index.html at the top level").level,
             Level::Blocker
         );
     }
@@ -581,7 +588,7 @@ mod tests {
             ("assets/a.css", b"body{}"),
         ]);
         let report = dir.inspect();
-        let found = about(&report, "玩家那边会加载失败");
+        let found = about(&report, "fail to load for players");
         assert_eq!(found.level, Level::Warn);
         assert!(found.message.contains("assets/b.js"), "{found:?}");
         assert!(found.message.contains("hero.png"), "{found:?}");
@@ -599,13 +606,13 @@ mod tests {
             ("app.js", b"1"),
         ]);
         let report = dir.inspect_with_backend();
-        let found = about(&report, "交给你的后端");
+        let found = about(&report, "go to your backend");
         assert_eq!(found.level, Level::Note);
         assert!(found.message.contains("new"), "{found:?}");
         assert!(found.hint.is_none(), "没有要他改的东西，就别给建议");
         assert!(!messages(&report)
             .iter()
-            .any(|m| m.contains("玩家那边会加载失败")));
+            .any(|m| m.contains("fail to load for players")));
     }
 
     /// 缺得多的时候只列前几个。
@@ -617,10 +624,10 @@ mod tests {
         }
         let dir = Dir::new(&[("index.html", html.as_bytes())]);
         let found = dir.inspect();
-        let found = about(&found, "玩家那边会加载失败");
+        let found = about(&found, "fail to load for players");
         assert!(found.message.contains("m4.js"), "{found:?}");
         assert!(!found.message.contains("m5.js"), "{found:?}");
-        assert!(found.message.contains("还有 4 个"), "{found:?}");
+        assert!(found.message.contains("and 4 more"), "{found:?}");
     }
 
     /// Unity 两套压缩产物都在：说清楚以哪一套为准。
@@ -638,9 +645,9 @@ mod tests {
         assert_eq!(report.engine, Some(Engine::Unity));
         assert_eq!(report.manifest_engine().as_deref(), Some("unity"));
         assert_eq!(about(&report, "Decompression Fallback").level, Level::Warn);
-        let both = about(&report, "两套压缩产物");
+        let both = about(&report, "Both compressed sets");
         assert!(both.message.contains("webgl.data.unityweb"), "{both:?}");
-        assert!(both.message.contains(".unityweb 那一套"), "{both:?}");
+        assert!(both.message.contains("the .unityweb set"), "{both:?}");
     }
 
     /// 只有 .br 的 Unity 导出正是我们想要的形态，只说一句「照原样给」。
@@ -655,8 +662,8 @@ mod tests {
         assert_eq!(
             messages(&report),
             [
-                "看起来是 Unity 做的",
-                "目录里有压好的 .br / .gz，会按原样直接给玩家，由浏览器解压"
+                "Looks like a Unity build",
+                "The directory has precompressed .br / .gz files; they are served as-is and the browser decompresses them"
             ]
         );
     }
@@ -671,7 +678,7 @@ mod tests {
             ("index.audio.worklet.js", b"//"),
         ]);
         let report = dir.inspect();
-        let found = about(&report, "没有 .pck");
+        let found = about(&report, "no .pck");
         assert_eq!(found.level, Level::Warn);
         assert!(found.hint.as_ref().unwrap().contains(".pck"), "{found:?}");
 
@@ -682,7 +689,7 @@ mod tests {
             ("index.wasm", b"\0asm\x01\x00\x00\x00"),
             ("index.pck", b"pack"),
         ]);
-        assert_eq!(messages(&whole.inspect()), ["看起来是 Godot 做的"]);
+        assert_eq!(messages(&whole.inspect()), ["Looks like a Godot build"]);
     }
 
     /// 只是在页面里提了一句 Godot 的，不算 Godot 导出——不能因为一个词就说人家少传了文件。
@@ -692,7 +699,7 @@ mod tests {
             ("index.html", b"<p>Godot 4 needs two response headers</p>"),
             ("mod.wasm", b"\0asm\x01\x00\x00\x00"),
         ]);
-        assert_eq!(messages(&dir.inspect()), ["看起来是 Godot 做的"]);
+        assert_eq!(messages(&dir.inspect()), ["Looks like a Godot build"]);
     }
 
     /// Unity 的 Build 只拷了一半。
@@ -705,7 +712,7 @@ mod tests {
             ("Build/webgl.wasm", b"\0asm\x01\x00\x00\x00"),
         ]);
         let report = dir.inspect();
-        assert_eq!(about(&report, "没有 .data").level, Level::Warn);
+        assert_eq!(about(&report, "no .data").level, Level::Warn);
     }
 
     #[test]
@@ -734,7 +741,7 @@ mod tests {
         assert_eq!(report.engine, Some(Engine::Vite));
         // 清单里照实写 vite；「打包工具不等于游戏」由门禁页那份名单判断，玩家看到「体验」。
         assert_eq!(report.manifest_engine().as_deref(), Some("vite"));
-        assert_eq!(messages(&report), ["看起来是 Vite 做的"]);
+        assert_eq!(messages(&report), ["Looks like a Vite build"]);
     }
 
     #[test]
@@ -756,8 +763,10 @@ mod tests {
         let paths = vec!["node_modules/x/index.js".to_string()];
         assert!(explain_limit(&too_many, &paths)
             .unwrap()
-            .contains("源码目录"));
-        assert!(!explain_limit(&too_many, &[]).unwrap().contains("源码目录"));
+            .contains("source directory"));
+        assert!(!explain_limit(&too_many, &[])
+            .unwrap()
+            .contains("source directory"));
     }
 
     #[test]

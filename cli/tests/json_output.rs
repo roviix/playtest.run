@@ -53,7 +53,7 @@ const CARD_BYTES: &[u8] = b"\x89PNG\r\n\x1a\nnot-really-a-png";
 fn error_body(refusal: Refusal) -> Response {
     (
         StatusCode::from_u16(refusal.status).unwrap(),
-        Json(json!({ "code": refusal.code, "message": "服务器说的那句话" })),
+        Json(json!({ "code": refusal.code, "message": "what the server actually said" })),
     )
         .into_response()
 }
@@ -112,7 +112,7 @@ async fn list_sites(State(fake): State<Arc<Fake>>) -> Json<Value> {
     Json(json!([{
         "slug": SLUG,
         "url": site_url(&fake),
-        "title": "小球试玩",
+        "title": "Bouncy Ball",
         "current_version": 3,
         "created_at": "2026-09-07T00:00:00Z",
         "expires_at": "2026-09-08T03:30:00Z",
@@ -126,7 +126,7 @@ async fn get_site(State(fake): State<Arc<Fake>>, UrlPath(slug): UrlPath<String>)
     Json(json!({
         "slug": slug,
         "url": site_url(&fake),
-        "title": "小球试玩",
+        "title": "Bouncy Ball",
         "current_version": 7,
         "created_at": "2026-09-07T00:00:00Z",
         "listing": { "has_cover": false, "followers": 12 },
@@ -143,7 +143,7 @@ async fn patch_site(
     Json(json!({
         "slug": slug,
         "url": site_url(&fake),
-        "title": "小球试玩",
+        "title": "Bouncy Ball",
         "current_version": 7,
         "created_at": "2026-09-07T00:00:00Z",
         "listing": {
@@ -178,7 +178,7 @@ async fn activate_version(
     Json(json!({
         "slug": slug,
         "url": site_url(&fake),
-        "title": "小球试玩",
+        "title": "Bouncy Ball",
         "current_version": version,
         "created_at": "2026-09-07T00:00:00Z",
         "listing": { "has_cover": false, "followers": 12 },
@@ -394,7 +394,7 @@ fn current_directory_is_used_without_guessing_a_recent_site() {
         assert!(value["message"]
             .as_str()
             .unwrap()
-            .contains("这个目录还没发过"));
+            .contains("has never been published"));
     }
 }
 
@@ -496,7 +496,7 @@ fn an_upload_answers_with_one_object_and_keeps_the_talking_on_stderr() {
 
     // 说给人听的那些话一句都没跑到 stdout 上。
     let stderr = stderr_of(&output);
-    assert!(stderr.contains("正在整理"), "{stderr}");
+    assert!(stderr.contains("Reading "), "{stderr}");
     assert!(!stderr.contains('█'), "JSON 模式不该画二维码：{stderr}");
 }
 
@@ -568,7 +568,7 @@ fn an_explicit_card_download_saves_the_file_and_reports_its_path() {
         .any(|finding| finding["message"]
             .as_str()
             .unwrap_or("")
-            .contains("没有封面")));
+            .contains("no cover")));
 }
 
 #[test]
@@ -681,7 +681,7 @@ fn a_failed_explicit_card_save_does_not_hide_a_successful_publish() {
             .any(|finding| finding["message"]
                 .as_str()
                 .unwrap_or("")
-                .contains("作品已发布，但邀请卡未能保存")),
+                .contains("Project published, but the invite card could not be saved")),
         "{value}"
     );
     assert_eq!(std::fs::read_to_string(obstacle).unwrap(), "keep me");
@@ -700,7 +700,10 @@ fn retired_gate_is_hidden_and_fails_with_migration_advice() {
                 &[target, "--gate", mode, "--json"],
             );
             let value = expect_failure(&output, 2, "usage");
-            assert!(value["message"].as_str().unwrap().contains("--gate 已撤出"));
+            assert!(value["message"]
+                .as_str()
+                .unwrap()
+                .contains("--gate is gone"));
         }
     }
 }
@@ -806,7 +809,7 @@ fn the_card_command_fetches_one_more_copy() {
     );
     assert!(first.status.success(), "{}", stderr_of(&first));
 
-    let out = work.path().join("卡片").join("邀请.png");
+    let out = work.path().join("cards").join("invite.png");
     let output = run_cli_in(
         work.path(),
         home.path(),
@@ -819,7 +822,7 @@ fn the_card_command_fetches_one_more_copy() {
     assert_eq!(value["slug"], SLUG);
     assert_eq!(std::fs::read(&out).unwrap(), CARD_BYTES);
     assert!(
-        value["card_path"].as_str().unwrap().contains("邀请.png"),
+        value["card_path"].as_str().unwrap().contains("invite.png"),
         "{value}"
     );
 
@@ -831,7 +834,7 @@ fn the_card_command_fetches_one_more_copy() {
         &["--json", "card", dist.to_str().unwrap()],
     );
     assert!(output.status.success(), "{}", stderr_of(&output));
-    assert!(work.path().join("小球试玩-邀请卡.png").exists());
+    assert!(work.path().join("Bouncy Ball-invite.png").exists());
 }
 
 #[test]
@@ -854,7 +857,7 @@ fn how_many_are_waiting_shows_up_in_the_list() {
     assert!(listed.status.success(), "{}", stderr_of(&listed));
     let one = &only_object(&listed)["sites"][0];
     assert_eq!(one["followers"], 12);
-    assert_eq!(one["title"], "小球试玩");
+    assert_eq!(one["title"], "Bouncy Ball");
 
     // 那条命令真的没了，而不是悄悄留着。
     let gone = run_cli(home.path(), &api, &["--json", "followers", SLUG]);
@@ -885,7 +888,7 @@ fn listing_after_an_upload_names_the_work() {
     let output = run_cli(home.path(), &api, &["ls", "--json"]);
     let value = only_object(&output);
     assert_eq!(value["sites"][0]["slug"], SLUG);
-    assert_eq!(value["sites"][0]["title"], "小球试玩");
+    assert_eq!(value["sites"][0]["title"], "Bouncy Ball");
     assert_eq!(value["sites"][0]["version"], 3);
 }
 
@@ -944,7 +947,10 @@ fn asking_for_help_in_machine_mode_still_yields_one_object() {
     let value = only_object(&output);
     assert_eq!(value["action"], "help");
     let text = value["text"].as_str().unwrap();
-    assert!(text.contains("退出码"), "帮助里该有退出码那一段：{text}");
+    assert!(
+        text.contains("Exit codes"),
+        "帮助里该有退出码那一段：{text}"
+    );
 }
 
 // ---------------------------------------------------------------- 各条退出码
@@ -961,7 +967,7 @@ fn a_directory_that_is_not_there_is_our_users_problem_not_the_networks() {
     );
     let value = expect_failure(&output, 6, "bad_input");
     assert!(
-        value["message"].as_str().unwrap().contains("找不到"),
+        value["message"].as_str().unwrap().contains("Can't find"),
         "{value}"
     );
 }
@@ -978,11 +984,17 @@ fn nobody_listening_is_a_network_problem() {
     );
     let value = expect_failure(&output, 4, "network");
     assert!(
-        value["message"].as_str().unwrap().contains("连不上服务器"),
+        value["message"]
+            .as_str()
+            .unwrap()
+            .contains("Can't reach the server"),
         "{value}"
     );
     assert!(
-        value["hint"].as_str().unwrap().contains("请检查网络连接"),
+        value["hint"]
+            .as_str()
+            .unwrap()
+            .contains("Check your connection"),
         "{value}"
     );
 }
@@ -1002,7 +1014,7 @@ fn a_full_quota_has_its_own_exit_code() {
         value["message"]
             .as_str()
             .unwrap()
-            .contains("服务器说的那句话"),
+            .contains("what the server actually said"),
         "服务器的原话要带回来：{value}"
     );
 }
@@ -1139,9 +1151,9 @@ fn without_the_flag_stdout_is_still_just_the_link() {
     );
 
     let stderr = stderr_of(&output);
-    assert!(!stderr.contains("本次 "), "{stderr}");
-    assert!(!stderr.contains("没有封面"), "{stderr}");
-    assert!(!stderr.contains("（哈希 0.0"), "四个 0.0 是噪声：{stderr}");
+    assert!(!stderr.contains("This run took"), "{stderr}");
+    assert!(!stderr.contains("no cover"), "{stderr}");
+    assert!(!stderr.contains("(hash 0.0"), "四个 0.0 是噪声：{stderr}");
 }
 
 /// 发完那一屏，从上到下就是「接下来做什么」的次序（DESIGN §3.2）。
@@ -1175,12 +1187,12 @@ fn what_a_first_timer_sees_after_publishing_comes_in_one_useful_order() {
     let stderr = stderr_of(&output);
     let said: Vec<&str> = stderr.lines().filter(|l| !l.trim().is_empty()).collect();
     let order = [
-        "已发布",
-        "已放到广场上",
-        "想找 10 位试玩者",
-        // 快到期时这一句会换成提醒，两种说法里都有「匿名链接」这四个字。
-        "匿名链接",
-        "来的人玩成什么样",
+        "Published",
+        "On the Plaza",
+        "Looking for 10 testers",
+        // 快到期时这一句会换成提醒，两种说法里都有「anonymous link」。
+        "nonymous link",
+        "See how people played",
     ];
     let mut at = 0usize;
     for head in order {

@@ -62,9 +62,9 @@ impl Page {
     /// 检测到 Vite 时要说的那句话。
     pub fn vite_hint(&self) -> Option<Finding> {
         self.is_vite().then(|| {
-            Finding::note("检测到 Vite").hint(
-                "手机上要热更新的话，在 vite.config 里加 server.hmr.clientPort = 443\
-                 （不加也能玩，只是改代码后手机那边不会自动刷新）",
+            Finding::note("Looks like Vite").hint(
+                "For hot reload on a phone, set server.hmr.clientPort = 443 in vite.config \
+                 (it still plays without it; edits just will not refresh on the phone)",
             )
         })
     }
@@ -73,8 +73,8 @@ impl Page {
     /// 一个 socket.io 的游戏服务器没有源码可以看，说了就是吓人。
     pub fn exposure_hint(&self) -> Option<Finding> {
         self.is_vite().then(|| {
-            Finding::warn("拿到链接的人能看到这个开发服务器的全部：源码、/@fs/ 这类接口都在")
-                .hint("给朋友随手看看没问题；正式测试用 playtest ./dist，只发构建出来的东西")
+            Finding::warn("Anyone with the link sees everything this dev server exposes: your source, /@fs/ and the rest")
+                .hint("Fine for showing a friend. For a real playtest run playtest ./dist, which publishes only the build")
         })
     }
 
@@ -86,8 +86,8 @@ impl Page {
             || html.contains("http://127.0.0.1:")
             || html.contains("https://127.0.0.1:");
         has_hardcoded.then(|| {
-            Finding::warn("首页中检测到硬编码的 localhost 地址")
-                .hint("静态资源或接口若使用绝对地址，外部玩家可能无法访问；建议改用相对路径（如 /api/...）")
+            Finding::warn("The page hardcodes a localhost address")
+                .hint("Absolute addresses for assets or APIs will not resolve for anyone else. Use relative paths instead, like /api/...")
         })
     }
 }
@@ -163,12 +163,12 @@ pub fn heavy_hint(total: u64) -> Option<Finding> {
     }
     Some(
         Finding::note(format!(
-            "这个页面要下载约 {}。隧道走你的电脑上行，按常见家宽 30 Mbps 算一个玩家大约要等 {} 秒，\
-             十个人同时进来会更久",
+            "This page downloads about {}. The tunnel runs on your uplink, so at a typical 30 Mbps home connection one player waits around {} seconds, \
+             and ten at once wait longer",
             ui::bytes(total),
             wait_seconds(total)
         ))
-        .hint("如果这个目录是构建好的静态导出物，`playtest ./dist` 上传一次更快"),
+        .hint("If this directory is already a built static export, uploading it once with `playtest ./dist` is faster"),
     )
 }
 
@@ -326,7 +326,10 @@ mod tests {
         assert!(hint.message.contains("Vite"));
         let hint = hint.hint.unwrap();
         assert!(hint.contains("server.hmr.clientPort = 443"), "{hint}");
-        assert!(hint.contains("也能玩"), "不加也能玩这件事要说清楚：{hint}");
+        assert!(
+            hint.contains("still plays"),
+            "不加也能玩这件事要说清楚：{hint}"
+        );
         assert!(Page::default().vite_hint().is_none());
     }
 
@@ -337,7 +340,11 @@ mod tests {
             self_bytes: Some(10),
         };
         let warning = vite.exposure_hint().expect("开发服务器要说清暴露了什么");
-        assert!(warning.message.contains("源码"), "{}", warning.message);
+        assert!(
+            warning.message.contains("your source"),
+            "{}",
+            warning.message
+        );
         assert!(warning.hint.unwrap().contains("playtest ./dist"));
         // 没认出开发服务器就不说：socket.io 的房间服务器没有源码可看。
         assert!(Page::default().exposure_hint().is_none());
@@ -355,7 +362,7 @@ mod tests {
             .localhost_hint()
             .expect("硬编码 localhost 应该有提示");
         assert!(warning.message.contains("localhost"));
-        assert!(warning.hint.unwrap().contains("相对路径"));
+        assert!(warning.hint.unwrap().contains("relative paths"));
 
         let page_clean = Page {
             html: Some(r#"<html><script src="/api.js"></script></html>"#.into()),
@@ -420,7 +427,7 @@ mod tests {
     fn a_heavy_page_gets_a_number_not_an_adjective() {
         let hint = heavy_hint(32 * MIB).expect("32 MB 该提醒");
         assert!(hint.message.contains("32.0 MB"), "{}", hint.message);
-        assert!(hint.message.contains("9 秒"), "{}", hint.message);
+        assert!(hint.message.contains("9 seconds"), "{}", hint.message);
         assert!(hint.message.contains("30 Mbps"), "得说清楚这是按什么算的");
         assert!(hint.hint.unwrap().contains("playtest ./dist"));
     }

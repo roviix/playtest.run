@@ -44,23 +44,23 @@ pub struct Article {
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ArticleError {
-    #[error("文章是空的。请先写一点正文再发布。")]
+    #[error("The article is empty. Write something before publishing it.")]
     Empty,
     #[error(
-        "文章里不能放原生 HTML。请改用 Markdown 语法；首批阅读器不会执行标签、脚本或嵌入组件。"
+        "Articles can't contain raw HTML. Use Markdown instead — the reader does not execute tags, scripts or embeds."
     )]
     RawHtml,
-    #[error("文章里的图片必须是同目录内的本地 PNG、JPEG、WebP 或 GIF，不接受远程图片：{0}")]
+    #[error("Images must be local PNG, JPEG, WebP or GIF files next to the article. Remote images aren't accepted: {0}")]
     RemoteImage(String),
-    #[error("文章里的图片路径越出了文章所在目录：{0}")]
+    #[error("This image path points outside the article's own directory: {0}")]
     EscapingImage(String),
-    #[error("文章里的图片格式首批不支持：{0}（只接受 PNG、JPEG、WebP、GIF）")]
+    #[error("This image format isn't supported yet: {0} (PNG, JPEG, WebP and GIF are)")]
     UnsupportedImage(String),
-    #[error("文章里的本地文件链接首批不支持：{0}。要引用配图请用图片语法，要跳转请写完整的 http(s) 链接。")]
+    #[error("Links to local files aren't supported yet: {0}. Use image syntax for figures, or a full http(s) link to send people elsewhere.")]
     LocalLink(String),
-    #[error("文章里的链接协议不安全或首批不支持：{0}")]
+    #[error("This link uses a scheme that is unsafe or not supported yet: {0}")]
     UnsafeLink(String),
-    #[error("文章路径不合法：{0}")]
+    #[error("This article path isn't valid: {0}")]
     BadPath(String),
 }
 

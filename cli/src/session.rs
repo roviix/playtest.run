@@ -55,7 +55,7 @@ impl Session {
     pub fn client_or_say(&self, what: &str) -> Result<Client> {
         self.client()?.ok_or_else(|| {
             output::bad_input(format!(
-                "这台机器上还没发过东西，{what}。运行 playtest ./dist 发一个。"
+                "Nothing has been published from this machine, so {what}. Run playtest ./dist to publish something."
             ))
         })
     }
@@ -69,7 +69,7 @@ impl Session {
         if !path.is_dir() {
             if target.starts_with('.') || target.contains('/') || target.contains('\\') {
                 return Err(output::bad_input(format!(
-                    "找不到目录「{target}」。请指定已发布的目录，或用 playtest ls 查看作品标识。"
+                    "No directory named {target}. Point at a directory you published, or run playtest ls to see your project slugs."
                 )));
             }
             return Ok(target.to_string());
@@ -80,7 +80,7 @@ impl Session {
         match self.config.remembered_slug(&key) {
             Some(slug) => Ok(slug.to_string()),
             None => Err(output::bad_input(format!(
-                "{target} 这个目录还没发过。先运行 playtest {target} 把它发出去。"
+                "{target} has never been published. Run playtest {target} to publish it first."
             ))),
         }
     }
@@ -124,7 +124,7 @@ mod tests {
             "C:\\missing",
         ] {
             let error = session.slug_of(target).unwrap_err();
-            assert!(error.to_string().contains("找不到目录"), "{error}");
+            assert!(error.to_string().contains("No directory named"), "{error}");
         }
     }
 
@@ -149,7 +149,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let s = session_with(Config::default());
         let err = s.slug_of(dir.path().to_str().unwrap()).unwrap_err();
-        assert!(err.to_string().contains("还没发过"), "{err}");
+        assert!(
+            err.to_string().contains("has never been published"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -157,9 +160,9 @@ mod tests {
         let s = session_with(Config::default());
         assert!(s.client().unwrap().is_none(), "没令牌不是错误");
         let err = s
-            .client_or_say("没有它可以删")
+            .client_or_say("nothing to remove")
             .err()
             .expect("没令牌时要说人话");
-        assert!(err.to_string().contains("没有它可以删"), "{err}");
+        assert!(err.to_string().contains("nothing to remove"), "{err}");
     }
 }
