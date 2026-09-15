@@ -29,7 +29,7 @@
       let text = copy.dataset.copyText;
       if (!text && dialog) {
         const panel = Array.from(dialog.querySelectorAll('.codebox')).find(item => getComputedStyle(item).display !== 'none');
-        text = panel?.querySelector('code')?.textContent;
+        text = panel?.dataset.copyText || panel?.querySelector('code')?.textContent;
       }
       text = text || '';
       const succeed = () => {

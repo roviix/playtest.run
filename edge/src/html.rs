@@ -180,11 +180,11 @@ mod tests {
     #[test]
     fn each_page_carries_only_its_two_layers_and_they_stay_small() {
         // 卡页 ~15 KB：含整套门禁卡与右侧悬浮实时原声舱（含微信式全屏聊天、表情盘与试玩贴纸），无外链脚本，样式在 16 KB 以内。
-        // 整页 29 KB：广场的墙、栏、卡、Slogan Hero、发布说明（终端舱）、通知设置都在里面，没有一条卡页的规则。
+        // 整页 ~31 KB：广场的墙、栏、卡、Slogan Hero、发布说明（终端舱）、通知设置都在里面，样式在 32 KB 以内。
         let card = BASE.len() + CARD.len();
         let page = BASE.len() + PAGE.len();
         assert!(card < 32 * 512, "卡页样式 {card} 字节");
-        assert!(page < 29 * 1024, "整页样式 {page} 字节");
+        assert!(page < 32 * 1024, "整页样式 {page} 字节");
         assert!(
             PAGE.contains(".publish-sheet{width:min(34rem,100%)"),
             "发布说明独立使用 34rem 紧凑阅读宽度"

@@ -389,12 +389,12 @@ fn publish_sheet() -> String {
 <button class=\"copy-command\" type=\"button\" aria-label=\"Copy command\" title=\"Copy command\" data-copy-command hidden>\
 <svg class=\"icon copy-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"8\" y=\"8\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3\"/></svg>\
 <svg class=\"icon copied-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg><span class=\"copy-text\">Copy</span></button></div>\n\
-<div class=\"codebox ai-box\" id=\"panel-ai\" tabindex=\"0\" role=\"region\" aria-label=\"AI Prompt\"><code>{ai_prompt}</code></div>\n\
+<div class=\"codebox ai-box\" id=\"panel-ai\" tabindex=\"0\" role=\"region\" aria-label=\"AI Prompt\" data-copy-text=\"{ai_prompt_plain}\"><div class=\"ai-prompt-view\"><div class=\"ai-lead\">Build and publish this project to playtest.run:</div><div class=\"ai-step\"><span class=\"step-num\">1.</span> Ensure CLI is installed: <code class=\"cmd-pill\"><span class=\"k\">curl</span> <span class=\"f\">-fsSL</span> https://playtest.run/install.sh | <span class=\"k\">bash</span></code></div><div class=\"ai-step\"><span class=\"step-num\">2.</span> Publish: run <code class=\"cmd-pill\"><span class=\"k\">playtest</span> <span class=\"a\">&lt;dir&gt;</span></code> for static build with index.html (add <span class=\"f\">--spa</span> for SPA), or <code class=\"cmd-pill\"><span class=\"k\">playtest</span> <span class=\"a\">&lt;port&gt;</span></code> for dev server. Optional: <span class=\"f\">-n</span> &quot;<span class=\"a\">name</span>&quot;, <span class=\"f\">-m</span> &quot;<span class=\"a\">note</span>&quot;.</div><div class=\"ai-step\"><span class=\"step-num\">3.</span> Report back the playable link and QR code.</div></div></div>\n\
 <div class=\"codebox\" id=\"panel-static\" tabindex=\"0\" role=\"region\" aria-label=\"Publish command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span></code></div>\n\
 <div class=\"codebox\" id=\"panel-local\" tabindex=\"0\" role=\"region\" aria-label=\"Publish command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">3000</span></code></div>\n\
 <div class=\"codebox\" id=\"panel-backend\" tabindex=\"0\" role=\"region\" aria-label=\"Publish command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span> <span class=\"f\">--backend</span> <span class=\"a\">8000</span></code></div>\n\
 <div class=\"codebox\" id=\"panel-install\" tabindex=\"0\" role=\"region\" aria-label=\"Install command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">curl</span> <span class=\"f\">-fsSL</span> <span class=\"a\">https://playtest.run/install.sh</span> <span class=\"f\">|</span> <span class=\"k\">bash</span></code></div>\n\
-<p class=\"leg\" id=\"leg-ai\">{info}<span>把提示词发给 Cursor、Claude Code 等 AI 助手，它会自动完成构建与发布。</span></p>\n\
+<p class=\"leg\" id=\"leg-ai\">{info}<span>Paste into Cursor, Claude Code, or Windsurf to build and publish autonomously.</span></p>\n\
 <p class=\"leg\" id=\"leg-static\">{info}<span>Build your project and replace <code>./dist</code> with your export folder.</span></p>\n\
 <p class=\"leg\" id=\"leg-local\">{info}<span>Start your local dev server and keep the terminal session open.</span></p>\n\
 <p class=\"leg\" id=\"leg-backend\">{info}<span>Proxies unmatched routes to your local backend.</span></p>\n\
@@ -417,11 +417,11 @@ fn publish_sheet() -> String {
         out = icon("out"),
         usage = USAGE_URL,
         dev = DEVELOPER_API_URL,
-        ai_prompt = crate::html::esc(
-            "请将当前项目构建并发布到 playtest.run：\n\
-1. 检查或安装 CLI：curl -fsSL https://playtest.run/install.sh | bash\n\
-2. 依项目选择发布：含 index.html 产物运行 playtest <目录>（单页应用加 --spa），或本地服务运行 playtest <端口>。可用 -n 指定名称，-m 简述更新。\n\
-3. 将返回的试玩链接与二维码反馈给我。"
+        ai_prompt_plain = crate::html::esc(
+            "Build and publish this project to playtest.run:\n\
+1. Ensure CLI is installed: curl -fsSL https://playtest.run/install.sh | bash\n\
+2. Publish: run playtest <dir> for static build with index.html (add --spa for SPA), or playtest <port> for local dev server. Optional: -n \"<name>\", -m \"<note>\".\n\
+3. Report back the playable link and QR code."
         ),
     )
 }
