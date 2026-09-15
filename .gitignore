@@ -10,6 +10,9 @@ target/
 bin/
 *.log
 
+# Cargo 的 src/bin/ 是源码不是产物：上面的 bin/ 会把契约生成器吞掉，CI 因此连 workspace 都编不过。
+!**/src/bin/
+
 # 测试用的真实导出物要进仓库；Unity 布局里的 Build/ 在不区分大小写的文件系统上会被上面的 build/ 误伤
 !fixtures/**/export/**
 
