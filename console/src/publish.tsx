@@ -5,7 +5,7 @@ import { BrandMark } from "./auth";
 const AI_PROMPT_TEXT = `Build and publish this project to playtest.run:
 1. Ensure CLI is installed: curl -fsSL https://playtest.run/install.sh | bash
 2. Publish: run playtest <dir> for static build with index.html (add --spa for SPA), or playtest <port> for local dev server. Optional: -n "<name>", -m "<note>".
-3. Report back the playable link and QR code.`;
+3. Hand back the playable link and QR code.`;
 
 interface Mode {
   id: "ai" | "static" | "local" | "install";
@@ -23,7 +23,7 @@ const modes: Mode[] = [
   },
   {
     id: "static",
-    label: "Export Folder",
+    label: "Export Directory",
     commandText: "playtest ./dist",
     hint: "Build your project first, then replace ./dist with your export directory.",
   },
@@ -66,13 +66,13 @@ export function Publish() {
     } catch {
       if (generation !== copyGeneration.current) return;
       setCopied(false);
-      setMessage("Failed to copy automatically, please select and copy manually.");
+      setMessage("Could not reach the clipboard. Select the text above and copy it manually.");
     }
   }
 
   return <>
     <button class="publish" type="button" onClick={() => { resetCopy(); dialog.current?.showModal(); }}>
-      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg> Publish Work
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg> Publish Project
     </button>
     <dialog class="overlay" ref={dialog} aria-labelledby="publish-title" onClose={resetCopy}>
       <button class="overlay-back" type="button" aria-label="Close publish dialog" tabIndex={-1} onClick={() => dialog.current?.close()} />
@@ -80,7 +80,7 @@ export function Publish() {
         <div class="dialog-head">
           <div class="dialog-title-wrap">
             <BrandMark />
-            <h2 id="publish-title">Publish Work</h2>
+            <h2 id="publish-title">Publish Project</h2>
           </div>
           <button class="close" type="button" autoFocus aria-label="Close publish dialog" onClick={() => dialog.current?.close()}>
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg>

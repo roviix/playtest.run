@@ -118,7 +118,7 @@ async function call<T>(path: string, init: RequestInit = {}, notifyExpired = tru
     response = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: "same-origin" });
   } catch {
     // 断网、控制面没起、代理没配都会走到这里。说清楚下一步做什么。
-    throw new ApiError(0, "offline", "暂时连接不上，请检查网络后重试。");
+    throw new ApiError(0, "offline", "Cannot reach the server. Check your connection and try again.");
   }
 
   if (response.status === 401 && notifyExpired) {
@@ -131,7 +131,7 @@ async function call<T>(path: string, init: RequestInit = {}, notifyExpired = tru
   try {
     parsed = text ? JSON.parse(text) : null;
   } catch {
-    throw new ApiError(response.status, "internal", `控制面返回了看不懂的东西：${text.slice(0, 200)}`);
+    throw new ApiError(response.status, "internal", `The server returned a response we could not read: ${text.slice(0, 200)}`);
   }
 
   if (!response.ok) {
@@ -139,7 +139,7 @@ async function call<T>(path: string, init: RequestInit = {}, notifyExpired = tru
     throw new ApiError(
       response.status,
       body?.code ?? "internal",
-      body?.message ?? `控制面返回了 ${response.status}。`,
+      body?.message ?? `The server returned ${response.status}.`,
     );
   }
   return parsed as T;

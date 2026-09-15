@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>playtest · 一条命令，把这个版本放到别人面前</title>
-<meta name="description" content="把你手上这个能玩的版本，用一条命令放到别人面前，然后知道他们玩成了什么样。">
+<title>playtest · One command to put this build in front of other people</title>
+<meta name="description" content="One command puts the playable build you have right now in front of other people, and tells you how it went.">
 <style>
 /* 和控制台（console/src/style.css）、玩家侧（edge/src/html.rs）同一套记号：同样的琥珀色、同样的圆角。
    这一页只是开发者第一次来时读的说明，所以是浅色、窄栏、正文优先；右边那张暗色卡片是玩家会看到的门禁页，用 CSS 画出来的。 */
@@ -51,47 +51,48 @@ footer{margin:3rem 0 3.5rem;padding-top:1rem;border-top:1px solid var(--line);co
 <div class="shell">
 <header class="top">
   <a class="brand" href="/">playtest</a>
-  <nav><a href="https://playtest.run/">广场</a><a href="/console/">控制台</a><a href="#install">安装</a></nav>
+  <nav><a href="https://playtest.run/">Plaza</a><a href="/console/">Developer Console</a><a href="#install">Install CLI</a></nav>
 </header>
 
 <section class="hero">
-<h1>一条命令，把你手上这个能玩的版本放到别人面前，<br>然后知道他们玩成了什么样。</h1>
-<p class="lead">给用 AI 写小东西的人、Game Jam 参赛者、独立开发者、创意编码作者。产物是浏览器里跑的东西，观众是具体的人——朋友、测试者、评委、学生。</p>
-<pre><code><b>playtest</b> ./dist                <span class="c"># 上传导出目录 → https://xxx.playtest.run 和一张二维码</span>
-<b>playtest</b> 5173                  <span class="c"># 把正在跑的本地开发服务器接出去，链接长得一样</span>
-<b>playtest</b> ./dist --backend 3000 <span class="c"># 静态文件上传，/api 和 WebSocket 穿隧道回你的后端</span></code></pre>
-<ul class="facts"><li>玩家不注册、不装东西</li><li>手机扫码就能玩</li><li>不登录也能发，24 小时</li><li>不运行你的代码，只分发文件</li></ul>
+<h1>One command puts the build you have right now in front of<br>other people, and tells you how it went.</h1>
+<p class="lead">For people making small things with AI, game jam entrants, indie developers, creative coders. What you built runs in a browser; the audience is specific people — friends, testers, judges, students.</p>
+<pre><code><b>playtest</b> ./dist                <span class="c"># upload an export directory &#8594; https://xxx.playtest.run and a QR code</span>
+<b>playtest</b> 5173                  <span class="c"># hand out the dev server already running here, same kind of link</span>
+<b>playtest</b> ./dist --backend 3000 <span class="c"># static files uploaded, /api and WebSockets tunnelled to your backend</span></code></pre>
+<ul class="facts"><li>Testers do not sign up or install anything</li><li>Scan the QR code and play on a phone</li><li>No account needed: an Anonymous link lasts 24 hours</li><li>We serve your files, we never run your code</li></ul>
 </section>
 
-<h2>玩家点开之后</h2>
+<h2>What a tester sees</h2>
 <div class="two">
 <div>
-<div class="step"><div class="n">1</div><div>先看到一页「某某 邀请你试玩《作品名》· v7」和一个「开始」按钮。这一下点击解锁了浏览器的音频，也是会话的起点。</div></div>
-<div class="step"><div class="n">2</div><div>进入作品。<code>.wasm</code>、预压缩的 <code>.br</code>、Godot 4 需要的跨源隔离、断点续传——引擎导出物最容易白屏的地方，边缘替你配好了。</div></div>
-<div class="step"><div class="n">3</div><div>你在<a href="/console/">控制台</a>看到的不是仪表盘，是点名册：几个人打开、几个人进到游戏、停留多久、在什么设备上报了什么错、说了什么。</div></div>
+<div class="step"><div class="n">1</div><div>First a page that says &#8220;&lt;author&gt; invites you to test <i>Your Title</i> · v7&#8221; with a Start button. That one click unlocks browser audio, and it is where the session begins.</div></div>
+<div class="step"><div class="n">2</div><div>Then the project itself. <code>.wasm</code>, pre-compressed <code>.br</code>, the cross-origin isolation Godot 4 needs, range requests — the places engine exports usually turn into a white screen are already set up at the edge.</div></div>
+<div class="step"><div class="n">3</div><div>What the <a href="/console/">Developer Console</a> gives you is not a dashboard, it is a roster: how many opened it, how many got into the game, how long they stayed, which device reported which error, and what they said.</div></div>
 </div>
 <div class="gate" aria-hidden="true">
-  <small>匿名开发者 邀请你试玩</small>
-  <div class="t">《跳跳》<span>· v7</span></div>
-  <div class="go">开始</div>
-  <p class="exp">这个链接在 明天 17:58 后失效</p>
+  <small>Anonymous invites you to test</small>
+  <div class="t">Jumpy<span>· v7</span></div>
+  <div class="go">Start</div>
+  <p class="exp">This link expires tomorrow at 17:58</p>
 </div>
 </div>
 
-<h2>现在的状态</h2>
+<h2>Where this stands</h2>
 <div class="status">
-<p><span class="ok">已经能用：</span>上传、隧道、静态加后端的混合模式、门禁页、点名册、可选的 <code>playtest.js</code>（加一行 <code>&lt;script src="/_playtest/sdk.js"&gt;&lt;/script&gt;</code> 就有 JS 错误、加载用时、自定义事件和一个反馈按钮）、广场（<code>--public</code> 与 <code>--seek</code>）、版本回滚。</p>
-<p><span style="color:var(--accent)">刚接上、还在真机验证：</span>GitHub 登录（<code>playtest login</code>；登录前发的作品会一起归入账号、不再 24 小时后失效）。<span style="color:var(--accent)">还没做：</span>自己挑链接名字、口令与邀请名单、自定义域名。做不到的地方命令会明说。</p>
-<p>不登录也能用：每次运行拿到的是 24 小时的匿名链接；控制台里粘上 <code>~/.config/playtest/config.json</code> 里的令牌就能看结果。</p>
+<p><span class="ok">Working today:</span> uploads, tunnels, the hybrid static-plus-backend mode, the Door page, the roster, the invite card (<code>playtest card</code> writes <code>&lt;title&gt;-invite.png</code>), the optional <code>playtest.js</code> (one <code>&lt;script src="/_playtest/sdk.js"&gt;&lt;/script&gt;</code> line gives you JS errors, load timing, custom events and a feedback button), Plaza (<code>--public</code> and <code>--seats</code>), and version rollback.</p>
+<p><span style="color:var(--accent)">Landed recently, not yet verified on anyone else's machine:</span> sign-in (<code>playtest login</code>; projects you published before signing in move into your account and stop expiring after 24 hours). <span style="color:var(--accent)">Not built yet:</span> picking your own link name, passwords and invite lists, custom domains. The CLI says so whenever it cannot do something.</p>
+<p>You do not need an account: every run gives you an Anonymous link that lasts 24 hours, and pasting the token from <code>~/.config/playtest/config.json</code> into the Developer Console shows you the results.</p>
 </div>
 
-<h2 id="install">安装</h2>
-<p>一个单文件，macOS（Apple Silicon 与 Intel）、Linux（x86_64 与 arm64）、Windows 各一份，在 <a href="https://github.com/roviix/playtest.run/releases">GitHub Releases</a> 下载。私测阶段仓库是私有的，链接只有受邀的人打得开；macOS 第一次运行若被拦，在「系统设置 → 隐私与安全性」里放行一次（还没有签名与公证）。</p>
-<pre><code><span class="c"># macOS / Linux：解开、放进 PATH、发一个</span>
-tar -xzf playtest-*.tar.gz &amp;&amp; sudo mv playtest-*/playtest /usr/local/bin/
-cd 你的导出目录 &amp;&amp; playtest .</code></pre>
+<h2 id="install">Install</h2>
+<p>One binary per platform: macOS (Apple Silicon and Intel), Linux (x86_64 and arm64) and Windows. The current release is v0.3.0, and the source is public at <a href="https://github.com/roviix/playtest.run">github.com/roviix/playtest.run</a>.</p>
+<pre><code><span class="c"># macOS / Linux: one line, installs to ~/.local/bin</span>
+curl -fsSL https://playtest.run/install.sh | bash
+cd your-export-directory &amp;&amp; playtest .</code></pre>
+<p>On Windows, or if you would rather do it by hand, download the archive for your platform from <a href="https://github.com/roviix/playtest.run/releases/latest">GitHub Releases</a> and put <code>playtest</code> on your <code>PATH</code>. The binaries are not signed or notarised yet; if macOS blocks the first run, allow it once under <i>System Settings &#8594; Privacy &amp; Security</i>.</p>
 
-<footer>玩家看到的东西全在 <code>*.playtest.run</code> 上；登录、令牌、控制台只在这个域名下。我们从不运行你的代码，只分发文件和转发连接；不记玩家 IP，不收集位置。数据默认保留 90 天。<br>一个 <a href="https://roviix.com">roviix</a> 出品 · <a href="https://playtest.run/">去广场看看别人在测什么</a></footer>
+<footer>Everything a tester sees lives on <code>*.playtest.run</code>; sign-in, tokens and the Developer Console exist only on this domain. We never run your code — we serve files and forward connections. We do not record tester IP addresses and we do not collect location. Data is kept for 90 days by default.<br>Made by <a href="https://roviix.com">roviix</a> · <a href="https://playtest.run/">See what other people are testing</a></footer>
 </div>
 </body>
 </html>

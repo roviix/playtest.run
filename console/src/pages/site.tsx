@@ -68,11 +68,11 @@ export function SitePage({
 
   return (
     <>
-      <a class="back-link" href={href({ name: "sites" })}>← All Works</a>
+      <a class="back-link" href={href({ name: "sites" })}>← All Projects</a>
       <Identity site={site} />
       {loaded.error ? <Failed error={loaded.error} onRetry={loaded.reload} /> : null}
       <Now site={site} results={results} />
-      <nav class="tabs" aria-label="Work tabs">
+      <nav class="tabs" aria-label="Project tabs">
         <TabLink slug={slug} tab="results" active={tab} text="Results" />
         <TabLink slug={slug} tab="roster" active={tab} text="Visitors" version={rosterVersion} />
         <TabLink slug={slug} tab="feedback" active={tab} text="Feedback" />
@@ -144,9 +144,9 @@ function Identity({ site }: { site: Site }) {
   else chips.push({ text: "No version yet", tone: "plain" });
   if (listing?.public) {
     if (listing.hidden) chips.push({ text: "Unlisted", tone: "warn" });
-    else chips.push({ text: listing.seeking ? "On Plaza · Seeking Testers" : "On Plaza", tone: "" });
+    else chips.push({ text: listing.seeking ? "On Plaza · Seeking testers" : "On Plaza", tone: "" });
   }
-  if (listing && (listing.followers ?? 0) > 0) chips.push({ text: `${listing.followers} followers`, tone: "plain" });
+  if (listing && (listing.followers ?? 0) > 0) chips.push({ text: `${listing.followers} ${listing.followers === 1 ? "follower" : "followers"}`, tone: "plain" });
   if (listing?.seats) chips.push({ text: `${listing.joined ?? 0} / ${listing.seats} seats`, tone: "plain" });
   const remaining = left(site.expires_at);
   if (remaining) chips.push({ text: `Anonymous · ${remaining}`, tone: "warn" });

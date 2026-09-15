@@ -21,7 +21,7 @@ export function DevicePage() {
         setPreview(await account.previewDevice(code));
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : "授权未完成，请重试。");
+      setError(error instanceof Error ? error.message : "Authorization did not complete. Try again.");
     } finally {
       setBusy(false);
     }
@@ -38,23 +38,23 @@ export function DevicePage() {
         </div>
 
         <header class="device-head">
-          <h1>{done ? "已授权连接" : "连接命令行"}</h1>
+          <h1>{done ? "Device connected" : "Connect the CLI"}</h1>
           <p class="muted">
             {done
-              ? "这台设备已成功与你的账号绑定，可以回到终端继续操作。"
-              : "在终端运行 playtest login 后，输入屏幕上显示的 8 位代码。"}
+              ? "This device is linked to your account. Go back to the terminal to continue."
+              : "Run playtest login in your terminal, then enter the 8-character code it shows."}
           </p>
         </header>
 
         {done ? (
           <div class="device-done-body">
-            <p class="device-tip">回到终端，已自动登录完毕；之后发布的作品将永久保留在你的账号下。</p>
-            <a class="button primary" href="#/">查看我的作品</a>
+            <p class="device-tip">The terminal is signed in. Projects you publish from now on stay in your account for good.</p>
+            <a class="button primary" href="#/">Open My Projects</a>
           </div>
         ) : (
           <form class="device-form" onSubmit={submit}>
             <div class="device-input-wrap">
-              <label for="device-code" class="device-label">一次性授权代码</label>
+              <label for="device-code" class="device-label">One-time device code</label>
               <input
                 id="device-code"
                 autoComplete="off"
@@ -78,27 +78,27 @@ export function DevicePage() {
             {preview ? (
               <div class="device-preview-box">
                 <p class="preview-text">
-                  <strong>授权权限</strong>：允许此命令行发布、更新和管理你的作品。令牌可随时在账号设置中撤销。
+                  <strong>This grants</strong> the CLI permission to publish, update and manage your projects. You can revoke the token any time in Settings.
                 </p>
                 {preview.anonymous_works ? (
                   <p class="preview-sub">
-                    ✓ 将自动把该终端上的 <strong>{preview.anonymous_works}</strong> 件临时作品合并保留至当前账号。
+                    ✓ The <strong>{preview.anonymous_works}</strong> temporary {preview.anonymous_works === 1 ? "project" : "projects"} published from this terminal will move into your account and stop expiring.
                   </p>
                 ) : null}
               </div>
             ) : (
               <p class="notice-note">
-                🔒 仅在你自己的终端执行 <code>playtest login</code> 时输入，切勿输入别人发来的代码。
+                🔒 Only enter a code that your own terminal showed after <code>playtest login</code>. Never enter a code someone sent you.
               </p>
             )}
 
             <div class="device-actions">
               <button class="button primary" type="submit" disabled={busy || !code.trim() || code.length < 4}>
-                {busy ? "正在确认…" : preview ? "允许连接" : "继续"}
+                {busy ? "Confirming…" : preview ? "Allow" : "Continue"}
               </button>
               {preview ? (
                 <button class="button quiet" type="button" disabled={busy} onClick={() => setPreview(null)}>
-                  更换代码
+                  Use another code
                 </button>
               ) : null}
             </div>

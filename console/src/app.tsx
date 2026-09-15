@@ -28,7 +28,7 @@ export function App() {
   async function refresh() {
     setError("");
     try { setIdentity(await account.view()); }
-    catch (error) { setError(error instanceof Error ? error.message : "暂时无法连接，请重试。"); }
+    catch (error) { setError(error instanceof Error ? error.message : "Cannot reach the server right now. Try again."); }
     finally { setLoading(false); }
   }
 
@@ -57,7 +57,7 @@ export function App() {
     } else {
       setExchanging(false);
       void refresh();
-      if (query.has("login") || query.has("error")) setLogin({ target: route, returnTo, error: query.has("error") ? "GitHub 登录未完成，可以重试或使用邮箱。" : undefined });
+      if (query.has("login") || query.has("error")) setLogin({ target: route, returnTo, error: query.has("error") ? "GitHub sign-in did not complete. Try again, or use email instead." : undefined });
     }
   }, []);
 
@@ -68,7 +68,7 @@ export function App() {
   useEffect(() => {
     const expired = () => {
       setIdentity((previous) => previous ? { ...previous, account: null } : null);
-      setLogin({ target: route, error: "登录已失效，请重新登录。" });
+      setLogin({ target: route, error: "Your session expired. Sign in again." });
     };
     const requested = () => setLogin({ target: route });
     addEventListener(AUTH_EXPIRED_EVENT, expired);
@@ -148,7 +148,7 @@ function Rail({ route, me, onNavigate }: { route: Route; me: Me | null; onNaviga
     <nav class="rail-nav" aria-label="Pages">
       <a class="nav-item" href="/"><NavIcon kind="grid" />Plaza</a>
       <a class="nav-item" href="/me"><NavIcon kind="bell" />Following</a>
-      <a class={`nav-item ${mine ? "active" : ""}`} aria-current={mine ? "page" : undefined} href={href({ name: "sites" })} onClick={(event) => onNavigate(event, { name: "sites" })}><NavIcon kind="grid" />My Works</a>
+      <a class={`nav-item ${mine ? "active" : ""}`} aria-current={mine ? "page" : undefined} href={href({ name: "sites" })} onClick={(event) => onNavigate(event, { name: "sites" })}><NavIcon kind="grid" />My Projects</a>
       <a class={`nav-item ${route.name === "collections" ? "active" : ""}`} aria-current={route.name === "collections" ? "page" : undefined} href={href({ name: "collections" })} onClick={(event) => onNavigate(event, { name: "collections" })}><NavIcon kind="folder" />My Collections</a>
     </nav>
     <div class="rail-bottom">

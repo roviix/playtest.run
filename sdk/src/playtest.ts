@@ -183,7 +183,7 @@ type Sample = {
       }
     }
     const where = fileOf(file);
-    const text = (message || '未命名的错误').slice(0, 200);
+    const text = (message || 'Unnamed error').slice(0, 200);
     // 点名册里同一个错误要能合并成一行，所以指纹里不放列号——同一行代码打包前后列号会变。
     const fingerprint = where ? text + ' @ ' + where + ':' + (line || 0) : text;
     const times = (seen[fingerprint] = (seen[fingerprint] || 0) + 1);
@@ -211,7 +211,7 @@ type Sample = {
     try {
       const why = e.reason;
       const message = why && why.message ? why.message : String(why);
-      report('未处理的 Promise 拒绝：' + message, why && why.stack);
+      report('Unhandled promise rejection: ' + message, why && why.stack);
     } catch (_) {
       /* 同上。 */
     }
@@ -299,11 +299,11 @@ type Sample = {
       ANCHOR +
         'padding:6px 12px;border:0;border-radius:16px;background:rgba(17,17,17,.72);color:#fff;' +
         'cursor:pointer;box-shadow:0 1px 6px rgba(0,0,0,.25);-webkit-tap-highlight-color:transparent;',
-      '反馈',
+      'Feedback',
     );
     button.id = 'playtest-feedback';
     button.type = 'button';
-    button.setAttribute('aria-label', '给开发者留一句话');
+    button.setAttribute('aria-label', 'Send the developer a note');
     button.onclick = () => {
       button.style.display = 'none';
       openPanel(() => {
@@ -326,7 +326,7 @@ type Sample = {
         'border-radius:8px;resize:none;' +
         FONT,
     ) as HTMLTextAreaElement;
-    box.placeholder = '哪里卡住了？一句话就行';
+    box.placeholder = 'Where did you get stuck? One line is enough';
     box.maxLength = 2000;
 
     const row = el('div', 'display:flex;gap:8px;margin-top:8px;');
@@ -335,14 +335,14 @@ type Sample = {
       'flex:0 0 auto;padding:6px 10px;border:0;border-radius:8px;background:#f2f2f2;' +
         'color:#555;cursor:pointer;' +
         FONT,
-      '取消',
+      'Cancel',
     );
     const send0 = el(
       'button',
       'flex:1;padding:6px 10px;border:0;border-radius:8px;background:#111;color:#fff;' +
         'cursor:pointer;' +
         FONT,
-      '发送',
+      'Send',
     );
     cancel.type = 'button';
     send0.type = 'button';
@@ -359,7 +359,7 @@ type Sample = {
         return;
       }
       send0.disabled = true;
-      send0.textContent = '发送中';
+      send0.textContent = 'Sending';
       send('/v1/ingest/feedback', {
         session: sid,
         slug: slug,
@@ -370,7 +370,7 @@ type Sample = {
           landing(panel, close);
           return;
         }
-        panel.textContent = '没发出去，等下再试一次';
+        panel.textContent = 'Could not send. Try again in a moment.';
         panel.style.width = 'auto';
         setTimeout(close, 1600);
       });
@@ -419,7 +419,7 @@ type Sample = {
    */
   function landing(panel: HTMLElement, close: () => void) {
     panel.textContent = '';
-    panel.appendChild(el('div', 'font-weight:600;margin-bottom:8px;', '谢谢，开发者会看到。'));
+    panel.appendChild(el('div', 'font-weight:600;margin-bottom:8px;', 'Thanks. The developer will see this.'));
 
     if (onEdge && slug) {
       const form = el('form', 'display:flex;gap:6px;margin:0;');
@@ -436,14 +436,14 @@ type Sample = {
       );
       email.type = 'email';
       email.name = 'email';
-      email.placeholder = '有新版本时告诉我';
+      email.placeholder = 'Email me about new versions';
 
       const tell = el(
         'button',
         'flex:0 0 auto;padding:6px 10px;border:0;border-radius:8px;background:#111;color:#fff;' +
           'cursor:pointer;' +
           FONT,
-        '告诉我',
+        'Notify me',
       );
       tell.type = 'submit';
 
@@ -455,7 +455,7 @@ type Sample = {
     const foot = el('div', 'display:flex;align-items:baseline;gap:8px;margin-top:10px;');
     const plaza = plazaHref();
     if (plaza) {
-      const link = el('a', SMALL + 'color:#666;text-decoration:underline;', '看看别的作品');
+      const link = el('a', SMALL + 'color:#666;text-decoration:underline;', 'See other projects');
       link.href = plaza;
       link.target = '_blank';
       link.rel = 'noreferrer';
@@ -464,7 +464,7 @@ type Sample = {
     const done = el(
       'button',
       SMALL + 'margin-left:auto;padding:0;border:0;background:none;color:#999;cursor:pointer;',
-      '关掉',
+      'Close',
     );
     done.type = 'button';
     done.onclick = close;

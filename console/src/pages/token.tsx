@@ -44,7 +44,7 @@ export function TokenPage({
       setEmail("");
       setShowEmailInput(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "绑定邮箱失败，请稍后重试。");
+      setError(err instanceof Error ? err.message : "Could not link that email. Try again.");
     } finally {
       setBusy(false);
     }
@@ -62,10 +62,10 @@ export function TokenPage({
       await account.profile(next);
       await onRefresh();
       setEditingName(false);
-      setMessage("已保存。");
+      setMessage("Saved.");
       setTimeout(() => setMessage(""), 2500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "保存失败，请稍后重试。");
+      setError(err instanceof Error ? err.message : "Could not save. Try again.");
     } finally {
       setBusy(false);
     }
@@ -80,7 +80,7 @@ export function TokenPage({
       setCopied(false);
       await loadTokens();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "生成令牌失败，请稍后重试。");
+      setError(err instanceof Error ? err.message : "Could not create a token. Try again.");
     } finally {
       setBusy(false);
     }
@@ -94,10 +94,10 @@ export function TokenPage({
       if (token) setToken("");
       setRevokingId(null);
       await loadTokens();
-      setMessage("令牌已撤销。");
+      setMessage("Token revoked.");
       setTimeout(() => setMessage(""), 2500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "撤销失败。");
+      setError(err instanceof Error ? err.message : "Could not revoke that token. Try again.");
     } finally {
       setBusy(false);
     }
@@ -115,7 +115,7 @@ export function TokenPage({
     <div class="account-page">
       <header class="stage-head">
         <div>
-          <h1>设置</h1>
+          <h1>Settings</h1>
         </div>
       </header>
 
@@ -127,7 +127,7 @@ export function TokenPage({
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           <span>{error}</span>
-          <button type="button" class="notice-dismiss" onClick={() => setError("")} aria-label="关闭">×</button>
+          <button type="button" class="notice-dismiss" onClick={() => setError("")} aria-label="Dismiss">×</button>
         </div>
       ) : null}
 
@@ -138,7 +138,7 @@ export function TokenPage({
             <polyline points="22 4 12 14.01 9 11.01" />
           </svg>
           <span>{message}</span>
-          <button type="button" class="notice-dismiss" onClick={() => setMessage("")} aria-label="关闭">×</button>
+          <button type="button" class="notice-dismiss" onClick={() => setMessage("")} aria-label="Dismiss">×</button>
         </div>
       ) : null}
 
@@ -161,26 +161,26 @@ export function TokenPage({
                   Creator
                 </span>
               </div>
-              <span>{profile.me.login ? `@${profile.me.login}` : (profile.email || "创作者")}</span>
+              <span>{profile.me.login ? `@${profile.me.login}` : (profile.email || "Author")}</span>
             </div>
           </div>
 
           <div class="settings-identity-actions">
-            <a class="settings-action" href="/me" title="查看公开作品与动态">
+            <a class="settings-action" href="/me" title="View your public page">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                 <polyline points="15 3 21 3 21 9" />
                 <line x1="10" y1="14" x2="21" y2="3" />
               </svg>
-              公开主页
+              Public page
             </a>
-            <button class="settings-action settings-action--danger" type="button" onClick={onLogout} title="退出登录">
+            <button class="settings-action settings-action--danger" type="button" onClick={onLogout} title="Sign out">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
                 <line x1="21" y1="12" x2="9" y2="12" />
               </svg>
-              退出
+              Sign out
             </button>
           </div>
         </div>
@@ -191,7 +191,7 @@ export function TokenPage({
         <header class="settings-card-head">
           <div class="settings-card-head-row">
             <div class="settings-card-heading">
-              <h2 class="settings-card-title">资料</h2>
+              <h2 class="settings-card-title">Profile</h2>
             </div>
           </div>
         </header>
@@ -199,7 +199,7 @@ export function TokenPage({
         <div class="settings-card-body">
           <div class="settings-row">
             <div class="settings-row-meta">
-              <span class="settings-row-label">展示名称</span>
+              <span class="settings-row-label">Display name</span>
             </div>
             <div class="settings-row-control">
               {editingName ? (
@@ -209,7 +209,7 @@ export function TokenPage({
                     value={draftName}
                     maxLength={40}
                     autoFocus
-                    placeholder="输入展示名称"
+                    placeholder="Your display name"
                     disabled={busy}
                     onInput={(e) => setDraftName(e.currentTarget.value)}
                     onKeyDown={(e) => {
@@ -227,7 +227,7 @@ export function TokenPage({
                       setEditingName(false);
                     }}
                   >
-                    取消
+                    Cancel
                   </button>
                   <button
                     type="button"
@@ -235,7 +235,7 @@ export function TokenPage({
                     disabled={busy || !draftName.trim() || draftName.trim() === profile.me.display_name}
                     onClick={() => void saveName()}
                   >
-                    保存
+                    Save
                   </button>
                 </div>
               ) : (
@@ -246,7 +246,7 @@ export function TokenPage({
                     setDraftName(profile.me.display_name);
                     setEditingName(true);
                   }}
-                  title="点击修改"
+                  title="Click to edit"
                 >
                   <span>{profile.me.display_name}</span>
                   <svg class="pencil-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -259,21 +259,21 @@ export function TokenPage({
 
           <div class="settings-row">
             <div class="settings-row-meta">
-              <span class="settings-row-label">邮箱</span>
+              <span class="settings-row-label">Email</span>
             </div>
             <div class="settings-row-control">
-              <span class="settings-value settings-value--mono">{profile.email || "未绑定"}</span>
+              <span class="settings-value settings-value--mono">{profile.email || "Not linked"}</span>
             </div>
           </div>
 
           <div class="settings-row settings-row--last">
             <div class="settings-row-meta">
-              <span class="settings-row-label">身份</span>
+              <span class="settings-row-label">Account</span>
             </div>
             <div class="settings-row-control">
               <span class="settings-chip settings-chip--accent">
                 <span class="settings-chip-dot" />
-                独立创作者
+                Independent author
               </span>
             </div>
           </div>
@@ -285,17 +285,17 @@ export function TokenPage({
         <header class="settings-card-head">
           <div class="settings-card-head-row">
             <div class="settings-card-heading">
-              <h2 class="settings-card-title">登录方式</h2>
+              <h2 class="settings-card-title">Sign-in methods</h2>
               <div class="settings-tip-anchor">
                 <button
                   type="button"
                   class="settings-card-tip-btn"
-                  aria-label="说明"
+                  aria-label="About sign-in methods"
                 >
                   ?
                 </button>
                 <div class="settings-tip-popover" role="tooltip">
-                  GitHub 授权与邮箱验证码登录双通道均指向当前唯一账户，作品与令牌保持同步。
+                  GitHub and email both sign you into this same account. Your projects and tokens stay the same either way.
                 </div>
               </div>
             </div>
@@ -311,11 +311,11 @@ export function TokenPage({
               {profile.me.login ? (
                 <span class="settings-chip settings-chip--pos">
                   <span class="settings-chip-dot" />
-                  已连接 @{profile.me.login}
+                  Connected as @{profile.me.login}
                 </span>
               ) : (
                 <a class="settings-action settings-action--primary" href={`${githubLoginUrl}?return_to=${encodeURIComponent("/console/#/token")}`}>
-                  连接 GitHub
+                  Connect GitHub
                 </a>
               )}
             </div>
@@ -323,17 +323,17 @@ export function TokenPage({
 
           <div class="settings-row settings-row--last">
             <div class="settings-row-meta">
-              <span class="settings-row-label">邮箱登录</span>
+              <span class="settings-row-label">Email sign-in</span>
             </div>
             <div class="settings-row-control">
               {profile.email && !showEmailInput ? (
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <span class="settings-chip settings-chip--pos">
                     <span class="settings-chip-dot" />
-                    已连接
+                    Connected
                   </span>
                   <button type="button" class="settings-action" onClick={() => setShowEmailInput(true)}>
-                    更换
+                    Change
                   </button>
                 </div>
               ) : (
@@ -342,17 +342,17 @@ export function TokenPage({
                     type="email"
                     class="settings-inline-input"
                     value={email}
-                    placeholder="输入邮箱"
+                    placeholder="you@example.com"
                     required
                     disabled={busy}
                     onInput={(e) => setEmail(e.currentTarget.value)}
                   />
                   <button type="submit" class="settings-inline-btn save" disabled={busy || !email.trim()}>
-                    发送链接
+                    Send link
                   </button>
                   {profile.email ? (
                     <button type="button" class="settings-inline-btn cancel" onClick={() => setShowEmailInput(false)}>
-                      取消
+                      Cancel
                     </button>
                   ) : null}
                 </form>
@@ -367,7 +367,7 @@ export function TokenPage({
         <header class="settings-card-head">
           <div class="settings-card-head-row">
             <div class="settings-card-heading">
-              <h2 class="settings-card-title">开发者令牌</h2>
+              <h2 class="settings-card-title">Access tokens</h2>
             </div>
             <button
               type="button"
@@ -375,7 +375,7 @@ export function TokenPage({
               disabled={busy}
               onClick={createToken}
             >
-              + 生成新令牌
+              + New token
             </button>
           </div>
         </header>
@@ -383,13 +383,13 @@ export function TokenPage({
         {token ? (
           <div class="settings-token-box">
             <div class="settings-token-box-head">
-              <span class="settings-token-box-badge">新令牌已生成</span>
-              <span class="settings-token-box-warn">离开页面后将不再显示，请妥善保存</span>
+              <span class="settings-token-box-badge">New token</span>
+              <span class="settings-token-box-warn">Copy it now, it will not be shown again</span>
             </div>
             <div class="settings-token-box-row">
               <input class="settings-token-box-input" value={token} readOnly onClick={(e) => e.currentTarget.select()} />
               <button type="button" class="settings-token-box-btn" onClick={copyToken}>
-                {copied ? "已复制 ✓" : "复制"}
+                {copied ? "Copied ✓" : "Copy"}
               </button>
             </div>
           </div>
@@ -398,7 +398,7 @@ export function TokenPage({
         <div class="settings-card-body">
           {tokens.length === 0 ? (
             <div class="token-empty-state">
-              暂无开发者令牌
+              No tokens yet. Create one to sign in the CLI on a machine without a browser.
             </div>
           ) : (
             tokens.map((t) => (
@@ -409,7 +409,7 @@ export function TokenPage({
                     <span class="token-row-time">{new Date(t.created_at).toLocaleDateString()}</span>
                     <span class="settings-chip settings-chip--pos">
                       <span class="settings-chip-dot" />
-                      活跃
+                      Active
                     </span>
                   </div>
                 </div>
@@ -422,7 +422,7 @@ export function TokenPage({
                         disabled={busy}
                         onClick={() => void confirmRevoke(t.id)}
                       >
-                        确认撤销
+                        Confirm revoke
                       </button>
                       <button
                         type="button"
@@ -430,7 +430,7 @@ export function TokenPage({
                         disabled={busy}
                         onClick={() => setRevokingId(null)}
                       >
-                        取消
+                        Cancel
                       </button>
                     </div>
                   ) : (
@@ -440,7 +440,7 @@ export function TokenPage({
                       disabled={busy}
                       onClick={() => setRevokingId(t.id)}
                     >
-                      撤销
+                      Revoke
                     </button>
                   )}
                 </div>

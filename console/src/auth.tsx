@@ -73,7 +73,7 @@ export function LoginDialog({ request, onClose, available }: {
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 1-4-2-6-2m12 5v-3.4a3 3 0 0 0-.8-2.3c2.7-.3 5.6-1.3 5.6-6a4.7 4.7 0 0 0-1.3-3.3 4.3 4.3 0 0 0-.1-3.3S17.4 3.4 15 5a11.5 11.5 0 0 0-6 0C6.6 3.4 5.6 3.7 5.6 3.7a4.3 4.3 0 0 0-.1 3.3 4.7 4.7 0 0 0-1.3 3.3c0 4.7 2.9 5.7 5.6 6A3 3 0 0 0 9 18.6V22"/></svg>
         Continue with GitHub
       </a> : null}
-      {available && !available.email_available && !available.github_available ? <p role="status">Sign in is temporarily unavailable. Works remain accessible. Please try again later.</p> : null}
+      {available && !available.email_available && !available.github_available ? <p role="status">Sign in is temporarily unavailable. Projects remain accessible. Please try again later.</p> : null}
       {!available ? <p role="status">Unable to load sign in methods right now. Please close and try again.</p> : null}
     </>}
     {error ? <p class="login-error" role="alert">{error}</p> : null}
@@ -81,13 +81,13 @@ export function LoginDialog({ request, onClose, available }: {
 }
 
 export function LoginRequired({ route, onLogin }: { route: Route; onLogin: () => void }) {
-  const title = route.name === "collections" ? "My Collections" : route.name === "token" ? "Account" : "My Works";
+  const title = route.name === "collections" ? "My Collections" : route.name === "token" ? "Account" : "My Projects";
   return <div class="auth-required">
     <header class="stage-head"><h1>{title}</h1></header>
     <div class="auth-empty">
       <BrandMark />
       <h2>Sign in to continue</h2>
-      <p class="muted">Following, works, and collections — all in one account.</p>
+      <p class="muted">Following, projects, and collections — all in one account.</p>
       <button class="button primary" type="button" onClick={onLogin}>Sign in</button>
     </div>
   </div>;

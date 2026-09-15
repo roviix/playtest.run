@@ -24,7 +24,7 @@ export function HomePage({ sites, me }: { sites: Loaded<Site[]>; me: Me | null }
       <header class="workspace-head">
         <div>
           <h1>
-            My Works
+            My Projects
             <span class="workspace-count" style={{ marginLeft: "8px" }}>{count}</span>
           </h1>
         </div>
@@ -72,7 +72,7 @@ function tagOf(site: Site): { text: string; tone: string } | null {
   const listing = site.listing;
   if (!listing?.public) return null;
   if (listing.hidden) return { text: "Unlisted", tone: "warn" };
-  if (listing.seeking) return { text: "Seeking Testers", tone: "" };
+  if (listing.seeking) return { text: "Seeking testers", tone: "" };
   return { text: "On Plaza", tone: "plain" };
 }
 
@@ -82,7 +82,7 @@ function factOf(site: Site): string {
   if (listing?.seats) return `${listing.joined ?? 0} / ${listing.seats} seats`;
   const remaining = left(site.expires_at);
   if (remaining) return remaining;
-  if (listing && (listing.followers ?? 0) > 0) return `${listing.followers} followers`;
+  if (listing && (listing.followers ?? 0) > 0) return `${listing.followers} ${listing.followers === 1 ? "follower" : "followers"}`;
   if (site.current_version !== undefined) return `v${site.current_version}`;
   return `Created ${moment(site.created_at)}`;
 }
@@ -115,8 +115,8 @@ function EmptyHome({ me }: { me: Me | null }) {
             <line x1="12" y1="22.08" x2="12" y2="12" />
           </svg>
         }
-        title="No works yet"
-        description="Run one command in your project directory to create a playable build and collect feedback."
+        title="No projects yet"
+        description="Run one command in your export directory. You get a link and a QR code to hand out, and feedback comes back here."
       >
         <div class="command-box">
           <code>{command}</code>
@@ -129,7 +129,7 @@ function EmptyHome({ me }: { me: Me | null }) {
         </p>
         {anonymous ? (
           <p class="notice">
-            Anonymous session. Sign in anytime to preserve works permanently.
+            Anonymous session. Anonymous links last 24 hours; sign in to keep your projects for good.
           </p>
         ) : null}
       </Empty>

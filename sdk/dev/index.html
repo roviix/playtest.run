@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>playtest.js 手动试一遍</title>
+    <title>playtest.js manual test page</title>
     <style>
       body {
         margin: 0;
@@ -32,33 +32,35 @@
   </head>
   <body>
     <main>
-      <h1>playtest.js 手动试一遍</h1>
+      <h1>playtest.js manual test page</h1>
       <p>
-        这一页假装是一个游戏。它自己不做任何统计，全部由页面底部那一行
-        <code>&lt;script&gt;</code> 完成。右下角应该出现一个「反馈」按钮。
+        This page pretends to be a game. It collects nothing on its own; everything comes from
+        the single <code>&lt;script&gt;</code> tag at the bottom. A "Feedback" button should appear
+        in the bottom-right corner.
       </p>
       <p>
-        用 <code>pnpm dev</code> 起服务，然后从
-        <code>http://&lt;slug&gt;.localhost:38080/</code> 打开——域名的第一段会被当作 slug，
-        它得是控制面里真实存在的一个作品，事件才写得进去。
+        Run <code>pnpm dev</code>, then open
+        <code>http://&lt;slug&gt;.localhost:38080/</code>. The first label of the hostname is read as
+        the slug, and it has to match a project that really exists on the server, otherwise the
+        events are rejected.
       </p>
 
-      <div class="game" id="game">（这里是游戏画面，点一下算一次输入）</div>
+      <div class="game" id="game">(game canvas goes here, a click counts as one input)</div>
 
       <p>
-        <button id="err">扔一个错误</button>
-        <button id="reject">未处理的 Promise</button>
-        <button id="event">打一个自定义事件</button>
-        <button id="loop">连发 40 条（试限流）</button>
+        <button id="err">Throw an error</button>
+        <button id="reject">Unhandled promise</button>
+        <button id="event">Send a custom event</button>
+        <button id="loop">Send 40 in a row (hit the cap)</button>
       </p>
 
-      <h2 style="font-size: 1rem">这一页看得见的</h2>
-      <div id="log">（发出去的请求会记在这里）</div>
+      <h2 style="font-size: 1rem">What you should see</h2>
+      <div id="log">(outgoing requests are logged here)</div>
 
       <ul>
-        <li><code>load</code> 在首帧之后自动发一条。</li>
-        <li>输入只在切走或关掉这一页时补一条 <code>input</code>，不是每次都发。</li>
-        <li>右下角的反馈框没有任何必填项，发送成功会显示「收到，谢谢」。</li>
+        <li><code>load</code> is sent once automatically, after the first frame.</li>
+        <li>Input is reported as a single <code>input</code> sample when the page is hidden or closed, not on every interaction.</li>
+        <li>The feedback box has no required fields; on success it says "Thanks. The developer will see this."</li>
       </ul>
     </main>
 
@@ -88,7 +90,7 @@
         }, 0);
       };
       document.getElementById('reject').onclick = () => {
-        Promise.reject(new Error('存档读不出来'));
+        Promise.reject(new Error('Could not read the save file'));
       };
       document.getElementById('event').onclick = () => {
         window.playtest.event('level_done', { level: 3 });

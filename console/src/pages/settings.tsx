@@ -122,27 +122,27 @@ function WorkDetails({
 
   return (
     <Block
-      title="基本信息"
-      lead="作品标题与长期简介。修改后会实时同步至作品邀请函与广场卡片。"
+      title="Basics"
+      lead="Project title and one-line summary. Changes show up on the door page and the Plaza card right away."
     >
       <form class="work-meta-form" onSubmit={submit}>
         <div class="field-grid">
           <label class="field">
-            <span>作品名称</span>
+            <span>Title</span>
             <input
               value={title}
               required
               maxLength={80}
-              placeholder="作品名称"
+              placeholder="Project title"
               onInput={(event) => setTitle((event.target as HTMLInputElement).value)}
             />
           </label>
           <label class="field">
-            <span>一句话简介 · {Array.from(summary).length}/140</span>
+            <span>Summary · {Array.from(summary).length}/140</span>
             <input
               value={summary}
               maxLength={140}
-              placeholder="简明介绍你的作品（可在广场与邀请卡中展示）"
+              placeholder="One line about this project, shown on Plaza and the invite card"
               onInput={(event) => setSummary((event.target as HTMLInputElement).value)}
             />
           </label>
@@ -153,18 +153,18 @@ function WorkDetails({
             <span class={`now-dot ${site.listing?.has_cover ? "" : "idle"}`} aria-hidden="true" />
             <span class="muted">
               {site.listing?.has_cover
-                ? "已配置封面图 · 更换可在终端运行 playtest ./dist --cover <文件>"
-                : "暂无封面（当前使用字标占位） · 随时可在终端运行 playtest ./dist --cover <文件> 添加"}
+                ? "Cover image set · replace it with playtest ./dist --cover <file>"
+                : "No cover image yet, a monogram card is used instead · add one with playtest ./dist --cover <file>"}
             </span>
           </div>
           <div class="meta-action">
-            {saved ? <span class="save-toast">✓ 已更新</span> : null}
+            {saved ? <span class="save-toast">✓ Saved</span> : null}
             <button
               class="button primary"
               type="submit"
               disabled={busy || !hasChanged || !title.trim()}
             >
-              {busy ? "保存中…" : "保存基本信息"}
+              {busy ? "Saving…" : "Save"}
             </button>
           </div>
         </div>
@@ -500,7 +500,7 @@ function Versions({ site, onVersionsChanged }: { site: Site; onVersionsChanged: 
               <span class="mono ver-no">v{one.version}</span>
               <span class="version-when muted">{moment(one.created_at)}</span>
               <span class="version-size muted mono">
-                {one.file_count} files · {bytes(one.total_bytes)}
+                {one.file_count} {one.file_count === 1 ? "file" : "files"} · {bytes(one.total_bytes)}
               </span>
               <span class="version-note">{one.note ? `“${one.note}”` : ""}</span>
               {one.current ? (
@@ -545,7 +545,7 @@ function Danger({ site }: { site: Site }) {
   return (
     <section class="block danger">
       <div class="block-head">
-        <h2>Delete Work</h2>
+        <h2>Delete Project</h2>
         <p class="muted">
           The link will become invalid immediately. Versions, roster, and feedback will be permanently deleted. This cannot be undone.
         </p>
