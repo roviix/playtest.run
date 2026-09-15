@@ -19,7 +19,7 @@ const modes: Mode[] = [
     id: "ai",
     label: "AI Prompt",
     commandText: AI_PROMPT_TEXT,
-    hint: "Paste this prompt into Cursor, Claude Code, or Windsurf to build and publish autonomously.",
+    hint: "",
   },
   {
     id: "static",
@@ -98,7 +98,14 @@ export function Publish() {
               >
                 {item.id === "ai" && (
                   <svg class="icon tab-spark" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="m12 3 1.9 4.9a3.5 3.5 0 0 0 2.2 2.2L21 12l-4.9 1.9a3.5 3.5 0 0 0-2.2 2.2L12 21l-1.9-4.9a3.5 3.5 0 0 0-2.2-2.2L3 12l4.9-1.9a3.5 3.5 0 0 0 2.2-2.2z" />
+                    <defs>
+                      <linearGradient id="ai-grad-c" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#c084fc" />
+                        <stop offset="50%" stop-color="#38bdf8" />
+                        <stop offset="100%" stop-color="#75cdb5" />
+                      </linearGradient>
+                    </defs>
+                    <path fill="url(#ai-grad-c)" d="m12 3 1.9 4.9a3.5 3.5 0 0 0 2.2 2.2L21 12l-4.9 1.9a3.5 3.5 0 0 0-2.2 2.2L12 21l-1.9-4.9a3.5 3.5 0 0 0-2.2-2.2L3 12l4.9-1.9a3.5 3.5 0 0 0 2.2-2.2z" />
                   </svg>
                 )}
                 {item.label}
@@ -125,21 +132,7 @@ export function Publish() {
             </div>
             {selected.id === "ai" && (
               <div class="codebox ai-box selected" tabIndex={0} role="region" aria-label="AI Prompt">
-                <div class="ai-prompt-view">
-                  <div class="ai-lead">Build and publish this project to playtest.run:</div>
-                  <div class="ai-step">
-                    <span class="step-num">1.</span> Ensure CLI is installed:{" "}
-                    <code class="cmd-pill"><span class="k">curl</span> <span class="f">-fsSL</span> https://playtest.run/install.sh | <span class="k">bash</span></code>
-                  </div>
-                  <div class="ai-step">
-                    <span class="step-num">2.</span> Publish: run{" "}
-                    <code class="cmd-pill"><span class="k">playtest</span> <span class="a">&lt;dir&gt;</span></code> for static build with index.html (add <span class="f">--spa</span> for SPA), or{" "}
-                    <code class="cmd-pill"><span class="k">playtest</span> <span class="a">&lt;port&gt;</span></code> for dev server. Optional: <span class="f">-n</span> "<span class="s">name</span>", <span class="f">-m</span> "<span class="s">note</span>".
-                  </div>
-                  <div class="ai-step">
-                    <span class="step-num">3.</span> Report back the playable link and QR code.
-                  </div>
-                </div>
+                <code>{AI_PROMPT_TEXT}</code>
               </div>
             )}
             {selected.id === "static" && (
@@ -157,10 +150,12 @@ export function Publish() {
                 <b aria-hidden="true">$</b><code><span class="k">curl</span> <span class="f">-fsSL</span> <span class="a">https://playtest.run/install.sh</span> | <span class="k">bash</span></code>
               </div>
             )}
-            <p class="leg selected">
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4m0-4h.01" /></svg>
-              <span>{selected.hint}</span>
-            </p>
+            {selected.hint ? (
+              <p class="leg selected">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4m0-4h.01" /></svg>
+                <span>{selected.hint}</span>
+              </p>
+            ) : null}
           </div>
           <p class="pub-status" role="status" data-state={copied ? "success" : "error"}>{message}</p>
         </div>

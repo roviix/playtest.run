@@ -374,7 +374,7 @@ fn publish_sheet() -> String {
 <div class=\"pub\">\n\
 <div class=\"publish-tabs\" role=\"group\" aria-label=\"Publish mode\">\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-ai\" checked>\n\
-<label for=\"tab-ai\">AI Prompt</label>\n\
+<label for=\"tab-ai\" class=\"tab-ai\"><svg class=\"icon tab-spark\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><defs><linearGradient id=\"ai-grad-p\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"#c084fc\"/><stop offset=\"50%\" stop-color=\"#38bdf8\"/><stop offset=\"100%\" stop-color=\"#75cdb5\"/></linearGradient></defs><path fill=\"url(#ai-grad-p)\" d=\"m12 3 1.9 4.9a3.5 3.5 0 0 0 2.2 2.2L21 12l-4.9 1.9a3.5 3.5 0 0 0-2.2 2.2L12 21l-1.9-4.9a3.5 3.5 0 0 0-2.2-2.2L3 12l4.9-1.9a3.5 3.5 0 0 0 2.2-2.2z\"/></svg>AI Prompt</label>\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-static\">\n\
 <label for=\"tab-static\">Export Directory</label>\n\
 <input type=\"radio\" name=\"pub-mode\" id=\"tab-local\">\n\
@@ -389,12 +389,11 @@ fn publish_sheet() -> String {
 <button class=\"copy-command\" type=\"button\" aria-label=\"Copy command\" title=\"Copy command\" data-copy-command hidden>\
 <svg class=\"icon copy-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"8\" y=\"8\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3\"/></svg>\
 <svg class=\"icon copied-glyph\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg><span class=\"copy-text\">Copy</span></button></div>\n\
-<div class=\"codebox ai-box\" id=\"panel-ai\" tabindex=\"0\" role=\"region\" aria-label=\"AI Prompt\" data-copy-text=\"{ai_prompt_plain}\"><div class=\"ai-prompt-view\"><div class=\"ai-lead\">Build and publish this project to playtest.run:</div><div class=\"ai-step\"><span class=\"step-num\">1.</span> Ensure CLI is installed: <code class=\"cmd-pill\"><span class=\"k\">curl</span> <span class=\"f\">-fsSL</span> https://playtest.run/install.sh | <span class=\"k\">bash</span></code></div><div class=\"ai-step\"><span class=\"step-num\">2.</span> Publish: run <code class=\"cmd-pill\"><span class=\"k\">playtest</span> <span class=\"a\">&lt;dir&gt;</span></code> for static build with index.html (add <span class=\"f\">--spa</span> for SPA), or <code class=\"cmd-pill\"><span class=\"k\">playtest</span> <span class=\"a\">&lt;port&gt;</span></code> for dev server. Optional: <span class=\"f\">-n</span> &quot;<span class=\"s\">name</span>&quot;, <span class=\"f\">-m</span> &quot;<span class=\"s\">note</span>&quot;.</div><div class=\"ai-step\"><span class=\"step-num\">3.</span> Report back the playable link and QR code.</div></div></div>\n\
+<div class=\"codebox ai-box\" id=\"panel-ai\" tabindex=\"0\" role=\"region\" aria-label=\"AI Prompt\" data-copy-text=\"{ai_prompt_plain}\"><code>{ai_prompt_plain}</code></div>\n\
 <div class=\"codebox\" id=\"panel-static\" tabindex=\"0\" role=\"region\" aria-label=\"Publish command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span></code></div>\n\
 <div class=\"codebox\" id=\"panel-local\" tabindex=\"0\" role=\"region\" aria-label=\"Publish command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">3000</span></code></div>\n\
 <div class=\"codebox\" id=\"panel-backend\" tabindex=\"0\" role=\"region\" aria-label=\"Publish command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">playtest</span> <span class=\"a\">./dist</span> <span class=\"f\">--backend</span> <span class=\"a\">8000</span></code></div>\n\
 <div class=\"codebox\" id=\"panel-install\" tabindex=\"0\" role=\"region\" aria-label=\"Install command\"><b aria-hidden=\"true\">$</b><code><span class=\"k\">curl</span> <span class=\"f\">-fsSL</span> <span class=\"a\">https://playtest.run/install.sh</span> <span class=\"f\">|</span> <span class=\"k\">bash</span></code></div>\n\
-<p class=\"leg\" id=\"leg-ai\">{info}<span>Paste into Cursor, Claude Code, or Windsurf to build and publish autonomously.</span></p>\n\
 <p class=\"leg\" id=\"leg-static\">{info}<span>Build your project and replace <code>./dist</code> with your export folder.</span></p>\n\
 <p class=\"leg\" id=\"leg-local\">{info}<span>Start your local dev server and keep the terminal session open.</span></p>\n\
 <p class=\"leg\" id=\"leg-backend\">{info}<span>Proxies unmatched routes to your local backend.</span></p>\n\
