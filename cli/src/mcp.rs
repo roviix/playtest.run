@@ -295,7 +295,7 @@ const SHARE_READY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 // 握手测试会挂——它比对的是握手时真发出去的那个值。
 #[tool_handler(
     name = "playtest",
-    version = "0.3.0",
+    version = "0.4.0",
     instructions = "playtest puts a playable build in front of specific people. Call \
                     playtest_upload with the directory your build step produced; give the user the \
                     returned url, paste qr_text verbatim in a code block when they will open it on \
