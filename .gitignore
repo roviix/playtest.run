@@ -27,6 +27,9 @@ bin/
 # 本机开发时 api / edge 的数据（对象存储、SQLite、事件日志）
 .data/
 
+# wrangler 在仓库里缓存的账号信息，不入库
+.wrangler/
+
 # 编辑器
 .idea/
 .vscode/
