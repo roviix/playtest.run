@@ -21,13 +21,14 @@ use crate::error::{ApiError, ApiResult};
 use crate::routes::JsonBody;
 use crate::state::AppState;
 
-const BAD_TOKEN: &str = "管理令牌不对。";
-const NO_SUCH_BOOST: &str = "没有这一条推广。";
-const NO_SUCH_SITE: &str = "没有这个作品。";
+const BAD_TOKEN: &str = "That admin token is wrong.";
+const NO_SUCH_BOOST: &str = "No such boost.";
+const NO_SUCH_SITE: &str = "No such project.";
 const ANON_CANNOT_BOOST: &str =
-    "匿名作品不能推广：匿名链接 24 小时就到期，推广位上会留下一个打不开的作品。让作者先用 GitHub 登录。";
+    "An anonymous project cannot be boosted: the link expires in 24 hours and the slot would be left pointing at a dead project. Ask the author to sign in with GitHub first.";
 /// 手工撤下时写进 `hidden_reason`，控制台照着它告诉开发者。
-const HIDDEN_BY_HAND: &str = "我们看过之后从广场撤下了，作品链接照常能开";
+const HIDDEN_BY_HAND: &str =
+    "We looked at this and took it off the Plaza. The project link still works.";
 
 /// 带对了管理令牌。提取器放在这里而不是 `auth.rs`：它和开发者令牌不是一套东西，
 /// 混在一起早晚有人把 `Caller` 当成管理员。
@@ -80,7 +81,7 @@ pub async fn grant(
     let requested = match request.starts_at.as_deref() {
         Some(raw) => Some(clock::parse(raw).ok_or_else(|| {
             ApiError::invalid(format!(
-                "开始时间要写成 2026-09-14T01:00:00Z 这样，现在是「{raw}」。"
+                "A start time looks like 2026-09-14T01:00:00Z; this one is \"{raw}\"."
             ))
         })?),
         None => None,

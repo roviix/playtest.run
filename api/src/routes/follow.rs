@@ -33,11 +33,13 @@ use crate::state::AppState;
 /// 令牌的字节数，和开发者令牌一样：32 字节随机量，base64url 之后 43 个字符。
 const TOKEN_BYTES: usize = 32;
 
-const BAD_EMAIL: &str = "这个邮箱的写法不对，检查一下有没有打错。";
-const NO_SUCH_SITE: &str = "没有这个作品，或者它的链接已经失效了。";
-const BAD_ME_TOKEN: &str = "这个链接已经不能用了。到信箱里找最近那封信，或者重新填一次邮箱。";
-const BAD_CONFIRM: &str = "这个确认链接已经用过或者过期了。重新填一次邮箱，我们再发一封。";
-const TOO_MANY: &str = "试得太频繁了，等一分钟再来。";
+const BAD_EMAIL: &str = "That email address does not look right. Check it for a typo.";
+const NO_SUCH_SITE: &str = "No such project, or its link has expired.";
+const BAD_ME_TOKEN: &str =
+    "This link no longer works. Open the most recent email we sent you, or enter your address again.";
+const BAD_CONFIRM: &str =
+    "This confirmation link was already used or has expired. Enter your address again and we will send another.";
+const TOO_MANY: &str = "That was a lot of tries. Wait a minute and come back.";
 
 /// `POST /v1/follow`
 pub async fn follow(
@@ -62,11 +64,15 @@ pub async fn follow(
     }
     if kind == "collection" {
         if !state.notify().email_on() {
-            return Err(ApiError::invalid("邮件摘要目前不可用，请稍后再关注。"));
+            return Err(ApiError::invalid(
+                "Email digests are unavailable right now. Try following again later.",
+            ));
         }
         match &request.channel {
             FollowChannel::Push { .. } => {
-                return Err(ApiError::invalid("合集只发送邮件摘要，请使用邮箱关注。"))
+                return Err(ApiError::invalid(
+                    "A collection only sends an email digest. Follow it with an email address.",
+                ))
             }
             FollowChannel::Me { me_token } => {
                 let conn = state.db().read().await;
@@ -75,7 +81,7 @@ pub async fn follow(
                     .is_none()
                 {
                     return Err(ApiError::invalid(
-                        "合集摘要需要已确认的邮箱，请填写邮箱关注。",
+                        "A collection digest needs a confirmed email address. Enter one to follow.",
                     ));
                 }
             }
@@ -124,7 +130,7 @@ pub async fn follow(
                     crate::collections::enqueue_confirmation(
                         &conn,
                         &player,
-                        title.as_deref().unwrap_or("合集"),
+                        title.as_deref().unwrap_or("this collection"),
                         &state.notify().confirm_url(&token),
                         now,
                     )?;
@@ -220,7 +226,9 @@ pub async fn confirm(
                 )?
                 .is_none()
             {
-                return Err(ApiError::not_found("这个合集已停止公开，没有新增关注。"));
+                return Err(ApiError::not_found(
+                    "This collection is no longer public, so the follow was not added.",
+                ));
             }
             db::insert_follow(
                 &conn,

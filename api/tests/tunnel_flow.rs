@@ -258,7 +258,7 @@ async fn anonymous_developer_gets_a_token_the_edge_can_verify() {
     assert_eq!(claims.slug, site.slug);
     assert!(!claims.sub.is_empty(), "用量和撤销要按用户归");
     assert_eq!(claims.title, site.title, "没给作品名就用建作品时那个");
-    assert_eq!(claims.developer, "匿名开发者");
+    assert_eq!(claims.developer, playtest_api::auth::ANON_DISPLAY_NAME);
     assert!(claims.badge, "匿名和免费档都带角标");
     assert_eq!(claims.gate, GateMode::Once, "默认门禁策略");
     assert!(!claims.isolated);
@@ -393,7 +393,11 @@ async fn a_token_is_required_and_expiry_says_so() {
         )
         .await
         .error(StatusCode::UNAUTHORIZED, ErrorCode::TokenExpired);
-    assert!(expired.message.contains("新链接"), "{}", expired.message);
+    assert!(
+        expired.message.contains("get a new link"),
+        "{}",
+        expired.message
+    );
 }
 
 #[tokio::test]

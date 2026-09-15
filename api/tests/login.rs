@@ -493,7 +493,7 @@ async fn a_bad_code_from_github_is_a_login_failure_not_a_crash() {
         )
         .await
         .error(StatusCode::BAD_REQUEST, ErrorCode::LoginFailed);
-    assert!(body.message.contains("重新登录"), "{}", body.message);
+    assert!(body.message.contains("Sign in again"), "{}", body.message);
 }
 
 #[tokio::test]
@@ -521,6 +521,10 @@ async fn missing_client_secret_suggests_email_instead_of_pasting_a_token() {
         .get(paths::LOGIN_WEB_START, None)
         .await
         .error(StatusCode::NOT_IMPLEMENTED, ErrorCode::LoginUnavailable);
-    assert!(body.message.contains("邮箱登录"), "{}", body.message);
-    assert!(!body.message.contains("粘贴"));
+    assert!(
+        body.message.contains("Use email sign-in"),
+        "{}",
+        body.message
+    );
+    assert!(!body.message.contains("paste"));
 }

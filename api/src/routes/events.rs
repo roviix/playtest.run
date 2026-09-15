@@ -33,9 +33,10 @@ use crate::clock;
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 
-pub const NO_SUCH_SITE: &str = "没有这个作品，或者它的链接已经失效了。";
-const BAD_SESSION: &str = "会话 id 的形态不对。它应该是门禁页种下的那一个。";
-const TOO_MANY: &str = "这个会话发得太快了，先歇一会儿。";
+pub const NO_SUCH_SITE: &str = "No such project, or its link has expired.";
+pub(crate) const BAD_SESSION: &str =
+    "That session id has the wrong shape. It should be the one the invitation page set.";
+const TOO_MANY: &str = "This session is sending too fast. Give it a moment.";
 
 /// 客户端的钟不可信，但也不能一律不信——退出时补发的「最后一次输入」本来就是几分钟前的事。
 /// 落在这个窗口里就采信客户端的时间，否则用服务端收到的时间。
@@ -77,7 +78,7 @@ async fn sdk_batch(
     }
     if batch.events.len() > ingest::MAX_EVENTS_PER_BATCH {
         return Err(ApiError::invalid(format!(
-            "一批最多 {} 条事件，这批有 {} 条。",
+            "A batch holds at most {} events; this one has {}.",
             ingest::MAX_EVENTS_PER_BATCH,
             batch.events.len()
         )));
@@ -162,7 +163,8 @@ pub async fn from_edge(
     body: Bytes,
 ) -> Response {
     if !edge_is_authorized(&state, &headers) {
-        return ApiError::unauthorized("这条入口只接收受信边缘上报。").into_response();
+        return ApiError::unauthorized("This endpoint only accepts reports from a trusted edge.")
+            .into_response();
     }
     let done = edge_batch(&state, &limiter, &body).await;
     // 这一批里有举报：立刻重算一次广场，够数的当场撤下（DESIGN §3.8），不等 5 分钟那一轮。
@@ -196,7 +198,7 @@ async fn edge_batch(
     let batch: EdgeBatch = parse(body)?;
     if batch.events.len() > ingest::MAX_EVENTS_PER_BATCH {
         return Err(ApiError::invalid(format!(
-            "一批最多 {} 条事件，这批有 {} 条。",
+            "A batch holds at most {} events; this one has {}.",
             ingest::MAX_EVENTS_PER_BATCH,
             batch.events.len()
         )));
@@ -394,7 +396,7 @@ fn denied_origin() -> Response {
     ApiError::public(
         StatusCode::FORBIDDEN,
         ErrorCode::Invalid,
-        "这个地址只收玩家页面发来的事件。",
+        "This endpoint only takes events from a player page.",
     )
     .into_response()
 }
@@ -721,7 +723,7 @@ fn stage(conn: &Connection, id: &str, column: &str, ts: &str) -> rusqlite::Resul
 pub fn parse<T: DeserializeOwned>(body: &Bytes) -> ApiResult<T> {
     serde_json::from_slice(body).map_err(|err| {
         tracing::debug!(%err, "写入端点收到了解析不了的体");
-        ApiError::invalid("请求内容不是我们认识的格式。")
+        ApiError::invalid("We could not read this request body.")
     })
 }
 

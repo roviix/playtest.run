@@ -16,6 +16,9 @@ use crate::{clock, db, notify, AppState};
 
 const SESSION_SECONDS: u64 = 30 * 24 * 60 * 60;
 
+/// 邮件里那个登录链接用过一次或者过期之后的原话。预览和确认两条路要说同一句。
+const LINK_SPENT: &str = "This link was already used or has expired. Send yourself a new one.";
+
 pub fn cookie_name(secure: bool) -> &'static str {
     if secure {
         "__Host-pt_session"
@@ -165,7 +168,7 @@ pub fn user_for_player(conn: &Connection, player_id: &str) -> rusqlite::Result<S
         &db::NewUser {
             id: &id,
             kind: "email",
-            display_name: "新朋友",
+            display_name: "New here",
             created_at: &clock::now_string(),
             expires_at: None,
         },
@@ -195,7 +198,9 @@ pub async fn protect(State(state): State<AppState>, request: Request, next: Next
     {
         return (
             StatusCode::FORBIDDEN,
-            Json(json!({"code":"invalid","message":"请在 playtest 页面完成这个操作。"})),
+            Json(
+                json!({"code":"invalid","message":"Do this from a playtest page, not from another site."}),
+            ),
         )
             .into_response();
     }
@@ -290,19 +295,21 @@ pub async fn email_start(
 ) -> ApiResult<Json<serde_json::Value>> {
     if !state.notify().email_on() {
         return Err(ApiError::login_unavailable(
-            "邮箱登录暂不可用，请使用 GitHub 或稍后重试。",
+            "Email sign-in is unavailable right now. Use GitHub, or try again later.",
         ));
     }
     let email = request.email.trim().to_ascii_lowercase();
     if !playtest_common::follow::looks_like_email(&email) {
-        return Err(ApiError::invalid("请填写有效的邮箱地址。"));
+        return Err(ApiError::invalid(
+            "That does not look like an email address.",
+        ));
     }
     follow::spend(&limiter, &headers, Some(&email))?;
     let link_user = if request.link {
         Some(
             caller(&state, &headers)
                 .await?
-                .ok_or_else(|| ApiError::unauthorized("请先登录再关联邮箱。"))?
+                .ok_or_else(|| ApiError::unauthorized("Sign in before linking an email address."))?
                 .user_id,
         )
     } else {
@@ -326,7 +333,7 @@ pub async fn email_start(
     )?;
     tx.commit()?;
     Ok(Json(
-        json!({"message":"登录链接已加入发送队列，请查收邮箱。链接一小时内有效。"}),
+        json!({"message":"The sign-in link is queued for sending. Check your inbox; the link works for one hour."}),
     ))
 }
 
@@ -341,8 +348,7 @@ pub async fn email_preview(
 ) -> ApiResult<Json<serde_json::Value>> {
     let conn = state.db().read().await;
     let pending: Option<(String,bool)> = conn.query_row("SELECT p.email,a.link_user_id IS NOT NULL FROM account_links a JOIN players p ON p.id=a.player_id WHERE a.token_hash=?1 AND a.expires_at>?2",params![hash::hash_bytes(request.token.as_bytes()),clock::now_string()],|row|Ok((row.get(0)?,row.get(1)?))).optional()?;
-    let (email, link) = pending
-        .ok_or_else(|| ApiError::login_failed("链接已使用或已过期，请重新发送登录链接。"))?;
+    let (email, link) = pending.ok_or_else(|| ApiError::login_failed(LINK_SPENT))?;
     Ok(Json(
         json!({"email":playtest_common::follow::mask_email(&email),"link":link}),
     ))
@@ -360,11 +366,13 @@ pub async fn email_confirm(
     let tx = conn.transaction()?;
     let token_hash = hash::hash_bytes(request.token.as_bytes());
     let pending: Option<(String,Option<String>,String)> = tx.query_row("SELECT player_id,link_user_id,return_to FROM account_links WHERE token_hash=?1 AND expires_at>?2",params![token_hash,clock::now_string()],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?))).optional()?;
-    let (player_id, link_user, return_to) = pending
-        .ok_or_else(|| ApiError::login_failed("链接已使用或已过期，请重新发送登录链接。"))?;
+    let (player_id, link_user, return_to) =
+        pending.ok_or_else(|| ApiError::login_failed(LINK_SPENT))?;
     if let Some(ref user_id) = link_user {
         if current.as_ref().map(|identity| &identity.user_id) != Some(user_id) {
-            return Err(ApiError::login_failed("请在发起关联的账号中打开这封邮件。"));
+            return Err(ApiError::login_failed(
+                "Open this email while signed in to the account that asked for the link.",
+            ));
         }
         let owner: Option<String> = tx.query_row(
             "SELECT user_id FROM players WHERE id=?1",
@@ -373,13 +381,15 @@ pub async fn email_confirm(
         )?;
         if owner.as_ref().is_some_and(|owner| owner != user_id) {
             return Err(ApiError::invalid(
-                "这个邮箱已属于另一个账号，未合并任何作品或关注。请使用该邮箱登录。",
+                "This email belongs to another account. Nothing was merged. Sign in with that email instead.",
             ));
         }
         let old_player = player_for_user(&tx, user_id)?;
         if old_player.id != player_id {
             if old_player.email_verified_at.is_some() {
-                return Err(ApiError::invalid("账号已关联邮箱，暂不支持替换。"));
+                return Err(ApiError::invalid(
+                    "This account already has an email address, and replacing it is not supported yet.",
+                ));
             }
             tx.execute("INSERT OR IGNORE INTO follows(player_id,target_kind,target_slug,source,created_at) SELECT ?1,target_kind,target_slug,source,created_at FROM follows WHERE player_id=?2",params![player_id,old_player.id])?;
             tx.execute(
@@ -429,7 +439,7 @@ pub async fn github_start(
         Some(
             caller(&state, &headers)
                 .await?
-                .ok_or_else(|| ApiError::unauthorized("请先登录再关联 GitHub。"))?
+                .ok_or_else(|| ApiError::unauthorized("Sign in before linking GitHub."))?
                 .user_id,
         )
     } else {
@@ -443,13 +453,13 @@ pub async fn github_start(
     else {
         return Ok(response);
     };
-    let url =
-        reqwest::Url::parse(location).map_err(|_| ApiError::login_failed("登录地址无效。"))?;
+    let url = reqwest::Url::parse(location)
+        .map_err(|_| ApiError::login_failed("The sign-in address is not valid."))?;
     let nonce = url
         .query_pairs()
         .find(|(key, _)| key == "state")
         .map(|(_, value)| value.into_owned())
-        .ok_or_else(|| ApiError::login_failed("登录请求无效。"))?;
+        .ok_or_else(|| ApiError::login_failed("The sign-in request is not valid."))?;
     let browser = auth::new_token();
     {
         let conn = state.db().lock().await;
@@ -488,10 +498,12 @@ pub async fn github_exchange(
             "pt_oauth"
         },
     )
-    .ok_or_else(|| ApiError::login_failed("请在发起登录的浏览器中重试。"))?;
+    .ok_or_else(|| {
+        ApiError::login_failed("Try again in the browser you started signing in from.")
+    })?;
     let (link_user, return_to) = {
         let conn = state.db().lock().await;
-        conn.query_row("DELETE FROM browser_oauth WHERE state_hash=?1 AND browser_hash=?2 AND expires_at>?3 RETURNING link_user_id,return_to",params![hash::hash_bytes(request.state.as_bytes()),hash::hash_bytes(browser.as_bytes()),clock::now_string()],|row|Ok((row.get::<_,Option<String>>(0)?,row.get::<_,String>(1)?))).optional()?.ok_or_else(||ApiError::login_failed("这次登录已失效，请重新开始。"))?
+        conn.query_row("DELETE FROM browser_oauth WHERE state_hash=?1 AND browser_hash=?2 AND expires_at>?3 RETURNING link_user_id,return_to",params![hash::hash_bytes(request.state.as_bytes()),hash::hash_bytes(browser.as_bytes()),clock::now_string()],|row|Ok((row.get::<_,Option<String>>(0)?,row.get::<_,String>(1)?))).optional()?.ok_or_else(||ApiError::login_failed("This sign-in is no longer valid. Start again."))?
     };
     if link_user.is_some()
         && caller(&state, &headers)
@@ -499,7 +511,9 @@ pub async fn github_exchange(
             .map(|identity| identity.user_id)
             != link_user
     {
-        return Err(ApiError::login_failed("账号已改变，请重新发起关联。"));
+        return Err(ApiError::login_failed(
+            "The signed-in account changed. Start the link again.",
+        ));
     }
     let github = login::web_exchange(State(state.clone()), JsonBody(request)).await?;
     let (token, changed_slugs) = {
@@ -519,7 +533,7 @@ pub async fn github_exchange(
         let user_id = if let Some(link_user) = link_user {
             if owner.as_ref().is_some_and(|owner| owner != &link_user) {
                 return Err(ApiError::invalid(
-                    "这个 GitHub 已属于另一个账号，未合并任何作品或关注。",
+                    "This GitHub account belongs to another playtest account. Nothing was merged.",
                 ));
             }
             if owner.is_none() {
@@ -529,7 +543,9 @@ pub async fn github_exchange(
                     |row| row.get(0),
                 )?;
                 if already.is_some() {
-                    return Err(ApiError::invalid("账号已关联 GitHub，暂不支持替换。"));
+                    return Err(ApiError::invalid(
+                        "This account is already linked to GitHub, and replacing it is not supported yet.",
+                    ));
                 }
                 tx.execute(
                     "UPDATE users SET github_id=?1,login=?2,avatar_url=?3 WHERE id=?4",
@@ -592,7 +608,7 @@ pub async fn create_token(
     identity: Caller,
 ) -> ApiResult<Json<serde_json::Value>> {
     if identity.kind.is_anon() {
-        return Err(ApiError::invalid("请先登录长期账号。"));
+        return Err(ApiError::invalid("Sign in to a lasting account first."));
     }
     let token = auth::new_token();
     let conn = state.db().lock().await;
@@ -641,7 +657,9 @@ pub async fn profile(
 ) -> ApiResult<StatusCode> {
     let name = request.display_name.trim();
     if name.is_empty() || name.chars().count() > 40 || name.chars().any(char::is_control) {
-        return Err(ApiError::invalid("名字请用 1–40 个字，不含控制字符。"));
+        return Err(ApiError::invalid(
+            "A name is 1–40 characters, with no control characters.",
+        ));
     }
     let slugs = {
         let conn = state.db().lock().await;

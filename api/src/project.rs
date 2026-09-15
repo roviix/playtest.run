@@ -59,7 +59,7 @@ pub fn compose(
         display_name: owner
             .as_ref()
             .map(|o| o.display_name.clone())
-            .unwrap_or_else(|| "匿名开发者".to_string()),
+            .unwrap_or_else(|| crate::auth::ANON_DISPLAY_NAME.to_string()),
         login: None,
         avatar_url: owner.and_then(|o| o.avatar_url),
     };
@@ -250,9 +250,9 @@ mod tests {
     fn an_owner_we_cannot_find_is_an_anonymous_one() {
         let p = compose(row(), None, url(), Extras::default());
         assert_eq!(p.owner.kind, OwnerKind::Anon);
-        assert_eq!(p.owner.display_name, "匿名开发者");
+        assert_eq!(p.owner.display_name, crate::auth::ANON_DISPLAY_NAME);
         assert_eq!(p.plan, Plan::Anon);
-        assert_eq!(p.card().developer, "匿名开发者");
+        assert_eq!(p.card().developer, crate::auth::ANON_DISPLAY_NAME);
     }
 
     #[test]

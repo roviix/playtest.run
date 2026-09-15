@@ -28,9 +28,9 @@ use crate::routes::sites::NO_SUCH_SITE;
 use crate::routes::JsonBody;
 use crate::state::AppState;
 
-const NO_SUCH_FEEDBACK: &str = "没有这条反馈，或者它不是你的作品的。";
+const NO_SUCH_FEEDBACK: &str = "No such feedback, or it is not on one of your projects.";
 /// 错误的 `name` 是空的时候拿它当 fingerprint。归成一堆总比一条条散着好看。
-const UNNAMED_ERROR: &str = "没带名字的错误";
+const UNNAMED_ERROR: &str = "Unnamed error";
 
 #[derive(Debug, Default, Deserialize)]
 pub struct RosterQuery {
@@ -210,13 +210,14 @@ pub async fn feedback(
     Path(slug): Path<String>,
     Query(query): Query<FeedbackQuery>,
 ) -> ApiResult<Json<FeedbackList>> {
-    let version =
-        match query.version.as_deref() {
-            None | Some("") => None,
-            Some(value) => Some(value.parse::<u32>().map_err(|_| {
-                ApiError::invalid(format!("版本号只能是数字，不认识「{value}」。"))
-            })?),
-        };
+    let version = match query.version.as_deref() {
+        None | Some("") => None,
+        Some(value) => Some(value.parse::<u32>().map_err(|_| {
+            ApiError::invalid(format!(
+                "A version number is digits only; we cannot read \"{value}\"."
+            ))
+        })?),
+    };
     let status = match query.status.as_deref() {
         None | Some("") => None,
         Some(value) => Some(value.parse::<FeedbackStatus>().map_err(ApiError::invalid)?),
@@ -253,7 +254,7 @@ pub async fn update_feedback(
 ) -> ApiResult<Json<FeedbackItem>> {
     if request.status.is_none() && request.public.is_none() {
         return Err(ApiError::invalid(
-            "这次请求什么都没改。要改状态就带 status，要公开或藏起来就带 public。",
+            "This request changes nothing. Send status to change the state, or public to show or hide it.",
         ));
     }
 

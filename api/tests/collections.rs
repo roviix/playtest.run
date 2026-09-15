@@ -485,7 +485,7 @@ async fn follow_requires_confirmation_and_digest_rechecks_privacy() {
                 |row| row.get(0),
             )
             .unwrap();
-        assert!(body.contains("每周有新投稿"));
+        assert!(body.contains("one email a week summarising new entries"));
         body.split("/me/confirm/")
             .nth(1)
             .unwrap()

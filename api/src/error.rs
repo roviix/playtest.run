@@ -10,7 +10,7 @@ use axum::Json;
 use playtest_common::api::{ErrorBody, ErrorCode};
 
 /// 500 对外只说这一句。把内部错误原文吐给客户端等于把库结构和路径也一起吐出去。
-pub const INTERNAL_MESSAGE: &str = "服务器出错了，请稍后重试";
+pub const INTERNAL_MESSAGE: &str = "Something went wrong on our side. Try again in a moment.";
 
 pub type ApiResult<T> = Result<T, ApiError>;
 

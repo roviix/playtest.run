@@ -1,5 +1,6 @@
 use crate::db::NotificationRow;
 
+use super::digest::HEADING_SEPARATOR;
 use super::{
     Runtime, CONFIRM_TOKEN_HOURS, KIND_CONFIRM, KIND_DIGEST, KIND_SEND_LINK, KIND_SITE_VERSION,
 };
@@ -12,34 +13,34 @@ pub struct Content {
 pub fn render(runtime: &Runtime, row: &NotificationRow) -> Content {
     let (category, preview, action_label, reason) = match row.kind.as_str() {
         KIND_CONFIRM => (
-            "确认关注",
-            "确认邮箱后，你选择的通知才会生效。开发者看不到你的邮箱。",
-            "确认关注",
-            "你在 playtest.run 发起了关注请求，因此收到这封确认信。",
+            "Confirm follow",
+            "Confirm your email and the updates you asked for start. The author never sees your address.",
+            "Confirm follow",
+            "You asked to follow something on playtest.run, so we sent this confirmation.",
         ),
         KIND_SEND_LINK => (
-            "换一台设备",
-            "找回已关注的作品，让这台设备也能管理关注。无需密码。",
-            "找回关注",
-            "你请求找回在 playtest.run 上的关注，因此收到这封信。",
+            "Sign in",
+            "Sign in and manage what you follow from this device. No password.",
+            "Sign in",
+            "You asked playtest.run for a sign-in link, so we sent this email.",
         ),
         KIND_SITE_VERSION => (
-            "作品更新",
-            "你关注的作品有新版本了。打开邀请函，就能看到这一版。",
-            "查看新版本",
-            "你关注了这个作品，因此收到更新通知。同一作品 24 小时内最多一封。",
+            "New version",
+            "A project you follow has a new version. Open the invite to try it.",
+            "Open the new version",
+            "You follow this project, so you get its updates. At most one email per project per 24 hours.",
         ),
         KIND_DIGEST => (
-            "新作品周报",
-            "本周的新作品与开发者介绍。你可以随时管理关注或退订。",
-            "查看作品",
-            "你确认接收了 playtest.run 新作品周报，因此收到这封信。",
+            "Weekly digest",
+            "New projects this week, and who made them. You can manage your follows or unsubscribe any time.",
+            "See the projects",
+            "You confirmed the playtest.run weekly digest, so we sent this email.",
         ),
         _ => (
-            "通知",
-            "你在 playtest.run 上的通知。",
-            "查看详情",
-            "来自 playtest.run 的通知。",
+            "Notice",
+            "A notice about your playtest.run follows.",
+            "Open",
+            "A notice from playtest.run.",
         ),
     };
     let preview = if row.kind == KIND_SITE_VERSION {
@@ -63,9 +64,9 @@ pub fn render(runtime: &Runtime, row: &NotificationRow) -> Content {
     let message = message.trim();
     let body = if row.kind == KIND_SITE_VERSION {
         format!(
-            r#"<p class="muted" style="margin:0 0 22px;color:#62626c;font-size:15px;line-height:1.8">你关注的作品有新版本了。</p>
+            r#"<p class="muted" style="margin:0 0 22px;color:#62626c;font-size:15px;line-height:1.8">A project you follow has a new version.</p>
 <div class="note" style="border-left:2px solid #c6c6ce;padding:2px 0 2px 20px;margin:0 0 4px">
-<p class="muted" style="margin:0 0 10px;color:#62626c;font-size:12px;letter-spacing:1px">这一版的变化</p>{}</div>"#,
+<p class="muted" style="margin:0 0 10px;color:#62626c;font-size:12px;letter-spacing:1px">What changed</p>{}</div>"#,
             paragraphs(runtime, message, false)
         )
     } else {
@@ -84,14 +85,14 @@ pub fn render(runtime: &Runtime, row: &NotificationRow) -> Content {
         })
         .unwrap_or_else(|| {
             if row.url.is_some() {
-                "<p style=\"margin:24px 0 0;font-size:14px;line-height:1.8\">这封信的链接暂不可用，请回到作品页面重新操作。</p>".to_string()
+                "<p style=\"margin:24px 0 0;font-size:14px;line-height:1.8\">The link in this email is not usable. Go back to the project page and start again.</p>".to_string()
             } else {
                 String::new()
             }
         });
     let security = verification.then(|| {
         format!(
-            "链接 {CONFIRM_TOKEN_HOURS} 小时内有效，仅可使用一次。请在你自己的浏览器中打开，不要转发。不是你本人操作的，可以忽略这封信。"
+            "This link works for {CONFIRM_TOKEN_HOURS} hours and can be used once. Open it in your own browser and do not forward it. If you did not ask for this, ignore this email."
         )
     });
     let safety = security
@@ -102,16 +103,16 @@ pub fn render(runtime: &Runtime, row: &NotificationRow) -> Content {
         .map(|url| {
             let url = escape(url);
             format!(
-                r#"<p class="muted" style="margin:0 0 6px;color:#62626c;font-size:11px;line-height:1.8">按钮无法打开？复制这个链接到浏览器：</p>
+                r#"<p class="muted" style="margin:0 0 6px;color:#62626c;font-size:11px;line-height:1.8">Button not working? Copy this link into your browser:</p>
 <p style="margin:0 0 22px;font-size:11px;line-height:1.8;word-break:break-all;overflow-wrap:anywhere"><a class="muted" href="{url}" style="color:#62626c;text-decoration:underline">{url}</a></p>"#
             )
         })
         .unwrap_or_default();
     let mut text = format!("playtest.run · {category}\n\n{}\n\n{message}", row.subject);
     if let Some(url) = action_url {
-        text.push_str(&format!("\n\n{action_label}：\n{url}"));
+        text.push_str(&format!("\n\n{action_label}:\n{url}"));
     } else if row.url.is_some() {
-        text.push_str("\n\n这封信的链接暂不可用，请回到作品页面重新操作。");
+        text.push_str("\n\nThe link in this email is not usable. Go back to the project page and start again.");
     }
     if let Some(security) = security {
         text.push_str(&format!("\n\n{security}"));
@@ -120,21 +121,23 @@ pub fn render(runtime: &Runtime, row: &NotificationRow) -> Content {
     let mut footer_links = String::new();
     let me_url = runtime.me_url();
     if player_url(runtime, &me_url) {
-        text.push_str(&format!("\n管理关注：{me_url}"));
+        text.push_str(&format!("\nManage your follows: {me_url}"));
         footer_links.push_str(&format!(
-            r#"<a class="muted" href="{}" style="color:#62626c;text-decoration:underline">管理关注</a>"#,
+            r#"<a class="muted" href="{}" style="color:#62626c;text-decoration:underline">Manage your follows</a>"#,
             escape(&me_url)
         ));
     }
     if let Some(token) = row.unsubscribe_token.as_deref() {
         let url = runtime.unsubscribe_url(token);
         if player_url(runtime, &url) {
-            text.push_str(&format!("\n一键退订全部关注：{url}"));
+            text.push_str(&format!(
+                "\nUnsubscribe from everything in one click: {url}"
+            ));
             if !footer_links.is_empty() {
                 footer_links.push_str("&nbsp;&nbsp;·&nbsp;&nbsp;");
             }
             footer_links.push_str(&format!(
-                r#"<a class="muted" href="{}" style="color:#62626c;text-decoration:underline">一键退订全部关注</a>"#,
+                r#"<a class="muted" href="{}" style="color:#62626c;text-decoration:underline">Unsubscribe from everything</a>"#,
                 escape(&url)
             ));
         }
@@ -158,14 +161,13 @@ fn paragraphs(runtime: &Runtime, text: &str, linkify: bool) -> String {
     text.split("\n\n")
         .filter(|paragraph| !paragraph.trim().is_empty())
         .map(|paragraph| {
-            if linkify && paragraph.trim() == "—\n推广" {
-                return "<p class=\"muted\" style=\"margin:24px 0 12px;color:#62626c;font-size:11px;letter-spacing:1px\">推广</p>".to_string();
+            if linkify && paragraph.trim() == "—\nSponsored" {
+                return "<p class=\"muted\" style=\"margin:24px 0 12px;color:#62626c;font-size:11px;letter-spacing:1px\">Sponsored</p>".to_string();
             }
             if linkify {
                 if let Some((heading, details)) = paragraph.split_once('\n') {
                     if let Some((title, developer)) = heading
-                        .strip_prefix('《')
-                        .and_then(|heading| heading.rsplit_once("》 "))
+                        .rsplit_once(HEADING_SEPARATOR)
                         .filter(|_| details.lines().last().is_some_and(|url| player_url(runtime, url.trim())))
                     {
                         return format!(
@@ -183,7 +185,7 @@ fn paragraphs(runtime: &Runtime, text: &str, linkify: bool) -> String {
                     let trimmed = line.trim();
                     if linkify && player_url(runtime, trimmed) {
                         format!(
-                            r#"<a class="text-link" href="{}" style="color:#202024;font-weight:600;text-decoration:underline">打开邀请函 →</a>"#,
+                            r#"<a class="text-link" href="{}" style="color:#202024;font-weight:600;text-decoration:underline">Open the invite →</a>"#,
                             escape(trimmed)
                         )
                     } else {

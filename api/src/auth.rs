@@ -16,13 +16,13 @@ use crate::db;
 use crate::error::ApiError;
 use crate::state::AppState;
 
-pub const ANON_DISPLAY_NAME: &str = "匿名开发者";
+pub const ANON_DISPLAY_NAME: &str = "Anonymous author";
 
 const NO_TOKEN: &str =
-    "这个请求没带令牌。第一次用直接运行 playtest，它会自动申请一个 24 小时的匿名链接。";
-const BAD_TOKEN: &str = "这个令牌我们不认识。重新运行 playtest 会拿到一个新的链接。";
+    "This request carried no token. If this is your first time, just run playtest; it asks for a 24-hour anonymous link on its own.";
+const BAD_TOKEN: &str = "We do not recognise this token. Run playtest again to get a new link.";
 const EXPIRED: &str =
-    "匿名链接的 24 小时已到，这个令牌和它创建的作品都失效了。重新运行 playtest 会拿到一个新链接。";
+    "The 24 hours of this anonymous link are up, so the token and the projects it created have expired. Run playtest again to get a new link.";
 
 /// 令牌的字节数。32 字节的随机量，base64url 之后是 43 个字符，能整行复制粘贴。
 const TOKEN_BYTES: usize = 32;

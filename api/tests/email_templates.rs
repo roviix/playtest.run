@@ -52,7 +52,14 @@ async fn queued_verification_letters_explain_the_action_and_expiry_in_both_forma
     .unwrap();
     let runtime = runtime();
     let url = runtime.confirm_url("not-a-real-confirm-token");
-    notify::enqueue_confirm(&connection, "preview-player", Some("小小星球"), &url, now).unwrap();
+    notify::enqueue_confirm(
+        &connection,
+        "preview-player",
+        Some("Tiny Planet"),
+        &url,
+        now,
+    )
+    .unwrap();
     notify::enqueue_confirm(&connection, "preview-player", None, &url, now).unwrap();
     notify::enqueue_send_link(&connection, "preview-player", &url, now).unwrap();
     let rows = db::due_notifications(&connection, &clock::format(now), 10).unwrap();
@@ -60,14 +67,13 @@ async fn queued_verification_letters_explain_the_action_and_expiry_in_both_forma
     for row in &rows {
         let content = notify::email::render(&runtime, row);
         for body in [&content.html, &content.text] {
-            assert!(body.contains("48 小时内有效"));
-            assert!(body.contains("仅可使用一次"));
-            assert!(body.contains("不要转发"));
-            assert!(body.contains("不是你本人操作"));
-            assert!(body.contains("可以忽略这封信"));
-            assert!(body.contains("管理关注"));
-            assert!(body.contains("一键退订全部关注"));
-            assert!(!body.contains("就算数"));
+            assert!(body.contains("works for 48 hours"));
+            assert!(body.contains("can be used once"));
+            assert!(body.contains("do not forward it"));
+            assert!(body.contains("If you did not ask for this"));
+            assert!(body.contains("ignore this email"));
+            assert!(body.contains("Manage your follows"));
+            assert!(body.contains("Unsubscribe from everything"));
         }
         assert_eq!(content.text.matches(&url).count(), 1);
         assert_eq!(content.html.matches(&format!("href=\"{url}\"")).count(), 2);
@@ -81,20 +87,20 @@ async fn queued_verification_letters_explain_the_action_and_expiry_in_both_forma
             .unwrap();
         assert!(!preheader.contains("not-a-real-confirm-token"));
     }
-    assert!(rows[0].body.contains("小小星球"));
-    assert!(!rows[0].body.contains("周报"));
-    assert!(rows[1].body.contains("每周最多收到一封"));
+    assert!(rows[0].body.contains("Tiny Planet"));
+    assert!(!rows[0].body.contains("digest"));
+    assert!(rows[1].body.contains("at most one digest a week"));
     assert!(notify::email::render(&runtime, &rows[2])
         .html
-        .contains("找回关注&nbsp; →"));
+        .contains("Sign in&nbsp; →"));
 }
 
 #[test]
 fn developer_text_is_not_html_and_tracking_parameters_survive() {
     let row = row(
         notify::KIND_SITE_VERSION,
-        "《<img src=x onerror=alert(1)> & 星球》更新至 v8",
-        "<script>alert('hello')</script>\n\n改善了移动操作 & 新手引导。{action}",
+        "<img src=x onerror=alert(1)> & Planet is now v8",
+        "<script>alert('hello')</script>\n\nBetter touch controls & tutorial.{action}",
         Some("https://playtest.run/p/preview?from=notice&version=8"),
     );
     let content = notify::email::render(&runtime(), &row);
@@ -104,12 +110,14 @@ fn developer_text_is_not_html_and_tracking_parameters_survive() {
     assert!(!content.html.contains("<img "));
     assert!(content
         .html
-        .contains("改善了移动操作 &amp; 新手引导。{action}"));
+        .contains("Better touch controls &amp; tutorial.{action}"));
     assert!(content.text.contains("<script>alert('hello')</script>"));
     assert!(content.html.contains("?from=notice&amp;version=8"));
     assert!(content.text.contains("?from=notice&version=8"));
-    assert!(content.html.contains("查看新版本&nbsp; →"));
-    assert!(content.html.contains("同一作品 24 小时内最多一封"));
+    assert!(content.html.contains("Open the new version&nbsp; →"));
+    assert!(content
+        .html
+        .contains("At most one email per project per 24 hours"));
 }
 
 #[test]
@@ -125,11 +133,22 @@ fn unexpected_action_urls_are_not_clickable_and_the_failure_is_visible() {
         "http://playtest.run/p/preview",
         "https://playtest.run:444/p/preview",
     ] {
-        let row = row(notify::KIND_SITE_VERSION, "作品更新", "新版本", Some(url));
+        let row = row(
+            notify::KIND_SITE_VERSION,
+            "Tiny Planet is now v8",
+            "A new version",
+            Some(url),
+        );
         let content = notify::email::render(&runtime(), &row);
         assert!(!content.html.contains(&format!("href=\"{url}\"")), "{url}");
-        assert!(content.html.contains("链接暂不可用"), "{url}");
-        assert!(content.text.contains("链接暂不可用"), "{url}");
+        assert!(
+            content.html.contains("link in this email is not usable"),
+            "{url}"
+        );
+        assert!(
+            content.text.contains("link in this email is not usable"),
+            "{url}"
+        );
     }
 }
 
@@ -137,35 +156,35 @@ fn unexpected_action_urls_are_not_clickable_and_the_failure_is_visible() {
 fn digest_preserves_developer_names_and_promotion_labels_without_linkifying_the_web() {
     let items = [
         notify::digest::Item {
-            title: "小小星球".to_string(),
-            developer: "小雨".to_string(),
-            summary: Some("<b>触摸星星</b>\nhttps://attacker.example".to_string()),
+            title: "Tiny Planet".to_string(),
+            developer: "Rain".to_string(),
+            summary: Some("<b>Touch the stars</b>\nhttps://attacker.example".to_string()),
             url: "https://playtest.run/p/preview?from=notice".to_string(),
             boosted: false,
         },
         notify::digest::Item {
-            title: "纸上远行".to_string(),
-            developer: "阿树".to_string(),
-            summary: Some("十分钟的水彩旅行。".to_string()),
+            title: "Paper Passage".to_string(),
+            developer: "Tree".to_string(),
+            summary: Some("A ten-minute watercolour trip.".to_string()),
             url: "https://paper.playtest.run/?from=notice".to_string(),
             boosted: true,
         },
     ];
     let row = row(
         notify::KIND_DIGEST,
-        "本周新作品",
+        "New this week",
         &notify::digest::body(&items),
         None,
     );
     let content = notify::email::render(&runtime(), &row);
-    assert_eq!(content.html.matches("打开邀请函 →").count(), 2);
+    assert_eq!(content.html.matches("Open the invite →").count(), 2);
     assert_eq!(
         content.html.matches("<div class=\"digest-item\"").count(),
         2
     );
-    assert!(content.html.contains("推广"));
-    assert!(content.html.contains("阿树"));
-    assert!(content.html.contains("&lt;b&gt;触摸星星&lt;/b&gt;"));
+    assert!(content.html.contains("Sponsored"));
+    assert!(content.html.contains("Tree"));
+    assert!(content.html.contains("&lt;b&gt;Touch the stars&lt;/b&gt;"));
     assert!(!content.html.contains("href=\"https://attacker.example\""));
     assert!(content.text.contains(&items[0].url));
     assert!(content.text.contains(&items[1].url));
@@ -173,8 +192,8 @@ fn digest_preserves_developer_names_and_promotion_labels_without_linkifying_the_
 
 #[test]
 fn long_text_remains_complete_without_remote_assets() {
-    let title = "给还没睡的人做的一段星际旅程".repeat(12);
-    let note = "修复了长标题下的显示问题。\n".repeat(30);
+    let title = "An interstellar trip for anyone still awake ".repeat(12);
+    let note = "Fixed how a very long title wraps.\n".repeat(30);
     let row = row(
         notify::KIND_SITE_VERSION,
         &title,
@@ -203,8 +222,8 @@ fn local_self_hosted_preview_keeps_its_own_player_origin() {
     .unwrap();
     let row = row(
         notify::KIND_SITE_VERSION,
-        "作品更新",
-        "新版本",
+        "Tiny Planet is now v8",
+        "A new version",
         Some("http://preview.localhost:8443/?from=notice"),
     );
     let content = notify::email::render(&runtime, &row);

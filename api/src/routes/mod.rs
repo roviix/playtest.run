@@ -171,8 +171,12 @@ async fn health() -> &'static str {
 }
 
 async fn unknown_route() -> ApiError {
-    ApiError::not_found("没有这个地址。请确认 CLI 和控制面的版本对得上。")
+    ApiError::not_found(NO_SUCH_ROUTE)
 }
+
+/// 地址不存在时的原话。兜底那一层也用它，两处不能各说一句。
+const NO_SUCH_ROUTE: &str =
+    "No such endpoint. Check that your CLI and this control plane are on matching versions.";
 
 /// 兜底：把中间层产生的裸响应（方法不对、体积超限）也补成 [`ErrorBody`]，
 /// 客户端才能只写一套解析逻辑。
@@ -198,30 +202,30 @@ fn describe(status: StatusCode) -> (ErrorCode, String) {
     match status {
         StatusCode::METHOD_NOT_ALLOWED => (
             ErrorCode::Invalid,
-            "这个地址不接受这种请求方法。".to_string(),
+            "This endpoint does not accept that HTTP method.".to_string(),
         ),
         StatusCode::PAYLOAD_TOO_LARGE => (ErrorCode::QuotaExceeded, too_large_message()),
         StatusCode::UNSUPPORTED_MEDIA_TYPE => (
             ErrorCode::Invalid,
-            "请求内容的类型不对，这个地址要 application/json。".to_string(),
+            "Wrong content type. This endpoint takes application/json.".to_string(),
         ),
-        StatusCode::NOT_FOUND => (
-            ErrorCode::NotFound,
-            "没有这个地址。请确认 CLI 和控制面的版本对得上。".to_string(),
-        ),
+        StatusCode::NOT_FOUND => (ErrorCode::NotFound, NO_SUCH_ROUTE.to_string()),
         _ if status.is_server_error() => (ErrorCode::Internal, INTERNAL_MESSAGE.to_string()),
-        _ => (ErrorCode::Invalid, "这个请求我们处理不了。".to_string()),
+        _ => (
+            ErrorCode::Invalid,
+            "We cannot handle this request.".to_string(),
+        ),
     }
 }
 
 pub fn too_large_message() -> String {
     format!(
-        "单个文件最多 {} MB，这个超了。",
+        "This file is too large. One file is capped at {} MB.",
         limits::MAX_FILE_BYTES / limits::MIB
     )
 }
 
-/// 和 [`axum::Json`] 一样，只是把解析失败也换成中文的 [`ErrorBody`]。
+/// 和 [`axum::Json`] 一样，只是把解析失败也换成我们自己的 [`ErrorBody`]。
 pub struct JsonBody<T>(pub T);
 
 impl<T, S> FromRequest<S> for JsonBody<T>
@@ -238,7 +242,7 @@ where
                 // 原文是英文，只进日志；给人看的是下面那句。
                 tracing::debug!(rejection = %rejection, "请求体解析失败");
                 Err(ApiError::invalid(
-                    "请求内容不是我们认识的格式：可能不是合法的 JSON，也可能少了必填字段。请确认 CLI 和控制面的版本对得上。",
+                    "We could not read this request body: it is either not valid JSON or a required field is missing. Check that your CLI and this control plane are on matching versions.",
                 ))
             }
         }

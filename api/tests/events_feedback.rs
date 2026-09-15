@@ -767,7 +767,7 @@ async fn feedback_is_one_sentence_and_stops_at_three() {
         .await
         .error(StatusCode::TOO_MANY_REQUESTS, ErrorCode::QuotaExceeded);
     assert!(
-        fourth.message.contains("谢谢"),
+        fourth.message.contains("Thank you"),
         "拦也要好好说话：{}",
         fourth.message
     );

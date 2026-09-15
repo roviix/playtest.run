@@ -106,8 +106,8 @@ pub fn enqueue_confirmation(
     url: &str,
     now: time::OffsetDateTime,
 ) -> rusqlite::Result<()> {
-    let subject = format!("确认关注《{title}》的新投稿");
-    let body = format!("你希望关注《{title}》。确认后，每周有新投稿时收到一封邮件摘要；没有新投稿就不发。\n\n这是合集订阅，不是每件作品的更新通知。作者看不到你的邮箱，可以随时取消。\n\n{url}");
+    let subject = format!("Confirm your follow: {title}");
+    let body = format!("You asked to follow {title}. Once you confirm, you get one email a week summarising new entries, and none in a week with no new entries.\n\nThis follows the collection, not each project in it. Authors never see your address, and you can stop any time.\n\n{url}");
     let now = clock::format(now);
     db::enqueue_notification(
         conn,
@@ -164,11 +164,11 @@ pub fn refresh_digest(
     if entries.is_empty() {
         return Ok(false);
     }
-    notification.subject = format!("《{}》有 {} 件新作品", collection.title, entries.len());
-    notification.body = format!("你关注的《{}》有这些新投稿：\n", collection.title);
+    notification.subject = new_entries_subject(&collection.title, entries.len());
+    notification.body = new_entries_intro(&collection.title);
     for entry in entries.iter().take(10) {
         notification.body.push_str(&format!(
-            "\n《{}》\n{}/p/{}?collection={}&from=notice\n",
+            "\n{}\n{}/p/{}?collection={}&from=notice\n",
             entry.title,
             root.trim_end_matches('/'),
             entry.slug,
@@ -180,10 +180,21 @@ pub fn refresh_digest(
         root.trim_end_matches('/')
     ));
     notification.body.push_str(&format!(
-        "\n看看整个合集：{}\n",
+        "\nSee the whole collection: {}\n",
         notification.url.as_deref().unwrap_or_default()
     ));
     Ok(true)
+}
+
+/// 合集摘要那封信的主题与开头。入队和重新核对两条路都用它，免得两处各写一句。
+fn new_entries_subject(title: &str, count: usize) -> String {
+    // entry 的复数不是加 s，words::count 只管规则名词，这句自己说。
+    let entries = if count == 1 { "entry" } else { "entries" };
+    format!("{title}: {count} new {entries}")
+}
+
+fn new_entries_intro(title: &str) -> String {
+    format!("New entries in {title}, a collection you follow:\n")
 }
 
 pub fn enqueue_digests(
@@ -225,12 +236,12 @@ pub fn enqueue_digests(
                 "/c",
                 collection.slug
             );
-            let subject = format!("《{}》有 {} 件新作品", collection.title, entries.len());
-            let mut body = format!("你关注的《{}》有这些新投稿：\n", collection.title);
+            let subject = new_entries_subject(&collection.title, entries.len());
+            let mut body = new_entries_intro(&collection.title);
             for entry in entries.iter().take(10) {
                 if let Some(site) = db::find_site(&transaction, &entry.slug)? {
                     body.push_str(&format!(
-                        "\n《{}》\n{}/p/{}?collection={}&from=notice\n",
+                        "\n{}\n{}/p/{}?collection={}&from=notice\n",
                         site.title,
                         root.trim_end_matches('/'),
                         entry.slug,
@@ -239,7 +250,7 @@ pub fn enqueue_digests(
                 }
             }
             body.push_str(&format!(
-                "\n看看整个合集：{url}\n创作说明由作者填写，不代表模型能力排名。\n"
+                "\nSee the whole collection: {url}\nNotes are written by the authors. This is not a ranking.\n"
             ));
             db::enqueue_notification(
                 &transaction,

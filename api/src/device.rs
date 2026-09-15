@@ -24,7 +24,7 @@ pub async fn start(
             .is_none_or(|github| github.client_secret.is_none())
     {
         return Err(ApiError::login_unavailable(
-            "登录暂不可用，匿名作品仍可分享。请稍后重试。",
+            "Sign-in is unavailable right now. Anonymous projects can still be shared. Try again later.",
         ));
     }
     follow::spend(&limiter, &headers, None)?;
@@ -42,7 +42,9 @@ pub async fn start(
         |row| row.get(0),
     )?;
     if recent >= 60 {
-        return Err(ApiError::quota("正在登录的设备太多，请稍后重试。"));
+        return Err(ApiError::quota(
+            "Too many devices are signing in right now. Try again shortly.",
+        ));
     }
     conn.execute(
         "DELETE FROM device_authorizations WHERE expires_at<=?1",
@@ -99,7 +101,9 @@ pub async fn preview(
     let conn = state.db().read().await;
     let pending: Option<(String,i64)> = conn.query_row("SELECT d.expires_at,(SELECT count(*) FROM sites s WHERE s.user_id=d.anon_user_id AND s.deleted_at IS NULL) FROM device_authorizations d WHERE d.user_code_hash=?1 AND d.user_id IS NULL AND d.expires_at>?2",params![code_hash(&request.user_code),clock::now_string()],|row|Ok((row.get(0)?,row.get(1)?))).optional()?;
     let (expires_at, anonymous_works) = pending.ok_or_else(|| {
-        ApiError::invalid("没有找到这次请求，确认终端里的代码，或重新运行 playtest login。")
+        ApiError::invalid(
+            "We cannot find this request. Check the code in your terminal, or run playtest login again.",
+        )
     })?;
     Ok(Json(
         json!({"expires_at":expires_at,"anonymous_works":anonymous_works}),
@@ -114,15 +118,21 @@ pub async fn approve(
     JsonBody(request): JsonBody<Approval>,
 ) -> ApiResult<Json<serde_json::Value>> {
     if identity.kind.is_anon() {
-        return Err(ApiError::unauthorized("请先登录长期账号。"));
+        return Err(ApiError::unauthorized(
+            "Sign in to a lasting account first.",
+        ));
     }
     follow::spend(&limiter, &headers, None)?;
     let conn = state.db().lock().await;
     let changed = conn.execute("UPDATE device_authorizations SET user_id=?1 WHERE user_code_hash=?2 AND user_id IS NULL AND expires_at>?3",params![identity.user_id,code_hash(&request.user_code),clock::now_string()])?;
     if changed != 1 {
-        return Err(ApiError::invalid("这次请求已处理或过期，请回终端重试。"));
+        return Err(ApiError::invalid(
+            "This request was already handled or has expired. Go back to your terminal and try again.",
+        ));
     }
-    Ok(Json(json!({"message":"已授权，回到终端继续。"})))
+    Ok(Json(
+        json!({"message":"Approved. Go back to your terminal to continue."}),
+    ))
 }
 
 pub async fn poll(
@@ -138,7 +148,9 @@ pub async fn poll(
         let device_hash = hash::hash_bytes(request.device_code.as_bytes());
         let row: Option<(Option<String>,Option<String>,Option<String>)> = tx.query_row("SELECT user_id,anon_user_id,last_poll_at FROM device_authorizations WHERE device_hash=?1 AND expires_at>?2",params![device_hash,clock::now_string()],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?))).optional()?;
         let (user_id, anonymous, last_poll) = row.ok_or_else(|| {
-            ApiError::login_failed("登录请求已过期或已完成，请重新运行 playtest login。")
+            ApiError::login_failed(
+                "This sign-in request has expired or already completed. Run playtest login again.",
+            )
         })?;
         let cutoff = clock::format(clock::now() - time::Duration::seconds(5));
         if last_poll.is_some_and(|last| last > cutoff) {

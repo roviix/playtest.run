@@ -40,7 +40,7 @@ pub async fn grant(
     // 混合模式的分界线是上传的清单：没有清单就没有分界线，玩家点开首页只会看到 404。
     if request.hybrid && site.current_version.is_none() {
         return Err(ApiError::invalid(
-            "混合模式要先有一个上传过的版本：目录里的文件从边缘给，目录里没有的路径才走到你的后端。先 playtest ./dist 传一次。",
+            "Hybrid mode needs an uploaded version first: files in the directory are served from the edge, and only paths that are not in it reach your backend. Run playtest ./dist once.",
         ));
     }
 
@@ -48,7 +48,7 @@ pub async fn grant(
     let expires_at = token_expiry(issued_at, site.expires_at.as_deref());
     if expires_at <= issued_at {
         return Err(ApiError::token_expired(
-            "这个匿名作品的 24 小时已经到了，不能再开隧道。重新运行会拿到一个新链接。",
+            "The 24 hours of this anonymous project are up, so no new tunnel can open. Run playtest again to get a new link.",
         ));
     }
     let claims = Claims {

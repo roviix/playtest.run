@@ -115,10 +115,10 @@ impl Vapid {
 fn audience(endpoint: &str) -> anyhow::Result<String> {
     let rest = endpoint
         .split_once("://")
-        .ok_or_else(|| anyhow::anyhow!("推送地址不像一个网址"))?;
+        .ok_or_else(|| anyhow::anyhow!("the push endpoint does not look like a URL"))?;
     let host = rest.1.split('/').next().unwrap_or_default();
     if host.is_empty() {
-        anyhow::bail!("推送地址里没有域名");
+        anyhow::bail!("the push endpoint has no host");
     }
     Ok(format!("{}://{host}", rest.0))
 }
@@ -133,8 +133,9 @@ fn encrypt(
     ephemeral: &SecretKey,
     salt: &[u8; 16],
 ) -> anyhow::Result<Vec<u8>> {
-    let ua_public_key = PublicKey::from_sec1_bytes(ua_public)
-        .map_err(|_| anyhow::anyhow!("订阅里的 p256dh 不是一把 P-256 公钥"))?;
+    let ua_public_key = PublicKey::from_sec1_bytes(ua_public).map_err(|_| {
+        anyhow::anyhow!("the p256dh in this subscription is not a P-256 public key")
+    })?;
     let as_public = ephemeral.public_key().to_encoded_point(false);
     let as_public = as_public.as_bytes();
 
@@ -149,22 +150,22 @@ fn encrypt(
     let mut ikm = [0u8; 32];
     Hkdf::<Sha256>::new(Some(auth_secret), shared.raw_secret_bytes())
         .expand(&info, &mut ikm)
-        .map_err(|_| anyhow::anyhow!("推算密钥失败"))?;
+        .map_err(|_| anyhow::anyhow!("deriving the key material failed"))?;
 
     // 第二次 HKDF：RFC 8188 的内容加密密钥与 nonce。
     let hkdf = Hkdf::<Sha256>::new(Some(salt), &ikm);
     let mut cek = [0u8; 16];
     hkdf.expand(b"Content-Encoding: aes128gcm\0", &mut cek)
-        .map_err(|_| anyhow::anyhow!("推算内容密钥失败"))?;
+        .map_err(|_| anyhow::anyhow!("deriving the content encryption key failed"))?;
     let mut nonce = [0u8; 12];
     hkdf.expand(b"Content-Encoding: nonce\0", &mut nonce)
-        .map_err(|_| anyhow::anyhow!("推算 nonce 失败"))?;
+        .map_err(|_| anyhow::anyhow!("deriving the nonce failed"))?;
 
     // RFC 8188 的填充：正文后面跟一个 0x02 表示「这是最后一条记录」。
     let mut padded = plaintext.to_vec();
     padded.push(0x02);
     let ciphertext = Aes128Gcm::new_from_slice(&cek)
-        .map_err(|_| anyhow::anyhow!("内容密钥长度不对"))?
+        .map_err(|_| anyhow::anyhow!("the content encryption key has the wrong length"))?
         .encrypt(
             Nonce::from_slice(&nonce),
             Payload {
@@ -172,7 +173,7 @@ fn encrypt(
                 aad: &[],
             },
         )
-        .map_err(|_| anyhow::anyhow!("加密失败"))?;
+        .map_err(|_| anyhow::anyhow!("encryption failed"))?;
 
     // RFC 8188 §2 的记录头：盐、记录大小、公钥长度、公钥，然后是密文。
     let mut body = Vec::with_capacity(21 + as_public.len() + ciphertext.len());
@@ -203,14 +204,20 @@ pub async fn send(
     url: &str,
 ) -> Result<bool, SendError> {
     let payload = serde_json::to_vec(&PushPayload { title, body, url })
-        .map_err(|e| SendError::Permanent(format!("通知内容拼不出来：{e}")))?;
+        .map_err(|e| SendError::Permanent(format!("could not build the push payload: {e}")))?;
 
     let ua_public = URL_SAFE_NO_PAD
         .decode(subscription.keys.p256dh.trim())
-        .map_err(|_| SendError::Permanent("订阅里的 p256dh 不是 base64url".to_string()))?;
+        .map_err(|_| {
+            SendError::Permanent("the p256dh in this subscription is not base64url".to_string())
+        })?;
     let auth_secret = URL_SAFE_NO_PAD
         .decode(subscription.keys.auth.trim())
-        .map_err(|_| SendError::Permanent("订阅里的 auth 不是 base64url".to_string()))?;
+        .map_err(|_| {
+            SendError::Permanent(
+                "the auth secret in this subscription is not base64url".to_string(),
+            )
+        })?;
 
     let ephemeral = SecretKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
     let mut salt = [0u8; 16];
@@ -222,7 +229,7 @@ pub async fn send(
         audience(&subscription.endpoint).map_err(|e| SendError::Permanent(e.to_string()))?;
     let authorization = vapid
         .authorization(&audience, crate::clock::now().unix_timestamp())
-        .map_err(|e| SendError::Permanent(format!("签 VAPID 断言失败：{e}")))?;
+        .map_err(|e| SendError::Permanent(format!("signing the VAPID assertion failed: {e}")))?;
 
     let response = http
         .post(&subscription.endpoint)
@@ -234,7 +241,7 @@ pub async fn send(
         .body(encrypted)
         .send()
         .await
-        .map_err(|e| SendError::Retry(format!("连不上推送服务：{e}")))?;
+        .map_err(|e| SendError::Retry(format!("could not reach the push service: {e}")))?;
 
     let status = response.status();
     if status == 404 || status == 410 {
@@ -244,7 +251,7 @@ pub async fn send(
         return Ok(true);
     }
     let detail = response.text().await.unwrap_or_default();
-    let message = format!("推送服务回了 {status}：{}", detail.trim());
+    let message = format!("the push service answered {status}: {}", detail.trim());
     if status.is_client_error() && status.as_u16() != 429 {
         Err(SendError::Permanent(message))
     } else {

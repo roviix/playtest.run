@@ -17,6 +17,7 @@ use crate::plaza;
 use crate::routes::uploads::{clean_summary, clean_text, clean_title};
 use crate::routes::JsonBody;
 use crate::state::AppState;
+use crate::words;
 
 pub const ANON_MAX_SITES: u32 = playtest_common::plan::Plan::Anon.limits().active_projects;
 pub const LOGGED_IN_MAX_SITES: u32 = playtest_common::plan::Plan::Free.limits().active_projects;
@@ -24,7 +25,8 @@ pub const LOGGED_IN_MAX_SITES: u32 = playtest_common::plan::Plan::Free.limits().
 /// 随机名字最多抽几次。抽不到说明词表用完了，那是我们要加词，不是用户的错。
 const SLUG_ATTEMPTS: usize = 20;
 
-pub const NO_SUCH_SITE: &str = "没有这个作品，或者它不是你的。用 playtest ls 看看你有哪些作品。";
+pub const NO_SUCH_SITE: &str =
+    "No such project, or it is not yours. Run playtest ls to see what you have.";
 
 pub async fn create(
     State(state): State<AppState>,
@@ -42,12 +44,15 @@ pub async fn create(
         if caller.kind.is_anon() {
             if live >= ANON_MAX_SITES {
                 return Err(ApiError::quota(format!(
-                    "匿名链接最多同时留 {ANON_MAX_SITES} 个作品，你已经有 {live} 个了。先用 playtest rm 删掉一个再建，或者 playtest login 之后能留 {LOGGED_IN_MAX_SITES} 个。"
+                    "An anonymous link holds {} at a time and you already have {live}. Remove one with playtest rm, or run playtest login to hold {}.",
+                    words::count(u64::from(ANON_MAX_SITES), "project"),
+                    words::count(u64::from(LOGGED_IN_MAX_SITES), "project"),
                 )));
             }
         } else if live >= LOGGED_IN_MAX_SITES {
             return Err(ApiError::quota(format!(
-                "一个账号最多同时留 {LOGGED_IN_MAX_SITES} 个作品，你已经有 {live} 个了。先用 playtest rm 删掉一个再建。"
+                "An account holds {} at a time and you already have {live}. Remove one with playtest rm before making another.",
+                words::count(u64::from(LOGGED_IN_MAX_SITES), "project"),
             )));
         }
 
@@ -193,7 +198,7 @@ pub async fn update(
         Some(raw) => Some(clean_text(
             Some(raw),
             limits::MAX_SEEK_NOTE_CHARS,
-            "「想让你看什么」",
+            "What you want testers to look at",
         )?),
     };
     let seats = clean_seats(request.seats)?;
@@ -227,7 +232,7 @@ pub async fn update(
         };
         if public == Some(true) && site.current_version.is_none() {
             return Err(ApiError::invalid(
-                "这个作品还没上传过版本，广场上还没有可体验的内容。先发一版再公开。",
+                "This project has no version yet, so there is nothing on the Plaza to play. Publish a version first.",
             ));
         }
         if title.is_some() || summary.is_some() {
@@ -277,7 +282,7 @@ fn clean_seats(seats: Option<u32>) -> ApiResult<Option<Option<u32>>> {
         None => Ok(None),
         Some(0) => Ok(Some(None)),
         Some(n) if n > limits::MAX_SEATS => Err(ApiError::invalid(format!(
-            "名额最多 {} 位，你写的是 {n} 位。要找这么多人，那已经是公开测试而不是 playtest 了。",
+            "You asked for {n} seats; the cap is {}. Looking for more people than that is an open beta, not a playtest.",
             limits::MAX_SEATS
         ))),
         Some(n) => Ok(Some(Some(n))),
@@ -293,13 +298,13 @@ fn clean_community_url(raw: &str) -> ApiResult<Option<String>> {
     let count = url.chars().count();
     if count > limits::MAX_COMMUNITY_URL_CHARS {
         return Err(ApiError::invalid(format!(
-            "群链接最多 {} 个字符，这个有 {count} 个。",
+            "The community link is capped at {} characters; this one has {count}.",
             limits::MAX_COMMUNITY_URL_CHARS
         )));
     }
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Err(ApiError::invalid(
-            "群链接要以 http:// 或 https:// 开头，比如一张微信群二维码所在的网页地址。",
+            "The community link has to start with http:// or https:// — a Discord invite or any page testers can open.",
         ));
     }
     Ok(Some(url.to_string()))
@@ -377,7 +382,7 @@ fn claim_slug(conn: &Connection, wanted: &str) -> ApiResult<String> {
     slug::validate(wanted).map_err(|err| ApiError::invalid(err.to_string()))?;
     if db::slug_taken(conn, wanted)? {
         return Err(ApiError::slug_unavailable(format!(
-            "「{wanted}」已经有人用了，换一个。"
+            "The name \"{wanted}\" is taken. Pick another one."
         )));
     }
     Ok(wanted.to_string())

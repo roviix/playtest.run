@@ -11,13 +11,15 @@ use crate::auth::Caller;
 use crate::error::{ApiError, ApiResult};
 use crate::routes::{admin::Admin, JsonBody};
 use crate::state::AppState;
-use crate::{clock, collections, db, plaza};
+use crate::{clock, collections, db, plaza, words};
 
-const MISSING: &str = "没有这个合集，或者你不能管理它。";
+const MISSING: &str = "No such collection, or it is not yours to manage.";
 
 fn require_account(caller: &Caller) -> ApiResult<()> {
     if caller.kind.is_anon() {
-        return Err(ApiError::quota("请先登录并保留作品，再创建合集或投稿。"));
+        return Err(ApiError::quota(
+            "Sign in and keep a project before creating a collection or submitting to one.",
+        ));
     }
     Ok(())
 }
@@ -37,23 +39,24 @@ fn text(value: &str, maximum: usize, label: &str) -> ApiResult<String> {
             .any(|character| character.is_control() && character != '\n' && character != '\t')
     {
         return Err(ApiError::invalid(format!(
-            "{label}最多 {maximum} 个字，不能含不可见控制字符。"
+            "{label} is capped at {maximum} characters and cannot contain invisible control characters."
         )));
     }
     Ok(value.to_string())
 }
 
 fn clean(mut draft: CollectionDraft) -> ApiResult<CollectionDraft> {
-    draft.title = text(&draft.title, 80, "合集标题")?;
+    draft.title = text(&draft.title, 80, "The collection title")?;
     if draft.title.is_empty() {
-        return Err(ApiError::invalid("给这个合集起一个名字。"));
+        return Err(ApiError::invalid("Give this collection a name."));
     }
-    draft.summary = text(&draft.summary, 280, "简介")?;
-    draft.prompt = text(&draft.prompt, 6000, "题目")?;
-    draft.rules = text(&draft.rules, 3000, "规则")?;
+    draft.summary = text(&draft.summary, 280, "The summary")?;
+    draft.prompt = text(&draft.prompt, 6000, "The prompt")?;
+    draft.rules = text(&draft.rules, 3000, "The rules")?;
     if let Some(close) = draft.closes_at.as_deref().filter(|value| !value.is_empty()) {
-        let parsed = clock::parse(close)
-            .ok_or_else(|| ApiError::invalid("截止时间需要带时区的完整日期。"))?;
+        let parsed = clock::parse(close).ok_or_else(|| {
+            ApiError::invalid("The closing time needs a full date with a time zone.")
+        })?;
         draft.closes_at = Some(clock::format(
             parsed
                 .to_offset(time::UtcOffset::UTC)
@@ -67,7 +70,9 @@ fn clean(mut draft: CollectionDraft) -> ApiResult<CollectionDraft> {
         draft.closes_at = None;
     }
     if draft.kind == CollectionKind::Challenge && draft.public && draft.prompt.is_empty() {
-        return Err(ApiError::invalid("公开挑战前，先写清楚大家要做什么。"));
+        return Err(ApiError::invalid(
+            "Say what people are supposed to make before you make this challenge public.",
+        ));
     }
     Ok(draft)
 }
@@ -125,13 +130,20 @@ pub async fn create(
             )
         });
     playtest_common::slug::validate(&slug)
-        .map_err(|_| ApiError::invalid("合集地址只用小写英文字母、数字和连字符，长度 3–63。"))?;
+        .map_err(|_| {
+            ApiError::invalid(
+                "A collection address uses lowercase letters, digits and hyphens, 3–63 characters long.",
+            )
+        })?;
     let value = {
         let conn = state.db().lock().await;
         if collections::list(&conn, Some(&caller.user_id), &clock::now_string())?.len()
             >= MAX_COLLECTIONS
         {
-            return Err(ApiError::quota("最多管理 10 个合集，先整理已有的合集。"));
+            return Err(ApiError::quota(format!(
+                "You can run {} at a time. Tidy up the ones you have first.",
+                words::count(MAX_COLLECTIONS as u64, "collection")
+            )));
         }
         if conn
             .query_row("SELECT 1 FROM collections WHERE slug=?1", [&slug], |_| {
@@ -140,7 +152,9 @@ pub async fn create(
             .optional()?
             .is_some()
         {
-            return Err(ApiError::invalid("这个合集地址已经被使用，换一个试试。"));
+            return Err(ApiError::invalid(
+                "That collection address is taken. Try another one.",
+            ));
         }
         let now = clock::now_string();
         conn.execute("INSERT INTO collections(slug,user_id,title,summary,kind,prompt,rules,closes_at,public,created_at,updated_at)
@@ -164,7 +178,7 @@ pub async fn update(
         let old = owned(&conn, &slug, &caller)?;
         if old.kind != draft.kind {
             return Err(ApiError::invalid(
-                "合集类型创建后不再改变，避免改变已有投稿的规则。",
+                "The kind of a collection is fixed once it exists, so the rules cannot change under the entries already in it.",
             ));
         }
         let has_entries: bool = conn.query_row(
@@ -178,7 +192,7 @@ pub async fn update(
                 || old.closes_at != draft.closes_at)
         {
             return Err(ApiError::invalid(
-                "已有投稿，题目、规则和截止时间不能再改变；新题目请新建挑战。",
+                "There are entries already, so the prompt, the rules and the closing time are fixed. Create a new challenge for a new prompt.",
             ));
         }
         conn.execute("UPDATE collections SET title=?2,summary=?3,prompt=?4,rules=?5,closes_at=?6,public=?7,updated_at=?8 WHERE slug=?1",
@@ -213,7 +227,7 @@ pub async fn submit(
     JsonBody(draft): JsonBody<EntryDraft>,
 ) -> ApiResult<Json<Collection>> {
     require_account(&caller)?;
-    let note = text(&draft.note, 500, "创作说明")?;
+    let note = text(&draft.note, 500, "The submission note")?;
     let now = clock::now_string();
     {
         let conn = state.db().lock().await;
@@ -229,18 +243,18 @@ pub async fn submit(
         }
         if collection.closed(&now) {
             return Err(ApiError::invalid(
-                "这个挑战已经结束，不能新增或替换投稿，但仍可以撤回。",
+                "This challenge has closed. Entries cannot be added or replaced, but they can still be withdrawn.",
             ));
         }
         let site = db::find_live_site(&conn, &draft.slug, &caller.user_id)?
-            .ok_or_else(|| ApiError::not_found("只能投稿你自己的作品。"))?;
+            .ok_or_else(|| ApiError::not_found("You can only submit your own project."))?;
         if !site.listing.public
             || site.listing.hidden_at.is_some()
             || site.expires_at.is_some()
             || site.current_version.is_none()
         {
             return Err(ApiError::invalid(
-                "请选择已发布、主动公开、未被隐藏的长期作品。投稿不会替你把作品公开。",
+                "Pick a lasting project that is published, public by your own choice, and not taken down. Submitting will not make a project public for you.",
             ));
         }
         let manifest = state
@@ -248,10 +262,12 @@ pub async fn submit(
             .get_manifest(&site.slug, site.current_version.unwrap())
             .await
             .map_err(|error| ApiError::Internal(error.into()))?
-            .ok_or_else(|| ApiError::invalid("作品内容暂时读不到，请稍后重试。"))?;
+            .ok_or_else(|| {
+                ApiError::invalid("We cannot read this project right now. Try again shortly.")
+            })?;
         if manifest.files.is_empty() {
             return Err(ApiError::invalid(
-                "临时隧道不能留作投稿。请上传可保留的目录版本后再试。",
+                "A temporary tunnel cannot stand as an entry. Upload a directory version that lasts, then try again.",
             ));
         }
         let existing: Option<bool> = conn
@@ -263,7 +279,7 @@ pub async fn submit(
             .optional()?;
         if existing == Some(true) {
             return Err(ApiError::invalid(
-                "组织者已移除这件作品，需由组织者允许后才能再次投稿。",
+                "The organiser removed this project. They have to allow it back before it can be submitted again.",
             ));
         }
         let count: i64 = conn.query_row(
@@ -272,9 +288,10 @@ pub async fn submit(
             |row| row.get(0),
         )?;
         if existing.is_none() && count >= MAX_ENTRIES as i64 {
-            return Err(ApiError::quota(
-                "这个合集已满 200 件作品，先联系组织者整理。",
-            ));
+            return Err(ApiError::quota(format!(
+                "This collection is full at {}. Ask the organiser to tidy it up.",
+                words::count(MAX_ENTRIES as u64, "project")
+            )));
         }
         conn.execute("INSERT INTO collection_entries(collection_slug,site_slug,user_id,submitted_version,submitted_at,note)
             VALUES(?1,?2,?3,?4,?5,?6) ON CONFLICT(collection_slug,site_slug) DO UPDATE SET
@@ -296,7 +313,9 @@ pub async fn withdraw(
         let (author, blocked) = entry.ok_or_else(|| ApiError::not_found(MISSING))?;
         if author == caller.user_id {
             if blocked {
-                return Err(ApiError::invalid("作品已被组织者移除，无需再撤回。"));
+                return Err(ApiError::invalid(
+                    "The organiser already removed this project, so there is nothing to withdraw.",
+                ));
             }
             conn.execute(
                 "DELETE FROM collection_entries WHERE collection_slug=?1 AND site_slug=?2",

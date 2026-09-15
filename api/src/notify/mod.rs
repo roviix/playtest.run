@@ -131,17 +131,17 @@ pub fn enqueue_confirm(
     now: OffsetDateTime,
 ) -> rusqlite::Result<()> {
     let subject = match title {
-        Some(title) => format!("确认关注《{title}》"),
-        None => "确认接收 playtest.run 新作品周报".to_string(),
+        Some(title) => format!("Confirm your follow: {title}"),
+        None => "Confirm the playtest.run weekly digest".to_string(),
     };
     let body = match title {
         Some(title) => format!(
-            "你希望在《{title}》发布新版本时收到通知。\n\n\
-             确认邮箱后，关注才会生效。开发者看不到你的邮箱。\n\n{confirm_url}"
+            "You asked to hear about new versions of {title}.\n\n\
+             Confirm your email and the follow takes effect. The author never sees your address.\n\n{confirm_url}"
         ),
         None => format!(
-            "你希望通过邮件发现 playtest.run 上的新作品。\n\n\
-             确认后，每周最多收到一封周报；没有新作品时不发。开发者看不到你的邮箱。\n\n{confirm_url}"
+            "You asked to hear about new projects on playtest.run by email.\n\n\
+             Once you confirm, you get at most one digest a week, and none in a week with nothing new. Authors never see your address.\n\n{confirm_url}"
         ),
     };
     let now = clock::format(now);
@@ -170,8 +170,8 @@ pub fn enqueue_send_link(
     now: OffsetDateTime,
 ) -> rusqlite::Result<()> {
     let body = format!(
-        "打开下面的链接登录 playtest，继续关注与创作。\n\n\
-         登录不会替你订阅任何内容。如果不是你发起的操作，请忽略这封邮件。\n\n{link}"
+        "Open the link below to sign in to playtest and pick up where you left off.\n\n\
+         Signing in does not subscribe you to anything.\n\n{link}"
     );
     let now = clock::format(now);
     db::enqueue_notification(
@@ -180,7 +180,7 @@ pub fn enqueue_send_link(
             player_id,
             kind: KIND_SEND_LINK,
             target_slug: None,
-            subject: "登录 playtest",
+            subject: "Sign in to playtest",
             body: &body,
             url: Some(link),
             channel: CHANNEL_EMAIL,
@@ -205,10 +205,10 @@ pub fn enqueue_site_version(
     site_url: &str,
     now: OffsetDateTime,
 ) -> rusqlite::Result<usize> {
-    let subject = format!("《{title}》更新至 v{version}");
+    let subject = format!("{title} is now v{version}");
     let body = match note.map(str::trim).filter(|n| !n.is_empty()) {
         Some(note) => note.to_string(),
-        None => "开发者发了新版本，暂未填写更新说明。".to_string(),
+        None => "The author published a new version without a note.".to_string(),
     };
     let url = notice_url(site_url);
     let now_text = clock::format(now);

@@ -22,7 +22,8 @@ use crate::state::AppState;
 pub const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 
 /// 自动撤下时写进 `hidden_reason` 的原话，控制台照着它告诉开发者。
-pub const HIDDEN_BY_REPORTS: &str = "24 小时内被多人举报，已从广场撤下，等人复核";
+pub const HIDDEN_BY_REPORTS: &str =
+    "Several people reported this within 24 hours, so it is off the Plaza until someone reviews it.";
 
 /// 重新整理并写出 `plaza.json`。返回写出去了几个作品。
 ///

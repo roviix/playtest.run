@@ -140,11 +140,11 @@ impl Notify {
         });
         anyhow::ensure!(
             valid,
-            "真实发信前，请把 {PUBLIC_ROOT_URL_ENV} 配成玩家可访问的 HTTPS 根地址；不能使用 localhost、回环地址、开发者控制台域或带路径的地址"
+            "Before sending real email, set {PUBLIC_ROOT_URL_ENV} to an HTTPS root address players can reach. Not localhost, not a loopback address, not the Developer Console domain, and without a path."
         );
         anyhow::ensure!(
             self.from.parse::<lettre::message::Mailbox>().is_ok(),
-            "{EMAIL_FROM_ENV} 必须是合法的发件人邮箱，例如 playtest.run <notice@playtest.run>"
+            "{EMAIL_FROM_ENV} has to be a valid sender mailbox, for example: playtest.run <notice@playtest.run>"
         );
         Ok(())
     }
@@ -168,13 +168,15 @@ impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let listen_raw = env_or(LISTEN_ENV, DEFAULT_LISTEN);
         let listen = listen_raw.parse().with_context(|| {
-            format!("{LISTEN_ENV} 要写成「地址:端口」的样子，例如 {DEFAULT_LISTEN}，现在是「{listen_raw}」")
+            format!(
+                "{LISTEN_ENV} takes an address:port pair, for example {DEFAULT_LISTEN}. It is currently {listen_raw}"
+            )
         })?;
 
         let site_url_template = env_or(SITE_URL_TEMPLATE_ENV, DEFAULT_SITE_URL_TEMPLATE);
         if !site_url_template.contains(SLUG_PLACEHOLDER) {
             anyhow::bail!(
-                "{SITE_URL_TEMPLATE_ENV} 里必须有 {SLUG_PLACEHOLDER}，否则每个作品的链接都一样，现在是「{site_url_template}」"
+                "{SITE_URL_TEMPLATE_ENV} has to contain {SLUG_PLACEHOLDER}, or every project gets the same link. It is currently {site_url_template}"
             );
         }
 
@@ -183,7 +185,7 @@ impl Config {
             edge_ingest_token
                 .as_ref()
                 .is_none_or(|token| token.len() >= MIN_EDGE_INGEST_TOKEN_BYTES),
-            "{EDGE_INGEST_TOKEN_ENV} 至少要有 {MIN_EDGE_INGEST_TOKEN_BYTES} 字节；请生成随机值，不要使用示例值"
+            "{EDGE_INGEST_TOKEN_ENV} needs at least {MIN_EDGE_INGEST_TOKEN_BYTES} bytes. Generate a random value; do not use the one from the example."
         );
 
         Ok(Self {
@@ -254,8 +256,8 @@ fn notify_from_env() -> anyhow::Result<Notify> {
         "resend" => {
             let api_key = env_opt(RESEND_API_KEY_ENV).ok_or_else(|| {
                 anyhow::anyhow!(
-                    "{EMAIL_PROVIDER_ENV}=resend 还要配 {RESEND_API_KEY_ENV}；\
-                     暂时不想发信就把 {EMAIL_PROVIDER_ENV} 设成 off"
+                    "{EMAIL_PROVIDER_ENV}=resend also needs {RESEND_API_KEY_ENV}. \
+                     To send nothing for now, set {EMAIL_PROVIDER_ENV} to off."
                 )
             })?;
             EmailProvider::Resend { api_key }
@@ -263,14 +265,14 @@ fn notify_from_env() -> anyhow::Result<Notify> {
         "smtp" => {
             let url = env_opt(SMTP_URL_ENV).ok_or_else(|| {
                 anyhow::anyhow!(
-                    "{EMAIL_PROVIDER_ENV}=smtp 还要配 {SMTP_URL_ENV}，形如 \
-                     smtps://用户名:密码@邮件服务器:465"
+                    "{EMAIL_PROVIDER_ENV}=smtp also needs {SMTP_URL_ENV}, shaped like \
+                     smtps://user:password@mail.example.com:465"
                 )
             })?;
             EmailProvider::Smtp { url }
         }
         other => anyhow::bail!(
-            "{EMAIL_PROVIDER_ENV} 只认 log、resend、smtp、off 四个值，现在是「{other}」"
+            "{EMAIL_PROVIDER_ENV} takes one of log, resend, smtp, off. It is currently {other}"
         ),
     };
     Ok(Notify {

@@ -63,7 +63,7 @@ pub async fn run_once(state: &AppState) -> usize {
                         row.id,
                         "dead",
                         &clock::format(now),
-                        "合集、投稿或订阅已失效，未发送",
+                        "the collection, its entries or the subscription went away; not sent",
                     );
                     continue;
                 }
@@ -123,7 +123,7 @@ async fn send_email(state: &AppState, row: &db::NotificationRow) -> super::maile
     let Some(to) = row.email.clone() else {
         // 人把邮箱去掉了（或者从来就是推送那条路），这封信没有收件人。
         return Err(super::mailer::SendError::Permanent(
-            "这个人没有邮箱".to_string(),
+            "this person has no email address".to_string(),
         ));
     };
     let runtime = state.notify();
@@ -145,12 +145,12 @@ async fn send_email(state: &AppState, row: &db::NotificationRow) -> super::maile
 async fn send_push(state: &AppState, row: &db::NotificationRow) -> super::mailer::SendResult {
     let Some(raw) = row.push_subscription.as_deref() else {
         return Err(super::mailer::SendError::Permanent(
-            "这个人没有浏览器订阅".to_string(),
+            "this person has no browser subscription".to_string(),
         ));
     };
     let Some(subscription) = super::push::parse_subscription(raw) else {
         return Err(super::mailer::SendError::Permanent(
-            "库里这条浏览器订阅读不懂".to_string(),
+            "we cannot read the stored browser subscription".to_string(),
         ));
     };
     let runtime = state.notify();

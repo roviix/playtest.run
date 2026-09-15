@@ -29,14 +29,14 @@ pub async fn upload(
     // 先挡住形态不对的哈希：它后面要被拼进对象存储的路径。
     if !hash::is_valid_hex(&hash) {
         return Err(ApiError::invalid(
-            "地址里的这一段不是内容哈希：要 64 个小写十六进制字符。",
+            "That path segment is not a content hash: it needs 64 lowercase hex characters.",
         ));
     }
 
     let expected_sizes = pending_sizes_for(&state, &caller.user_id, &hash).await?;
     if expected_sizes.is_empty() {
         return Err(ApiError::invalid(
-            "这份文件不在你尚未提交的上传清单里。请重新运行一次上传。",
+            "This file is not in any of your uncommitted uploads. Run the upload again.",
         ));
     }
 
@@ -52,14 +52,14 @@ pub async fn upload(
     if actual != hash {
         discard(&tmp).await;
         return Err(ApiError::hash_mismatch(format!(
-            "这些字节算出来的内容哈希是 {actual}，和地址里的 {hash} 对不上。文件在路上变了或者传错了地方，重传一次。"
+            "These bytes hash to {actual}, not the {hash} in the URL. The file changed on the way or went to the wrong place. Upload it again."
         )));
     }
 
     if !expected_sizes.contains(&size) {
         discard(&tmp).await;
         return Err(ApiError::invalid(format!(
-            "这份文件实际有 {size} 字节，和准备上传时声明的大小不一致。请重新运行一次上传。"
+            "This file is {size} bytes, which is not the size declared when the upload was prepared. Run the upload again."
         )));
     }
 
@@ -141,7 +141,7 @@ fn interrupted(received: u64, err: axum::Error) -> ApiError {
         ApiError::too_large(super::too_large_message())
     } else {
         tracing::debug!(error = %err, received, "上传中途断了");
-        ApiError::invalid("这个文件没传完，连接就断了。重传一次。")
+        ApiError::invalid("The connection dropped before this file finished. Upload it again.")
     }
 }
 

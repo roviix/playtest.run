@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     notify::enqueue_confirm(
         &connection,
         "preview-player",
-        Some("小小星球"),
+        Some("Tiny Planet"),
         &confirm_url,
         now,
     )?;
@@ -56,16 +56,16 @@ async fn main() -> anyhow::Result<()> {
     notify::enqueue_site_version(
         &connection,
         "preview-planet",
-        "小小星球",
+        "Tiny Planet",
         8,
-        Some("重新做了新手引导，现在可以直接拖动星星。\n\n也修好了手机上偶尔没有声音的问题。想请你再试试，看看这次会不会更顺手。"),
+        Some("The tutorial is rebuilt: you can drag the stars directly now.\n\nThe missing sound on phones is fixed too. Worth another try to see whether it reads better this time."),
         "https://playtest.run/p/preview-planet",
         now,
     )?;
     notify::enqueue_site_version(
         &connection,
         "preview-paper",
-        "纸上远行",
+        "Paper Passage",
         3,
         None,
         "https://playtest.run/p/preview-paper",
@@ -73,16 +73,18 @@ async fn main() -> anyhow::Result<()> {
     )?;
     let items = [
         notify::digest::Item {
-            title: "小小星球".to_string(),
-            developer: "小雨".to_string(),
-            summary: Some("用手指拨动星星，给一颗小行星找到回家的路。".to_string()),
+            title: "Tiny Planet".to_string(),
+            developer: "Rain".to_string(),
+            summary: Some(
+                "Nudge the stars with a finger and send a small planet home.".to_string(),
+            ),
             url: "https://playtest.run/p/preview-planet?from=notice".to_string(),
             boosted: false,
         },
         notify::digest::Item {
-            title: "纸上远行".to_string(),
-            developer: "阿树".to_string(),
-            summary: Some("一段十分钟的水彩旅行，不用急着到终点。".to_string()),
+            title: "Paper Passage".to_string(),
+            developer: "Tree".to_string(),
+            summary: Some("A ten-minute watercolour trip. No hurry to arrive.".to_string()),
             url: "https://playtest.run/p/preview-paper?from=notice".to_string(),
             boosted: true,
         },
@@ -104,18 +106,22 @@ async fn main() -> anyhow::Result<()> {
     notify::enqueue_confirm(
         &connection,
         "preview-player",
-        Some(&"给还没睡的人做的一段星际旅程".repeat(5)),
+        Some(
+            "An interstellar trip for anyone still awake "
+                .repeat(5)
+                .trim(),
+        ),
         &runtime.confirm_url(&"preview-only-".repeat(12)),
         now,
     )?;
     let samples = [
-        ("confirm", "确认关注"),
-        ("weekly-confirm", "周报确认"),
-        ("restore", "找回关注"),
-        ("update", "作品更新"),
-        ("update-no-note", "未写说明"),
-        ("digest", "已有周报"),
-        ("long-title", "长内容检查"),
+        ("confirm", "Confirm follow"),
+        ("weekly-confirm", "Confirm digest"),
+        ("restore", "Sign-in link"),
+        ("update", "New version"),
+        ("update-no-note", "No note"),
+        ("digest", "Weekly digest"),
+        ("long-title", "Long content"),
     ];
     let rows = db::due_notifications(&connection, &timestamp, 20)?;
     anyhow::ensure!(rows.len() == samples.len(), "预览样例数量不一致");
@@ -142,15 +148,18 @@ async fn main() -> anyhow::Result<()> {
     std::fs::write(
         output.join("index.html"),
         format!(
-            r#"<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>playtest.run 邮件预览</title>
-<style>body{{margin:0;background:#f2f2f0;color:#202024;font:14px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}}header{{padding:20px 24px;background:#fff;border-bottom:1px solid #ddd}}h1{{margin:0;font-size:18px}}p{{margin:4px 0 12px;color:#62626c;font-size:12px}}nav{{display:flex;gap:8px;flex-wrap:wrap}}a{{padding:5px 12px;border:1px solid #ddd;border-radius:6px;color:#202024;text-decoration:none;font-size:12px}}a:hover,a:focus-visible{{background:#202024;color:#fff}}iframe{{display:block;width:100%;height:calc(100vh - 158px);min-height:720px;border:0}}</style>
-<header><h1>playtest.run / 邮件模板</h1><p>本机预览 · 虚构作品与无效令牌 · 没有发送邮件 · 不代表真实邮箱兼容性验收</p><nav>{navigation}</nav></header><iframe name="email-preview" title="邮件正文预览" sandbox src="update.html"></iframe></html>"#
+            r#"<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>playtest.run email preview</title>
+<style>body{{margin:0;background:#f2f2f0;color:#202024;font:14px/1.6 -apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}}header{{padding:20px 24px;background:#fff;border-bottom:1px solid #ddd}}h1{{margin:0;font-size:18px}}p{{margin:4px 0 12px;color:#62626c;font-size:12px}}nav{{display:flex;gap:8px;flex-wrap:wrap}}a{{padding:5px 12px;border:1px solid #ddd;border-radius:6px;color:#202024;text-decoration:none;font-size:12px}}a:hover,a:focus-visible{{background:#202024;color:#fff}}iframe{{display:block;width:100%;height:calc(100vh - 158px);min-height:720px;border:0}}</style>
+<header><h1>playtest.run / email templates</h1><p>Local preview · made-up projects and dead tokens · nothing was sent · not a check of real inbox rendering</p><nav>{navigation}</nav></header><iframe name="email-preview" title="Email body preview" sandbox src="update.html"></iframe></html>"#
         ),
     )?;
     println!(
-        "邮件预览已生成：{}",
+        "Email preview written to {}",
         output.join("index.html").canonicalize()?.display()
     );
-    println!("7 组 HTML / 纯文本 / MIME 样例；仅使用虚构数据，没有发送邮件。");
+    println!(
+        "{} as HTML, plain text and MIME. Made-up data only; nothing was sent.",
+        playtest_api::words::count(samples.len() as u64, "sample")
+    );
     Ok(())
 }

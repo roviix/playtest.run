@@ -19,12 +19,18 @@ use crate::clock;
 use crate::error::{ApiError, ApiResult};
 use crate::routes::events::{
     check_origin, clean_slug, clip, current_version, header_str, parse, touch_session, with_cors,
-    Limiter, Origin, Seen, NO_SUCH_SITE,
+    Limiter, Origin, Seen, BAD_SESSION, NO_SUCH_SITE,
 };
 use crate::state::AppState;
 
-const EMPTY_TEXT: &str = "反馈是空的，写一句再发。";
-const ENOUGH: &str = "这次已经收到你 3 条反馈了，谢谢，就先到这里。";
+const EMPTY_TEXT: &str = "This feedback is empty. Write a line, then send it.";
+
+/// 一句话反馈和挑战对话的上限不一样，所以数字现说现算，别在文案里写死。
+fn enough(max_allowed: u32) -> String {
+    format!(
+        "We already have {max_allowed} pieces of feedback from you this visit. Thank you — that is enough for now."
+    )
+}
 
 /// 和 `events.rs` 里的一致：隔这么久再出现算回头客。
 const RETURN_AFTER_MINUTES: i64 = 30;
@@ -40,7 +46,7 @@ pub async fn submit(
             return ApiError::public(
                 StatusCode::FORBIDDEN,
                 ErrorCode::Invalid,
-                "这个地址只收玩家页面发来的反馈。",
+                "This endpoint only takes feedback from a player page.",
             )
             .into_response()
         }
@@ -61,16 +67,14 @@ async fn save(
 ) -> ApiResult<Json<FeedbackAccepted>> {
     let request: FeedbackRequest = parse(body)?;
     if !ingest::is_session_id(&request.session) {
-        return Err(ApiError::invalid(
-            "会话 id 的形态不对。它应该是门禁页种下的那一个。",
-        ));
+        return Err(ApiError::invalid(BAD_SESSION));
     }
     let slug = clean_slug(&request.slug)?;
     if !limiter.take(&request.session, &slug) {
         return Err(ApiError::public(
             StatusCode::TOO_MANY_REQUESTS,
             ErrorCode::QuotaExceeded,
-            "发得太快了，先歇一会儿。",
+            "That is too fast. Give it a moment.",
         ));
     }
 
@@ -100,7 +104,7 @@ async fn save(
             return Err(ApiError::public(
                 StatusCode::TOO_MANY_REQUESTS,
                 ErrorCode::QuotaExceeded,
-                ENOUGH,
+                enough(max_allowed),
             ));
         }
 

@@ -25,13 +25,15 @@ impl Letter {
     }
 
     pub fn smtp_message(&self, from: &str) -> Result<lettre::Message, SendError> {
-        let from = from
-            .parse::<lettre::message::Mailbox>()
-            .map_err(|error| SendError::Permanent(format!("发件人不是合法的邮箱：{error}")))?;
+        let from = from.parse::<lettre::message::Mailbox>().map_err(|error| {
+            SendError::Permanent(format!("the sender is not a valid mailbox: {error}"))
+        })?;
         let to = self
             .to
             .parse::<lettre::message::Mailbox>()
-            .map_err(|error| SendError::Permanent(format!("收件人不是合法的邮箱：{error}")))?;
+            .map_err(|error| {
+                SendError::Permanent(format!("the recipient is not a valid mailbox: {error}"))
+            })?;
         lettre::Message::builder()
             .from(from)
             .to(to)
@@ -40,7 +42,7 @@ impl Letter {
                 self.body.clone(),
                 self.html.clone(),
             ))
-            .map_err(|error| SendError::Permanent(format!("这封信拼不出来：{error}")))
+            .map_err(|error| SendError::Permanent(format!("could not build this email: {error}")))
     }
 }
 
@@ -110,14 +112,14 @@ impl Mailer for ResendMailer {
             .json(&body)
             .send()
             .await
-            .map_err(|e| SendError::Retry(format!("连不上 Resend：{e}")))?;
+            .map_err(|e| SendError::Retry(format!("could not reach Resend: {e}")))?;
 
         let status = response.status();
         if status.is_success() {
             return Ok(());
         }
         let detail = response.text().await.unwrap_or_default();
-        let message = format!("Resend 回了 {status}：{}", detail.trim());
+        let message = format!("Resend answered {status}: {}", detail.trim());
         // 4xx 是这封信自己的问题（地址不合法、域名没验），再试也一样；429 例外。
         if status.is_client_error() && status.as_u16() != 429 {
             Err(SendError::Permanent(message))
@@ -151,7 +153,7 @@ impl Mailer for SmtpMailer {
             .send(message)
             .await
             .map(|_| ())
-            .map_err(|e| SendError::Retry(format!("SMTP 发信失败：{e}")))
+            .map_err(|e| SendError::Retry(format!("SMTP delivery failed: {e}")))
     }
 }
 
@@ -162,7 +164,7 @@ pub struct OffMailer;
 impl Mailer for OffMailer {
     async fn send(&self, _from: &str, _letter: &Letter) -> SendResult {
         Err(SendError::Permanent(
-            "这台机器没开发信（PLAYTEST_EMAIL_PROVIDER=off）".to_string(),
+            "this server does not send email (PLAYTEST_EMAIL_PROVIDER=off)".to_string(),
         ))
     }
 }

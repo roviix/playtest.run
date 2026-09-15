@@ -23,9 +23,12 @@ use crate::error::{ApiError, ApiResult};
 use crate::routes::sites::NO_SUCH_SITE;
 use crate::routes::JsonBody;
 use crate::state::AppState;
+use crate::words;
 
-const NO_SUCH_UPLOAD: &str = "没有这次上传记录，或者它不属于这个作品。重新走一遍准备上传。";
-const ALREADY_COMMITTED: &str = "这次上传已经提交过了。要再发一版，重新走一遍准备上传。";
+const NO_SUCH_UPLOAD: &str =
+    "No such upload, or it does not belong to this project. Start the upload again.";
+const ALREADY_COMMITTED: &str =
+    "This upload was already committed. To publish another version, start a new upload.";
 const MAX_PENDING_UPLOADS_PER_USER: usize = 8;
 pub(crate) const PENDING_UPLOAD_HOURS: i64 = 1;
 
@@ -87,7 +90,7 @@ pub async fn prepare(
         db::delete_pending_uploads_before(&conn, &stale_before)?;
         if db::count_pending_uploads(&conn, &caller.user_id)? >= MAX_PENDING_UPLOADS_PER_USER {
             return Err(ApiError::quota(format!(
-                "还有 {MAX_PENDING_UPLOADS_PER_USER} 次上传没有提交。请先完成其中一次，或一小时后重新准备。"
+                "You have {MAX_PENDING_UPLOADS_PER_USER} uploads still uncommitted. Finish one of them, or start again in an hour."
             )));
         }
         db::insert_upload(
@@ -144,7 +147,7 @@ pub async fn commit(
     let existing_kind = site.work_kind.parse::<WorkKind>().unwrap_or_default();
     if site.current_version.is_some() && existing_kind != requested_kind {
         return Err(ApiError::invalid(format!(
-            "这个作品已经是{}，不能在同一个链接下改成{}。请加 --to new 新建一件作品，再用合集把它们关联起来。",
+            "This project is already {}, and it cannot become {} under the same link. Add --to new to create a separate project, then use a collection to tie them together.",
             kind_label(existing_kind),
             kind_label(requested_kind)
         )));
@@ -315,9 +318,9 @@ pub async fn commit(
 
 fn kind_label(kind: WorkKind) -> &'static str {
     match kind {
-        WorkKind::Web => "网页作品",
-        WorkKind::Article => "文章作品",
-        WorkKind::Video => "视频作品",
+        WorkKind::Web => "a web project",
+        WorkKind::Article => "an article",
+        WorkKind::Video => "a video",
     }
 }
 
@@ -326,33 +329,39 @@ fn validate_upload_shape(request: &PrepareUploadRequest) -> ApiResult<()> {
     match request.kind {
         WorkKind::Web => {
             if request.entry.is_some() {
-                return Err(ApiError::invalid("网页目录不需要指定单文件入口。"));
+                return Err(ApiError::invalid(
+                    "A web directory does not take a single-file entry point.",
+                ));
             }
         }
         WorkKind::Article => {
             let entry = presentation_entry(request)?;
             if !entry.path.to_ascii_lowercase().ends_with(".md") {
-                return Err(ApiError::invalid("文章入口必须是 .md 文件。"));
+                return Err(ApiError::invalid(
+                    "An article entry point must be a .md file.",
+                ));
             }
             if request.isolated || request.spa || request.engine.is_some() {
                 return Err(ApiError::invalid(
-                    "文章不使用 --isolated、--spa 或网页引擎设置。",
+                    "Articles do not use --isolated, --spa or a web engine setting.",
                 ));
             }
         }
         WorkKind::Video => {
             let entry = presentation_entry(request)?;
             if !entry.path.to_ascii_lowercase().ends_with(".mp4") {
-                return Err(ApiError::invalid("视频入口必须是 .mp4 文件。"));
+                return Err(ApiError::invalid(
+                    "A video entry point must be an .mp4 file.",
+                ));
             }
             if request.files.len() != 1 {
                 return Err(ApiError::invalid(
-                    "首批视频作品只接受一个 MP4 文件；封面请用 --cover 单独传。",
+                    "For now a video project takes exactly one MP4 file. Send the cover separately with --cover.",
                 ));
             }
             if request.isolated || request.spa || request.engine.is_some() {
                 return Err(ApiError::invalid(
-                    "视频不使用 --isolated、--spa 或网页引擎设置。",
+                    "Videos do not use --isolated, --spa or a web engine setting.",
                 ));
             }
         }
@@ -363,16 +372,16 @@ fn validate_upload_shape(request: &PrepareUploadRequest) -> ApiResult<()> {
 fn presentation_entry(request: &PrepareUploadRequest) -> ApiResult<&FileEntry> {
     let path = request.entry.as_deref().ok_or_else(|| {
         ApiError::invalid(match request.kind {
-            WorkKind::Article => "文章缺少 Markdown 原稿入口。",
-            WorkKind::Video => "视频缺少 MP4 文件入口。",
-            WorkKind::Web => "网页目录没有单文件入口。",
+            WorkKind::Article => "This article has no Markdown source as its entry point.",
+            WorkKind::Video => "This video has no MP4 file as its entry point.",
+            WorkKind::Web => "A web directory has no single-file entry point.",
         })
     })?;
     request
         .files
         .iter()
         .find(|file| file.path == path)
-        .ok_or_else(|| ApiError::invalid("作品入口不在这次上传的文件清单里。"))
+        .ok_or_else(|| ApiError::invalid("The entry point is not in this upload's file list."))
 }
 
 async fn render_article(
@@ -385,9 +394,12 @@ async fn render_article(
         .store()
         .get_blob_bytes(&source.hash, limits::MAX_ARTICLE_SOURCE_BYTES)
         .await?
-        .ok_or_else(|| ApiError::blobs_missing("文章原稿没有传完整，请重传一次。"))?;
-    let markdown = std::str::from_utf8(&bytes)
-        .map_err(|_| ApiError::invalid("Markdown 原稿不是 UTF-8 文本，请另存为 UTF-8 后重试。"))?;
+        .ok_or_else(|| {
+            ApiError::blobs_missing("The article source did not arrive in full. Upload it again.")
+        })?;
+    let markdown = std::str::from_utf8(&bytes).map_err(|_| {
+        ApiError::invalid("The Markdown source is not UTF-8 text. Save it as UTF-8 and try again.")
+    })?;
     let inspected = playtest_common::article::inspect(markdown, &source.path)
         .map_err(|error| ApiError::invalid(error.to_string()))?;
     let mut all_images = Vec::new();
@@ -404,11 +416,13 @@ async fn render_article(
             let extra = supplied.difference(&expected).next().copied();
             let missing = expected.difference(&supplied).next().copied();
             let message = match (missing, extra) {
-                (Some(path), _) => format!("文章引用了 {path}，但这张图片没有随原稿上传。"),
+                (Some(path), _) => {
+                    format!("The article references {path}, but that image was not uploaded with the source.")
+                }
                 (_, Some(path)) => format!(
-                    "{path} 没有被文章引用。文章发布只收原稿和明确引用的本地图片，不会顺手上传整个目录。"
+                    "{path} is not referenced by the article. Publishing an article takes the source and the local images it references, not a whole directory."
                 ),
-                _ => "文章文件清单与正文引用对不上。".to_string(),
+                _ => "The uploaded files do not match what the article references.".to_string(),
             };
             return Err(ApiError::invalid(message));
         }
@@ -422,7 +436,7 @@ async fn render_article(
         for ch in &request.chapters {
             if !supplied.contains(ch.path.as_str()) {
                 return Err(ApiError::invalid(format!(
-                    "章节 {} 的文件 {} 缺失",
+                    "Chapter {} is missing its file {}.",
                     ch.id, ch.path
                 )));
             }
@@ -442,7 +456,7 @@ async fn render_article(
         .map_err(|error| ApiError::invalid(error.to_string()))?;
     if rendered.is_empty() || rendered.len() as u64 > limits::MAX_ARTICLE_HTML_BYTES {
         return Err(ApiError::invalid(format!(
-            "文章渲染后太大了，上限是 {} MiB。",
+            "This article is too large once rendered. The cap is {} MiB.",
             limits::MAX_ARTICLE_HTML_BYTES / limits::MIB
         )));
     }
@@ -464,17 +478,24 @@ async fn validate_article_image(state: &AppState, entry: &FileEntry) -> ApiResul
         .store()
         .get_blob(&entry.hash, Some(0..end))
         .await?
-        .ok_or_else(|| ApiError::blobs_missing(format!("配图 {} 没有传完整。", entry.path)))?
+        .ok_or_else(|| {
+            ApiError::blobs_missing(format!("The image {} did not arrive in full.", entry.path))
+        })?
         .bytes()
         .await
-        .map_err(|error| ApiError::invalid(format!("配图 {} 读不到：{error}", entry.path)))?;
+        .map_err(|error| {
+            ApiError::invalid(format!(
+                "We could not read the image {}: {error}",
+                entry.path
+            ))
+        })?;
     let actual = manifest::sniff_image_mime(&bytes);
     let expected = playtest_common::article::image_mime(&entry.path);
     if actual.is_none() || actual != expected {
         return Err(ApiError::invalid(format!(
-            "{} 的扩展名和实际图片格式对不上（实际是 {}），不能只改扩展名。",
+            "The extension of {} does not match its actual image format (it is {}). Renaming the file is not enough.",
             entry.path,
-            actual.unwrap_or("无法识别的格式")
+            actual.unwrap_or("a format we do not recognise")
         )));
     }
     Ok(())
@@ -487,12 +508,16 @@ async fn validate_video(state: &AppState, entry: &FileEntry) -> ApiResult<()> {
             .store()
             .get_blob(&entry.hash, None)
             .await?
-            .ok_or_else(|| ApiError::blobs_missing("视频没有传完整，请重传一次。"))?;
+            .ok_or_else(|| {
+                ApiError::blobs_missing("The video did not arrive in full. Upload it again.")
+            })?;
         let mut file = tokio::fs::File::create(&tmp).await?;
         let mut stream = object.into_stream();
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.map_err(|error| {
-                ApiError::invalid(format!("重新读取视频做编码检查时中断了：{error}"))
+                ApiError::invalid(format!(
+                    "Reading the video back for the codec check was interrupted: {error}"
+                ))
             })?;
             file.write_all(&chunk).await?;
         }
@@ -500,13 +525,13 @@ async fn validate_video(state: &AppState, entry: &FileEntry) -> ApiResult<()> {
         let path = tmp.clone();
         tokio::task::spawn_blocking(move || {
             let mut file = std::fs::File::open(path)
-                .map_err(|error| ApiError::invalid(format!("视频检查失败：{error}")))?;
+                .map_err(|error| ApiError::invalid(format!("The video check failed: {error}")))?;
             playtest_common::video::inspect(&mut file)
                 .map_err(|error| ApiError::invalid(error.to_string()))?;
             Ok::<(), ApiError>(())
         })
         .await
-        .map_err(|error| ApiError::invalid(format!("视频检查任务没有完成：{error}")))??;
+        .map_err(|error| ApiError::invalid(format!("The video check did not finish: {error}")))??;
         Ok::<(), ApiError>(())
     }
     .await;
@@ -521,7 +546,7 @@ async fn validate_video(state: &AppState, entry: &FileEntry) -> ApiResult<()> {
 /// 封面在「缺哪些 blob」这一步里的样子：它不在目录里，给它一个只在报错信息里出现的名字。
 fn cover_entry(cover: &manifest::Cover) -> FileEntry {
     FileEntry {
-        path: "（封面）".to_string(),
+        path: "(cover)".to_string(),
         hash: cover.hash.clone(),
         size: cover.size,
     }
@@ -561,22 +586,21 @@ fn missing_message(absent: &[&str]) -> String {
         .take(MISSING_SHOWN)
         .copied()
         .collect::<Vec<_>>()
-        .join("、");
+        .join(", ");
     let rest = absent.len().saturating_sub(MISSING_SHOWN);
+    let head = words::count(absent.len() as u64, "file");
     if rest > 0 {
         format!(
-            "还有 {} 个文件没传上来：{shown}，以及另外 {rest} 个。重新运行一次上传，没传成功的会补上。",
-            absent.len()
+            "{head} never arrived: {shown}, and {rest} more. Run the upload again; it sends only what is still missing."
         )
     } else {
         format!(
-            "还有 {} 个文件没传上来：{shown}。重新运行一次上传，没传成功的会补上。",
-            absent.len()
+            "{head} never arrived: {shown}. Run the upload again; it sends only what is still missing."
         )
     }
 }
 
-/// 清单校验的中文原话直接给人看；数量和体积超限用 413，CLI 不看 message 也知道是「太大了」。
+/// 清单校验的原话直接给人看；数量和体积超限用 413，CLI 不看 message 也知道是「太大了」。
 fn as_api_error(err: ManifestError) -> ApiError {
     let message = err.to_string();
     match err {
@@ -589,15 +613,15 @@ fn as_api_error(err: ManifestError) -> ApiError {
 
 /// 空白的作品名当作没给。
 pub fn clean_title(title: Option<&str>) -> ApiResult<Option<String>> {
-    clean_text(title, limits::MAX_TITLE_CHARS, "作品名")
+    clean_text(title, limits::MAX_TITLE_CHARS, "The project title")
 }
 
 pub fn clean_note(note: Option<&str>) -> ApiResult<Option<String>> {
-    clean_text(note, limits::MAX_NOTE_CHARS, "这版改了什么")
+    clean_text(note, limits::MAX_NOTE_CHARS, "What changed in this version")
 }
 
 pub fn clean_summary(summary: Option<&str>) -> ApiResult<Option<String>> {
-    clean_text(summary, limits::MAX_SUMMARY_CHARS, "一句话介绍")
+    clean_text(summary, limits::MAX_SUMMARY_CHARS, "The one-line summary")
 }
 
 pub fn clean_text(value: Option<&str>, max_chars: usize, what: &str) -> ApiResult<Option<String>> {
@@ -607,7 +631,7 @@ pub fn clean_text(value: Option<&str>, max_chars: usize, what: &str) -> ApiResul
     let count = text.chars().count();
     if count > max_chars {
         return Err(ApiError::invalid(format!(
-            "{what}最多 {max_chars} 个字，这个有 {count} 个。"
+            "{what} is capped at {max_chars} characters; this one has {count}."
         )));
     }
     Ok(Some(text.to_string()))
@@ -637,11 +661,19 @@ mod tests {
 
     #[test]
     fn missing_message_lists_at_most_five() {
-        let all = ["a", "b", "c", "d", "e", "f", "g"];
+        let all = ["a1", "b2", "c3", "d4", "e5", "f6", "g7"];
         let message = missing_message(&all);
-        assert!(message.contains("还有 7 个文件"), "{message}");
-        assert!(message.contains("以及另外 2 个"), "{message}");
-        assert!(!message.contains('f'), "{message}");
+        assert!(message.contains("7 files never arrived"), "{message}");
+        assert!(message.contains("and 2 more"), "{message}");
+        assert!(message.contains("e5"), "{message}");
+        assert!(!message.contains("f6"), "{message}");
+        assert!(!message.contains("g7"), "{message}");
+    }
+
+    #[test]
+    fn one_missing_file_is_not_one_files() {
+        let message = missing_message(&["a1"]);
+        assert!(message.contains("1 file never arrived"), "{message}");
     }
 
     #[test]

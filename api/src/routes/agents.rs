@@ -105,8 +105,8 @@ The creator gets a clean roster of who visited, on what, where they stopped, and
 ## When NOT to use it
 
 - Plain static hosting for a report, dashboard, docs site or landing page. That is a hosting
-  product's job, not this one. Links here are for *iterative testing and build-in-public*, the root domain is a plaza of
-  works looking for testers, and anonymous links expire in {anon_hours} hours.
+  product's job, not this one. Links here are for *iterative testing and build-in-public*, the root domain is the Plaza,
+  where projects look for testers, and anonymous links expire in {anon_hours} hours.
 - Anything that needs server-side code. We never run user code. If the user has a backend,
   keep it on their machine and use `--backend` (hybrid mode).
 - Long-term production hosting or a custom domain. We do not do custom domains.
@@ -136,7 +136,7 @@ Or call the HTTP API directly: see {api}/llms-full.txt and {api}/openapi.json.
 
 1. **The url.** That is the thing they share.
 2. **`qr_text`** — paste it verbatim in a code block when they will open it on a phone.
-3. **The invite card**, when needed: use `playtest card --out invite.png` or the image block from MCP. CLI uploads do not download it by default. In WeChat a bare link has no
+3. **The invite card**, when needed: use `playtest card --out invite.png` or the image block from MCP. CLI uploads do not download it by default. In a chat app a bare link has no
    title and no face; the card is a picture with the developer's name on it, and pictures travel.
    Hand the image over, do not just mention it.
 
@@ -344,10 +344,10 @@ Useful flags:
 
 - `-n, --name` the title players see before they start
 - `-m, --note` what changed in this version — shown on the invitation page, sent to followers, and
-  used as the \"what I want you to look at\" line on the plaza
+  used as the \"what I want you to look at\" line on the Plaza
 - `--summary` the persistent project description; omitted values keep the existing description
 - `--cover cover.png` the first thing players see; without it we typeset a plain title card
-- `--public` put it on the plaza; `--seats 10` also marks it as looking for that many testers
+- `--public` put it on the Plaza; `--seats 10` also marks it as looking for that many testers
 - `--card <path>` explicitly download an invite card (default: no download; `-` also skips it)
 - `--isolated=on|off|auto` cross-origin isolation; Godot 4 threaded exports need it (auto detects)
 
@@ -356,7 +356,7 @@ Useful flags:
 1. The **url**.
 2. The **QR code** — paste `qr_text` verbatim inside a code block. It only scans in a monospace
    block; do not reflow or summarise it.
-3. If an image is needed, run `playtest card --out invite.png` or use the MCP image block. CLI uploads do not write a card by default; `card_path` appears only after an explicit successful download. This matters more than it sounds: in WeChat a bare
+3. If an image is needed, run `playtest card --out invite.png` or use the MCP image block. CLI uploads do not write a card by default; `card_path` appears only after an explicit successful download. This matters more than it sounds: in most chat apps a bare
    link shows no title and no face, and a picture with the developer's name on it is what people
    actually forward. Attach the image; do not just say it exists.
 
@@ -374,7 +374,7 @@ say what to change. Fix the build; retrying the same bytes will fail the same wa
   adopts links they already made anonymously.
 - We never run their code and never rewrite their bytes.
 - Players never need an account. First play is zero-friction by design.
-- This is not general static hosting; the root domain is a plaza for works looking for testers.
+- This is not general static hosting; the root domain is the Plaza, for projects looking for testers.
 
 ## Other commands
 
@@ -384,7 +384,7 @@ playtest versions <slug>    # every version, and which one players see
 playtest rollback <slug> 3  # point players back at v3; no bytes re-uploaded
 playtest card <slug>        # fetch the current invite card again
 playtest files <slug>       # what is actually live: every path, size and sha256
-playtest unlist <slug>      # take it off the plaza; the link keeps working
+playtest unlist <slug>      # take it off the Plaza; the link keeps working
 playtest open <slug>
 playtest rm <slug> -y
 ```

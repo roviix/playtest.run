@@ -65,7 +65,7 @@ pub async fn files(
         .await?
         .ok_or_else(|| {
             ApiError::not_found(format!(
-                "这个作品没有 v{version}。用 playtest versions {} 看看发过哪几版。",
+                "This project has no v{version}. Run playtest versions {} to see what was published.",
                 site.slug
             ))
         })?;
@@ -99,7 +99,7 @@ pub async fn activate(
             .ok_or_else(|| ApiError::not_found(NO_SUCH_SITE))?;
         if !db::version_exists(&conn, &site.slug, version)? {
             return Err(ApiError::not_found(format!(
-                "这个作品没有 v{version}。用 playtest versions {} 看看发过哪几版。",
+                "This project has no v{version}. Run playtest versions {} to see what was published.",
                 site.slug
             )));
         }

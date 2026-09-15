@@ -301,7 +301,7 @@ async fn going_public_rewrites_the_plaza_at_once() {
     assert_eq!(item.slug, site.slug);
     assert_eq!(item.url, format!("http://{}.localhost:8443", site.slug));
     assert_eq!(item.title, "小球");
-    assert_eq!(item.developer, "匿名开发者");
+    assert_eq!(item.developer, playtest_api::auth::ANON_DISPLAY_NAME);
     assert_eq!(item.summary.as_deref(), Some("三关五分钟"));
     assert_eq!(item.engine.as_deref(), Some("phaser"));
     assert!(item.is_game);
@@ -373,7 +373,11 @@ async fn a_work_without_a_version_cannot_go_public() {
         )
         .await
         .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
-    assert!(body.message.contains("先发一版"), "{}", body.message);
+    assert!(
+        body.message.contains("Publish a version first"),
+        "{}",
+        body.message
+    );
 
     // 别人的作品动不了。
     let other = h.anon_token().await;
@@ -583,7 +587,7 @@ async fn the_cover_is_a_blob_like_any_other_and_is_checked() {
         )
         .await
         .error(StatusCode::CONFLICT, ErrorCode::BlobsMissing);
-    assert!(body.message.contains("（封面）"), "{}", body.message);
+    assert!(body.message.contains("(cover)"), "{}", body.message);
 
     // 不是图片的封面在准备那一步就被拦下。
     let mut bad = request.clone();

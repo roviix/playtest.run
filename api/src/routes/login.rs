@@ -14,7 +14,8 @@ use crate::error::{ApiError, ApiResult};
 use crate::routes::JsonBody;
 use crate::state::AppState;
 
-const UNAVAILABLE: &str = "这个控制面没有开 GitHub 登录。匿名链接照常能用，只是 24 小时后失效。";
+const UNAVAILABLE: &str =
+    "This control plane has GitHub sign-in turned off. Anonymous links still work; they just expire after 24 hours.";
 
 /// 浏览器直接打开这个地址，被送去 GitHub。回来落在控制台上，带着 `code` 和 `state`。
 pub async fn web_start(State(state): State<AppState>) -> Response {
@@ -23,7 +24,7 @@ pub async fn web_start(State(state): State<AppState>) -> Response {
     };
     if gh.client_secret.is_none() {
         return ApiError::login_unavailable(
-            "GitHub 登录尚未配置完整，请使用邮箱登录或联系运营者。",
+            "GitHub sign-in is not fully configured. Use email sign-in, or contact whoever runs this server.",
         )
         .into_response();
     }
@@ -32,7 +33,7 @@ pub async fn web_start(State(state): State<AppState>) -> Response {
         return ApiError::public(
             StatusCode::TOO_MANY_REQUESTS,
             playtest_common::api::ErrorCode::LoginFailed,
-            "正在登录的人太多，过一分钟再试。",
+            "Too many people are signing in right now. Try again in a minute.",
         )
         .into_response();
     }
@@ -55,12 +56,12 @@ pub async fn web_exchange(
         .ok_or_else(|| ApiError::login_unavailable(UNAVAILABLE))?;
     let Some(secret) = gh.client_secret.as_deref() else {
         return Err(ApiError::login_unavailable(
-            "GitHub 登录尚未配置完整，请使用邮箱登录。",
+            "GitHub sign-in is not fully configured. Use email sign-in instead.",
         ));
     };
     if !state.take_login_state(&request.state) {
         return Err(ApiError::login_failed(
-            "这次登录的凭据对不上或已过期（从点「登录」到回来超过了 10 分钟）。回到控制台再点一次。",
+            "These sign-in credentials do not match or have expired (more than 10 minutes passed between starting and coming back). Go back to the Developer Console and start again.",
         ));
     }
     let access_token = access_token(
@@ -145,7 +146,7 @@ async fn access_token(
     }
     tracing::warn!(error = ?body.error, description = ?body.error_description, "GitHub 拒绝授权码");
     Err(ApiError::login_failed(
-        "GitHub 授权未完成或已过期，请重新登录。",
+        "The GitHub authorisation did not complete, or it expired. Sign in again.",
     ))
 }
 
@@ -154,7 +155,7 @@ fn github_unreachable(err: reqwest::Error) -> ApiError {
     ApiError::public(
         StatusCode::BAD_GATEWAY,
         playtest_common::api::ErrorCode::LoginFailed,
-        "控制面这边连 GitHub 没成功。过一会儿再试；匿名链接不受影响。",
+        "We could not reach GitHub from this control plane. Try again in a moment; anonymous links are unaffected.",
     )
 }
 

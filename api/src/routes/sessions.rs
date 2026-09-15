@@ -28,7 +28,7 @@ pub async fn revoke(
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.split_once(' '))
         .map(|(_, token)| token.trim())
-        .ok_or_else(|| crate::error::ApiError::unauthorized("这个请求没带令牌。"))?;
+        .ok_or_else(|| crate::error::ApiError::unauthorized("This request carried no token."))?;
     let connection = state.db().lock().await;
     connection.execute(
         "DELETE FROM tokens WHERE token_hash=?1 AND user_id=?2",
@@ -54,7 +54,7 @@ pub async fn create(State(state): State<AppState>) -> ApiResult<Json<AnonSession
             return Err(ApiError::public(
                 StatusCode::TOO_MANY_REQUESTS,
                 ErrorCode::QuotaExceeded,
-                "这一分钟创建的匿名链接太多了，请稍后重试。",
+                "Too many anonymous links were created this minute. Try again shortly.",
             ));
         }
         db::insert_user(

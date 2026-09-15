@@ -289,7 +289,7 @@ async fn anonymous_upload_reaches_v2() {
     let manifest = h.store.get_manifest(&site.slug, 1).await.unwrap().unwrap();
     assert_eq!(manifest.schema, playtest_common::manifest::SCHEMA);
     assert_eq!(manifest.title, "小球");
-    assert_eq!(manifest.developer, "匿名开发者");
+    assert_eq!(manifest.developer, playtest_api::auth::ANON_DISPLAY_NAME);
     assert_eq!(manifest.note.as_deref(), Some("第一版：能动了"));
     assert!(manifest.badge, "匿名作品的门禁页要带角标");
     assert!(manifest.isolated);
@@ -553,7 +553,9 @@ async fn article_commit_renders_a_separate_safe_artifact_and_keeps_the_kind_stab
         )
         .await
         .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
-    assert!(error.message.contains("不能在同一个链接下改成"));
+    assert!(error
+        .message
+        .contains("it cannot become a web project under the same link"));
     assert_eq!(
         h.store
             .get_current(&site.slug)
@@ -838,7 +840,7 @@ async fn no_token_and_stale_token_say_different_things() {
         .await
         .error(StatusCode::UNAUTHORIZED, ErrorCode::TokenExpired);
     assert!(
-        expired.message.contains("24 小时") && expired.message.contains("新链接"),
+        expired.message.contains("24 hours") && expired.message.contains("get a new link"),
         "过期的说法要告诉人下一步做什么：{}",
         expired.message
     );
@@ -863,8 +865,16 @@ async fn anonymous_users_stop_at_the_published_plan_limit() {
         .await
         .error(StatusCode::FORBIDDEN, ErrorCode::QuotaExceeded);
     assert!(
-        body.message.contains(&format!("最多同时留 {limit} 个作品")),
+        body.message.contains(&format!(
+            "holds {} at a time",
+            playtest_api::words::count(u64::from(limit), "project")
+        )),
         "{}",
+        body.message
+    );
+    assert!(
+        !body.message.contains("1 projects"),
+        "数出来的东西要按英文的单复数说：{}",
         body.message
     );
 
@@ -1008,7 +1018,7 @@ async fn oversized_version_is_a_quota_error() {
         )
         .await
         .error(StatusCode::PAYLOAD_TOO_LARGE, ErrorCode::QuotaExceeded);
-    assert!(body.message.contains("上限"), "{}", body.message);
+    assert!(body.message.contains("the limit is"), "{}", body.message);
 }
 
 #[tokio::test]

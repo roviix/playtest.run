@@ -135,14 +135,21 @@ pub fn compose(
     Ok(Some(items))
 }
 
+/// 标题和作者之间的分隔符。邮件模板照它把一行拆回「作品名 / 作者」两段，
+/// 所以两处只能有这一个定义（[`crate::notify::email`]）。
+pub const HEADING_SEPARATOR: &str = " — ";
+
 pub fn subject(now: OffsetDateTime) -> String {
-    format!("本周新作品 · {}", &clock::format(now)[..10])
+    format!("New this week · {}", &clock::format(now)[..10])
 }
 
 pub fn body(items: &[Item]) -> String {
-    let mut text = String::from("这周有这些新作品可以试：\n");
+    let mut text = String::from("New projects to try this week:\n");
     for item in items.iter().filter(|i| !i.boosted) {
-        text.push_str(&format!("\n《{}》 {}\n", item.title, item.developer));
+        text.push_str(&format!(
+            "\n{}{HEADING_SEPARATOR}{}\n",
+            item.title, item.developer
+        ));
         if let Some(summary) = &item.summary {
             text.push_str(summary);
             text.push('\n');
@@ -152,9 +159,12 @@ pub fn body(items: &[Item]) -> String {
     }
     let promoted: Vec<&Item> = items.iter().filter(|i| i.boosted).collect();
     if !promoted.is_empty() {
-        text.push_str("\n—\n推广\n");
+        text.push_str("\n—\nSponsored\n");
         for item in promoted {
-            text.push_str(&format!("\n《{}》 {}\n", item.title, item.developer));
+            text.push_str(&format!(
+                "\n{}{HEADING_SEPARATOR}{}\n",
+                item.title, item.developer
+            ));
             if let Some(summary) = &item.summary {
                 text.push_str(summary);
                 text.push('\n');

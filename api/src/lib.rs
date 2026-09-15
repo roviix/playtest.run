@@ -30,6 +30,7 @@ pub mod scheduler;
 pub mod state;
 pub mod sweeper;
 pub mod tunnel_keys;
+pub mod words;
 
 pub use config::Config;
 pub use routes::app;

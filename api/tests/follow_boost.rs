@@ -424,10 +424,13 @@ async fn an_email_only_counts_after_the_link_is_clicked() {
     let (kind, subject, body, status) = h.last_notice().await.expect("该有一封确认信");
     assert_eq!(kind, notify::KIND_CONFIRM);
     assert!(
-        subject.contains("确认关注") && subject.contains("小球"),
+        subject.contains("Confirm your follow") && subject.contains("小球"),
         "{subject}"
     );
-    assert!(body.contains("确认邮箱后，关注才会生效"), "{body}");
+    assert!(
+        body.contains("Confirm your email and the follow takes effect"),
+        "{body}"
+    );
     assert_eq!(status, "pending");
 
     // 点了才算。
@@ -801,7 +804,7 @@ async fn send_link_never_says_whether_the_email_is_known() {
         )
         .await
         .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
-    assert!(body.message.contains("邮箱"), "{}", body.message);
+    assert!(body.message.contains("email address"), "{}", body.message);
 }
 
 #[tokio::test]
@@ -888,7 +891,7 @@ async fn a_new_version_tells_the_followers_once_a_day() {
     let (_, subject, body, _) = h.last_notice().await.unwrap();
     assert!(subject.contains("v4"), "合并后是最新那一版：{subject}");
     assert!(
-        body.contains("开发者发了新版本"),
+        body.contains("The author published a new version without a note"),
         "没写 note 就用这句：{body}"
     );
 }
@@ -937,7 +940,7 @@ async fn every_letter_carries_the_unsubscribe_line() {
         db::due_notifications(&conn, &clock::now_string(), 10).unwrap()
     };
     let letter = notify::render(h.state.notify(), &rows[0]);
-    assert!(letter.contains("一键退订"), "{letter}");
+    assert!(letter.contains("Unsubscribe from everything"), "{letter}");
     assert!(letter.contains("/me/unsubscribe/"), "{letter}");
 }
 
@@ -969,7 +972,7 @@ async fn the_weekly_digest_only_goes_out_when_there_is_something_new() {
         db::due_notifications(&conn, &clock::format(now), 10).unwrap()
     };
     let letter = notify::render(h.state.notify(), rows.last().unwrap());
-    assert!(letter.contains("管理关注"), "{letter}");
+    assert!(letter.contains("Manage your follows"), "{letter}");
 
     // 过几周之后那个作品不再算「新」，这一期就不发。
     let later = now + time::Duration::days(30);
@@ -1092,7 +1095,12 @@ async fn an_anonymous_site_cannot_be_promoted() {
         )
         .await
         .error(StatusCode::BAD_REQUEST, ErrorCode::Invalid);
-    assert!(body.message.contains("匿名"), "{}", body.message);
+    assert!(
+        body.message
+            .contains("An anonymous project cannot be boosted"),
+        "{}",
+        body.message
+    );
 }
 
 #[tokio::test]
