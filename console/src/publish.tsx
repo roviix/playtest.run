@@ -134,7 +134,7 @@ export function Publish() {
                   <div class="ai-step">
                     <span class="step-num">2.</span> Publish: run{" "}
                     <code class="cmd-pill"><span class="k">playtest</span> <span class="a">&lt;dir&gt;</span></code> for static build with index.html (add <span class="f">--spa</span> for SPA), or{" "}
-                    <code class="cmd-pill"><span class="k">playtest</span> <span class="a">&lt;port&gt;</span></code> for dev server. Optional: <span class="f">-n</span> "<span class="a">name</span>", <span class="f">-m</span> "<span class="a">note</span>".
+                    <code class="cmd-pill"><span class="k">playtest</span> <span class="a">&lt;port&gt;</span></code> for dev server. Optional: <span class="f">-n</span> "<span class="s">name</span>", <span class="f">-m</span> "<span class="s">note</span>".
                   </div>
                   <div class="ai-step">
                     <span class="step-num">3.</span> Report back the playable link and QR code.
