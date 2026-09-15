@@ -46,9 +46,6 @@ body.media-page{padding:24px clamp(28px,3vw,64px) 40px}
 .video-status,.image-status{font-size:13px;line-height:1.7;color:var(--warn);padding:12px 0}.media-page .video-retry{margin-bottom:12px}
 .video-page .media-heading h1{font-size:clamp(23px,2.3vw,30px)}
 .media-page .chat-panel{display:none}
-.chat-prompt{padding:9px 12px;background:rgba(255,255,255,.025);border:1px solid var(--line);border-left:2.5px solid var(--accent);border-radius:0 8px 8px 0;margin:10px 0 0;font-size:12.5px;line-height:1.55;flex-shrink:0;word-break:break-word}
-.chat-prompt .prompt-lead{color:var(--accent);font-weight:600;font-size:12px;letter-spacing:.01em}
-.chat-prompt .prompt-text{color:var(--fg)}
 .media-page .chat-back{display:none;min-height:36px;align-items:center}
 .media-page .feedback-status{font-size:12px;line-height:1.7;color:var(--dim);padding:10px 0}
 @media(min-width:1100px){

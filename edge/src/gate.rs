@@ -39,6 +39,10 @@ const SHARE_ICON: &str = "<svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" 
 const CHAT_ICON: &str = "<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\"/></svg>";
 const CLOCK_ICON: &str = "<svg width=\"13\" height=\"13\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"7\"/><path d=\"M10 6v4l2.5 1.5\"/></svg>";
 const PRESENTATION_CSS: &str = include_str!("../../ui/presentation.css");
+/// 「作者想问」那一块的样式。它原来只在 `presentation.css` 里，而那份样式只在文章与
+/// 视频页内联，网页作品页因此裸奔（2026-09-15 线上确认）。邀请页的字节预算很紧，
+/// 所以只在真有这句话时才注入这三条。
+const PROMPT_CSS: &str = ".chat-prompt{padding:9px 12px;background:rgba(255,255,255,.025);border:1px solid var(--line);border-left:2.5px solid var(--accent);border-radius:0 8px 8px 0;margin:10px 0 0;font-size:12.5px;line-height:1.55;flex-shrink:0;word-break:break-word}.chat-prompt .prompt-lead{color:var(--accent);font-weight:600;font-size:12px;letter-spacing:.01em}.chat-prompt .prompt-text{color:var(--fg)}";
 
 fn public_file_url(origin: &str, path: &str) -> String {
     let encoded = path
@@ -285,6 +289,13 @@ impl GatePage<'_> {
         head.push_str(&format!("<style>:root{{--h:{hue}}}</style>\n"));
         if m.kind != WorkKind::Web {
             head.push_str(&format!("<style>{PRESENTATION_CSS}</style>\n"));
+        }
+        if (self.live.feedback_public || self.live.listed)
+            && m.note
+                .as_deref()
+                .is_some_and(|note| !note.trim().is_empty())
+        {
+            head.push_str(&format!("<style>{PROMPT_CSS}</style>\n"));
         }
 
         // 有封面就用封面；没有封面就用算法生成的专属几何星轨图，
@@ -1766,6 +1777,30 @@ mod tests {
         // 解析不了就整行不出，不显示一串机器码给玩家看。
         m.expires_at = Some("下周".into());
         assert!(!page(&m, false).render().contains("class=\"expires\""));
+    }
+
+    #[test]
+    fn the_authors_question_is_styled_on_a_game_invitation_too() {
+        // 这块样式原来只随 presentation.css 进文章与视频页，网页作品——最常见的那种——
+        // 输出了结构却没有样式。有这句话就得有样式，没这句话就一个字节都不带。
+        let mut m = manifest();
+        assert_eq!(m.kind, playtest_common::manifest::WorkKind::Web);
+        let mut live = SiteLive::empty("brisk-otter-41");
+        live.listed = true;
+
+        let mut quiet = page(&m, true);
+        quiet.live = &live;
+        assert!(
+            !quiet.render().contains(".chat-prompt{"),
+            "没话说就别带样式"
+        );
+
+        m.note = Some("Is the tutorial clear?".into());
+        let mut asked = page(&m, true);
+        asked.live = &live;
+        let html = asked.render();
+        assert!(html.contains("class=\"chat-prompt\""), "少了那块结构");
+        assert!(html.contains(".chat-prompt{"), "结构在样式却不在");
     }
 
     #[test]
