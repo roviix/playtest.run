@@ -314,16 +314,25 @@ async fn project_door(
                 res
             };
             let (status, message) = match result {
-                Ok(()) => (StatusCode::OK, "反馈已送达。是否公开由作者决定。"),
-                Err(400) => (StatusCode::BAD_REQUEST, "请填写 1–200 字的反馈。"),
-                Err(403) => (StatusCode::FORBIDDEN, "请在作品页面提交反馈。"),
+                Ok(()) => (
+                    StatusCode::OK,
+                    "Feedback delivered. The author decides whether it becomes public.",
+                ),
+                Err(400) => (
+                    StatusCode::BAD_REQUEST,
+                    "Feedback has to be 1–200 characters.",
+                ),
+                Err(403) => (
+                    StatusCode::FORBIDDEN,
+                    "Send feedback from the project page.",
+                ),
                 Err(429) => (
                     StatusCode::TOO_MANY_REQUESTS,
-                    "本次反馈已达上限，或提交过于频繁，请稍后再试。",
+                    "You have reached the feedback limit, or sent too fast. Try again later.",
                 ),
                 Err(_) => (
                     StatusCode::SERVICE_UNAVAILABLE,
-                    "反馈未送达，请稍后重试；你的文字仍保留在这里。",
+                    "Couldn't send. Try again; your text is still here.",
                 ),
             };
             let mut headers = base_headers();
@@ -353,14 +362,16 @@ async fn project_door(
             }
             let action = crate::html::esc(parts.uri.path());
             let retry = if result.is_err() {
-                format!("<form method=\"post\" action=\"{action}\"><input type=\"hidden\" name=\"action\" value=\"feedback\"><label>你的反馈<textarea name=\"feedback\" maxlength=\"200\">{}</textarea></label><button type=\"submit\">重新发送</button></form>", crate::html::esc(&text))
+                format!("<form method=\"post\" action=\"{action}\"><input type=\"hidden\" name=\"action\" value=\"feedback\"><label>Your feedback<textarea name=\"feedback\" maxlength=\"200\">{}</textarea></label><button type=\"submit\">Send again</button></form>", crate::html::esc(&text))
             } else {
                 String::new()
             };
             let html = crate::html::shell(
-                "作品反馈",
+                "Project feedback",
                 "",
-                &format!("<h1>{message}</h1>{retry}<a href=\"{action}#chat-panel\">返回作品</a>"),
+                &format!(
+                    "<h1>{message}</h1>{retry}<a href=\"{action}#chat-panel\">Back to project</a>"
+                ),
             );
             return (status, headers, html).into_response();
         }
@@ -448,7 +459,7 @@ async fn project_door(
                 let avatar =
                     playtest_common::avatar::svg_for_seed(who, Some(28), Some("chat-avatar-svg"));
                 let time_str =
-                    crate::when::day_time(&item.at).unwrap_or_else(|| "刚刚".to_string());
+                    crate::when::day_time(&item.at).unwrap_or_else(|| "just now".to_string());
                 serde_json::json!({
                     "who": who,
                     "text": item.text,
@@ -561,9 +572,9 @@ async fn project_door(
             } else if requested_chapter_id.is_some() {
                 Some(format!(
                     "<div class=\"chapter-missing\">\
-                     <h2>未找到指定章节</h2>\
-                     <p>你访问的章节可能已下架或链接有误。</p>\
-                     <p><a class=\"media-control\" href=\"/p/{slug}\">返回作品起始页</a></p>\
+                     <h2>Chapter not found</h2>\
+                     <p>This chapter may have been removed, or the link is wrong.</p>\
+                     <p><a class=\"media-control\" href=\"/p/{slug}\">Back to the first page</a></p>\
                      </div>"
                 ))
             } else {
@@ -725,7 +736,7 @@ async fn discovery_page(
             .iter()
             .find(|collection| collection.slug == slug && collection.public && !collection.hidden)
         else {
-            return root_html(app, authority, StatusCode::NOT_FOUND, plaza::wrap("合集暂不可用", "", plaza::Here::Collections, "<div class=\"content\"><h1>这个合集暂时不可用</h1><p>可能已停止公开或被移除。</p><a href=\"/collections\">看看其他合集 →</a></div>"));
+            return root_html(app, authority, StatusCode::NOT_FOUND, plaza::wrap("Collection unavailable", "", plaza::Here::Collections, "<div class=\"content\"><h1>This collection is unavailable</h1><p>It may have been unpublished or removed.</p><a href=\"/collections\">See other collections →</a></div>"));
         };
         let caps = app.caps.get().await;
         let viewer = if let Some(token) = me_token {
@@ -826,8 +837,8 @@ async fn mine(app: &App, authority: &str, me: Option<&str>) -> Response {
                 None
             }
             follow::Mine::Unavailable => {
-                let html = crate::plaza::wrap("关注", "", crate::plaza::Here::Mine,
-                    "<div class=\"drawer\"><h1>暂时无法读取关注</h1><p>服务连接失败，关注记录没有改变。请稍后重试。</p><a class=\"button\" href=\"/me\">重试</a></div>");
+                let html = crate::plaza::wrap("Following", "", crate::plaza::Here::Mine,
+                    "<div class=\"drawer\"><h1>Can't load what you follow</h1><p>The service is unreachable. Nothing you follow has changed. Try again in a moment.</p><a class=\"button\" href=\"/me\">Retry</a></div>");
                 let html = crate::html::enhance(html, &nonce);
                 let mut headers = root_headers(app, authority, &nonce);
                 put(&mut headers, "cache-control", "no-store");
@@ -1761,7 +1772,7 @@ async fn serve_file(
             put(&mut headers, "content-type", "text/html; charset=utf-8");
             security(&mut headers, manifest.isolated, false);
             let body = format!(
-                "<!doctype html><meta charset=\"utf-8\"><title>已移动</title><a href=\"{}\">{}</a>\n",
+                "<!doctype html><meta charset=\"utf-8\"><title>Moved</title><a href=\"{}\">{}</a>\n",
                 crate::html::esc(&location),
                 crate::html::esc(&location)
             );
@@ -1847,7 +1858,7 @@ async fn blob(
         return (
             StatusCode::RANGE_NOT_SATISFIABLE,
             headers,
-            "请求的范围超出了这个文件\n",
+            "The requested range is past the end of this file\n",
         )
             .into_response();
     }
@@ -2037,7 +2048,7 @@ fn method_not_allowed(allow: &str) -> Response {
     (
         StatusCode::METHOD_NOT_ALLOWED,
         headers,
-        "这个地址不接受这种请求\n",
+        "This address does not accept this kind of request\n",
     )
         .into_response()
 }

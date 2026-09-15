@@ -244,7 +244,7 @@ pub fn plaza_json_ld() -> String {
 \"@type\": \"WebSite\",\n  \
 \"name\": \"playtest\",\n  \
 \"url\": \"https://playtest.run/\",\n  \
-\"description\": \"以作品为中心的 build in public 平台：拿作品说话，带观众走向下一版。\",\n  \
+\"description\": \"A build-in-public platform centered on the work: show the project, take your audience to the next version.\",\n  \
 \"potentialAction\": {\n    \
 \"@type\": \"SearchAction\",\n    \
 \"target\": \"https://playtest.run/?q={search_term_string}\",\n    \

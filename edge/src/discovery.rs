@@ -412,7 +412,7 @@ pub fn collection(
     let followed =
         viewer.is_some_and(|viewer| viewer.follows.iter().any(|follow| follow.target == target));
     let subscribe = if followed {
-        "<a class=\"utility-btn subscribed\" href=\"/me\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 13 4 4L19 7\"/></svg>已关注</a>".to_string()
+        "<a class=\"utility-btn subscribed\" href=\"/me\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 13 4 4L19 7\"/></svg>Following</a>".to_string()
     } else if !caps.email {
         String::new()
     } else if viewer.is_some_and(|viewer| viewer.email_masked.is_some()) {
@@ -645,5 +645,5 @@ pub fn context(plaza: &Plaza, slug: &str, collection_slug: Option<&str>) -> Stri
     }) else {
         return String::new();
     };
-    format!("<a class=\"invitation-back collection-context\" href=\"{}\" title=\"Back to {}\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m15 18-6-6 6-6\"/></svg><span>返回 {}</span></a>", esc(&collection.path()), esc(&collection.title), esc(&collection.title))
+    format!("<a class=\"invitation-back collection-context\" href=\"{}\" title=\"Back to {}\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m15 18-6-6 6-6\"/></svg><span>Back to {}</span></a>", esc(&collection.path()), esc(&collection.title), esc(&collection.title))
 }

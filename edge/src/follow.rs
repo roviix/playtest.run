@@ -309,7 +309,7 @@ pub fn result_page(outcome: &Outcome, sub: &Submission, back: &str) -> (StatusCo
             let masked = sub.email.as_deref().map(mask_email).unwrap_or_default();
             (
                 StatusCode::OK,
-                format!("Confirmation email sent to {masked}. 确认信已发出。"),
+                format!("Confirmation email sent to {masked}."),
                 "Click the link in the email to confirm. Check your spam folder if it does not arrive.",
             )
         }
@@ -876,7 +876,7 @@ mod tests {
         assert!(html.contains("href=\"/level/3\""));
         // 不吓人：正文里没有一个内部词（样式在 head 里，不看）。
         let body = html.split("</head>").nth(1).unwrap();
-        for word in ["控制面", "500", "错误", "失败", "超时"] {
+        for word in ["control plane", "500", "error", "failed", "timeout"] {
             assert!(!body.contains(word), "「{word}」不是给玩家看的");
         }
 
@@ -971,7 +971,7 @@ mod tests {
         // 没有推送能力时这一页一行脚本都没有：邮箱是原生表单。
         assert!(!html.contains("<script"));
         // 这一页不是个人主页：没有这些东西（DESIGN §3.10）。
-        for word in [">注册<", "昵称", "创建账号"] {
+        for word in [">Sign up<", "Nickname", "Create account", "Password"] {
             assert!(!html.contains(word), "「{word}」不该出现");
         }
     }

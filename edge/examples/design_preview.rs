@@ -33,7 +33,7 @@ fn cover_data_uri() -> std::io::Result<String> {
     let tree =
         usvg::Tree::from_str(svg, &usvg::Options::default()).map_err(std::io::Error::other)?;
     let mut pixmap = tiny_skia::Pixmap::new(800, 500)
-        .ok_or_else(|| std::io::Error::other("无法分配模拟封面"))?;
+        .ok_or_else(|| std::io::Error::other("could not allocate the mock cover"))?;
     resvg::render(
         &tree,
         tiny_skia::Transform::identity(),
@@ -50,52 +50,52 @@ fn gallery(now: OffsetDateTime) -> Plaza {
     let samples = [
         (
             "moon-post",
-            "月球邮差",
-            "小树",
-            "沿着月光，送完今晚最后一封信。",
+            "Moon Courier",
+            "Shu",
+            "Carry the last letter of the night along the moonlight.",
             true,
         ),
         (
             "rainy-store",
-            "雨夜便利店",
-            "阿遥",
-            "一间只在下雨时营业的便利店。",
+            "Rainy Night Store",
+            "Yao",
+            "A corner shop that only opens when it rains.",
             true,
         ),
         (
             "quiet-map",
-            "把附近每条散步路线都画进一张安静的地图",
-            "一个正在慢慢做东西的人",
-            "从熟悉的路口出发，记下树荫、晚风和藏在街角的小店，看看很长的简介在卡片里怎样收尾。",
+            "Drawing every walking route near home into one quiet map",
+            "Someone making something slowly",
+            "Start at a familiar crossing, note the shade, the evening wind and the small shops around the corner, and see how a long summary ends inside a card.",
             false,
         ),
-        ("paper-plane", "纸飞机", "纸间", "", true),
+        ("paper-plane", "Paper Plane", "Ji", "", true),
         (
             "tiny-orbit",
             "Tiny Orbit",
             "Nori",
-            "用一根手指，把卫星留在轨道上。",
+            "Keep a satellite in orbit with one finger.",
             true,
         ),
         (
             "colour-pocket",
-            "口袋配色",
-            "鹿白",
-            "把今天的颜色收进口袋。",
+            "Pocket Colors",
+            "Bai",
+            "Put today's colors in your pocket.",
             false,
         ),
         (
             "cloud-room",
-            "云端房间",
-            "小满",
-            "留一扇窗，听十分钟的雨。",
+            "Cloud Room",
+            "Man",
+            "Leave a window open and listen to ten minutes of rain.",
             false,
         ),
         (
             "after-school",
-            "放学以后",
-            "木川",
-            "在太阳落山前，找到回家的路。",
+            "After School",
+            "Kawa",
+            "Find the way home before the sun goes down.",
             true,
         ),
     ];
@@ -111,8 +111,9 @@ fn gallery(now: OffsetDateTime) -> Plaza {
                 developer: developer.into(),
                 avatar_url: None,
                 summary: (!summary.is_empty()).then(|| summary.into()),
-                note: (index == 0 || index == 2)
-                    .then(|| "想知道第一次打开时，能不能自然找到下一步。".into()),
+                note: (index == 0 || index == 2).then(|| {
+                    "Curious whether the next step is obvious the first time you open it.".into()
+                }),
                 engine: is_game.then(|| "godot".into()),
                 is_game,
                 kind: Default::default(),
@@ -177,7 +178,7 @@ fn main() -> std::io::Result<()> {
                 target: FollowTarget::Site {
                     slug: "moon-post".into(),
                 },
-                title: Some("月球邮差".into()),
+                title: Some("Moon Courier".into()),
                 url: None,
                 since: "2026-09-12T00:00:00Z".into(),
             },
@@ -185,7 +186,7 @@ fn main() -> std::io::Result<()> {
                 target: FollowTarget::Site {
                     slug: "rainy-store".into(),
                 },
-                title: Some("雨夜便利店".into()),
+                title: Some("Rainy Night Store".into()),
                 url: None,
                 since: "2026-09-12T00:00:00Z".into(),
             },
@@ -268,7 +269,7 @@ fn main() -> std::io::Result<()> {
         std::fs::write(directory.join(filename), enhance(html, NONCE))?;
     }
     println!(
-        "模拟数据界面已写入 {}；不连接账号，不发送邮件。",
+        "Mock-data pages written to {}; no account is used and no email is sent.",
         directory.display()
     );
     Ok(())

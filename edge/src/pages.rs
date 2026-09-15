@@ -138,7 +138,7 @@ mod tests {
         let html = over_quota();
         assert!(html.contains("check back in a little while"));
         // 不吓唬玩家，也不说他们插不上手的内部词。
-        for word in ["熔断", "配额", "风控", "封禁", "DDoS"] {
+        for word in ["circuit breaker", "quota", "rate limit", "banned", "DDoS"] {
             assert!(!html.contains(word), "「{word}」不是给玩家看的词");
         }
     }

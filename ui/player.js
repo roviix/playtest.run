@@ -7,10 +7,10 @@
     if (status) status.textContent = '';
     if (copy) {
       delete copy.dataset.copied;
-      copy.setAttribute('aria-label', '复制命令');
-      copy.title = '复制命令';
+      copy.setAttribute('aria-label', 'Copy command');
+      copy.title = 'Copy command';
       const ct = copy.querySelector('.copy-text, .hero-copy-text');
-      if (ct) ct.textContent = '复制';
+      if (ct) ct.textContent = 'Copy';
     }
   };
   if (dialog) {
@@ -35,12 +35,12 @@
       const succeed = () => {
         if (generation !== copyGeneration) return;
         copy.dataset.copied = 'true';
-        copy.setAttribute('aria-label', '已复制命令');
-        copy.title = '已复制';
-        if (copyText) copyText.textContent = '已复制';
+        copy.setAttribute('aria-label', 'Command copied');
+        copy.title = 'Copied';
+        if (copyText) copyText.textContent = 'Copied';
         if (status) {
           status.dataset.state = 'success';
-          status.textContent = '已复制命令。';
+          status.textContent = 'Command copied.';
         }
       };
       try {
@@ -66,7 +66,7 @@
           resetCopy(copy);
           if (status) {
             status.dataset.state = 'error';
-            status.textContent = '复制失败，请选中命令手动复制。';
+            status.textContent = "Couldn't copy. Select the command and copy it manually.";
           }
         }
       }

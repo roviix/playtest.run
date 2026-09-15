@@ -10,11 +10,11 @@
   let sending = false;
   const load = async () => {
     const response = await fetch('/v1/account', { credentials: 'same-origin' });
-    if (!response.ok) throw new Error('暂时连接不上，请稍后重试。');
+    if (!response.ok) throw new Error("Can't connect right now. Try again.");
     identity = await response.json();
     form.hidden = !identity.email_available;
     github.hidden = !identity.github_available;
-    if (!identity.email_available && !identity.github_available) message.textContent = '登录暂不可用，作品仍可直接体验。';
+    if (!identity.email_available && !identity.github_available) message.textContent = 'Sign-in is unavailable. Projects still open without it.';
     document.querySelectorAll('[data-account-login]').forEach(link => {
       if (identity.account && link.classList.contains('account')) {
         link.querySelector('.account-name').textContent = identity.account.me.display_name;
@@ -34,7 +34,7 @@
     if (!identity) {
       form.hidden = true;
       github.hidden = true;
-      message.textContent = '正在获取登录方式…';
+      message.textContent = 'Loading sign-in options…';
       try { await load(); if (identity.email_available || identity.github_available) message.textContent = ''; }
       catch (error) { message.textContent = error.message; }
     }
@@ -55,15 +55,15 @@
     sending = true;
     const button = form.querySelector('button');
     button.disabled = true;
-    button.textContent = '正在发送…';
+    button.textContent = 'Sending…';
     message.textContent = '';
     try {
       const response = await fetch('/v1/account/email', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.elements.email.value, return_to: pending }) });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.message || '未能发送，请重试。');
+      if (!response.ok) throw new Error(result.message || "Couldn't send. Try again.");
       message.textContent = result.message;
-      button.textContent = '重新发送';
-    } catch (error) { message.textContent = error.message || '未能发送，请稍后重试。'; button.textContent = '重试'; }
+      button.textContent = 'Send again';
+    } catch (error) { message.textContent = error.message || "Couldn't send. Try again."; button.textContent = 'Retry'; }
     finally { sending = false; button.disabled = false; }
   });
 })();

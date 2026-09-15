@@ -27,6 +27,17 @@ pub fn esc(s: &str) -> String {
     out
 }
 
+/// 「3 chapters」但「1 chapter」：页面上每一处「数字 + 名词」都走这里，
+/// 免得出现 `1 chapters` 这种一眼假的写法。只管最规则的那条加 `s`，
+/// 用到不规则复数时再说——现在页面上只有 chapter、seat 这类词。
+pub fn count(n: usize, noun: &str) -> String {
+    if n == 1 {
+        format!("{n} {noun}")
+    } else {
+        format!("{n} {noun}s")
+    }
+}
+
 /// 字卡的色相：同一个作品每次都是同一种颜色，不同作品大概率不同。
 /// 门禁页、广场卡片、邀请卡三处共用它，一个作品在三个地方是同一种蓝或同一种绿。
 pub fn hue(slug: &str) -> u32 {
@@ -175,6 +186,13 @@ mod tests {
             "&lt;img src=x onerror=&quot;a&amp;b&quot; title=&#39;c&#39;&gt;"
         );
         assert_eq!(esc("《正常的名字》"), "《正常的名字》");
+    }
+
+    #[test]
+    fn one_of_something_is_never_plural() {
+        assert_eq!(count(0, "chapter"), "0 chapters");
+        assert_eq!(count(1, "chapter"), "1 chapter");
+        assert_eq!(count(2, "seat"), "2 seats");
     }
 
     #[test]

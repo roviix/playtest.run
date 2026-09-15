@@ -923,16 +923,8 @@ mod tests {
         assert!(svg.contains("<path d=\"M"));
         // DESIGN §3.4 的硬线：卡上没有人数、没有兑换券口吻、没有品类标签。
         for forbidden in [
-            "人玩过",
-            "人加入",
-            "限时",
-            "领取",
-            "立即",
-            "抢",
-            "免费",
-            "游戏",
-            "体验版",
-            "优惠",
+            "played", "joined", "Limited", "Claim", "Hurry", "Grab", "Free", "Game", "Demo",
+            "Discount",
         ] {
             assert!(!svg.contains(forbidden), "卡上不该有「{forbidden}」");
         }
@@ -946,7 +938,7 @@ mod tests {
         let svg = card(&manifest(), &live, Shape::Portrait).svg();
         assert!(svg.contains("Seeking 10 playtesters"));
         // 已加入几位只在门禁页上说。卡是邀请函，不是进度条——「还差 4 位」是催促的口吻。
-        for forbidden in ["已有", "6 位", "6/10", "6 / 10"] {
+        for forbidden in ["Already", "6 testers", "6 joined", "6/10", "6 / 10"] {
             assert!(!svg.contains(forbidden), "卡上不该有「{forbidden}」");
         }
     }

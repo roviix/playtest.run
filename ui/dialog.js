@@ -62,9 +62,9 @@
         if (selfKeys.has(key)) {
           msg.classList.add('self');
           const author = msg.querySelector('.chat-author');
-          if (author) author.textContent = '我';
+          if (author) author.textContent = 'You';
           const avatar = msg.querySelector('.chat-avatar');
-          if (avatar) avatar.textContent = '我';
+          if (avatar) avatar.textContent = 'You';
         }
       }
     });
@@ -99,10 +99,10 @@
       msg.className = isSelf ? 'chat-msg self' : 'chat-msg';
       msg.dataset.msgKey = key;
 
-      const avatarHtml = isSelf ? '我' : (avatar || `<div class="chat-avatar-char">${esc((who || '?').slice(0, 1))}</div>`);
-      const authorText = isSelf ? '我' : esc(who);
+      const avatarHtml = isSelf ? 'You' : (avatar || `<div class="chat-avatar-char">${esc((who || '?').slice(0, 1))}</div>`);
+      const authorText = isSelf ? 'You' : esc(who);
       const versionBadge = version ? `<span class="chat-badge">v${version}</span>` : '';
-      const timeText = esc(time || '刚刚');
+      const timeText = esc(time || 'just now');
 
       msg.innerHTML = `<div class="chat-avatar">${avatarHtml}</div><div class="chat-content voice"><div class="chat-meta"><span class="chat-author">${authorText}</span>${versionBadge}<span class="chat-time">${timeText}</span></div><p class="${bubbleClass}">${esc(text)}</p></div>`;
 
@@ -178,15 +178,15 @@
       const verMatch = stampEl ? stampEl.textContent.match(/v(\d+)/) : null;
       const version = verMatch ? parseInt(verMatch[1], 10) : '';
 
-      const key = `我:${version}:${text}`;
+      const key = `You:${version}:${text}`;
       addSelfKey(key);
 
       appendMessage({
-        who: '我',
+        who: 'You',
         version,
-        time: '刚刚',
+        time: 'just now',
         text,
-        avatar: '我',
+        avatar: 'You',
         isSelf: true,
       });
 
@@ -208,7 +208,7 @@
         });
         if (!resp.ok) {
           if (feedbackStatus) {
-            feedbackStatus.textContent = '发送未成功，请稍后重试';
+            feedbackStatus.textContent = "Couldn't send. Try again.";
             feedbackStatus.hidden = false;
           }
         } else {
@@ -216,7 +216,7 @@
         }
       } catch {
         if (feedbackStatus) {
-          feedbackStatus.textContent = '网络中断，请稍后重试';
+          feedbackStatus.textContent = 'Connection lost. Try again.';
           feedbackStatus.hidden = false;
         }
       }
@@ -238,13 +238,13 @@
             const currentSelfKeys = getSelfKeys();
             for (const m of data.messages) {
               const msgKey = `${m.who}:${m.version}:${m.text}`;
-              const isSelf = currentSelfKeys.has(msgKey) || currentSelfKeys.has(`我:${m.version}:${m.text}`);
+              const isSelf = currentSelfKeys.has(msgKey) || currentSelfKeys.has(`You:${m.version}:${m.text}`);
               appendMessage({
-                who: isSelf ? '我' : m.who,
+                who: isSelf ? 'You' : m.who,
                 version: m.version,
                 time: m.time,
                 text: m.text,
-                avatar: isSelf ? '我' : m.avatar,
+                avatar: isSelf ? 'You' : m.avatar,
                 isSelf
               });
             }

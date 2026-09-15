@@ -97,12 +97,7 @@ pub fn chapter_toc(chapters: &[ChapterEntry], current_id: &str, slug: &str) -> S
             current_attr = current_attr,
         ));
     }
-    let total = chapters.len();
-    let badge_text = if total == 1 {
-        "1 chapter".to_string()
-    } else {
-        format!("{total} chapters")
-    };
+    let badge_text = crate::html::count(chapters.len(), "chapter");
     format!(
         "<details class=\"chapter-toc\" id=\"chapter-toc\">\n\
 <summary class=\"chapter-toc-trigger\"><span class=\"chapter-toc-label\">Chapters</span><span class=\"chapter-toc-badge\">{badge_text}</span></summary>\n\

@@ -35,13 +35,13 @@ impl SharePage<'_> {
 <style>.shot{display:block;width:100%;height:auto;aspect-ratio:1080/1350;background:#0e1014;\
 border-bottom:1px solid var(--line)}</style>\n";
         let hero = format!(
-            "<img class=\"shot\" src=\"{CARD_PATH}\" alt=\"Invitation card for {title}\" width=\"1080\" height=\"1350\">\n"
+            "<img class=\"shot\" src=\"{CARD_PATH}\" alt=\"Invite card for {title}\" width=\"1080\" height=\"1350\">\n"
         );
         let body = format!(
             "<h1>Share this card</h1>\n\
 <p class=\"lead\">Long-press or click to save image, or share directly. The QR code on the card links here.</p>\n\
 {row}<button type=\"button\" id=\"pt-share\" data-title=\"{title}\" hidden>Share</button>\n\
-<div class=\"more\"><a href=\"{CARD_PATH}\" download=\"playtest-{slug}.png\">Save image</a>\
+<div class=\"more\"><a href=\"{CARD_PATH}\" download=\"{slug}-invite.png\">Save image</a>\
 <a href=\"/\">Back to project</a></div>\n\
 <footer><a href=\"{RESERVED_PATH_PREFIX}report\">Report an issue</a></footer>\n\
 <script>{COPY_JS}{SCRIPT}</script>\n",
@@ -49,7 +49,7 @@ border-bottom:1px solid var(--line)}</style>\n";
             row = copy_row(&link, Some("Project link")),
         );
         Some(shell_hero(
-            &format!("{} · Invitation Card", m.title),
+            &format!("{} · Invite card", m.title),
             head,
             &hero,
             &body,
@@ -67,7 +67,7 @@ s.hidden=false;\
 s.onclick=function(){var d={title:s.getAttribute('data-title'),url:i.value};\
 if(!navigator.canShare||!window.File){navigator.share(d);return}\
 fetch('/_playtest/card.png').then(function(r){return r.blob()}).then(function(b){\
-var f=new File([b],'playtest.png',{type:'image/png'});\
+var f=new File([b],'invite.png',{type:'image/png'});\
 if(navigator.canShare({files:[f]})){d.files=[f]}return navigator.share(d)})\
 .catch(function(){navigator.share(d).catch(function(){})})};})();";
 
@@ -125,12 +125,12 @@ mod tests {
         live.listed = true;
         let html = page(&m, &live).render().unwrap();
         assert!(html.contains("<img class=\"shot\" src=\"/_playtest/card.png\""));
-        assert!(html.contains("download=\"playtest-brisk-otter-41.png\""));
+        assert!(html.contains("download=\"brisk-otter-41-invite.png\""));
         assert!(html.contains("value=\"http://localhost:8443/p/brisk-otter-41\""));
         assert!(html.contains(">Copy link</button>"));
         // 系统分享默认藏着：没有 navigator.share 的浏览器上它不该占位。
         assert!(html.contains("id=\"pt-share\" data-title=\"小球大冒险\" hidden"));
-        assert!(html.contains("<title>小球大冒险 · Invitation Card</title>"));
+        assert!(html.contains("<title>小球大冒险 · Invite card</title>"));
         // 除了那张卡，一个外部资源都不加载。
         for forbidden in [
             "<script src",

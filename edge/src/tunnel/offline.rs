@@ -113,7 +113,7 @@ mod tests {
         assert!(html.contains("<title>某某 is currently offline</title>"));
         // 玩家页面上不出现品牌域名，也不出现我们内部的说法。
         assert!(!html.contains(playtest_common::DEVELOPER_HOST));
-        for word in ["隧道", "yamux", "上游", "WebSocket"] {
+        for word in ["tunnel", "yamux", "upstream", "WebSocket"] {
             assert!(!html.contains(word), "「{word}」不是给玩家看的词");
         }
     }

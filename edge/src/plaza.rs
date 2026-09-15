@@ -545,11 +545,11 @@ mod tests {
         assert_eq!(html.matches("小球大冒险").count(), 1, "作品名只出现一次");
         assert!(!html.contains("<img class=\"cover\""));
         for word in [
-            "想玩",
-            "举报",
-            "人关注</span>",
+            "Want to play",
+            "Report",
+            "followers</span>",
             "value=\"site:",
-            ">游戏<",
+            ">Game<",
             "<span class=\"v\">",
         ] {
             assert!(!html.contains(word), "卡上不该有「{word}」");
@@ -635,11 +635,11 @@ mod tests {
             1
         );
         for word in [
-            "最多人玩",
-            "筛选",
+            "Most played",
+            "Filter",
             "data-band",
             "class=\"chip\"",
-            "最近更新</h2>",
+            "Recently updated</h2>",
             "preview-panel",
             "play-dialog",
         ] {

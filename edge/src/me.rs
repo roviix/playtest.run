@@ -33,7 +33,7 @@ pub fn respond(
         return (
             StatusCode::METHOD_NOT_ALLOWED,
             headers,
-            "这个地址不接受这种请求\n",
+            "This address does not accept this kind of request\n",
         )
             .into_response();
     }

@@ -46,7 +46,7 @@ pub async fn respond(
         || !headers.contains_key(header::SEC_WEBSOCKET_KEY)
     {
         return invalid(
-            "这个地址只接受 WebSocket 握手：GET、Upgrade: websocket、Sec-WebSocket-Version: 13、Sec-WebSocket-Key",
+            "This address only accepts a WebSocket handshake: GET, Upgrade: websocket, Sec-WebSocket-Version: 13, Sec-WebSocket-Key",
         );
     }
     if !has_token(
@@ -54,11 +54,13 @@ pub async fn respond(
         header::SEC_WEBSOCKET_PROTOCOL.as_str(),
         WS_PROTOCOL,
     ) {
-        return invalid(&format!("握手要带 Sec-WebSocket-Protocol: {WS_PROTOCOL}"));
+        return invalid(&format!(
+            "The handshake has to carry Sec-WebSocket-Protocol: {WS_PROTOCOL}"
+        ));
     }
 
     let Some(token) = bearer(headers) else {
-        return unauthorized("缺少 Authorization: Bearer <令牌>");
+        return unauthorized("Missing Authorization: Bearer <token>");
     };
 
     // 公钥可能在边缘启动之后才出现（同一台机器上 api 后起），所以每次握手都问一次。
@@ -70,7 +72,7 @@ pub async fn respond(
         return crate::tunnel::error(
             StatusCode::SERVICE_UNAVAILABLE,
             ErrorCode::Internal,
-            "边缘还没拿到验签公钥",
+            "The edge does not have the verifying key yet",
         );
     };
 
@@ -81,41 +83,43 @@ pub async fn respond(
             return crate::tunnel::error(
                 StatusCode::UNAUTHORIZED,
                 ErrorCode::TokenExpired,
-                "令牌已经过期，换一个新的再连",
+                "The token has expired. Get a new one and reconnect.",
             )
         }
         Err(err) => {
             tracing::debug!(slug, %err, "隧道令牌验不过");
-            return unauthorized("令牌验不过");
+            return unauthorized("The token did not verify");
         }
     };
 
     if claims.slug != slug {
         tracing::warn!(slug, token_slug = %claims.slug, "令牌里的 slug 和 Host 对不上");
-        return unauthorized(&format!("这个令牌不是给 {slug} 的"));
+        return unauthorized(&format!("This token is not for {slug}"));
     }
     if tunnels.is_evicted(&claims.jti) {
         return crate::tunnel::error(
             StatusCode::CONFLICT,
             ErrorCode::TunnelReplaced,
-            "另一个 playtest 进程已经接管了这个作品，这个令牌不会再被接受；\
-             关掉那一个，或者换一个新令牌再连",
+            "Another playtest process took over this project, so this token is no longer accepted. \
+             Stop that one, or reconnect with a new token.",
         );
     }
 
     let Some(local_port) = local_port(headers) else {
         return invalid(&format!(
-            "{HEADER_LOCAL_PORT} 缺了，或者它不是 1 到 65535 之间的端口号"
+            "{HEADER_LOCAL_PORT} is missing, or is not a port number between 1 and 65535"
         ));
     };
 
     // hyper 只在 HTTP/1.1 且带 `Upgrade` 头时才把这个扩展塞进来。拿走它就是接下这条连接。
     let Some(on_upgrade) = parts.extensions.remove::<hyper::upgrade::OnUpgrade>() else {
-        return invalid("这条连接升级不了：要 HTTP/1.1，并且带上 Connection: Upgrade");
+        return invalid(
+            "This connection can not be upgraded: it needs HTTP/1.1 and Connection: Upgrade",
+        );
     };
     let accept = match headers.get(header::SEC_WEBSOCKET_KEY) {
         Some(key) => derive_accept_key(key.as_bytes()),
-        None => return invalid("缺少 Sec-WebSocket-Key"),
+        None => return invalid("Missing Sec-WebSocket-Key"),
     };
 
     spawn_session(tunnels.clone(), claims, local_port, on_upgrade);

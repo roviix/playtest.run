@@ -20,7 +20,7 @@
     previousFocus = document.activeElement;
     previousScroll = window.scrollY;
     page.classList.remove('media-focused');
-    if (focus) { focus.setAttribute('aria-pressed', 'false'); focus.textContent = page.classList.contains('article-page') ? '专注阅读' : '专注观看'; }
+    if (focus) { focus.setAttribute('aria-pressed', 'false'); focus.textContent = page.classList.contains('article-page') ? 'Focus reading' : 'Focus viewing'; }
     if (narrow.matches) {
       page.classList.add('feedback-open');
       panel.setAttribute('role', 'dialog');
@@ -60,25 +60,25 @@
     focus.addEventListener('click', () => {
       const focused = page.classList.toggle('media-focused');
       focus.setAttribute('aria-pressed', String(focused));
-      focus.textContent = focused ? '展开反馈' : (page.classList.contains('article-page') ? '专注阅读' : '专注观看');
+      focus.textContent = focused ? 'Show feedback' : (page.classList.contains('article-page') ? 'Focus reading' : 'Focus viewing');
     });
   }
   const video = document.querySelector('.video-body video');
   if (video) {
     const status = document.querySelector('.video-status');
     const retry = document.querySelector('.video-retry');
-    const fail = () => { status.hidden = false; status.textContent = '视频暂时无法播放，可能是网络或浏览器格式支持问题。可以重新加载后再试。'; retry.hidden = false; };
+    const fail = () => { status.hidden = false; status.textContent = "Video won't play. It may be the network, or a format this browser does not support. Reload and try again."; retry.hidden = false; };
     video.addEventListener('error', fail);
-    video.addEventListener('waiting', () => { status.hidden = false; status.textContent = '正在缓冲视频…'; });
+    video.addEventListener('waiting', () => { status.hidden = false; status.textContent = 'Buffering…'; });
     for (const event of ['canplay', 'playing']) video.addEventListener(event, () => { status.hidden = true; retry.hidden = true; });
-    retry.textContent = '重新加载视频';
-    retry.addEventListener('click', () => { retry.hidden = true; status.hidden = false; status.textContent = '正在重新加载，请稍候…'; video.load(); });
+    retry.textContent = 'Reload video';
+    retry.addEventListener('click', () => { retry.hidden = true; status.hidden = false; status.textContent = 'Reloading…'; video.load(); });
     if (video.error) fail();
   }
   const article = document.querySelector('.article-body[data-reader-slug]');
   if (!article) return;
   article.querySelectorAll('img').forEach(image => {
-    const fail = () => { if (image.hidden) return; image.hidden = true; const message = document.createElement('p'); message.className = 'image-status'; message.textContent = image.alt ? `图片暂时无法加载：${image.alt}` : '这张图片暂时无法加载，其他正文仍可继续阅读。'; image.after(message); };
+    const fail = () => { if (image.hidden) return; image.hidden = true; const message = document.createElement('p'); message.className = 'image-status'; message.textContent = image.alt ? `Image didn't load: ${image.alt}` : "This image didn't load. The rest of the text still reads fine."; image.after(message); };
     image.addEventListener('error', fail);
     if (image.complete && !image.naturalWidth) fail();
   });

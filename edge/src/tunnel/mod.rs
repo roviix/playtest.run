@@ -78,7 +78,7 @@ pub fn error(status: StatusCode, code: ErrorCode, message: &str) -> Response {
     };
     let json = serde_json::to_string(&body).unwrap_or_else(|_| {
         // ErrorBody 一定序列化得出来；真出了事也不能把 CLI 晾在一个空响应上。
-        "{\"code\":\"internal\",\"message\":\"边缘出错了\"}".to_string()
+        "{\"code\":\"internal\",\"message\":\"The edge hit an internal error\"}".to_string()
     });
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -204,7 +204,7 @@ mod tests {
         let response = error(
             StatusCode::CONFLICT,
             ErrorCode::TunnelReplaced,
-            "另一个 playtest 进程已经接管了这个作品",
+            "Another playtest process took over this project",
         );
         assert_eq!(response.status(), StatusCode::CONFLICT);
         assert_eq!(

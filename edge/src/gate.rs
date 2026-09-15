@@ -507,8 +507,8 @@ placeholder=\"How should we call you?\" autocomplete=\"nickname\">\
             let tag = match m.kind {
                 WorkKind::Article if !m.chapters.is_empty() => {
                     format!(
-                        "<div class=\"media-tag\">Serial · {} chapters</div>",
-                        m.chapters.len()
+                        "<div class=\"media-tag\">Serial · {}</div>",
+                        crate::html::count(m.chapters.len(), "chapter")
                     )
                 }
                 WorkKind::Article => {
@@ -518,10 +518,10 @@ placeholder=\"How should we call you?\" autocomplete=\"nickname\">\
                 WorkKind::Web => String::new(),
             };
             let metadata = if let Some(ch) = self.current_chapter {
-                let total = m.chapters.len();
+                let total = crate::html::count(m.chapters.len(), "chapter");
                 let ch_title = esc(&ch.title);
                 format!(
-                    "<header class=\"media-heading serial-heading\">{tag}<p class=\"serial-book-title\">{title}</p><h1>{ch_title}</h1><div class=\"media-byline\">{}{developer} · Serial · {total} chapters · {stamp}{expires}</div>{summary_html}</header>",
+                    "<header class=\"media-heading serial-heading\">{tag}<p class=\"serial-book-title\">{title}</p><h1>{ch_title}</h1><div class=\"media-byline\">{}{developer} · Serial · {total} · {stamp}{expires}</div>{summary_html}</header>",
                     self.avatar()
                 )
             } else {
@@ -759,7 +759,8 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
                 (WorkKind::Video, _) => "watch",
             };
             return format!(
-                "<p class=\"seats full\">{seats} seats filled · You can still {verb}</p>\n"
+                "<p class=\"seats full\">{} filled · You can still {verb}</p>\n",
+                crate::html::count(seats as usize, "seat")
             );
         }
         let joined = match self.live.joined {
@@ -810,7 +811,7 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
                 String::new()
             };
             rows.push(format!(
-                "<a class=\"btn-chat\" href=\"#chat-panel\" aria-label=\"原声与交流\" title=\"原声与交流\">{CHAT_ICON}<span>原声{chat_badge}</span></a>"
+                "<a class=\"btn-chat\" href=\"#chat-panel\" aria-label=\"Voices\" title=\"Voices\">{CHAT_ICON}<span>Voices{chat_badge}</span></a>"
             ));
         }
         if rows.is_empty() && follow.is_empty() {
@@ -839,21 +840,31 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         let mut messages = String::new();
         let m = self.manifest;
         let (topic, hint, role_noun, default_placeholder) = match m.kind {
-            WorkKind::Web => ("原声", "试玩聊天室", "playtester", "说点想法或选个贴纸…"),
+            WorkKind::Web => (
+                "Voices",
+                "Playtest chat",
+                "playtester",
+                "Say something, or pick a sticker…",
+            ),
             WorkKind::Article => {
                 let h = if self.current_chapter.is_some() {
-                    "本章讨论"
+                    "Chapter chat"
                 } else {
-                    "读者原声"
+                    "Reader chat"
                 };
                 let p = if self.current_chapter.is_some() {
-                    "聊聊这章的感受…"
+                    "How did this chapter land?…"
                 } else {
-                    "说点想法或选个贴纸…"
+                    "Say something, or pick a sticker…"
                 };
-                ("读者原声", h, "reader", p)
+                ("Reader voices", h, "reader", p)
             }
-            WorkKind::Video => ("观众原声", "弹幕原声", "viewer", "说点想法或选个贴纸…"),
+            WorkKind::Video => (
+                "Viewer voices",
+                "Viewer chat",
+                "viewer",
+                "Say something, or pick a sticker…",
+            ),
         };
 
         let prompt_card = if let Some(note) = self
@@ -864,7 +875,7 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
             .filter(|n| !n.is_empty())
         {
             format!(
-                "<div class=\"chat-prompt\"><span class=\"prompt-lead\">作者想问：</span><span class=\"prompt-text\">{}</span></div>\n",
+                "<div class=\"chat-prompt\"><span class=\"prompt-lead\">The author wants to know: </span><span class=\"prompt-text\">{}</span></div>\n",
                 esc(note)
             )
         } else {
@@ -918,7 +929,7 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
                 let avatar =
                     playtest_common::avatar::svg_for_seed(who, Some(28), Some("chat-avatar-svg"));
                 let time_str =
-                    crate::when::day_time(&item.at).unwrap_or_else(|| "刚刚".to_string());
+                    crate::when::day_time(&item.at).unwrap_or_else(|| "just now".to_string());
                 let msg_key = format!("{}:{}:{}", who, item.version, text);
                 messages.push_str(&format!(
                     "<div class=\"chat-msg\" data-msg-key=\"{msg_key}\">\
@@ -941,15 +952,25 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         if messages.is_empty() {
             let tip = if self.live.feedback_public {
                 match m.kind {
-                    WorkKind::Web => "暂无公开留言。<br>试玩后在下方留句原声吧！",
-                    WorkKind::Article => "暂无读者原声。<br>阅读后在下方留句原声吧！",
-                    WorkKind::Video => "暂无观众原声。<br>观看后在下方留句原声吧！",
+                    WorkKind::Web => "No public voices yet.<br>Play first, then leave yours below.",
+                    WorkKind::Article => {
+                        "No reader voices yet.<br>Read first, then leave yours below."
+                    }
+                    WorkKind::Video => {
+                        "No viewer voices yet.<br>Watch first, then leave yours below."
+                    }
                 }
             } else {
                 match m.kind {
-                    WorkKind::Web => "留言暂未公开。<br>在下方直接给创作者留言。",
-                    WorkKind::Article => "读者留言暂未公开。<br>在下方直接给创作者留言。",
-                    WorkKind::Video => "观众留言暂未公开。<br>在下方直接给创作者留言。",
+                    WorkKind::Web => {
+                        "Voices are not public here.<br>Your message goes straight to the author."
+                    }
+                    WorkKind::Article => {
+                        "Reader voices are not public here.<br>Your message goes straight to the author."
+                    }
+                    WorkKind::Video => {
+                        "Viewer voices are not public here.<br>Your message goes straight to the author."
+                    }
                 }
             };
             messages = format!("<div class=\"chat-empty\"><p>{tip}</p></div>\n");
@@ -969,45 +990,45 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         };
         let stickers = match m.kind {
             WorkKind::Web => concat!(
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎮 手感绝了\" title=\"手感绝了\">🎮 手感绝了</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎨 美术惊艳\" title=\"美术惊艳\">🎨 美术惊艳</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎵 配乐神作\" title=\"配乐神作\">🎵 配乐神作</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"💡 脑洞大开\" title=\"脑洞大开\">💡 脑洞大开</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🐛 抓个Bug\" title=\"抓个Bug\">🐛 抓个Bug</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"☕ 治愈满分\" title=\"治愈满分\">☕ 治愈满分</button>\n"
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎮 Feels great\" title=\"Feels great\">🎮 Feels great</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎨 Gorgeous art\" title=\"Gorgeous art\">🎨 Gorgeous art</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎵 Great sound\" title=\"Great sound\">🎵 Great sound</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"💡 Clever idea\" title=\"Clever idea\">💡 Clever idea</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🐛 Found a bug\" title=\"Found a bug\">🐛 Found a bug</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"☕ So cozy\" title=\"So cozy\">☕ So cozy</button>\n"
             ),
             WorkKind::Article => concat!(
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"📚 文笔惊艳\" title=\"文笔惊艳\">📚 文笔惊艳</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🧠 设定硬核\" title=\"设定硬核\">🧠 设定硬核</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🔥 催更追更\" title=\"催更追更\">🔥 催更追更</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"✨ 意境深远\" title=\"意境深远\">✨ 意境深远</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🔍 抓个错字\" title=\"抓个错字\">🔍 抓个错字</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"☕ 沉浸阅读\" title=\"沉浸阅读\">☕ 沉浸阅读</button>\n"
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"📚 Lovely writing\" title=\"Lovely writing\">📚 Lovely writing</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🧠 Solid worldbuilding\" title=\"Solid worldbuilding\">🧠 Solid worldbuilding</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🔥 More please\" title=\"More please\">🔥 More please</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"✨ Stayed with me\" title=\"Stayed with me\">✨ Stayed with me</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🔍 Found a typo\" title=\"Found a typo\">🔍 Found a typo</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"☕ Lost in it\" title=\"Lost in it\">☕ Lost in it</button>\n"
             ),
             WorkKind::Video => concat!(
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎬 剪辑封神\" title=\"剪辑封神\">🎬 剪辑封神</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎵 视听盛宴\" title=\"视听盛宴\">🎵 视听盛宴</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🍿 期待正片\" title=\"期待正片\">🍿 期待正片</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"💡 细节满满\" title=\"细节满满\">💡 细节满满</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎨 美术惊艳\" title=\"美术惊艳\">🎨 美术惊艳</button>\n",
-                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"👏 催更催更\" title=\"催更催更\">👏 催更催更</button>\n"
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎬 Great editing\" title=\"Great editing\">🎬 Great editing</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎵 Great sound\" title=\"Great sound\">🎵 Great sound</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🍿 Want the full cut\" title=\"Want the full cut\">🍿 Want the full cut</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"💡 Rich in detail\" title=\"Rich in detail\">💡 Rich in detail</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"🎨 Gorgeous art\" title=\"Gorgeous art\">🎨 Gorgeous art</button>\n",
+                "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"👏 More please\" title=\"More please\">👏 More please</button>\n"
             ),
         };
         let back_label = if m.kind == WorkKind::Web {
-            "返回作品卡片"
+            "Back to project card"
         } else {
-            "返回正文"
+            "Back to content"
         };
         let rendered = format!(
-            "<aside class=\"chat-panel\" id=\"chat-panel\" aria-label=\"{topic}与交流\">\n\
+            "<aside class=\"chat-panel\" id=\"chat-panel\" aria-label=\"{topic}\">\n\
 <header class=\"chat-head\">\n\
-<a href=\"#\" class=\"chat-back\" aria-label=\"{back_label}\">‹ 返回</a>\n\
+<a href=\"#\" class=\"chat-back\" aria-label=\"{back_label}\">‹ Back</a>\n\
 <div class=\"chat-title\"><span class=\"chat-dot\"></span><span class=\"chat-topic\">{topic}</span><span class=\"chat-count\">{count}</span></div>\n\
 <span class=\"chat-hint\">{hint}</span>\n\
 </header>\n\
 {prompt_card}\
 <div class=\"chat-stream\" id=\"chat-stream\">\n{messages}</div>\n\
-<div class=\"chat-stickers\" id=\"chat-stickers\" role=\"toolbar\" aria-label=\"快速贴纸\">\n\
+<div class=\"chat-stickers\" id=\"chat-stickers\" role=\"toolbar\" aria-label=\"Quick stickers\">\n\
 {stickers}\
 </div>\n\
 <div class=\"chat-emoji-popover\" id=\"chat-emoji-popover\" hidden aria-label=\"Emoji picker\">\n\
@@ -1047,11 +1068,11 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
 <form class=\"chat-bar\" method=\"post\" action=\"{feedback_action}\" id=\"chat-form\">\n\
 <input type=\"hidden\" name=\"action\" value=\"feedback\">\n\
 {chapter_input}\
-<button type=\"button\" class=\"chat-emoji-btn\" id=\"chat-emoji-toggle\" aria-label=\"选择表情\" title=\"选择表情\">\
+<button type=\"button\" class=\"chat-emoji-btn\" id=\"chat-emoji-toggle\" aria-label=\"Pick an emoji\" title=\"Pick an emoji\">\
 <svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M8 14s1.5 2 4 2 4-2 4-2\"/><line x1=\"9\" y1=\"9\" x2=\"9.01\" y2=\"9\"/><line x1=\"15\" y1=\"9\" x2=\"15.01\" y2=\"9\"/></svg>\
 </button>\n\
 <input type=\"text\" name=\"feedback\" class=\"chat-input\" placeholder=\"{default_placeholder}\" maxlength=\"200\" autocomplete=\"off\">\n\
-<button type=\"submit\" class=\"chat-send\" aria-label=\"发送原声\">\
+<button type=\"submit\" class=\"chat-send\" aria-label=\"Send\">\
 <svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"22\" y1=\"2\" x2=\"11\" y2=\"13\"/><polygon points=\"22 2 15 22 11 13 2 9 22 2\"/></svg>\
 </button>\n\
 </form>\n\
@@ -1428,7 +1449,7 @@ mod tests {
         assert!(html.contains("action=\"/_playtest/follow\""));
         assert!(html.contains("value=\"site:brisk-otter-41\""));
         // 子域上不提供浏览器通知（作品可能有自己的 Service Worker，见 follow.rs）。
-        assert!(!html.contains("浏览器通知"));
+        assert!(!html.contains("Browser notifications"));
         assert!(!html.contains("serviceWorker"));
 
         live.community_url = Some("https://qq.example/group/12345".into());
@@ -1492,7 +1513,7 @@ mod tests {
         );
 
         // 不是讨论区：没有回复、点赞、楼层（DESIGN §3.5）。
-        for word in ["回复", "点赞", "评论", "楼"] {
+        for word in ["Reply", "Like", "Upvote", "Comment", "Thread"] {
             assert!(!html.contains(word), "「{word}」不该出现");
         }
     }

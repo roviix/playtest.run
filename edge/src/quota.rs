@@ -32,9 +32,9 @@ pub enum Denied {
 impl Denied {
     pub fn response(self) -> Response {
         let (status, title, message) = match self {
-            Self::Full => (StatusCode::TOO_MANY_REQUESTS, "这个作品的流量额度已用完", "请联系作者或稍后再试。免费账号的月额度在下月恢复；匿名链接需要作者重新发布。不会产生额外账单。"),
-            Self::Expired => (StatusCode::GONE, "这个链接已过期", "请向作者要一个新的试玩链接。"),
-            Self::Unavailable => (StatusCode::SERVICE_UNAVAILABLE, "暂时无法检查流量额度", "我们暂时不能继续分发这个作品，请稍后重试。你的设备没有问题。"),
+            Self::Full => (StatusCode::TOO_MANY_REQUESTS, "This project is out of traffic", "Ask the author, or try again later. Free accounts get a new monthly allowance next month; an anonymous link needs the author to publish again. Nothing is billed."),
+            Self::Expired => (StatusCode::GONE, "This link has expired", "Ask the author for a new link."),
+            Self::Unavailable => (StatusCode::SERVICE_UNAVAILABLE, "Can't check the traffic allowance", "We can't keep serving this project right now. Try again shortly; your device is fine."),
         };
         let mut response = (
             status,

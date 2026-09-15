@@ -25,7 +25,7 @@ img.hero{object-fit:cover;width:100%;aspect-ratio:16/10;height:auto;display:bloc
 .stamp{padding:2px 7px;border-radius:4px;background:#ffffff0d;border:1px solid #ffffff14;font:11.5px/1.4 var(--mono);color:var(--soft);letter-spacing:.02em}
 .expires{display:flex;align-items:center;gap:5px;line-height:1.6;font-size:11.5px}
 .version-note{font-size:12.5px;color:#d4d4d8;line-height:1.55;background:linear-gradient(90deg,#101916 0%,#0d1214 100%);border:1px solid #1c2e27;border-left:3px solid var(--accent);border-radius:6px;padding:8px 12px;overflow-wrap:anywhere}
-.version-note::before{content:"本版要点：";color:var(--accent);font-weight:600;margin-right:2px}
+.version-note::before{content:"What's new: ";color:var(--accent);font-weight:600;margin-right:2px}
 .seats{display:inline-flex;align-items:center;gap:7px;font-size:12px;line-height:1.4;color:#a1a1aa;padding:6px 11px;border-radius:7px;background:#0e1315;border:1px solid #182823;box-shadow:inset 0 1px 0 #ffffff08;width:fit-content;max-width:100%}
 .seats::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);flex-shrink:0}
 .seats.full{color:var(--dim);background:#121316;border-color:#202228}

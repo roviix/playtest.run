@@ -600,7 +600,7 @@ async fn a_second_process_takes_over_and_the_old_token_is_finished() {
         let body = error_body(&refused);
         assert_eq!(body.code, ErrorCode::TunnelReplaced);
         assert!(
-            body.message.contains("另一个 playtest 进程"),
+            body.message.contains("Another playtest process"),
             "要说清是被谁接管了：{}",
             body.message
         );
@@ -987,7 +987,7 @@ async fn without_a_verifying_key_the_edge_says_so_instead_of_guessing() {
         assert_eq!(reply.status, StatusCode::SERVICE_UNAVAILABLE);
         let body = error_body(&reply);
         assert_eq!(body.code, ErrorCode::Internal);
-        assert_eq!(body.message, "边缘还没拿到验签公钥");
+        assert_eq!(body.message, "The edge does not have the verifying key yet");
 
         // api 起来了，把公钥写进去——不用重启边缘，下一次握手就认。
         let key_path = dir
