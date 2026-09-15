@@ -163,7 +163,7 @@ export type EntryDraft = {
   slug: string;
 };
 
-/** 所有非 2xx 响应的体。`code` 给程序判断，`message` 给人看（中文，第一次用的人看得懂）。 */
+/** 所有非 2xx 响应的体。`code` 给程序判断，`message` 给人看（英文，第一次用的人看得懂）。 */
 export type ErrorBody = {
   code: ErrorCode;
   message: string;
