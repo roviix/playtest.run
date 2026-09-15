@@ -376,7 +376,7 @@ impl GatePage<'_> {
                 "<p class=\"expires\">{clock}<span>Expires <time datetime=\"{}\">{}</time></span></p>\n<script{nonce_attr}>\
 for(const t of document.querySelectorAll('.expires time[datetime]')){{\
 const d=new Date(t.getAttribute('datetime'));\
-if(!isNaN(d))t.textContent='Expires '+d.toLocaleString(undefined,{{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}});}}\
+if(!isNaN(d))t.textContent=d.toLocaleString(undefined,{{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}});}}\
 </script>\n",
                 esc(&machine),
                 esc(&human),
@@ -1777,6 +1777,32 @@ mod tests {
         // 解析不了就整行不出，不显示一串机器码给玩家看。
         m.expires_at = Some("下周".into());
         assert!(!page(&m, false).render().contains("class=\"expires\""));
+    }
+
+    #[test]
+    fn the_expiry_line_says_expires_once() {
+        // 外层 span 已经写了 Expires，本地化脚本只该换里面那个时间。
+        // 之前脚本自己又加了一遍前缀，真机上是「Expires Expires 9月17日 01:02」。
+        let mut m = manifest();
+        m.expires_at = Some("2026-09-08T04:30:00Z".into());
+        let html = page(&m, false).render();
+        assert!(html.contains("<span>Expires <time"), "少了那句");
+        assert!(
+            !html.contains("textContent='Expires '"),
+            "脚本不该再加一遍前缀"
+        );
+    }
+
+    #[test]
+    fn the_chat_poll_url_survives_the_hidden_action_field() {
+        // 聊天表单里有 name="action" 的隐藏域，它会遮蔽 form.action；
+        // 取 URL 必须走 getAttribute，否则轮询地址是 [object HTMLInputElement]。
+        let script = include_str!("../../ui/dialog.js");
+        assert!(
+            !script.contains("chatForm.action"),
+            "form.action 被隐藏域遮蔽，要用 getAttribute('action')"
+        );
+        assert!(script.contains("chatForm.getAttribute('action')"));
     }
 
     #[test]

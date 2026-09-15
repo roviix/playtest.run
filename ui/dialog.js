@@ -227,7 +227,11 @@
       if (document.visibilityState !== 'visible' || polling) return;
       polling = true;
       try {
-        const pollUrl = (chatForm.action || window.location.pathname) + '?chat=1';
+        // 取地址必须走 getAttribute：表单里那个 name="action" 的隐藏域
+        // 会按 DOM 的具名属性规则遮蔽掉表单自己的 action 属性，读到的是 input 元素本身，
+        // 拼出来的地址是 /p/[object HTMLInputElement]?chat=1，轮询一直 503。
+        const pollUrl =
+          (chatForm.getAttribute('action') || window.location.pathname) + '?chat=1';
         const resp = await fetch(pollUrl, {
           headers: { 'Accept': 'application/json' },
           cache: 'no-store'
