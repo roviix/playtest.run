@@ -1,6 +1,6 @@
 [package]
 name = "playtest"
-version = "0.3.0"
+version = "0.4.0"
 description = "一条命令，把你手上这个能玩的版本放到别人面前"
 license = "Apache-2.0"
 edition.workspace = true
