@@ -132,10 +132,8 @@ pub fn root(path: &str) -> Option<(Root<'_>, Allow)> {
                 Root::Project(slug)
             } else if let Some(token) = p.strip_prefix(root_paths::ME_CONFIRM) {
                 Root::Confirm(token)
-            } else if let Some(token) = p.strip_prefix(root_paths::ME_UNSUBSCRIBE) {
-                Root::Unsubscribe(token)
             } else {
-                return None;
+                Root::Unsubscribe(p.strip_prefix(root_paths::ME_UNSUBSCRIBE)?)
             }
         }
     };
