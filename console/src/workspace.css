@@ -6,8 +6,10 @@
 .sidebar .avatar{width:24px;height:24px;border-radius:8px}
 .sidebar .avatar.blank{display:grid;place-items:center;background:var(--card2);border:1px solid var(--line2)}
 .sidebar .avatar.blank:after{content:"";width:8px;height:8px;border-radius:50%;border:1px solid var(--dim)}
+.stage{padding-top:20px !important}
 .stage>:is(.identity,.now,.tabs,.tab-body){width:100%}
-.stage>.back-link{display:inline-flex;gap:8px;margin:0 0 20px;min-height:44px;font-size:14px;color:var(--dim)}
+.stage>.back-link{display:inline-flex;align-items:center;gap:6px;margin:0 0 10px;min-height:28px;font-size:13px;color:var(--dim);transition:color 150ms}
+.stage>.back-link:hover{color:var(--fg)}
 .identity{display:flex;align-items:center;gap:20px;padding:18px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:none}
 .identity .shot.small{width:112px;flex-shrink:0;border-radius:10px;aspect-ratio:16/10}
 .identity .cover.word b{font-size:42px;left:14px;bottom:10px}

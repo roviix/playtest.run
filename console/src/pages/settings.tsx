@@ -6,7 +6,7 @@
 // 推广那一节没有任何按钮：付款通道要等主体落地，放一个点不动的「购买」比什么都不放更伤人。
 
 import type { ComponentChildren } from "preact";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 
 import { api, type Boost, type Listing, type Site, type UpdateSiteRequest } from "../api";
 import { useLoad } from "../load";
@@ -61,6 +61,7 @@ export function SettingsTab({
   return (
     <div class="settings">
       {problem ? <p class="notice">{problem}</p> : null}
+      <WorkDetails site={site} busy={busy} onChange={change} />
       <Plaza site={site} listing={listing} busy={busy} plazaUrl={plazaUrl} onChange={change} />
       <Seats listing={listing} busy={busy} onChange={change} />
       <Community listing={listing} busy={busy} onChange={change} />
@@ -81,6 +82,94 @@ function Block({ title, lead, children }: { title: string; lead?: string; childr
       </div>
       {children ? <div class="block-body">{children}</div> : null}
     </section>
+  );
+}
+
+// ------------------------------------------------------------------ 基本信息
+
+function WorkDetails({
+  site,
+  busy,
+  onChange,
+}: {
+  site: Site;
+  busy: boolean;
+  onChange: Change;
+}) {
+  const [title, setTitle] = useState(site.title);
+  const [summary, setSummary] = useState(site.listing?.summary ?? "");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setTitle(site.title);
+    setSummary(site.listing?.summary ?? "");
+  }, [site.title, site.listing?.summary]);
+
+  const hasChanged =
+    title.trim() !== site.title ||
+    summary.trim() !== (site.listing?.summary ?? "");
+
+  async function submit(event: Event) {
+    event.preventDefault();
+    if (!title.trim() || !hasChanged) return;
+    await onChange({
+      title: title.trim(),
+      summary: summary.trim(),
+    });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  }
+
+  return (
+    <Block
+      title="基本信息"
+      lead="作品标题与长期简介。修改后会实时同步至作品邀请函与广场卡片。"
+    >
+      <form class="work-meta-form" onSubmit={submit}>
+        <div class="field-grid">
+          <label class="field">
+            <span>作品名称</span>
+            <input
+              value={title}
+              required
+              maxLength={80}
+              placeholder="作品名称"
+              onInput={(event) => setTitle((event.target as HTMLInputElement).value)}
+            />
+          </label>
+          <label class="field">
+            <span>一句话简介 · {Array.from(summary).length}/140</span>
+            <input
+              value={summary}
+              maxLength={140}
+              placeholder="简明介绍你的作品（可在广场与邀请卡中展示）"
+              onInput={(event) => setSummary((event.target as HTMLInputElement).value)}
+            />
+          </label>
+        </div>
+
+        <div class="meta-footer">
+          <div class="cover-status-badge">
+            <span class={`now-dot ${site.listing?.has_cover ? "" : "idle"}`} aria-hidden="true" />
+            <span class="muted">
+              {site.listing?.has_cover
+                ? "已配置封面图 · 更换可在终端运行 playtest ./dist --cover <文件>"
+                : "暂无封面（当前使用字标占位） · 随时可在终端运行 playtest ./dist --cover <文件> 添加"}
+            </span>
+          </div>
+          <div class="meta-action">
+            {saved ? <span class="save-toast">✓ 已更新</span> : null}
+            <button
+              class="button primary"
+              type="submit"
+              disabled={busy || !hasChanged || !title.trim()}
+            >
+              {busy ? "保存中…" : "保存基本信息"}
+            </button>
+          </div>
+        </div>
+      </form>
+    </Block>
   );
 }
 

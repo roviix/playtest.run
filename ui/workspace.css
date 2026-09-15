@@ -77,11 +77,15 @@ a{color:inherit;text-underline-offset:3px}
 .close:hover{color:#f4f4f5;background:#ffffff0d}
 .close .icon{width:16px;height:16px}
 .pub{color:#a1a1aa;font:13.5px/1.65 system-ui}
-.publish-tabs{display:flex;align-items:center;gap:4px;padding:3px;border-radius:7px;background:#090b0c;border:0;margin-bottom:12px}
+.publish-tabs{display:flex;align-items:center;gap:4px;padding:3px;border-radius:7px;background:#090b0c;border:0;margin-bottom:12px;overflow-x:auto;scrollbar-width:none}
+.publish-tabs::-webkit-scrollbar{display:none}
 .publish-tabs input{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none}
 .publish-tabs :is(label,button){flex:1;display:flex;align-items:center;justify-content:center;padding:5px 10px;border:0;border-radius:5px;background:none;color:var(--dim);font:13px system-ui;text-align:center;white-space:nowrap;cursor:pointer;transition:all 140ms}
 .publish-tabs :is(label,button):hover{color:#d4d4d8}
 .publish-tabs :is(input:checked+label,button[aria-pressed=true]){color:var(--fg);background:#ffffff0b;font-weight:500;box-shadow:inset 0 1px #ffffff06}
+.publish-tabs .tab-ai{display:inline-flex;align-items:center;gap:5px}
+.publish-tabs .tab-ai .tab-spark{width:13px;height:13px;fill:currentColor;flex-shrink:0}
+.publish-tabs :is(input:checked+label,button[aria-pressed=true]).tab-ai{color:var(--accent)}
 .pub :focus-visible,.publish-tabs input:focus-visible+label{outline:2px solid rgba(255,255,255,.45);outline-offset:-2px}
 .pub .cli{overflow:hidden;border:1px solid #ffffff18;border-radius:10px;background:#090b0d;box-shadow:inset 0 1px #ffffff08,0 8px 24px -8px #000a;transition:border-color 160ms}
 .pub .cli:hover{border-color:#ffffff26}
@@ -89,6 +93,10 @@ a{color:inherit;text-underline-offset:3px}
 .cli-info{display:flex;align-items:center;gap:10px}
 .cli-dots{display:inline-flex}
 .cli-dots:before{content:"";width:8px;height:8px;border-radius:50%;background:#ff5f56;box-shadow:12px 0 0 #ffbd2e,24px 0 0 #27c93f}
+.prompt-lang-toggle{display:inline-flex;align-items:center;gap:2px;padding:1px 2px;background:rgba(255,255,255,.06);border-radius:4px;margin-left:8px}
+.prompt-lang-toggle .lang-btn{background:none;border:0;padding:1px 6px;font-size:11px;font-family:inherit;color:var(--dim);border-radius:3px;cursor:pointer;transition:all 120ms;line-height:1.5}
+.prompt-lang-toggle .lang-btn:hover{color:var(--fg)}
+.prompt-lang-toggle .lang-btn.active{color:var(--fg);background:rgba(255,255,255,.14);font-weight:500}
 .copy-command{display:inline-flex;align-items:center;gap:4px;min-width:50px;height:24px;padding:0 7px;border-radius:4px;font:11.5px/22px system-ui;color:#a1a1aa;background:#ffffff0a;border:1px solid #ffffff12;cursor:pointer;transition:all 140ms}
 .copy-command:hover{color:#fff;background:#ffffff14;border-color:#ffffff22}
 .copy-command:active{transform:scale(.97)}
@@ -99,10 +107,13 @@ a{color:inherit;text-underline-offset:3px}
 .pub .codebox::before{content:none}
 .pub .codebox b{color:#75cdb5;font-weight:700;user-select:none}
 .pub .codebox code{padding:0;border:0;background:none;font:inherit;color:#e4e4e7;white-space:pre;user-select:all}
+.pub .codebox.ai-box{white-space:pre-wrap;font-size:12.5px;line-height:1.65;max-height:260px;overflow-y:auto;user-select:text}
+.pub .codebox.ai-box code{white-space:pre-wrap;line-height:1.65;user-select:text}
 .pub .k{font-weight:600;color:#75cdb5}.pub .a{color:#e4e4e7}.pub .f{color:var(--dim)}.pub .s{color:#fcd34d}
 .pub .leg{display:none;margin:0;padding:8px 14px;border-top:1px solid #ffffff09;font:13px/1.6 system-ui;color:var(--dim);align-items:center;gap:6px}
 .pub .leg code{padding:1px 4px;border-radius:4px;background:#ffffff0f;color:#d4d4d8;font:11.5px var(--mono)}
-.pub:has(#tab-static:checked) :is(#panel-static,#leg-static),.pub:has(#tab-local:checked) :is(#panel-local,#leg-local),.pub:has(#tab-backend:checked) :is(#panel-backend,#leg-backend),.pub:has(#tab-install:checked) :is(#panel-install,#leg-install),.pub .selected{display:flex}
+.pub:has(#tab-ai:checked) :is(#panel-ai,#leg-ai),.pub:has(#tab-static:checked) :is(#panel-static,#leg-static),.pub:has(#tab-local:checked) :is(#panel-local,#leg-local),.pub:has(#tab-backend:checked) :is(#panel-backend,#leg-backend),.pub:has(#tab-install:checked) :is(#panel-install,#leg-install),.pub .selected{display:flex}
+.pub:has(#tab-ai:checked) #panel-ai,.pub .codebox.ai-box{display:block}
 .pub-status{position:absolute;width:1px;height:1px;top:0;left:0;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .pub-foot{display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px;margin-top:20px;padding-top:12px;border-top:1px solid var(--line);font:12px system-ui}
 .pub-foot :is(a,button,label){display:inline-flex;align-items:center;gap:5px;color:var(--dim);background:none;border:none;padding:0;cursor:pointer;font:inherit;text-decoration:none;transition:color 140ms}

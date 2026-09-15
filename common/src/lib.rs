@@ -150,11 +150,23 @@ pub fn root_url_from_site(site_url: &str) -> String {
     if is_ip_host(host) {
         return format!("{scheme}://{host}/");
     }
-    let root = match host.split_once('.') {
-        Some((_slug, root)) => root,
-        None => host,
+    let (hostname, port_suffix) = match host.split_once(':') {
+        Some((h, p)) => (h, format!(":{p}")),
+        None => (host, String::new()),
     };
-    format!("{scheme}://{root}/")
+    let parts: Vec<&str> = hostname.split('.').collect();
+    let root_hostname = if hostname == "playtest.run" || hostname == "localhost" {
+        hostname
+    } else if hostname.ends_with(".playtest.run") && parts.len() >= 3 {
+        &hostname[parts[0].len() + 1..]
+    } else if hostname.ends_with(".localhost") && parts.len() >= 2 {
+        &hostname[parts[0].len() + 1..]
+    } else if parts.len() > 2 {
+        &hostname[parts[0].len() + 1..]
+    } else {
+        hostname
+    };
+    format!("{scheme}://{root_hostname}{port_suffix}/")
 }
 
 /// 作品主域邀请函完整链接（Front Door，DESIGN §3.1 与 §3.3）。
@@ -193,7 +205,19 @@ mod tests {
             "https://playtest.run/"
         );
         assert_eq!(
+            root_url_from_site("https://playtest.run/p/merry-eel-78"),
+            "https://playtest.run/"
+        );
+        assert_eq!(
+            root_url_from_site("https://playtest.run/"),
+            "https://playtest.run/"
+        );
+        assert_eq!(
             root_url_from_site("http://brisk-otter-41.localhost:8443"),
+            "http://localhost:8443/"
+        );
+        assert_eq!(
+            root_url_from_site("http://localhost:8443/p/brisk-otter-41"),
             "http://localhost:8443/"
         );
         assert_eq!(

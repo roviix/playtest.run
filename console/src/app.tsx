@@ -148,7 +148,7 @@ function Rail({ route, me, onNavigate }: { route: Route; me: Me | null; onNaviga
     <nav class="rail-nav" aria-label="Pages">
       <a class="nav-item" href="/"><NavIcon kind="grid" />Plaza</a>
       <a class="nav-item" href="/me"><NavIcon kind="bell" />Following</a>
-      <a class={`nav-item ${mine ? "active" : ""}`} aria-current={mine ? "page" : undefined} href={href({ name: "sites" })} onClick={(event) => onNavigate(event, { name: "sites" })}><NavIcon kind="grid" />My Projects</a>
+      <a class={`nav-item ${mine ? "active" : ""}`} aria-current={mine ? "page" : undefined} href={href({ name: "sites" })} onClick={(event) => onNavigate(event, { name: "sites" })}><NavIcon kind="grid" />My Works</a>
       <a class={`nav-item ${route.name === "collections" ? "active" : ""}`} aria-current={route.name === "collections" ? "page" : undefined} href={href({ name: "collections" })} onClick={(event) => onNavigate(event, { name: "collections" })}><NavIcon kind="folder" />My Collections</a>
     </nav>
     <div class="rail-bottom">

@@ -981,7 +981,10 @@ fn nobody_listening_is_a_network_problem() {
         value["message"].as_str().unwrap().contains("连不上服务器"),
         "{value}"
     );
-    assert!(value["hint"].as_str().unwrap().contains("--api"), "{value}");
+    assert!(
+        value["hint"].as_str().unwrap().contains("请检查网络连接"),
+        "{value}"
+    );
 }
 
 #[test]

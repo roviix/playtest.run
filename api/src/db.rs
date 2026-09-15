@@ -814,6 +814,28 @@ pub fn update_listing(
     Ok(())
 }
 
+/// 改作品标题与简介：只改传了的。`summary` 是 `Some(None)` 时清掉。
+pub fn update_site_meta(
+    conn: &Connection,
+    slug: &str,
+    title: Option<&str>,
+    summary: Option<Option<&str>>,
+) -> rusqlite::Result<()> {
+    if let Some(title) = title {
+        conn.execute(
+            "UPDATE sites SET title = ?2 WHERE slug = ?1",
+            params![slug, title],
+        )?;
+    }
+    if let Some(summary) = summary {
+        conn.execute(
+            "UPDATE sites SET summary = ?2 WHERE slug = ?1",
+            params![slug, summary],
+        )?;
+    }
+    Ok(())
+}
+
 /// 俱乐部那三项设置（DESIGN §3.3、§3.5）。外层 `Some` 是「这次带了」，
 /// 里层 `None` 是「清掉」——`--seats 0` 和 `--community ""` 都落在这里。
 pub fn update_club_settings(

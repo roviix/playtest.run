@@ -287,12 +287,12 @@ fn classify_client(e: &client::Error) -> (Code, Option<String>) {
     match e {
         client::Error::Transport { .. } => (
             Code::Network,
-            Some("控制面地址可以用 --api 或环境变量 PLAYTEST_API 指定。".into()),
+            Some("请检查网络连接后重试。".into()),
         ),
         client::Error::Local { .. } => (Code::BadInput, None),
         client::Error::Unexpected { .. } => (
             Code::ServerError,
-            Some("这个地址回的不是 playtest 控制面的格式，确认一下 --api。".into()),
+            Some("这个地址回的不是 playtest 控制面的格式。".into()),
         ),
         client::Error::Server { status, body } => match body.code {
             ErrorCode::QuotaExceeded => (Code::QuotaExceeded, None),

@@ -811,6 +811,8 @@ export type UpdateSiteRequest = {
   seats?: number;
   seek_note?: string;
   seeking?: boolean;
+  summary?: string;
+  title?: string;
 };
 
 export type VersionFile = {

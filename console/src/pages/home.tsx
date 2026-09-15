@@ -24,7 +24,7 @@ export function HomePage({ sites, me }: { sites: Loaded<Site[]>; me: Me | null }
       <header class="workspace-head">
         <div>
           <h1>
-            My Projects
+            My Works
             <span class="workspace-count" style={{ marginLeft: "8px" }}>{count}</span>
           </h1>
         </div>
@@ -115,23 +115,21 @@ function EmptyHome({ me }: { me: Me | null }) {
             <line x1="12" y1="22.08" x2="12" y2="12" />
           </svg>
         }
-        title="No projects yet"
+        title="No works yet"
         description="Run one command in your project directory to create a playable build and collect feedback."
-        action={
-          <div class="empty-home-actions">
-            <button class="copy-pill" type="button" onClick={copy} aria-label={`Copy command ${command}`}>
-              <code>$ {command}</code>
-              <span>{copied ? "Copied!" : "Copy"}</span>
-            </button>
-            <a class="button small primary" href={href({ name: "docs", section: "start" })}>
-              Quickstart Guide →
-            </a>
-          </div>
-        }
       >
+        <div class="command-box">
+          <code>{command}</code>
+          <button class="button small" type="button" onClick={copy}>
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <p class="muted">
+          First time? See <a href={href({ name: "docs", section: "start" })}>Getting Started</a>.
+        </p>
         {anonymous ? (
-          <p class="empty-anon-hint">
-            Anonymous session. Sign in anytime to preserve projects permanently.
+          <p class="notice">
+            Anonymous session. Sign in anytime to preserve works permanently.
           </p>
         ) : null}
       </Empty>

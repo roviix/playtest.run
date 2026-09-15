@@ -288,6 +288,10 @@ pub struct Listing {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct UpdateSiteRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub public: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seeking: Option<bool>,

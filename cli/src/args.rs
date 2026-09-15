@@ -139,9 +139,8 @@ pub struct UploadArgs {
     #[arg(help_heading = "运行设置")]
     pub backend: Option<u16>,
 
-    /// API 服务地址（自托管使用；也可以设置环境变量 PLAYTEST_API）
-    #[arg(long, global = true, value_name = "网址")]
-    #[arg(help_heading = "脚本与连接")]
+    /// API 服务地址（自托管与开发内部使用；也可以设置环境变量 PLAYTEST_API）
+    #[arg(long, global = true, hide = true, value_name = "网址")]
     pub api: Option<String>,
 
     /// 不画二维码

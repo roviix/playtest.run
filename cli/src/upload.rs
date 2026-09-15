@@ -217,6 +217,7 @@ pub async fn run(cli_args: &UploadArgs, shown: &str) -> Result<UploadReport> {
                         community_url: cli_args.community.clone(),
                         // 「让玩家看到彼此的反馈」这一轮只在控制台里改（DESIGN §3.5）。
                         feedback_public: None,
+                        ..UpdateSiteRequest::default()
                     },
                 )
                 .await?,

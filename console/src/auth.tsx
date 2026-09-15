@@ -81,13 +81,13 @@ export function LoginDialog({ request, onClose, available }: {
 }
 
 export function LoginRequired({ route, onLogin }: { route: Route; onLogin: () => void }) {
-  const title = route.name === "collections" ? "My Collections" : route.name === "token" ? "Account" : "My Projects";
+  const title = route.name === "collections" ? "My Collections" : route.name === "token" ? "Account" : "My Works";
   return <div class="auth-required">
     <header class="stage-head"><h1>{title}</h1></header>
     <div class="auth-empty">
       <BrandMark />
       <h2>Sign in to continue</h2>
-      <p class="muted">Following, projects, and collections — all in one account.</p>
+      <p class="muted">Following, works, and collections — all in one account.</p>
       <button class="button primary" type="button" onClick={onLogin}>Sign in</button>
     </div>
   </div>;

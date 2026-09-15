@@ -897,17 +897,34 @@ code {
 }
 
 .button.primary {
-  color: var(--fg);
-  background: var(--action-bg);
-  border: 1px solid #ffffff18;
-  border-top-color: var(--action-edge);
-  box-shadow: var(--action-shadow);
+  color: #09090b;
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 3px 12px rgba(255, 255, 255, 0.12);
+  font-weight: 600;
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .button.primary:hover {
-  background: var(--action-bg);
-  border-top-color: #71e8bf;
-  box-shadow: var(--action-shadow);
+  background: #f4f4f5;
+  border-color: #ffffff;
+  color: #000000;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(255, 255, 255, 0.22);
+}
+
+.button.primary:active {
+  transform: translateY(0);
+  background: #e4e4e7;
+}
+
+.button.primary:disabled {
+  background: #ffffff14;
+  color: #ffffff44;
+  border-color: transparent;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .button.quiet {
@@ -1422,6 +1439,66 @@ code {
 
 .block-body > .row-actions:first-child {
   margin-top: 0.4rem;
+}
+
+.work-meta-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 680px) {
+  .field-grid {
+    grid-template-columns: 1fr 1.6fr;
+  }
+}
+
+.meta-footer {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.cover-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.cover-status-badge .now-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.cover-status-badge .now-dot.idle {
+  background: var(--dim);
+}
+
+.meta-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.save-toast {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 500;
 }
 
 .block.danger {

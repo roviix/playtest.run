@@ -75,7 +75,7 @@ impl std::fmt::Display for Error {
                 };
                 write!(
                     f,
-                    "连不上服务器（{api}）：{reason}。检查网络，或用 --api 指定地址。"
+                    "连不上服务器（{api}）：{reason}。请检查网络连接。"
                 )
             }
             Error::Server { body, .. } => write!(f, "服务器说：{}", body.message),

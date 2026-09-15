@@ -14,7 +14,7 @@ use crate::clock;
 use crate::db::{self, ListingRow, SiteRow};
 use crate::error::{ApiError, ApiResult};
 use crate::plaza;
-use crate::routes::uploads::{clean_text, clean_title};
+use crate::routes::uploads::{clean_summary, clean_text, clean_title};
 use crate::routes::JsonBody;
 use crate::state::AppState;
 
@@ -183,6 +183,11 @@ pub async fn update(
     JsonBody(request): JsonBody<UpdateSiteRequest>,
 ) -> ApiResult<Json<Site>> {
     // 空字符串是「清掉」；有内容就检查长度。
+    let title = clean_title(request.title.as_deref())?;
+    let summary: Option<Option<String>> = match request.summary.as_deref() {
+        None => None,
+        Some(raw) => Some(clean_summary(Some(raw))?),
+    };
     let seek_note: Option<Option<String>> = match request.seek_note.as_deref() {
         None => None,
         Some(raw) => Some(clean_text(
@@ -224,6 +229,14 @@ pub async fn update(
             return Err(ApiError::invalid(
                 "这个作品还没上传过版本，广场上还没有可体验的内容。先发一版再公开。",
             ));
+        }
+        if title.is_some() || summary.is_some() {
+            db::update_site_meta(
+                &conn,
+                &slug,
+                title.as_deref(),
+                summary.as_ref().map(|s| s.as_deref()),
+            )?;
         }
         db::update_listing(
             &conn,

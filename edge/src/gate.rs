@@ -812,7 +812,7 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
 
         let prompt_card = if let Some(note) = self.manifest.note.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
             format!(
-                "<div class=\"chat-prompt\"><span class=\"prompt-tag\">作者想问</span><p class=\"prompt-text\">{}</p></div>\n",
+                "<div class=\"chat-prompt\"><span class=\"prompt-lead\">作者想问：</span><span class=\"prompt-text\">{}</span></div>\n",
                 esc(note)
             )
         } else {

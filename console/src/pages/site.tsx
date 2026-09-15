@@ -72,7 +72,7 @@ export function SitePage({
       <Identity site={site} />
       {loaded.error ? <Failed error={loaded.error} onRetry={loaded.reload} /> : null}
       <Now site={site} results={results} />
-      <nav class="tabs" aria-label="Project tabs">
+      <nav class="tabs" aria-label="Work tabs">
         <TabLink slug={slug} tab="results" active={tab} text="Results" />
         <TabLink slug={slug} tab="roster" active={tab} text="Visitors" version={rosterVersion} />
         <TabLink slug={slug} tab="feedback" active={tab} text="Feedback" />

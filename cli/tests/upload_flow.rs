@@ -533,7 +533,7 @@ fn the_server_cannot_be_reached() {
     assert_eq!(output.status.code(), Some(4));
     let stderr = stderr_of(&output);
     assert!(stderr.contains("连不上服务器"), "{stderr}");
-    assert!(stderr.contains("--api"), "{stderr}");
+    assert!(stderr.contains("请检查网络连接"), "{stderr}");
 }
 
 #[test]
