@@ -276,14 +276,8 @@ mod tests {
         assert!(root("/about").is_none());
         assert!(root("/me/").is_none());
         assert!(root("/index.html").is_none());
-        assert_eq!(
-            root("/robots.txt"),
-            Some((Root::Robots, Allow::Read))
-        );
-        assert_eq!(
-            root("/sitemap.xml"),
-            Some((Root::Sitemap, Allow::Read))
-        );
+        assert_eq!(root("/robots.txt"), Some((Root::Robots, Allow::Read)));
+        assert_eq!(root("/sitemap.xml"), Some((Root::Sitemap, Allow::Read)));
         assert_eq!(
             root("/p/scarlet-tiger-35"),
             Some((Root::Project("scarlet-tiger-35"), Allow::ReadOrPost))

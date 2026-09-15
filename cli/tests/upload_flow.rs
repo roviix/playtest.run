@@ -572,4 +572,3 @@ fn uploads_a_directory_of_markdown_chapters_as_a_serialized_article() {
     assert_eq!(req.chapters[1].path, "02-echo.md");
     assert_eq!(req.entry.as_deref(), Some("01-intro.md"));
 }
-

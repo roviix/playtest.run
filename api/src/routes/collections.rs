@@ -17,9 +17,7 @@ const MISSING: &str = "没有这个合集，或者你不能管理它。";
 
 fn require_account(caller: &Caller) -> ApiResult<()> {
     if caller.kind.is_anon() {
-        return Err(ApiError::quota(
-            "请先登录并保留作品，再创建合集或投稿。",
-        ));
+        return Err(ApiError::quota("请先登录并保留作品，再创建合集或投稿。"));
     }
     Ok(())
 }

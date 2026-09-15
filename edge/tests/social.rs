@@ -466,7 +466,9 @@ async fn following_a_work_from_its_own_gate() {
     assert_eq!(reply.status, StatusCode::OK);
     let html = reply.text();
     assert!(html.contains("Confirmation email sent to z***@example.com."));
-    assert!(html.contains("Click the link in the email to confirm. Check your spam folder if it does not arrive."));
+    assert!(html.contains(
+        "Click the link in the email to confirm. Check your spam folder if it does not arrive."
+    ));
     // 邮箱不回显。
     assert!(!html.contains("zhong@example.com"));
 
@@ -488,7 +490,9 @@ async fn following_a_work_from_its_own_gate() {
             "target=site%3Abrisk-otter-41&email=a%40b.co&to=%2F",
         )
         .await;
-    assert!(reply.text().contains("You are all set! We will notify you when a new version is released."));
+    assert!(reply
+        .text()
+        .contains("You are all set! We will notify you when a new version is released."));
 
     *api.answer.lock().unwrap() = Answer::Follow(FollowResponse::AlreadyFollowing);
     let reply = site
@@ -513,7 +517,9 @@ async fn a_work_cannot_borrow_a_player_to_follow_another_work() {
         )
         .await;
     assert_eq!(reply.status, StatusCode::BAD_REQUEST);
-    assert!(reply.text().contains("This link is incomplete, please go back and try again."));
+    assert!(reply
+        .text()
+        .contains("This link is incomplete, please go back and try again."));
 
     // 不像邮箱的东西也是 400，但页面上只有一句人话。
     let reply = site
@@ -563,7 +569,9 @@ async fn a_control_plane_that_is_not_there_is_one_calm_sentence() {
         )
         .await;
     assert_eq!(reply.status, StatusCode::SERVICE_UNAVAILABLE);
-    assert!(reply.text().contains("Unable to process right now. Please try again later."));
+    assert!(reply
+        .text()
+        .contains("Unable to process right now. Please try again later."));
 }
 
 // ------------------------------------------------------------------ 根域：关注
@@ -863,7 +871,9 @@ async fn the_wall_is_one_grid_with_a_rail_and_says_which_card_is_paid_for() {
     let csp = reply.header("content-security-policy").unwrap();
     assert!(csp.starts_with("default-src 'none'"));
     assert!(
-        csp.contains("img-src http://*.localhost:8443 'self' data: https://avatars.githubusercontent.com;"),
+        csp.contains(
+            "img-src http://*.localhost:8443 'self' data: https://avatars.githubusercontent.com;"
+        ),
         "{csp}"
     );
     assert!(csp.contains("form-action 'self'"));
@@ -886,7 +896,13 @@ async fn the_wall_is_one_grid_with_a_rail_and_says_which_card_is_paid_for() {
         .unwrap();
     let html = signed.get_root_as_me("/").await.text();
     // 有没有钥匙，这一页都一样：关注只在关注页里办。墙上不另写介绍。
-    let main = html.split("<main").nth(1).unwrap().split("</main>").next().unwrap();
+    let main = html
+        .split("<main")
+        .nth(1)
+        .unwrap()
+        .split("</main>")
+        .next()
+        .unwrap();
     assert!(!html.contains("有新东西时告诉我"));
     assert!(!main.contains("type=\"email\""));
     assert!(!html.contains("class=\"intro\""));
@@ -914,7 +930,9 @@ async fn following_from_the_wall_comes_back_to_the_wall() {
         )
         .await;
     assert_eq!(reply.status, StatusCode::OK);
-    assert!(reply.text().contains("You are all set! We will notify you when new projects arrive."));
+    assert!(reply
+        .text()
+        .contains("You are all set! We will notify you when new projects arrive."));
     // 有钥匙就用钥匙，不再问邮箱。
     let (path, body) = api.last();
     assert_eq!(path, routes::FOLLOW);

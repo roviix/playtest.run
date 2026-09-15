@@ -742,7 +742,9 @@ async fn unknown_slug_is_a_rendered_404() {
         )
         .await;
     assert_eq!(reply.status, StatusCode::NOT_FOUND);
-    assert!(reply.text().contains("This link does not exist or has expired"));
+    assert!(reply
+        .text()
+        .contains("This link does not exist or has expired"));
     assert_eq!(reply.header("x-content-type-options"), Some("nosniff"));
 }
 
@@ -1083,11 +1085,18 @@ async fn root_and_subdomain_serves_favicon_svg_and_ico() {
 
     // GET /favicon.svg on root
     let reply = site
-        .send(nav_on("localhost:8443", "/favicon.svg").body(Body::empty()).unwrap())
+        .send(
+            nav_on("localhost:8443", "/favicon.svg")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await;
     assert_eq!(reply.status, StatusCode::OK);
     assert_eq!(reply.header("content-type"), Some("image/svg+xml"));
-    assert!(reply.header("cache-control").unwrap_or_default().contains("public"));
+    assert!(reply
+        .header("cache-control")
+        .unwrap_or_default()
+        .contains("public"));
     let svg_text = reply.text();
     assert!(svg_text.contains("<svg"));
     assert!(svg_text.contains("#18c99c"));
@@ -1113,7 +1122,11 @@ async fn root_and_subdomain_serves_favicon_svg_and_ico() {
 
     // GET /favicon.ico on root
     let ico = site
-        .send(nav_on("localhost:8443", "/favicon.ico").body(Body::empty()).unwrap())
+        .send(
+            nav_on("localhost:8443", "/favicon.ico")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await;
     assert_eq!(ico.status, StatusCode::OK);
     assert_eq!(ico.header("content-type"), Some("image/x-icon"));
@@ -1152,13 +1165,21 @@ async fn root_and_subdomain_serves_favicon_svg_and_ico() {
 
     // 子域名（未上线或缺失站点）：GET /favicon.ico 与 /favicon.svg 必须 200 而非 404
     let sub_svg = site
-        .send(nav_on("paper-plane.localhost:8443", "/favicon.svg").body(Body::empty()).unwrap())
+        .send(
+            nav_on("paper-plane.localhost:8443", "/favicon.svg")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await;
     assert_eq!(sub_svg.status, StatusCode::OK);
     assert_eq!(sub_svg.header("content-type"), Some("image/svg+xml"));
 
     let sub_ico = site
-        .send(nav_on("paper-plane.localhost:8443", "/favicon.ico").body(Body::empty()).unwrap())
+        .send(
+            nav_on("paper-plane.localhost:8443", "/favicon.ico")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await;
     assert_eq!(sub_ico.status, StatusCode::OK);
     assert_eq!(sub_ico.header("content-type"), Some("image/x-icon"));
@@ -1171,5 +1192,3 @@ async fn root_and_subdomain_serves_favicon_svg_and_ico() {
     assert!(html.contains(r#"<link rel="icon" type="image/svg+xml" href="/favicon.svg">"#));
     assert!(html.contains(r#"<link rel="alternate icon" href="/favicon.ico">"#));
 }
-
-

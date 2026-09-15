@@ -451,10 +451,18 @@ placeholder=\"How should we call you?\" autocomplete=\"nickname\">\
                 let toc = if let Some(ch) = self.current_chapter {
                     crate::presentation::chapter_toc(&m.chapters, &ch.id, &m.slug)
                 } else {
-                    self.article_html.map(|html| crate::presentation::article_view(html, &m.title).contents).unwrap_or_default()
+                    self.article_html
+                        .map(|html| crate::presentation::article_view(html, &m.title).contents)
+                        .unwrap_or_default()
                 };
-                let chapter_attr = self.current_chapter.map(|c| format!(" data-reader-chapter=\"{}\"", esc(&c.id))).unwrap_or_default();
-                let heading_title = self.current_chapter.map(|c| c.title.as_str()).unwrap_or(&m.title);
+                let chapter_attr = self
+                    .current_chapter
+                    .map(|c| format!(" data-reader-chapter=\"{}\"", esc(&c.id)))
+                    .unwrap_or_default();
+                let heading_title = self
+                    .current_chapter
+                    .map(|c| c.title.as_str())
+                    .unwrap_or(&m.title);
                 let body = self.article_html.map(|html| crate::presentation::article_view(html, heading_title).body).unwrap_or_else(|| format!("<p class=\"tip\">Article body is currently unavailable. <a href=\"{}\">Reload</a></p>", esc(self.page_url)));
                 let pagination = if let Some(idx) = self.current_chapter_index {
                     crate::presentation::chapter_pagination(&m.chapters, idx, &m.slug)
@@ -465,7 +473,7 @@ placeholder=\"How should we call you?\" autocomplete=\"nickname\">\
                     "{toc}<article class=\"article-body\" id=\"article-content\" data-reader-slug=\"{}\" data-reader-version=\"{}\"{chapter_attr}>{body}</article>\n{pagination}",
                     esc(&m.slug), m.version
                 )
-            },
+            }
             WorkKind::Video => {
                 let src = m
                     .entry
@@ -498,9 +506,14 @@ placeholder=\"How should we call you?\" autocomplete=\"nickname\">\
         if m.kind != WorkKind::Web {
             let tag = match m.kind {
                 WorkKind::Article if !m.chapters.is_empty() => {
-                    format!("<div class=\"media-tag\">Serial · {} chapters</div>", m.chapters.len())
+                    format!(
+                        "<div class=\"media-tag\">Serial · {} chapters</div>",
+                        m.chapters.len()
+                    )
                 }
-                WorkKind::Article => "<div class=\"media-tag\">Article · Longform</div>".to_string(),
+                WorkKind::Article => {
+                    "<div class=\"media-tag\">Article · Longform</div>".to_string()
+                }
                 WorkKind::Video => "<div class=\"media-tag\">Video · Demo</div>".to_string(),
                 WorkKind::Web => String::new(),
             };
@@ -519,12 +532,20 @@ placeholder=\"How should we call you?\" autocomplete=\"nickname\">\
             };
             let resume = if m.kind == WorkKind::Article && self.article_html.is_some() {
                 "<div class=\"reader-resume\" hidden><button type=\"button\" class=\"reader-continue-btn\" hidden>‹ Resume reading</button><button type=\"button\" class=\"reader-clear-btn\" title=\"Clear reading position\" hidden aria-label=\"Clear reading position\">×</button></div>"
-            } else { "" };
+            } else {
+                ""
+            };
             let feedback_link = if self.live.feedback_public || self.live.listed {
                 "<a class=\"media-control\" href=\"#chat-panel\">Leave feedback</a>"
-            } else { "" };
+            } else {
+                ""
+            };
             let content = if m.kind == WorkKind::Article {
-                let end_text = if self.current_chapter.is_some() { "End of chapter" } else { "End of article" };
+                let end_text = if self.current_chapter.is_some() {
+                    "End of chapter"
+                } else {
+                    "End of article"
+                };
                 format!("{metadata}{resume}{presentation}<div class=\"media-end\"><span>{end_text}</span>{feedback_link}</div>")
             } else {
                 format!("{presentation}{metadata}<div class=\"media-end\">{feedback_link}</div>")
@@ -556,8 +577,10 @@ placeholder=\"How should we call you?\" autocomplete=\"nickname\">\
         };
         let has_chat = self.live.feedback_public || self.live.listed;
         let media_controls = if m.kind != WorkKind::Web && has_chat {
-            format!("<div class=\"media-navigation\"><button type=\"button\" class=\"media-control media-focus\" aria-pressed=\"false\" hidden><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3\"/></svg><span>Focus</span></button><a class=\"media-control media-feedback\" href=\"#chat-panel\">Feedback</a></div>")
-        } else { String::new() };
+            "<div class=\"media-navigation\"><button type=\"button\" class=\"media-control media-focus\" aria-pressed=\"false\" hidden><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3\"/></svg><span>Focus</span></button><a class=\"media-control media-feedback\" href=\"#chat-panel\">Feedback</a></div>".to_string()
+        } else {
+            String::new()
+        };
         let header = format!("<header class=\"invitation-header\"><nav class=\"invitation-nav\" aria-label=\"Back to Plaza\">{brand_link}{back_action}{media_controls}</nav></header>");
         let card_class = if m.kind == WorkKind::Web {
             "card"
@@ -593,9 +616,18 @@ placeholder=\"How should we call you?\" autocomplete=\"nickname\">\
             )
         };
         let media_script = if m.kind != WorkKind::Web && self.nonce.is_some() {
-            format!("<script{nonce_attr}>{}</script>", include_str!("../../ui/presentation.js"))
-        } else { String::new() };
-        rendered.replacen("</body>", &format!("{dialog}{script}{media_script}</body>"), 1)
+            format!(
+                "<script{nonce_attr}>{}</script>",
+                include_str!("../../ui/presentation.js")
+            )
+        } else {
+            String::new()
+        };
+        rendered.replacen(
+            "</body>",
+            &format!("{dialog}{script}{media_script}</body>"),
+            1,
+        )
     }
 
     /// 无封面时按作品 slug 色相算法生成的几何星轨艺术图案，作为邀请函头图（DESIGN §3.3）。
@@ -726,7 +758,9 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
                 (WorkKind::Article, _) => "read",
                 (WorkKind::Video, _) => "watch",
             };
-            return format!("<p class=\"seats full\">{seats} seats filled · You can still {verb}</p>\n");
+            return format!(
+                "<p class=\"seats full\">{seats} seats filled · You can still {verb}</p>\n"
+            );
         }
         let joined = match self.live.joined {
             0 => String::new(),
@@ -770,7 +804,11 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
             } else {
                 0
             };
-            let chat_badge = if count > 0 { format!(" {count}") } else { String::new() };
+            let chat_badge = if count > 0 {
+                format!(" {count}")
+            } else {
+                String::new()
+            };
             rows.push(format!(
                 "<a class=\"btn-chat\" href=\"#chat-panel\" aria-label=\"原声与交流\" title=\"原声与交流\">{CHAT_ICON}<span>原声{chat_badge}</span></a>"
             ));
@@ -803,14 +841,28 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
         let (topic, hint, role_noun, default_placeholder) = match m.kind {
             WorkKind::Web => ("原声", "试玩聊天室", "playtester", "说点想法或选个贴纸…"),
             WorkKind::Article => {
-                let h = if self.current_chapter.is_some() { "本章讨论" } else { "读者原声" };
-                let p = if self.current_chapter.is_some() { "聊聊这章的感受…" } else { "说点想法或选个贴纸…" };
+                let h = if self.current_chapter.is_some() {
+                    "本章讨论"
+                } else {
+                    "读者原声"
+                };
+                let p = if self.current_chapter.is_some() {
+                    "聊聊这章的感受…"
+                } else {
+                    "说点想法或选个贴纸…"
+                };
                 ("读者原声", h, "reader", p)
             }
             WorkKind::Video => ("观众原声", "弹幕原声", "viewer", "说点想法或选个贴纸…"),
         };
 
-        let prompt_card = if let Some(note) = self.manifest.note.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+        let prompt_card = if let Some(note) = self
+            .manifest
+            .note
+            .as_deref()
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+        {
             format!(
                 "<div class=\"chat-prompt\"><span class=\"prompt-lead\">作者想问：</span><span class=\"prompt-text\">{}</span></div>\n",
                 esc(note)
@@ -837,13 +889,11 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
                     .as_deref()
                     .map(str::trim)
                     .filter(|n| !n.is_empty())
-                    .unwrap_or_else(|| {
-                        match role_noun {
-                            "reader" => "A reader",
-                            "viewer" => "A viewer",
-                            "playtester" => "A playtester",
-                            _ => "A tester",
-                        }
+                    .unwrap_or(match role_noun {
+                        "reader" => "A reader",
+                        "viewer" => "A viewer",
+                        "playtester" => "A playtester",
+                        _ => "A tester",
                     });
                 let is_sticker = text.starts_with("🎮")
                     || text.starts_with("🎨")
@@ -865,8 +915,10 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
                 } else {
                     "chat-bubble"
                 };
-                let avatar = playtest_common::avatar::svg_for_seed(who, Some(28), Some("chat-avatar-svg"));
-                let time_str = crate::when::day_time(&item.at).unwrap_or_else(|| "刚刚".to_string());
+                let avatar =
+                    playtest_common::avatar::svg_for_seed(who, Some(28), Some("chat-avatar-svg"));
+                let time_str =
+                    crate::when::day_time(&item.at).unwrap_or_else(|| "刚刚".to_string());
                 let msg_key = format!("{}:{}:{}", who, item.version, text);
                 messages.push_str(&format!(
                     "<div class=\"chat-msg\" data-msg-key=\"{msg_key}\">\
@@ -908,7 +960,10 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
             String::new()
         };
         let chapter_input = if let Some(ch) = self.current_chapter {
-            format!("<input type=\"hidden\" name=\"chapter\" value=\"{}\">\n", esc(&ch.id))
+            format!(
+                "<input type=\"hidden\" name=\"chapter\" value=\"{}\">\n",
+                esc(&ch.id)
+            )
         } else {
             String::new()
         };
@@ -938,7 +993,11 @@ referrerpolicy=\"no-referrer\" loading=\"lazy\">",
                 "<button type=\"button\" class=\"sticker-btn\" data-sticker=\"👏 催更催更\" title=\"催更催更\">👏 催更催更</button>\n"
             ),
         };
-        let back_label = if m.kind == WorkKind::Web { "返回作品卡片" } else { "返回正文" };
+        let back_label = if m.kind == WorkKind::Web {
+            "返回作品卡片"
+        } else {
+            "返回正文"
+        };
         let rendered = format!(
             "<aside class=\"chat-panel\" id=\"chat-panel\" aria-label=\"{topic}与交流\">\n\
 <header class=\"chat-head\">\n\
@@ -1286,10 +1345,12 @@ mod tests {
         assert!(html.contains("Powered by localhost"));
         // 分享出去时靠这几条：Discord / iMessage / Telegram 会抓，微信尽力而为。
         assert!(html.contains("<title>某某 invites you to play 小球大冒险</title>"));
-        assert!(html
-            .contains("<meta name=\"description\" content=\"某某 invites you to play 小球大冒险 · v7\">"));
+        assert!(html.contains(
+            "<meta name=\"description\" content=\"某某 invites you to play 小球大冒险 · v7\">"
+        ));
         assert!(html.contains("<meta property=\"og:title\" content=\"小球大冒险 · v7\">"));
-        assert!(html.contains("<meta property=\"og:description\" content=\"某某 invites you to play\">"));
+        assert!(html
+            .contains("<meta property=\"og:description\" content=\"某某 invites you to play\">"));
         assert!(html.contains("<meta property=\"og:type\" content=\"website\">"));
         assert!(html.contains("og:url\" content=\"http://brisk-otter-41.localhost:8443/\""));
         // 版本、日期、这版改了什么，一行等宽小字（DESIGN §3.3 第 3 条）。
@@ -1412,16 +1473,23 @@ mod tests {
         live.feedback_public = true;
         p.live = &live;
         let html = p.render();
-        assert!(html.contains("class=\"chat-author\">小雨</span><span class=\"chat-badge\">v7</span>"));
+        assert!(
+            html.contains("class=\"chat-author\">小雨</span><span class=\"chat-badge\">v7</span>")
+        );
         assert!(html.contains("class=\"chat-bubble\">不知道要按哪个键</p>"));
         // 没留名字的显示「A playtester」。
-        assert!(html.contains("class=\"chat-author\">A playtester</span><span class=\"chat-badge\">v7</span>"));
+        assert!(html.contains(
+            "class=\"chat-author\">A playtester</span><span class=\"chat-badge\">v7</span>"
+        ));
         assert!(html.contains("class=\"chat-bubble\">第三关卡住了</p>"));
         // 时间正序（从旧到新，最新在最下）：
         let pos_aji = html.find("手感很好").expect("阿吉的消息应在页面中");
         let pos_anon = html.find("第三关卡住了").expect("匿名消息应在页面中");
         let pos_rain = html.find("不知道要按哪个键").expect("小雨的消息应在页面中");
-        assert!(pos_aji < pos_anon && pos_anon < pos_rain, "聊天消息应按时间正序排列（最新在最底部）");
+        assert!(
+            pos_aji < pos_anon && pos_anon < pos_rain,
+            "聊天消息应按时间正序排列（最新在最底部）"
+        );
 
         // 不是讨论区：没有回复、点赞、楼层（DESIGN §3.5）。
         for word in ["回复", "点赞", "评论", "楼"] {

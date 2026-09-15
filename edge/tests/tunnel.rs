@@ -622,7 +622,9 @@ async fn the_offline_page_remembers_who_was_here() {
         // 没连过的 slug 就是不存在，不是「离线」——离线要有人在线过才说得出口。
         let unknown = navigate(edge.addr, "/", None).await;
         assert_eq!(unknown.status, StatusCode::NOT_FOUND);
-        assert!(unknown.text().contains("This link does not exist or has expired"));
+        assert!(unknown
+            .text()
+            .contains("This link does not exist or has expired"));
 
         let cli = FakeCli::connect(&edge, &edge.token("jti-1", |_| {}), dev).await;
         edge.wait_online().await;

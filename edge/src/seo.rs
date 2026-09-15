@@ -171,6 +171,7 @@ pub fn sitemap_xml(plaza: &Plaza, now: OffsetDateTime) -> Response {
 }
 
 /// 为主域作品门面页生成 Schema.org JSON-LD 结构化数据
+#[allow(clippy::too_many_arguments)]
 pub fn project_json_ld(
     title: &str,
     slug: &str,

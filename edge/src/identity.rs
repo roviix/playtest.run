@@ -11,7 +11,7 @@ pub fn cookie_name(secure: bool) -> &'static str {
     }
 }
 
-pub fn token<'a>(headers: &'a HeaderMap, secure: bool) -> Option<&'a str> {
+pub fn token(headers: &HeaderMap, secure: bool) -> Option<&str> {
     let names = if secure {
         [SECURE_ME_COOKIE, "__Host-pt_session"]
     } else {
@@ -46,7 +46,14 @@ pub fn token<'a>(headers: &'a HeaderMap, secure: bool) -> Option<&'a str> {
 fn reserved(name: &str) -> bool {
     matches!(
         name,
-        ME_COOKIE | SECURE_ME_COOKIE | GATE_COOKIE | SESSION_COOKIE | "pt_session" | "__Host-pt_oauth" | "pt_oauth" | "__Host-pt_session"
+        ME_COOKIE
+            | SECURE_ME_COOKIE
+            | GATE_COOKIE
+            | SESSION_COOKIE
+            | "pt_session"
+            | "__Host-pt_oauth"
+            | "pt_oauth"
+            | "__Host-pt_session"
     )
 }
 

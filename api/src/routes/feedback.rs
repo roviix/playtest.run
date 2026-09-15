@@ -81,7 +81,8 @@ async fn save(
     let now = clock::now();
     let at = clock::format(now);
 
-    let is_chat = request.source.as_deref() == Some("gate") || request.source.as_deref() == Some("chat");
+    let is_chat =
+        request.source.as_deref() == Some("gate") || request.source.as_deref() == Some("chat");
     let max_allowed = if is_chat {
         ingest::MAX_CHAT_PER_SESSION
     } else {

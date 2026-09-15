@@ -15,8 +15,8 @@ use playtest_api::config::GitHubApp;
 use playtest_api::{app, AppState, Config};
 use playtest_common::api::{
     routes as paths, AnonSessionResponse, CommitUploadResponse, CreateSiteRequest, DeviceLoginPoll,
-    DeviceLoginStart, ErrorBody, ErrorCode, LoginPollResponse, Me,
-    PrepareUploadRequest, PrepareUploadResponse, Site, WebLoginExchange,
+    DeviceLoginStart, ErrorBody, ErrorCode, LoginPollResponse, Me, PrepareUploadRequest,
+    PrepareUploadResponse, Site, WebLoginExchange,
 };
 use playtest_common::hash;
 use playtest_common::manifest::{FileEntry, GateMode};
@@ -125,17 +125,57 @@ impl Reply {
 
 impl Harness {
     async fn browser_post<T: Serialize>(&self, path: &str, cookie: &str, value: &T) -> Reply {
-        self.send(Request::builder().method("POST").uri(path).header(header::CONTENT_TYPE,"application/json").header(header::ORIGIN,"http://localhost:8443").header(header::COOKIE,cookie).body(Body::from(serde_json::to_vec(value).unwrap())).unwrap()).await
+        self.send(
+            Request::builder()
+                .method("POST")
+                .uri(path)
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::ORIGIN, "http://localhost:8443")
+                .header(header::COOKIE, cookie)
+                .body(Body::from(serde_json::to_vec(value).unwrap()))
+                .unwrap(),
+        )
+        .await
     }
 
     async fn web_login(&self) -> String {
-        let start = self.get(paths::LOGIN_WEB_START,None).await;
-        let cookie = start.headers[header::SET_COOKIE].to_str().unwrap().split(';').next().unwrap();
-        let location = reqwest::Url::parse(start.headers[header::LOCATION].to_str().unwrap()).unwrap();
-        let state = location.query_pairs().find(|(key,_)|key=="state").unwrap().1.into_owned();
-        let reply = self.browser_post(paths::LOGIN_WEB_EXCHANGE,cookie,&WebLoginExchange { code:"good-code".to_string(),state }).await;
-        assert_eq!(reply.status,StatusCode::OK,"{}",reply.text());
-        reply.headers.get_all(header::SET_COOKIE).iter().filter_map(|value|value.to_str().ok()).find(|value|value.starts_with("pt_session=")).unwrap().split(';').next().unwrap().to_string()
+        let start = self.get(paths::LOGIN_WEB_START, None).await;
+        let cookie = start.headers[header::SET_COOKIE]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap();
+        let location =
+            reqwest::Url::parse(start.headers[header::LOCATION].to_str().unwrap()).unwrap();
+        let state = location
+            .query_pairs()
+            .find(|(key, _)| key == "state")
+            .unwrap()
+            .1
+            .into_owned();
+        let reply = self
+            .browser_post(
+                paths::LOGIN_WEB_EXCHANGE,
+                cookie,
+                &WebLoginExchange {
+                    code: "good-code".to_string(),
+                    state,
+                },
+            )
+            .await;
+        assert_eq!(reply.status, StatusCode::OK, "{}", reply.text());
+        reply
+            .headers
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .filter_map(|value| value.to_str().ok())
+            .find(|value| value.starts_with("pt_session="))
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_string()
     }
 
     async fn start(github: Option<GitHubApp>) -> Self {
@@ -279,7 +319,11 @@ async fn the_device_flow_logs_in_and_adopts_anonymous_sites() {
     assert!(site.expires_at.is_some());
 
     let start: DeviceLoginStart = h
-        .post(paths::LOGIN_DEVICE_START, Some(&anon), &serde_json::json!({}))
+        .post(
+            paths::LOGIN_DEVICE_START,
+            Some(&anon),
+            &serde_json::json!({}),
+        )
         .await
         .json();
     assert_eq!(start.user_code.len(), 9);
@@ -297,7 +341,13 @@ async fn the_device_flow_logs_in_and_adopts_anonymous_sites() {
     assert_eq!(first, LoginPollResponse::Pending { interval: 5 });
 
     let cookie = h.web_login().await;
-    h.browser_post("/v1/account/device/approve",&cookie,&serde_json::json!({"user_code":start.user_code})).await.json::<serde_json::Value>();
+    h.browser_post(
+        "/v1/account/device/approve",
+        &cookie,
+        &serde_json::json!({"user_code":start.user_code}),
+    )
+    .await
+    .json::<serde_json::Value>();
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
     // 第二次：成了，而且顺带把匿名作品归了进来。
@@ -362,7 +412,12 @@ async fn the_web_flow_needs_a_matching_state_and_uses_it_once() {
         .next()
         .unwrap()
         .to_string();
-    let cookie = start.headers[header::SET_COOKIE].to_str().unwrap().split(';').next().unwrap();
+    let cookie = start.headers[header::SET_COOKIE]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap();
 
     // state 编的、不认识的：拒。
     h.browser_post(
@@ -388,8 +443,12 @@ async fn the_web_flow_needs_a_matching_state_and_uses_it_once() {
         .await;
     let login: serde_json::Value = reply.json();
     assert!(login.get("token").is_none());
-    assert_eq!(login["return_to"],"/");
-    assert!(reply.headers.get_all(header::SET_COOKIE).iter().any(|value|value.to_str().unwrap().starts_with("pt_session=")));
+    assert_eq!(login["return_to"], "/");
+    assert!(reply
+        .headers
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .any(|value| value.to_str().unwrap().starts_with("pt_session=")));
 
     // 同一个 state 用第二次：不行。
     h.browser_post(
@@ -408,7 +467,12 @@ async fn the_web_flow_needs_a_matching_state_and_uses_it_once() {
 async fn a_bad_code_from_github_is_a_login_failure_not_a_crash() {
     let h = Harness::with_fake_github(Some("shh")).await;
     let start = h.get(paths::LOGIN_WEB_START, None).await;
-    let cookie = start.headers[header::SET_COOKIE].to_str().unwrap().split(';').next().unwrap();
+    let cookie = start.headers[header::SET_COOKIE]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap();
     let location = start.headers[header::LOCATION].to_str().unwrap();
     let state = location
         .rsplit("state=")

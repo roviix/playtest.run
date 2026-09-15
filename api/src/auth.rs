@@ -80,7 +80,8 @@ impl FromRequestParts<AppState> for Caller {
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let Some(token) = bearer_token(parts) else {
-            return crate::account::caller(state, &parts.headers).await?
+            return crate::account::caller(state, &parts.headers)
+                .await?
                 .ok_or_else(|| ApiError::unauthorized(NO_TOKEN));
         };
         let token_hash = hash::hash_bytes(token.as_bytes());

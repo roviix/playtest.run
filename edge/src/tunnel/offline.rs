@@ -34,7 +34,11 @@ pub fn offline(seen: &LastSeen) -> String {
 {when}\
 <p class=\"lead\">Please try again later, or let the creator know.</p>\n"
     );
-    shell(&format!("{} is currently offline", seen.developer), "", &body)
+    shell(
+        &format!("{} is currently offline", seen.developer),
+        "",
+        &body,
+    )
 }
 
 /// 同时在场的人超过了这个档位的上限（[`playtest_common::tunnel::Claims::max_players`]）。

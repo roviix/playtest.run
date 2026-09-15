@@ -100,10 +100,7 @@ pub async fn run(api_flag: Option<&str>) -> Result<()> {
         return Ok(());
     }
 
-    ui::say(&format!(
-        "已登录：{}。",
-        login.display_name
-    ));
+    ui::say(&format!("已登录：{}。", login.display_name));
     match login.migrated_sites {
         0 => {}
         n => ui::say(&format!(

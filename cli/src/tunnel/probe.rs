@@ -346,7 +346,9 @@ mod tests {
     #[test]
     fn hardcoded_localhost_triggers_a_helpful_warning() {
         let page_with_local = Page {
-            html: Some(r#"<html><script src="http://localhost:3000/api.js"></script></html>"#.into()),
+            html: Some(
+                r#"<html><script src="http://localhost:3000/api.js"></script></html>"#.into(),
+            ),
             self_bytes: Some(10),
         };
         let warning = page_with_local

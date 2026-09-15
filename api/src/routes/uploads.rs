@@ -421,7 +421,10 @@ async fn render_article(
             .collect();
         for ch in &request.chapters {
             if !supplied.contains(ch.path.as_str()) {
-                return Err(ApiError::invalid(format!("章节 {} 的文件 {} 缺失", ch.id, ch.path)));
+                return Err(ApiError::invalid(format!(
+                    "章节 {} 的文件 {} 缺失",
+                    ch.id, ch.path
+                )));
             }
         }
         all_images.extend(inspected.images);

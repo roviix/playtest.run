@@ -280,9 +280,8 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
         String::new()
     };
     let title = if index { "Collections" } else { "Plaza" };
-    let mut body = format!(
-        "<div class=\"content discovery\">{hero_banner}<h1 class=\"sr-only\">{title}</h1>"
-    );
+    let mut body =
+        format!("<div class=\"content discovery\">{hero_banner}<h1 class=\"sr-only\">{title}</h1>");
     body.push_str(&toolbar(query, base, index));
     let collections: Vec<_> = view
         .plaza
@@ -291,9 +290,7 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
         .filter(|collection| {
             collection.public && !collection.hidden && collection_matches(collection, &query.search)
         })
-        .filter(|_| {
-            index
-        })
+        .filter(|_| index)
         .collect();
     if !collections.is_empty() {
         if !index {
@@ -354,9 +351,15 @@ pub fn home(view: &View<'_>, query: &Query, index: bool) -> String {
     }
     body.push_str("</div>");
     let canonical = if index {
-        format!("<link rel=\"canonical\" href=\"https://{}/collections\">\n", playtest_common::DEVELOPER_HOST)
+        format!(
+            "<link rel=\"canonical\" href=\"https://{}/collections\">\n",
+            playtest_common::DEVELOPER_HOST
+        )
     } else {
-        format!("<link rel=\"canonical\" href=\"https://{}/\">\n", playtest_common::DEVELOPER_HOST)
+        format!(
+            "<link rel=\"canonical\" href=\"https://{}/\">\n",
+            playtest_common::DEVELOPER_HOST
+        )
     };
     let mut html = wrap(
         if index {
@@ -446,7 +449,8 @@ pub fn collection(
     };
     let has_prompt = !collection.prompt.is_empty();
     let has_rules = !collection.rules.is_empty();
-    let is_open_challenge = collection.kind == CollectionKind::Challenge && !collection.closed(&now);
+    let is_open_challenge =
+        collection.kind == CollectionKind::Challenge && !collection.closed(&now);
     let participate_btn = if is_open_challenge {
         "<a class=\"discovery-button primary action-participate\" href=\"#participate\"><svg class=\"icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\"/></svg>Submit a Project ↗</a>"
     } else {
@@ -557,11 +561,16 @@ pub fn collection(
             if query.search.is_empty() {
                 "Submitted projects will appear here.".to_string()
             } else {
-                format!("<a href=\"{}\">Clear filters</a> to view other projects.", esc(&base))
+                format!(
+                    "<a href=\"{}\">Clear filters</a> to view other projects.",
+                    esc(&base)
+                )
             }
         ));
     } else {
-        body.push_str("<section class=\"grid collection-entries\" aria-label=\"Submitted projects\">");
+        body.push_str(
+            "<section class=\"grid collection-entries\" aria-label=\"Submitted projects\">",
+        );
         for (entry, item) in entries.iter().skip(offset).take(PAGE_SIZE) {
             let tile = plaza::tile(item, false, view.now).replacen(
                 &format!("href=\"/p/{}\"", item.slug),

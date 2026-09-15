@@ -155,13 +155,10 @@ pub fn root_url_from_site(site_url: &str) -> String {
         None => (host, String::new()),
     };
     let parts: Vec<&str> = hostname.split('.').collect();
-    let root_hostname = if hostname == "playtest.run" || hostname == "localhost" {
-        hostname
-    } else if hostname.ends_with(".playtest.run") && parts.len() >= 3 {
-        &hostname[parts[0].len() + 1..]
-    } else if hostname.ends_with(".localhost") && parts.len() >= 2 {
-        &hostname[parts[0].len() + 1..]
-    } else if parts.len() > 2 {
+    // 去掉最前面那一级 slug：三级及以上域名一律去（`slug.playtest.run`、`slug.example.com`），
+    // `slug.localhost` 只有两级也要去；`playtest.run` / `localhost` 本身已经是根域。
+    let strip_slug = parts.len() > 2 || (parts.len() == 2 && hostname.ends_with(".localhost"));
+    let root_hostname = if strip_slug {
         &hostname[parts[0].len() + 1..]
     } else {
         hostname

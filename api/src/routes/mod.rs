@@ -49,14 +49,32 @@ pub fn app(state: AppState) -> Router {
         .route("/v1/account/device", post(crate::device::preview))
         .route("/v1/account/device/approve", post(crate::device::approve))
         .route(paths::LOGIN_WEB_START, get(crate::account::github_start))
-        .route(paths::LOGIN_WEB_EXCHANGE, post(crate::account::github_exchange))
-        .route("/v1/account", get(crate::account::view).patch(crate::account::profile))
+        .route(
+            paths::LOGIN_WEB_EXCHANGE,
+            post(crate::account::github_exchange),
+        )
+        .route(
+            "/v1/account",
+            get(crate::account::view).patch(crate::account::profile),
+        )
         .route("/v1/account/logout", post(crate::account::logout))
         .route("/v1/account/email", post(crate::account::email_start))
-        .route("/v1/account/email/confirm", post(crate::account::email_confirm))
-        .route("/v1/account/email/preview", post(crate::account::email_preview))
-        .route("/v1/account/tokens", get(crate::account::tokens).post(crate::account::create_token))
-        .route("/v1/account/tokens/{id}", delete(crate::account::revoke_token))
+        .route(
+            "/v1/account/email/confirm",
+            post(crate::account::email_confirm),
+        )
+        .route(
+            "/v1/account/email/preview",
+            post(crate::account::email_preview),
+        )
+        .route(
+            "/v1/account/tokens",
+            get(crate::account::tokens).post(crate::account::create_token),
+        )
+        .route(
+            "/v1/account/tokens/{id}",
+            delete(crate::account::revoke_token),
+        )
         .route(paths::ME, get(login::me))
         .route(paths::ME_TOKEN, axum::routing::delete(sessions::revoke))
         .route(
@@ -140,7 +158,10 @@ pub fn app(state: AppState) -> Router {
         // 写入端点的令牌桶。一个 app() 一份，进程内存里（见 events.rs）。
         .layer(Extension(events::Limiter::new()))
         .layer(middleware::map_response(as_error_body))
-        .layer(middleware::from_fn_with_state(state.clone(), crate::account::protect))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            crate::account::protect,
+        ))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

@@ -73,10 +73,7 @@ impl std::fmt::Display for Error {
                 } else {
                     root_cause(source)
                 };
-                write!(
-                    f,
-                    "连不上服务器（{api}）：{reason}。请检查网络连接。"
-                )
+                write!(f, "连不上服务器（{api}）：{reason}。请检查网络连接。")
             }
             Error::Server { body, .. } => write!(f, "服务器说：{}", body.message),
             Error::Unexpected { status, text } => {

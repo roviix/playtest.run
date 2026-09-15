@@ -56,8 +56,14 @@ pub fn untrusted_action() -> String {
 
 pub const REPORT_REASONS: &[(&str, &str)] = &[
     ("phishing", "Phishing, impersonation, or scam"),
-    ("malware", "Malware, malicious scripts, or harmful downloads"),
-    ("adult", "Sexually explicit, violent, or inappropriate content"),
+    (
+        "malware",
+        "Malware, malicious scripts, or harmful downloads",
+    ),
+    (
+        "adult",
+        "Sexually explicit, violent, or inappropriate content",
+    ),
     ("infringement", "Copyright infringement or plagiarism"),
     ("harassment", "Targeted harassment or abuse"),
     ("broken", "Broken link or fails to load"),

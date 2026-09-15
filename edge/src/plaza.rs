@@ -82,7 +82,12 @@ pub fn render(view: &View<'_>) -> String {
         host = playtest_common::DEVELOPER_HOST,
     );
 
-    wrap("playtest · Show the work, not the hype", &head, Here::Plaza, &wall(view))
+    wrap(
+        "playtest · Show the work, not the hype",
+        &head,
+        Here::Plaza,
+        &wall(view),
+    )
 }
 
 /// 人在这一域上的哪一间房。栏上那一项标成当前。
@@ -171,7 +176,7 @@ fn rail(here: Here) -> String {
 }
 
 pub(crate) fn hero() -> String {
-    format!(
+    String::from(
         "<section class=\"plaza-hero\">\n\
 <div class=\"hero-badge\"><span class=\"hero-dot\" aria-hidden=\"true\"></span>Build in Public</div>\n\
 <h1 class=\"hero-title\">Show the work, not the hype.</h1>\n\
@@ -327,10 +332,9 @@ loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\">",
 /// 这里只负责把它排成 HTML。
 fn blurb(item: &PlazaItem) -> String {
     let line = match item.blurb() {
-        Some(Blurb::Seeking(note)) => format!(
-            "<span class=\"seek-k\">Testing</span> {}",
-            esc(note.trim())
-        ),
+        Some(Blurb::Seeking(note)) => {
+            format!("<span class=\"seek-k\">Testing</span> {}", esc(note.trim()))
+        }
         Some(Blurb::Summary(summary)) => esc(summary.trim()),
         None => String::new(),
     };
@@ -534,9 +538,8 @@ mod tests {
         // 字卡：花押是作品名的第一个字，角上是 slug；作品名本身仍只出现一次。
         assert!(html.contains("><b>小</b><i>brisk-otter-41</i></div>"));
         // 名额那一件事实带一条进度线：6 / 10 就是 60%。
-        assert!(
-            html.contains("<span class=\"fact seats\" style=\"--p:60%\"><i></i>6 / 10 joined</span>")
-        );
+        assert!(html
+            .contains("<span class=\"fact seats\" style=\"--p:60%\"><i></i>6 / 10 joined</span>"));
         assert!(html.contains("<h2>小球大冒险</h2>"));
         assert!(!html.contains("class=\"type\""));
         assert_eq!(html.matches("小球大冒险").count(), 1, "作品名只出现一次");
@@ -615,9 +618,9 @@ mod tests {
             .contains("<span class=\"k\">playtest</span> <span class=\"a\">./dist</span></code>"));
         assert!(html.contains("<span class=\"k\">playtest</span> <span class=\"a\">3000</span>"));
         assert!(html.contains("<span class=\"f\">--backend</span> <span class=\"a\">8000</span>"));
-        assert!(
-            html.contains("aria-label=\"Copy command\" title=\"Copy command\" data-copy-command hidden>")
-        );
+        assert!(html.contains(
+            "aria-label=\"Copy command\" title=\"Copy command\" data-copy-command hidden>"
+        ));
         assert!(
             html.find("data-copy-command").unwrap() < html.find("id=\"panel-static\"").unwrap()
         );
@@ -626,7 +629,11 @@ mod tests {
         assert!(html.contains(&format!(
             "href=\"{DEVELOPER_API_URL}/console/\" target=\"_blank\" rel=\"noopener\">"
         )));
-        assert_eq!(html.matches(&format!("{DEVELOPER_API_URL}/console/")).count(), 1);
+        assert_eq!(
+            html.matches(&format!("{DEVELOPER_API_URL}/console/"))
+                .count(),
+            1
+        );
         for word in [
             "最多人玩",
             "筛选",

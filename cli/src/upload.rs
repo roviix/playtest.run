@@ -423,9 +423,12 @@ async fn prepare_input(shown: &str, has_backend: bool) -> Result<UploadInput> {
             .map(|file| file.entry.clone())
             .collect::<Vec<_>>();
 
-        let has_any_html = entries
-            .iter()
-            .any(|e| e.path == "index.html" || e.path.ends_with("/index.html") || e.path.ends_with(".htm") || e.path.ends_with("/index.htm"));
+        let has_any_html = entries.iter().any(|e| {
+            e.path == "index.html"
+                || e.path.ends_with("/index.html")
+                || e.path.ends_with(".htm")
+                || e.path.ends_with("/index.htm")
+        });
         let has_web_assets = entries.iter().any(|e| {
             e.path.ends_with(".js")
                 || e.path.ends_with(".mjs")

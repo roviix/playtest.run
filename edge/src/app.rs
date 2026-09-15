@@ -138,7 +138,8 @@ async fn handle(State(app): State<Arc<App>>, req: Request) -> Response {
         HostKind::Unknown => page(StatusCode::NOT_FOUND, pages::not_found(), None),
         HostKind::Site(slug) => {
             let head_only = parts.method == Method::HEAD;
-            let is_favicon = parts.uri.path() == "/favicon.ico" || parts.uri.path() == "/favicon.svg";
+            let is_favicon =
+                parts.uri.path() == "/favicon.ico" || parts.uri.path() == "/favicon.svg";
             let response = site(&app, &slug, &authority, parts, body).await;
             if !response.status().is_success() || is_favicon {
                 return response;
@@ -277,16 +278,25 @@ async fn project_door(
 
     if parts.method == Method::POST {
         let form = read_form(body).await;
-        if field(&form, "action").as_deref() == Some("feedback") || field(&form, "feedback").is_some() {
-            let text = field(&form, "feedback").unwrap_or_default().trim().to_string();
-            let chapter_id = field(&form, "chapter").map(|c| c.trim().to_string()).filter(|c| !c.is_empty());
+        if field(&form, "action").as_deref() == Some("feedback")
+            || field(&form, "feedback").is_some()
+        {
+            let text = field(&form, "feedback")
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            let chapter_id = field(&form, "chapter")
+                .map(|c| c.trim().to_string())
+                .filter(|c| !c.is_empty());
             let feedback_text = if let Some(ref cid) = chapter_id {
                 format!("[{cid}] {text}")
             } else {
                 text.clone()
             };
             let root_origin = format!("{scheme}://{suffix}{port_part}");
-            let result = if header_str(&parts.headers, "origin").is_some_and(|origin| origin != root_origin) {
+            let result = if header_str(&parts.headers, "origin")
+                .is_some_and(|origin| origin != root_origin)
+            {
                 Err(403)
             } else if text.is_empty() || text.chars().count() > 200 {
                 Err(400)
@@ -307,22 +317,51 @@ async fn project_door(
                 Ok(()) => (StatusCode::OK, "反馈已送达。是否公开由作者决定。"),
                 Err(400) => (StatusCode::BAD_REQUEST, "请填写 1–200 字的反馈。"),
                 Err(403) => (StatusCode::FORBIDDEN, "请在作品页面提交反馈。"),
-                Err(429) => (StatusCode::TOO_MANY_REQUESTS, "本次反馈已达上限，或提交过于频繁，请稍后再试。"),
-                Err(_) => (StatusCode::SERVICE_UNAVAILABLE, "反馈未送达，请稍后重试；你的文字仍保留在这里。"),
+                Err(429) => (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    "本次反馈已达上限，或提交过于频繁，请稍后再试。",
+                ),
+                Err(_) => (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "反馈未送达，请稍后重试；你的文字仍保留在这里。",
+                ),
             };
             let mut headers = base_headers();
             put(&mut headers, "cache-control", "no-store");
             if existing_sid.is_none() {
-                append(&mut headers, "set-cookie", &cookie(SESSION_COOKIE, &sid, Some(SESSION_MAX_AGE), app.config.public_scheme == "https", None));
+                append(
+                    &mut headers,
+                    "set-cookie",
+                    &cookie(
+                        SESSION_COOKIE,
+                        &sid,
+                        Some(SESSION_MAX_AGE),
+                        app.config.public_scheme == "https",
+                        None,
+                    ),
+                );
             }
-            if header_str(&parts.headers, "accept").is_some_and(|accept| accept.contains("application/json")) {
-                return (status, headers, axum::Json(serde_json::json!({"ok": result.is_ok(), "message": message}))).into_response();
+            if header_str(&parts.headers, "accept")
+                .is_some_and(|accept| accept.contains("application/json"))
+            {
+                return (
+                    status,
+                    headers,
+                    axum::Json(serde_json::json!({"ok": result.is_ok(), "message": message})),
+                )
+                    .into_response();
             }
             let action = crate::html::esc(parts.uri.path());
             let retry = if result.is_err() {
                 format!("<form method=\"post\" action=\"{action}\"><input type=\"hidden\" name=\"action\" value=\"feedback\"><label>你的反馈<textarea name=\"feedback\" maxlength=\"200\">{}</textarea></label><button type=\"submit\">重新发送</button></form>", crate::html::esc(&text))
-            } else { String::new() };
-            let html = crate::html::shell("作品反馈", "", &format!("<h1>{message}</h1>{retry}<a href=\"{action}#chat-panel\">返回作品</a>"));
+            } else {
+                String::new()
+            };
+            let html = crate::html::shell(
+                "作品反馈",
+                "",
+                &format!("<h1>{message}</h1>{retry}<a href=\"{action}#chat-panel\">返回作品</a>"),
+            );
             return (status, headers, html).into_response();
         }
 
@@ -384,33 +423,58 @@ async fn project_door(
         return (StatusCode::SEE_OTHER, headers).into_response();
     }
 
-    let is_chat_feed = parts.uri.query().is_some_and(|q| q.contains("chat=1") || q.contains("chat_feed=1"));
-    let is_json_accept = header_str(&parts.headers, "accept").is_some_and(|a| a.contains("application/json"));
+    let is_chat_feed = parts
+        .uri
+        .query()
+        .is_some_and(|q| q.contains("chat=1") || q.contains("chat_feed=1"));
+    let is_json_accept =
+        header_str(&parts.headers, "accept").is_some_and(|a| a.contains("application/json"));
     if is_chat_feed || (parts.method == Method::GET && is_json_accept) {
         if is_chat_feed {
             app.live.invalidate(&manifest.slug);
         }
         let live = app.live.get(&manifest.slug).await;
-        let mut messages = live.public_feedback.iter().take(playtest_common::live::PUBLIC_FEEDBACK_ON_GATE).map(|item| {
-            let who = item.name.as_deref().map(str::trim).filter(|n| !n.is_empty()).unwrap_or("A tester");
-            let avatar = playtest_common::avatar::svg_for_seed(who, Some(28), Some("chat-avatar-svg"));
-            let time_str = crate::when::day_time(&item.at).unwrap_or_else(|| "刚刚".to_string());
-            serde_json::json!({
-                "who": who,
-                "text": item.text,
-                "version": item.version,
-                "time": time_str,
-                "avatar": avatar,
+        let mut messages = live
+            .public_feedback
+            .iter()
+            .take(playtest_common::live::PUBLIC_FEEDBACK_ON_GATE)
+            .map(|item| {
+                let who = item
+                    .name
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|n| !n.is_empty())
+                    .unwrap_or("A tester");
+                let avatar =
+                    playtest_common::avatar::svg_for_seed(who, Some(28), Some("chat-avatar-svg"));
+                let time_str =
+                    crate::when::day_time(&item.at).unwrap_or_else(|| "刚刚".to_string());
+                serde_json::json!({
+                    "who": who,
+                    "text": item.text,
+                    "version": item.version,
+                    "time": time_str,
+                    "avatar": avatar,
+                })
             })
-        }).collect::<Vec<_>>();
+            .collect::<Vec<_>>();
         messages.reverse();
         let mut headers = base_headers();
-        put(&mut headers, "cache-control", "no-cache, no-store, must-revalidate");
-        return (StatusCode::OK, headers, axum::Json(serde_json::json!({
-            "ok": true,
-            "count": messages.len(),
-            "messages": messages,
-        }))).into_response();
+        put(
+            &mut headers,
+            "cache-control",
+            "no-cache, no-store, must-revalidate",
+        );
+        return (
+            StatusCode::OK,
+            headers,
+            axum::Json(serde_json::json!({
+                "ok": true,
+                "count": messages.len(),
+                "messages": messages,
+            })),
+        )
+            .into_response();
     }
 
     let live = app.live.get(&manifest.slug).await;
@@ -438,10 +502,7 @@ async fn project_door(
             .and_then(|q| field(q, playtest_common::FROM_PARAM))
             .as_deref(),
     );
-    let collection_slug = parts
-        .uri
-        .query()
-        .and_then(|q| field(q, "collection"));
+    let collection_slug = parts.uri.query().and_then(|q| field(q, "collection"));
     let plaza = app.plaza.get().await;
     let collection_context = crate::discovery::context(&plaza, slug, collection_slug.as_deref());
     let to_path = format!("{}{slug}", root_paths::PROJECT_PREFIX);
@@ -453,13 +514,15 @@ async fn project_door(
         None
     };
 
-    let requested_chapter_id = parts
-        .uri
-        .query()
-        .and_then(|q| field(q, "chapter"));
+    let requested_chapter_id = parts.uri.query().and_then(|q| field(q, "chapter"));
     let (current_chapter, current_chapter_index) = if manifest.is_serial() {
         if let Some(cid) = requested_chapter_id.as_deref() {
-            if let Some((idx, ch)) = manifest.chapters.iter().enumerate().find(|(_, c)| c.id == cid) {
+            if let Some((idx, ch)) = manifest
+                .chapters
+                .iter()
+                .enumerate()
+                .find(|(_, c)| c.id == cid)
+            {
                 (Some(ch), Some(idx))
             } else {
                 (None, None)
@@ -486,7 +549,8 @@ async fn project_door(
                             if content.trim_start().starts_with('<') {
                                 Some(content)
                             } else {
-                                playtest_common::article::render(&content, &chapter.path, &origin).ok()
+                                playtest_common::article::render(&content, &chapter.path, &origin)
+                                    .ok()
                             }
                         } else {
                             None
@@ -872,7 +936,11 @@ async fn confirm(app: &App, authority: &str, token: &str) -> Response {
         &mut headers,
         "set-cookie",
         &cookie(
-            if app.config.public_scheme == "https" { "__Host-pt_session" } else { "pt_session" },
+            if app.config.public_scheme == "https" {
+                "__Host-pt_session"
+            } else {
+                "pt_session"
+            },
             &answer.me_token,
             Some(ME_MAX_AGE),
             app.config.public_scheme == "https",
@@ -909,7 +977,11 @@ async fn unsubscribe(app: &App, authority: &str, token: &str) -> Response {
             response.headers_mut(),
             "set-cookie",
             &cookie(
-                if app.config.public_scheme == "https" { "__Host-pt_session" } else { "pt_session" },
+                if app.config.public_scheme == "https" {
+                    "__Host-pt_session"
+                } else {
+                    "pt_session"
+                },
                 "",
                 Some(0),
                 app.config.public_scheme == "https",
@@ -938,7 +1010,11 @@ fn service_worker(head_only: bool) -> Response {
 fn favicon_svg(head_only: bool) -> Response {
     let mut headers = base_headers();
     put(&mut headers, "content-type", "image/svg+xml");
-    put(&mut headers, "cache-control", "public, max-age=86400, immutable");
+    put(
+        &mut headers,
+        "cache-control",
+        "public, max-age=86400, immutable",
+    );
     put(&mut headers, "access-control-allow-origin", "*");
     put(
         &mut headers,
@@ -955,7 +1031,11 @@ fn favicon_svg(head_only: bool) -> Response {
 fn favicon_ico(head_only: bool) -> Response {
     let mut headers = base_headers();
     put(&mut headers, "content-type", "image/x-icon");
-    put(&mut headers, "cache-control", "public, max-age=86400, immutable");
+    put(
+        &mut headers,
+        "cache-control",
+        "public, max-age=86400, immutable",
+    );
     put(&mut headers, "access-control-allow-origin", "*");
     put(
         &mut headers,

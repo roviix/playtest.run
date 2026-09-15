@@ -69,11 +69,15 @@ pub fn parse(
     let target = field(form::TARGET)
         .as_deref()
         .and_then(FollowTarget::parse)
-        .ok_or(Invalid("This link is incomplete, please go back and try again."))?;
+        .ok_or(Invalid(
+            "This link is incomplete, please go back and try again.",
+        ))?;
     if let Some(slug) = only_slug {
         let mine = matches!(&target, FollowTarget::Site { slug: s } if s == slug);
         if !mine {
-            return Err(Invalid("This link is incomplete, please go back and try again."));
+            return Err(Invalid(
+                "This link is incomplete, please go back and try again.",
+            ));
         }
     }
 
@@ -81,15 +85,18 @@ pub fn parse(
     let push = field(form::PUSH);
     // 浏览器已经问过用户了，所以推送订阅优先：同一个人可能既有 `pt_me` 又刚点开通知。
     let channel = if let Some(raw) = push {
-        let subscription: PushSubscription = serde_json::from_str(&raw)
-            .map_err(|_| Invalid("Browser notifications could not be enabled, try email instead."))?;
+        let subscription: PushSubscription = serde_json::from_str(&raw).map_err(|_| {
+            Invalid("Browser notifications could not be enabled, try email instead.")
+        })?;
         FollowChannel::Push { subscription }
     } else if let Some(token) = me_token {
         FollowChannel::Me {
             me_token: token.to_string(),
         }
     } else {
-        let email = email.clone().ok_or(Invalid("Please enter an email address."))?;
+        let email = email
+            .clone()
+            .ok_or(Invalid("Please enter an email address."))?;
         if !looks_like_email(&email) {
             return Err(Invalid("Please check your email address."));
         }
@@ -145,8 +152,19 @@ pub async fn confirm(api_base: Option<&str>, token: &str) -> Option<ConfirmRespo
 }
 
 pub async fn preview(api_base: Option<&str>, token: &str) -> Option<String> {
-    match post::<_,serde_json::Value>(api_base,routes::PREVIEW,&ConfirmRequest { token:token.to_string() }).await {
-        Call::Ok(value) => value.get("email").and_then(|email|email.as_str()).map(str::to_string),
+    match post::<_, serde_json::Value>(
+        api_base,
+        routes::PREVIEW,
+        &ConfirmRequest {
+            token: token.to_string(),
+        },
+    )
+    .await
+    {
+        Call::Ok(value) => value
+            .get("email")
+            .and_then(|email| email.as_str())
+            .map(str::to_string),
         _ => None,
     }
 }
@@ -194,7 +212,12 @@ pub async fn push_off(api_base: Option<&str>, me_token: &str) -> Mine {
 }
 
 /// 门禁页即时提交一句话体验反馈。
-pub async fn submit_feedback(api_base: Option<&str>, slug: &str, session: &str, text: &str) -> Result<(), u16> {
+pub async fn submit_feedback(
+    api_base: Option<&str>,
+    slug: &str,
+    session: &str,
+    text: &str,
+) -> Result<(), u16> {
     let req = playtest_common::ingest::FeedbackRequest {
         session: session.to_string(),
         slug: slug.to_string(),
@@ -203,11 +226,12 @@ pub async fn submit_feedback(api_base: Option<&str>, slug: &str, session: &str, 
         source: Some("gate".to_string()),
     };
     match post::<_, playtest_common::ingest::FeedbackAccepted>(
-            api_base,
-            playtest_common::ingest::routes::FEEDBACK,
-            &req,
-        )
-        .await {
+        api_base,
+        playtest_common::ingest::routes::FEEDBACK,
+        &req,
+    )
+    .await
+    {
         Call::Ok(_) => Ok(()),
         Call::Rejected(status) => Err(status),
         Call::Unavailable => Err(503),
@@ -304,9 +328,11 @@ pub fn result_page(outcome: &Outcome, sub: &Submission, back: &str) -> (StatusCo
             "You are all set! We will notify you when a new version is released.".to_string(),
             "",
         ),
-        Outcome::Answered(FollowResponse::AlreadyFollowing) => {
-            (StatusCode::OK, "You are already following this.".to_string(), "")
-        }
+        Outcome::Answered(FollowResponse::AlreadyFollowing) => (
+            StatusCode::OK,
+            "You are already following this.".to_string(),
+            "",
+        ),
         // 503 是给机器看的（页面上那个按钮据此知道自己没成），玩家看到的仍是一句人话。
         Outcome::Unavailable => (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -351,7 +377,11 @@ aria-label=\"Your email\"><button type=\"submit\">Send another link</button></fo
 /// 退订。一句话说完，不问为什么，也不放「再想想」——那是挽留，不是尊重。
 pub fn unsubscribed_page(done: bool) -> String {
     if !done {
-        return one_liner("Unable to unsubscribe right now. Please try again later.", "", "/");
+        return one_liner(
+            "Unable to unsubscribe right now. Please try again later.",
+            "",
+            "/",
+        );
     }
     let body = "<h1>Unsubscribed. You will not receive any more notifications.</h1>\n\
 <p class=\"meta\"><a href=\"/\">Explore projects</a></p>\n";
@@ -460,7 +490,11 @@ pub fn push_button(caps: &Capabilities, target: &FollowTarget, already: bool, ro
 data-target=\"{target}\">{label}</button>",
         key = esc(key),
         target = esc(&target.form_value()),
-        label = if row { "Enable" } else { "Browser notifications" },
+        label = if row {
+            "Enable"
+        } else {
+            "Browser notifications"
+        },
     )
 }
 
@@ -590,7 +624,7 @@ fn weekly_settings(view: Option<&MeView>, caps: &Capabilities) -> String {
             .and_then(|v| v.email_masked.as_deref())
             .unwrap_or("your email");
         let change_link = if caps.email {
-            format!("<a class=\"notice-switch-link\" href=\"#follow-login\" data-dialog=\"follow-login\">Change email</a>")
+            "<a class=\"notice-switch-link\" href=\"#follow-login\" data-dialog=\"follow-login\">Change email</a>".to_string()
         } else {
             String::new()
         };
@@ -826,7 +860,9 @@ mod tests {
         assert!(!html.contains("zhong@example.com"));
 
         let (_, html) = result_page(&Outcome::Answered(FollowResponse::Subscribed), &sub, "/");
-        assert!(html.contains("You are all set! We will notify you when a new version is released."));
+        assert!(
+            html.contains("You are all set! We will notify you when a new version is released.")
+        );
         let (_, html) = result_page(
             &Outcome::Answered(FollowResponse::AlreadyFollowing),
             &sub,

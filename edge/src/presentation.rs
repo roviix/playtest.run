@@ -14,7 +14,11 @@ pub fn article_view(source: &str, title: &str) -> ArticleView {
     let mut counts = BTreeMap::new();
     let mut first_heading = true;
     while let Some((offset, level)) = (1..=6)
-        .filter_map(|level| remaining.find(&format!("<h{level}>")).map(|offset| (offset, level)))
+        .filter_map(|level| {
+            remaining
+                .find(&format!("<h{level}>"))
+                .map(|offset| (offset, level))
+        })
         .min()
     {
         let closing = format!("</h{level}>");
@@ -151,17 +155,29 @@ mod tests {
 
     #[test]
     fn heading_ids_are_deterministic_and_clean() {
-        let view = article_view("<h1>雨<strong>夜</strong></h1><p>正文</p><h2>雨夜</h2>", "雨夜");
+        let view = article_view(
+            "<h1>雨<strong>夜</strong></h1><p>正文</p><h2>雨夜</h2>",
+            "雨夜",
+        );
         assert!(view.body.contains("<p>正文</p>"));
         assert!(view.contents.contains("雨夜</a>"));
-        assert!(article_view("<h1>另一个标题</h1>", "雨夜").body.contains("<h1 id="));
+        assert!(article_view("<h1>另一个标题</h1>", "雨夜")
+            .body
+            .contains("<h1 id="));
     }
 
     #[test]
     fn section_links_are_stable_unique_and_escaped() {
         let first = article_view("<h2>A &amp; B</h2><h2>A &amp; B</h2>", "文章");
         let second = article_view("<h2>新增小节</h2><h2>A &amp; B</h2>", "文章");
-        let anchor = first.body.split("id=\"").nth(1).unwrap().split('"').next().unwrap();
+        let anchor = first
+            .body
+            .split("id=\"")
+            .nth(1)
+            .unwrap()
+            .split('"')
+            .next()
+            .unwrap();
         assert!(second.body.contains(anchor));
         assert_eq!(first.body.matches(anchor).count(), 1);
         assert!(first.contents.contains("A &amp; B</a>"));
@@ -170,7 +186,10 @@ mod tests {
 
     #[test]
     fn code_blocks_are_never_treated_as_headings() {
-        let view = article_view("<p>完整正文</p><pre>&lt;h2&gt;代码&lt;/h2&gt;</pre>", "文章");
+        let view = article_view(
+            "<p>完整正文</p><pre>&lt;h2&gt;代码&lt;/h2&gt;</pre>",
+            "文章",
+        );
         assert!(view.body.contains("完整正文"));
         assert!(view.contents.is_empty());
     }

@@ -217,7 +217,9 @@ async fn a_navigation_gets_a_page_a_subresource_gets_nothing() {
     );
     assert_eq!(page.header("cache-control"), Some("no-store"));
     assert!(page.header("retry-after").is_some());
-    assert!(page.text().contains("Hourly traffic limit reached for this project"));
+    assert!(page
+        .text()
+        .contains("Hourly traffic limit reached for this project"));
     assert!(!page.text().contains(playtest_common::DEVELOPER_HOST));
 
     // 子资源：状态码就是全部。**一个字节的 HTML 都不给**——和门禁页同一条硬线，

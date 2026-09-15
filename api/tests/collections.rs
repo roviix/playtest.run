@@ -252,7 +252,15 @@ async fn challenge_accepts_only_owned_public_long_lived_uploads() {
             StatusCode::NOT_FOUND,
         )
         .await;
-    harness.call("POST", "/v1/collections/pelican/entries", &author, json!({"slug":slug,"note":"<script>alert(1)</script>"}), StatusCode::OK).await;
+    harness
+        .call(
+            "POST",
+            "/v1/collections/pelican/entries",
+            &author,
+            json!({"slug":slug,"note":"<script>alert(1)</script>"}),
+            StatusCode::OK,
+        )
+        .await;
     let result = harness
         .call(
             "POST",

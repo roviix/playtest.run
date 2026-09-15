@@ -442,7 +442,11 @@ fn rewrite_location(headers: &mut HeaderMap, player: &Player<'_>, local_port: u1
     let is_localhost = host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1";
     let port = auth
         .port_u16()
-        .unwrap_or(if scheme.eq_ignore_ascii_case("https") { 443 } else { 80 });
+        .unwrap_or(if scheme.eq_ignore_ascii_case("https") {
+            443
+        } else {
+            80
+        });
     let is_local_port = port == local_port || (auth.port_u16().is_none() && local_port == 80);
 
     if is_localhost && is_local_port {
@@ -455,7 +459,10 @@ fn rewrite_location(headers: &mut HeaderMap, player: &Player<'_>, local_port: u1
         } else {
             format!("/{remainder}")
         };
-        let new_loc = format!("{}://{}{path_and_query}", player.public_scheme, player.authority);
+        let new_loc = format!(
+            "{}://{}{path_and_query}",
+            player.public_scheme, player.authority
+        );
         put(headers, header::LOCATION.as_str(), &new_loc);
     }
 }

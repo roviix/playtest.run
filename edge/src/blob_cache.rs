@@ -337,7 +337,10 @@ mod tests {
         let body = cache.stream_and_cache(hash, expected_size, stream);
 
         let collected = body.collect().await.unwrap().to_bytes();
-        assert_eq!(collected, Bytes::from_static(b"part 1: part 2: part 3 done."));
+        assert_eq!(
+            collected,
+            Bytes::from_static(b"part 1: part 2: part 3 done.")
+        );
 
         // 等待异步落盘完成
         tokio::time::sleep(Duration::from_millis(50)).await;

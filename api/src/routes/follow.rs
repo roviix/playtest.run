@@ -252,11 +252,14 @@ pub async fn confirm(
     Ok(Json(ConfirmResponse { me_token, me }))
 }
 
-pub async fn preview(State(state): State<AppState>, JsonBody(request): JsonBody<ConfirmRequest>) -> ApiResult<Json<serde_json::Value>> {
+pub async fn preview(
+    State(state): State<AppState>,
+    JsonBody(request): JsonBody<ConfirmRequest>,
+) -> ApiResult<Json<serde_json::Value>> {
     use rusqlite::OptionalExtension;
     let conn = state.db().read().await;
     let email: Option<String> = conn.query_row("SELECT p.email FROM follow_tokens t JOIN players p ON p.id=t.player_id WHERE t.token_hash=?1 AND t.used_at IS NULL AND t.expires_at>?2",rusqlite::params![hash::hash_bytes(request.token.as_bytes()),clock::now_string()],|row|row.get(0)).optional()?;
-    let email = email.ok_or_else(||ApiError::not_found(BAD_CONFIRM))?;
+    let email = email.ok_or_else(|| ApiError::not_found(BAD_CONFIRM))?;
     Ok(Json(serde_json::json!({"email":mask_email(&email)})))
 }
 
@@ -390,7 +393,13 @@ fn new_token() -> String {
 fn player_by_me_token(conn: &Connection, me_token: &str) -> ApiResult<db::PlayerRow> {
     let player = if let Some(identity) = crate::account::session_owner(conn, me_token)? {
         use rusqlite::OptionalExtension;
-        let player_id: Option<String> = conn.query_row("SELECT id FROM players WHERE user_id=?1", rusqlite::params![identity.user_id], |row| row.get(0)).optional()?;
+        let player_id: Option<String> = conn
+            .query_row(
+                "SELECT id FROM players WHERE user_id=?1",
+                rusqlite::params![identity.user_id],
+                |row| row.get(0),
+            )
+            .optional()?;
         player_id.and_then(|id| db::find_player(conn, &id).ok().flatten())
     } else {
         db::find_player_by_me_token(conn, &hash::hash_bytes(me_token.trim().as_bytes()))?

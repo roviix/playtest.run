@@ -72,12 +72,20 @@ pub async fn web_exchange(
             ("code", request.code.as_str()),
             ("redirect_uri", gh.console_url.as_str()),
         ],
-    ).await?;
-    state.http().get(format!("{}/user", gh.api_base))
+    )
+    .await?;
+    state
+        .http()
+        .get(format!("{}/user", gh.api_base))
         .bearer_auth(access_token)
         .header("Accept", "application/vnd.github+json")
-        .send().await.and_then(|response| response.error_for_status())
-        .map_err(github_unreachable)?.json().await.map_err(github_unreachable)
+        .send()
+        .await
+        .and_then(|response| response.error_for_status())
+        .map_err(github_unreachable)?
+        .json()
+        .await
+        .map_err(github_unreachable)
 }
 
 #[derive(Deserialize)]
@@ -136,7 +144,9 @@ async fn access_token(
         return Ok(token);
     }
     tracing::warn!(error = ?body.error, description = ?body.error_description, "GitHub 拒绝授权码");
-    Err(ApiError::login_failed("GitHub 授权未完成或已过期，请重新登录。"))
+    Err(ApiError::login_failed(
+        "GitHub 授权未完成或已过期，请重新登录。",
+    ))
 }
 
 fn github_unreachable(err: reqwest::Error) -> ApiError {
