@@ -30,11 +30,11 @@ if [ -z "$VERSION" ]; then
     fi
   fi
   if [ -z "$VERSION" ]; then
-    VERSION="v0.4.0"
+    VERSION="v0.4.1"
   fi
 fi
 
-[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]] || fail 'could not determine a release version. Pass one explicitly, e.g. PLAYTEST_VERSION=v0.4.0 bash install.sh'
+[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]] || fail 'could not determine a release version. Pass one explicitly, e.g. PLAYTEST_VERSION=v0.4.1 bash install.sh'
 [[ "$DESTINATION" = /* ]] || fail 'the install directory must be an absolute path.'
 for tool in uname tar mktemp; do command -v "$tool" >/dev/null || fail "$tool is required but not installed."; done
 
