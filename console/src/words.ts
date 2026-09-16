@@ -4,7 +4,7 @@
 // 手机上要短、`--json` 要原始数字、`playtest mcp` 要另一种说法。措辞钉在服务端的话，
 // 每一处都得先把句子拆回数字。规则集中在这个文件，改文案只改这里。
 
-import type { SourceTally, VersionResults, WorkKind } from "./api";
+import type { VersionResults, WorkKind } from "./api";
 
 export function workKind(kind: WorkKind | undefined): string {
   if (kind === "article") return "Article";
@@ -12,10 +12,11 @@ export function workKind(kind: WorkKind | undefined): string {
   return "Web";
 }
 
+/** 没留名字的人在反馈里叫什么：「A playtester」「A reader」「A viewer」。 */
 export function audience(kind: WorkKind | undefined): string {
-  if (kind === "article") return "Readers";
-  if (kind === "video") return "Viewers";
-  return "Playtesters";
+  if (kind === "article") return "A reader";
+  if (kind === "video") return "A viewer";
+  return "A playtester";
 }
 
 /** Seconds → human words. "45s", "3m 20s", "1h 2m". */
@@ -93,128 +94,79 @@ export function bytes(value: number): string {
   return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-export function sentences(version: VersionResults, kind: WorkKind | undefined = "web"): string[] {
-  if (version.opened === 0) {
-    return ["No visits yet."];
-  }
+/** 截断字符串，按 Unicode 字符数算。 */
+export function clip(text: string, max: number): string {
+  const chars = Array.from(text);
+  return chars.length > max ? `${chars.slice(0, max).join("")}…` : text;
+}
 
-  const lines: string[] = [];
-  const dropped = version.dropped_before_first_frame;
-  if (kind === "article") {
-    lines.push(`${version.opened} visited the article. Visiting does not imply full read.`);
-  } else if (kind === "video") {
-    lines.push(`${version.opened} visited the video page. Opening page is not counted as full play.`);
-  } else if (dropped === null || dropped === undefined) {
-    lines.push(`${version.opened} opened, ${version.entered} clicked start.`);
-    lines.push("playtest.js not integrated; unable to track drop-offs during load.");
-  } else {
-    const reached = Math.max(version.entered - dropped, 0);
-    lines.push(
-      dropped > 0
-        ? `${version.opened} opened, ${reached} entered, ${dropped} dropped off during load.`
-        : `${version.opened} opened, ${reached} entered.`,
-    );
-  }
+/** 事实行里的一项：一个数加一个词（`4 left name`），或者只有词（一条堆栈指纹）。 */
+export type FactItem = {
+  n?: number | string;
+  text: string;
+  /** 等宽排：堆栈指纹这种要逐字看的。 */
+  code?: boolean;
+};
 
-  const stayed: string[] = [];
-  if ((version.named ?? 0) > 0) stayed.push(`${version.named} left name`);
-  if (kind === "web" && (version.played_5min_plus ?? 0) > 0) stayed.push(`${version.played_5min_plus} played 5m+`);
-  if ((version.returned ?? 0) > 0) stayed.push(`${version.returned} returned`);
+export type Fact = {
+  label: string;
+  items: FactItem[];
+  tone?: "warn" | "plain";
+  /** 上一版的数，只在变了的时候给；数字旁边的差是好事，这里的差多半是坏事，所以写「was 0」。 */
+  was?: number;
+};
+
+/**
+ * 每版那段话，排成带标签的事实行（DESIGN §3.13）。
+ * 打开 / 进到 / 5 分钟 / 反馈头上已经排大了，掉在加载里的那几个挂在数字下面，这里都不再说。
+ * 0 的行不出现；`opened === 0` 时一行也没有，由调用方说「还没人来」。
+ */
+export function facts(version: VersionResults, kind: WorkKind | undefined = "web", previous?: VersionResults): Fact[] {
+  if (version.opened === 0) return [];
+  const rows: Fact[] = [];
+
+  const stayed: FactItem[] = [];
+  if ((version.named ?? 0) > 0) stayed.push({ n: version.named, text: "left name" });
+  if (kind !== "article" && kind !== "video" && (version.returned ?? 0) > 0) {
+    stayed.push({ n: version.returned, text: "returned" });
+  }
   if (version.dwell_median_s !== null && version.dwell_median_s !== undefined) {
-    stayed.push(`median dwell ${seconds(version.dwell_median_s)}`);
+    stayed.push({ n: seconds(version.dwell_median_s), text: "median dwell" });
   }
-  if (stayed.length > 0) lines.push(`${stayed.join(", ")}.`);
+  if (stayed.length > 0) rows.push({ label: "Stayed", items: stayed });
 
-  const from = sources(version.sources);
-  if (from) lines.push(from);
+  const from = (version.sources ?? []).filter((one) => one.count > 0);
+  if (from.length > 0) {
+    rows.push({ label: "From", items: from.map((one) => ({ n: one.count, text: sourceLabel(one.kind) })) });
+  }
 
   const errors = version.errors;
   if (errors.total > 0) {
-    const counted =
-      errors.distinct === 1 ? `1 error occurred ${errors.total} times` : `${errors.distinct} errors, ${errors.total} total`;
-    const worst = errors.top?.[0]?.fingerprint;
-    lines.push(worst ? `${counted}: ${worst}` : `${counted}.`);
+    // 只有一种错误时，「1 distinct」和下面那条指纹说的是同一件事，省掉。
+    const items: FactItem[] = [{ n: errors.total, text: errors.total === 1 ? "hit" : "hits" }];
+    if (errors.distinct > 1) items.push({ n: errors.distinct, text: "distinct" });
+    for (const one of errors.top ?? []) items.push({ n: `×${one.count}`, text: one.fingerprint, code: true });
+    rows.push({ label: "Errors", items, tone: "warn", was: changed(errors.total, previous?.errors.total) });
+  } else if (previous && previous.errors.total > 0) {
+    rows.push({ label: "Errors", items: [{ n: 0, text: "hits" }], was: previous.errors.total });
   }
 
-  if (version.load_failures > 0) lines.push(`${version.load_failures} load failure${version.load_failures > 1 ? "s" : ""}.`);
-  if (version.feedback_count > 0) lines.push(`${version.feedback_count} feedback item${version.feedback_count > 1 ? "s" : ""}.`);
+  if (version.load_failures > 0) {
+    rows.push({
+      label: "Load failed",
+      items: [{ n: version.load_failures, text: version.load_failures === 1 ? "resource" : "resources" }],
+      tone: "warn",
+      was: changed(version.load_failures, previous?.load_failures),
+    });
+  } else if (previous && previous.load_failures > 0) {
+    rows.push({ label: "Load failed", items: [{ n: 0, text: "resources" }], was: previous.load_failures });
+  }
 
-  return lines;
+  return rows;
 }
 
-function sources(tally: SourceTally[] | undefined): string | null {
-  const counted = (tally ?? []).filter((one) => one.count > 0);
-  if (counted.length === 0) return null;
-  return `From ${counted.map((one) => `${sourceLabel(one.kind)} ${one.count}`).join(" · ")}`;
-}
-
-export type VersusDelta = {
-  label: string;
-  kind: "better" | "worse" | "neutral";
-};
-
-export function versusDeltas(version: VersionResults, previous: VersionResults): {
-  previousVersion: number;
-  deltas: VersusDelta[];
-} | null {
-  const deltas: VersusDelta[] = [];
-
-  const opened = version.opened - previous.opened;
-  if (opened !== 0) {
-    deltas.push({
-      label: `opened ${opened > 0 ? "+" : "−"}${Math.abs(opened)}`,
-      kind: opened > 0 ? "better" : "neutral",
-    });
-  }
-
-  const entered = version.entered - previous.entered;
-  if (entered !== 0) {
-    deltas.push({
-      label: `entered ${entered > 0 ? "+" : "−"}${Math.abs(entered)}`,
-      kind: entered > 0 ? "better" : "neutral",
-    });
-  }
-
-  if (version.played_5min_plus !== previous.played_5min_plus) {
-    const playDiff = version.played_5min_plus - previous.played_5min_plus;
-    deltas.push({
-      label: `5m+ play ${playDiff > 0 ? "+" : "−"}${Math.abs(playDiff)}`,
-      kind: playDiff > 0 ? "better" : "neutral",
-    });
-  }
-
-  if (version.load_failures !== previous.load_failures) {
-    const worse = version.load_failures > previous.load_failures;
-    deltas.push({
-      label: `load failures ${previous.load_failures} → ${version.load_failures}`,
-      kind: worse ? "worse" : "better",
-    });
-  }
-
-  if (version.errors.total !== previous.errors.total) {
-    const worse = version.errors.total > previous.errors.total;
-    deltas.push({
-      label: `errors ${previous.errors.total} → ${version.errors.total}`,
-      kind: worse ? "worse" : "better",
-    });
-  }
-
-  if (version.feedback_count !== previous.feedback_count) {
-    const fbDiff = version.feedback_count - previous.feedback_count;
-    deltas.push({
-      label: `feedback ${previous.feedback_count} → ${version.feedback_count}`,
-      kind: fbDiff > 0 ? "better" : "neutral",
-    });
-  }
-
-  if (deltas.length === 0) return null;
-  return { previousVersion: previous.version, deltas };
-}
-
-export function versus(version: VersionResults, previous: VersionResults): string | null {
-  const res = versusDeltas(version, previous);
-  if (!res) return null;
-  return `vs v${res.previousVersion}: ${res.deltas.map((d) => d.label).join(", ")}`;
+function changed(now: number, before: number | undefined): number | undefined {
+  return before !== undefined && before !== now ? before : undefined;
 }
 
 const NAMES: Record<string, string> = {

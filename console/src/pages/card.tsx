@@ -22,8 +22,8 @@ export function CardTab({ site }: { site: Site }) {
             <polyline points="21 15 16 10 5 21" />
           </svg>
         }
-        title="Invite cards ready upon publish"
-        description="High-resolution portrait and landscape sharing cards will generate automatically once you deploy your first version."
+        title="No card yet"
+        description="Cards are drawn from the first published version."
       />
     );
   }
@@ -54,8 +54,8 @@ export function CardTab({ site }: { site: Site }) {
   return (
     <div class="cards-page">
       <div class="cards-row">
-        <CardImage src={tall} ratio="1080 / 1350" caption="Portrait · For chats & social" />
-        <CardImage src={wide} ratio="1200 / 630" caption="Landscape · Link preview" />
+        <CardImage src={tall} ratio="1080 / 1350" caption="Portrait · chats" />
+        <CardImage src={wide} ratio="1200 / 630" caption="Landscape · link preview" />
       </div>
       <p class="row-actions">
         <a class="button" href={tall} target="_blank" rel="noreferrer">
@@ -73,7 +73,7 @@ export function CardTab({ site }: { site: Site }) {
           </button>
         ) : null}
       </p>
-      <p class="muted">Right-click or long-press to save image. Cards update with each version.</p>
+      <p class="muted">Right-click or long-press to save. Cards follow the current version.</p>
     </div>
   );
 }
@@ -84,7 +84,7 @@ function CardImage({ src, ratio, caption }: { src: string; ratio: string; captio
     <figure class="card-figure">
       {broken ? (
         <div class="card-image missing" style={`aspect-ratio:${ratio}`}>
-          <p class="muted">Rendering. Refresh shortly.</p>
+          <p class="muted">Not ready yet. Refresh later.</p>
         </div>
       ) : (
         <img

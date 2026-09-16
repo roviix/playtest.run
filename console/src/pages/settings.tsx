@@ -121,10 +121,7 @@ function WorkDetails({
   }
 
   return (
-    <Block
-      title="Basics"
-      lead="Project title and one-line summary. Changes show up on the door page and the Plaza card right away."
-    >
+    <Block title="Basics">
       <form class="work-meta-form" onSubmit={submit}>
         <div class="field-grid">
           <label class="field">
@@ -142,7 +139,7 @@ function WorkDetails({
             <input
               value={summary}
               maxLength={140}
-              placeholder="One line about this project, shown on Plaza and the invite card"
+              placeholder="One line, shown on the card and on Plaza"
               onInput={(event) => setSummary((event.target as HTMLInputElement).value)}
             />
           </label>
@@ -152,9 +149,7 @@ function WorkDetails({
           <div class="cover-status-badge">
             <span class={`now-dot ${site.listing?.has_cover ? "" : "idle"}`} aria-hidden="true" />
             <span class="muted">
-              {site.listing?.has_cover
-                ? "Cover image set · replace it with playtest ./dist --cover <file>"
-                : "No cover image yet, a monogram card is used instead · add one with playtest ./dist --cover <file>"}
+              {site.listing?.has_cover ? "Cover set" : "No cover, monogram used"} · <code>playtest ./dist --cover &lt;file&gt;</code>
             </span>
           </div>
           <div class="meta-action">
@@ -193,16 +188,16 @@ function Plaza({
 
   if (!canPublish) {
     return (
-      <Block title="Plaza" lead="Available for Plaza listing after uploading your first version." />
+      <Block title="Plaza" lead="Available after the first version." />
     );
   }
 
   if (!listing.public) {
     return (
-      <Block title="Plaza" lead="Unlisted. Only people with the link can play.">
+      <Block title="Plaza" lead="Unlisted · link only.">
         <p class="row-actions">
           <button class="button" type="button" disabled={busy} onClick={() => onChange({ public: true })}>
-            Publish to Plaza
+            List on Plaza
           </button>
           <button
             class="button primary"
@@ -210,7 +205,7 @@ function Plaza({
             disabled={busy}
             onClick={() => onChange({ public: true, seeking: true })}
           >
-            List to Recruit
+            List & Recruit
           </button>
           <a class="muted" href={plazaUrl} target="_blank" rel="noreferrer">
             Plaza ↗
@@ -225,8 +220,8 @@ function Plaza({
       title="Plaza"
       lead={
         listing.hidden
-          ? "Multiple reports received, removed from Plaza pending review. Direct link still works."
-          : `Listed on Plaza${listing.seeking ? ", recruiting playtesters" : ""}.`
+          ? "Removed from Plaza after reports · link still works."
+          : `On Plaza${listing.seeking ? " · recruiting" : ""}.`
       }
     >
       {listing.seeking ? (
@@ -296,10 +291,10 @@ function Seats({ listing, busy, onChange }: { listing: Listing; busy: boolean; o
       title="Seats"
       lead={
         listing.seats
-          ? `Seeking ${listing.seats} playtesters, ${listing.joined ?? 0} joined so far.`
+          ? `${listing.seats} seats · ${listing.joined ?? 0} joined.`
           : (listing.joined ?? 0) > 0
-            ? `No seat limit. ${listing.joined} joined so far.`
-            : "No seat limit."
+            ? `No limit · ${listing.joined} joined.`
+            : "No limit."
       }
     >
       <form class="field-row" onSubmit={save}>
@@ -334,7 +329,7 @@ function Seats({ listing, busy, onChange }: { listing: Listing; busy: boolean; o
         ) : null}
       </form>
       {wrong ? <p class="notice">{wrong}</p> : null}
-      <p class="muted">Leaving a name counts as joined. Playable even when full.</p>
+      <p class="muted">A name left counts as joined. Full does not block play.</p>
     </Block>
   );
 }
@@ -357,7 +352,7 @@ function Community({ listing, busy, onChange }: { listing: Listing; busy: boolea
   }
 
   return (
-    <Block title="Community" lead="Shown on the Door page and after leaving feedback. Any valid URL accepted.">
+    <Block title="Community" lead="Shown on the door page and after feedback.">
       <form class="field-row" onSubmit={save}>
         <label class="field grow">
           <span>URL</span>
@@ -398,7 +393,7 @@ function PublicFeedback({ listing, busy, onChange }: { listing: Listing; busy: b
   return (
     <Block
       title="Public Feedback"
-      lead={listing.feedback_public ? "Enabled. Door page displays the 3 latest entries with author names." : "Disabled. Only you can view feedback."}
+      lead={listing.feedback_public ? "On · the door page shows the 3 latest." : "Off."}
     >
       <p class="row-actions">
         <button
@@ -407,7 +402,7 @@ function PublicFeedback({ listing, busy, onChange }: { listing: Listing; busy: b
           disabled={busy}
           onClick={() => onChange({ feedback_public: !listing.feedback_public })}
         >
-          {listing.feedback_public ? "Disable" : "Enable"}
+          {listing.feedback_public ? "Turn off" : "Turn on"}
         </button>
       </p>
     </Block>
@@ -427,7 +422,7 @@ function BoostSection({ boost }: { boost?: Boost }) {
     <Block
       title="Boost"
       lead={
-        boost ? "Not open for purchase yet. Managed by platform operators." : "Coming soon. Featured placement at top of Plaza with a 'Boosted' badge."
+        "Not open yet."
       }
     >
       {boost ? <BoostState boost={boost} /> : null}
@@ -441,25 +436,25 @@ function BoostState({ boost }: { boost: Boost }) {
     case "pending":
       return (
         <p>
-          <span class="chip">{kind}</span> scheduled for {day(boost.starts_at)}, manual review before going live.
+          <span class="chip">{kind}</span> from {day(boost.starts_at)} · pending review.
         </p>
       );
     case "live":
       return (
         <p>
-          <span class="chip">{kind}</span> active{boost.ends_at ? `, until ${day(boost.ends_at)}` : ""}.
+          <span class="chip">{kind}</span> live{boost.ends_at ? ` · until ${day(boost.ends_at)}` : ""}.
         </p>
       );
     case "ended":
       return (
         <p class="muted">
-          {kind} ended{boost.ends_at ? `, ${day(boost.ends_at)}` : ""}.
+          {kind} ended{boost.ends_at ? ` ${day(boost.ends_at)}` : ""}.
         </p>
       );
     case "rejected":
       return (
-        <p class="says warn">
-          {kind} rejected{boost.reason ? `: ${boost.reason}` : ""}. Full refund issued.
+        <p class="notice">
+          {kind} rejected{boost.reason ? `: ${boost.reason}` : ""}. Refunded.
         </p>
       );
   }
@@ -488,7 +483,7 @@ function Versions({ site, onVersionsChanged }: { site: Site; onVersionsChanged: 
   }
 
   return (
-    <Block title="Versions" lead="Every upload creates a new version. Past versions are preserved. Rollback keeps the same link.">
+    <Block title="Versions">
       {loading ? <Loading /> : null}
       {error ? <Failed error={error} onRetry={reload} /> : null}
       {problem ? <p class="notice">{problem}</p> : null}
@@ -547,7 +542,7 @@ function Danger({ site }: { site: Site }) {
       <div class="block-head">
         <h2>Delete Project</h2>
         <p class="muted">
-          The link will become invalid immediately. Versions, roster, and feedback will be permanently deleted. This cannot be undone.
+          Removes the link, all versions, roster and feedback. No undo.
         </p>
       </div>
       <form class="field-row" onSubmit={remove}>

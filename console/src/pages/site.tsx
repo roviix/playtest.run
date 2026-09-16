@@ -10,7 +10,7 @@ import { useEffect, useState } from "preact/hooks";
 import { api, doorUrl, type FeedbackItem, type Site, type SiteResults, type VersionResults } from "../api";
 import { useLoad, type Loaded } from "../load";
 import { href, type Tab } from "../router";
-import { ago, left, moment, workKind } from "../words";
+import { ago, clip, left, moment, workKind } from "../words";
 import { CardTab } from "./card";
 import { Cover } from "./cover";
 import { FeedbackTab } from "./feedback";
@@ -203,7 +203,7 @@ function Now({ site, results }: { site: Site; results: Loaded<SiteResults> }) {
     return (
       <p class="now muted" role="status">
         <span class="now-dot idle" aria-hidden="true" />
-        Loading recent activity…
+        Loading…
       </p>
     );
   }
@@ -211,7 +211,7 @@ function Now({ site, results }: { site: Site; results: Loaded<SiteResults> }) {
     return (
       <p class="now muted">
         <span class="now-dot idle" aria-hidden="true" />
-        Recent activity temporarily unavailable.
+        Activity unavailable.
         <button class="button small" onClick={() => { sessions.reload(); feedback.reload(); results.reload(); }}>Retry</button>
       </p>
     );
@@ -226,65 +226,59 @@ function Now({ site, results }: { site: Site; results: Loaded<SiteResults> }) {
   const hasErrors = (version?.errors.total ?? 0) > 0;
   const isLive = recent > 0;
   const dotState = hasErrors ? "warn" : isLive ? "live" : "idle";
-  const containerClass = `now ${hasErrors ? "has-warn" : isLive ? "has-live" : ""}`.trim();
 
-  const bits: JSX.Element[] = [];
+  let activityNode: JSX.Element;
   if (recent > 0) {
-    bits.push(
-      <span key="recent" class="now-lead">
+    activityNode = (
+      <span class="now-activity">
         <b>{recent}</b> {recent === 1 ? "visitor" : "visitors"} in the last hour
-      </span>,
+      </span>
     );
   } else if (rows.length > 0) {
-    bits.push(<span key="last">Last opened {moment(rows[0].at)}</span>);
+    activityNode = <span class="now-activity">Last opened {moment(rows[0].at)}</span>;
   } else if (version && version.opened > 0) {
-    bits.push(<span key="last">{version.last_at ? `Last opened ${moment(version.last_at)}` : `${version.opened} visitors on v${current}`}</span>);
+    activityNode = (
+      <span class="now-activity">
+        {version.last_at ? `Last opened ${moment(version.last_at)}` : `${version.opened} visitors on v${current}`}
+      </span>
+    );
   } else {
     return (
-      <p class="now muted">
+      <div class="now idle">
         <span class="now-dot idle" aria-hidden="true" />
-        No visits on v{current} yet. Share the door link to invite first testers.
-      </p>
+        <span class="now-activity muted">No visits on v{current} yet.</span>
+      </div>
     );
   }
 
-  if (latest) {
-    bits.push(
-      <span key="fb">
-        Latest feedback {ago(latest.ts)}: "{clip(latest.text, 24)}"
-      </span>,
-    );
-  }
-
-  if (version && version.errors.total > 0) {
-    const topError = version.errors.top?.[0]?.fingerprint;
-    const errorSnippet = topError ? ` (${clip(topError, 28)})` : "";
-    bits.push(
-      <span key="err" class="now-warn">
-        ⚠️ {version.errors.total} {version.errors.total === 1 ? "error" : "errors"}{errorSnippet}
-      </span>,
-    );
-  }
+  const topError = version?.errors.top?.[0]?.fingerprint;
 
   return (
-    <p class={containerClass}>
-      <span class={`now-dot ${dotState}`} aria-hidden="true" />
-      {bits.map((bit, index) => (
-        <span key={index} class="now-bit">
-          {index > 0 ? <span class="now-sep"> · </span> : null}
-          {bit}
-        </span>
-      ))}
-    </p>
+    <div class={`now ${dotState}`} role="status">
+      <div class="now-pulse">
+        <span class={`now-dot ${dotState}`} aria-hidden="true" />
+        {activityNode}
+      </div>
+
+      {latest ? (
+        <a class="now-quote" href={href({ name: "site", slug: site.slug, tab: "feedback" })}>
+          <span class="now-quote-tag">Feedback {ago(latest.ts)}</span>
+          <span class="now-quote-text">“{clip(latest.text, 36)}”</span>
+        </a>
+      ) : null}
+
+      {hasErrors && version ? (
+        <a class="now-error-pill" href={href({ name: "site", slug: site.slug, tab: "results" })}>
+          <span class="now-error-dot" />
+          <span class="now-error-count"><b>{version.errors.total}</b> {version.errors.total === 1 ? "error" : "errors"}</span>
+          {topError ? <span class="now-error-detail mono">{clip(topError, 24)}</span> : null}
+        </a>
+      ) : null}
+    </div>
   );
 }
 
 function newest(items: FeedbackItem[]): FeedbackItem | null {
   if (items.length === 0) return null;
   return items.reduce((best, one) => (one.ts > best.ts ? one : best), items[0]);
-}
-
-function clip(text: string, max: number): string {
-  const chars = Array.from(text);
-  return chars.length > max ? `${chars.slice(0, max).join("")}…` : text;
 }

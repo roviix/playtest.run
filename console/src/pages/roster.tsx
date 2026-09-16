@@ -49,8 +49,8 @@ export function RosterTab({
             <line x1="12" y1="17" x2="12" y2="21" />
           </svg>
         }
-        title="No versions published yet"
-        description="Run playtest in your project folder to upload your first build and start receiving visitors."
+        title="No versions yet"
+        description="Run playtest ./dist to publish the first one."
       />
     );
   }
@@ -106,7 +106,7 @@ function Rows({ slug, version, sort }: { slug: string; version: number; sort: Ro
           </svg>
         }
         title={`No visits on v${version} yet`}
-        description="Share your link with playtesters. As players open the page, their sessions, device info, and dwell times will appear here."
+        description="Each visitor becomes a row here."
       />
     );
   }
@@ -116,7 +116,7 @@ function Rows({ slug, version, sort }: { slug: string; version: number; sort: Ro
   return (
     <>
       {anyFirstFrame ? null : (
-        <p class="notice soft">playtest.js not integrated: unable to track first frame, progress, or errors.</p>
+        <p class="notice soft">No playtest.js: first frame, progress, errors unknown.</p>
       )}
       <ul class="sessions">
         {data.sessions.map((session) => (
@@ -136,19 +136,21 @@ function Session({ session, anyFirstFrame }: { session: SessionRow; anyFirstFram
       <button class="session-head" type="button" onClick={() => setOpen(!open)} aria-expanded={open}>
         <span class="dwell mono">{seconds(session.dwell_s)}</span>
         <span class="session-who">
-          <span>
-            {session.name ? (
-              <b class="who">{session.name}</b>
-            ) : (
-              <span class="who mono muted">{session.id.slice(0, 6)}</span>
-            )}{" "}
-            <span class="muted">
-              · {label(session.device)} · {label(session.browser)} · {label(session.os)}
-            </span>
+          {session.name ? (
+            <b class="who">{session.name}</b>
+          ) : (
+            <span class="who mono muted">{session.id.slice(0, 6)}</span>
+          )}
+          <span class="session-device muted">
+            {label(session.device)} · {label(session.browser)} · {label(session.os)}
           </span>
-          <span class="muted">Opened {moment(session.at)}</span>
         </span>
-        <span class="muted expand">{open ? "Collapse" : "Expand"}</span>
+        <time class="session-time mono muted" dateTime={session.at}>{moment(session.at)}</time>
+        <span class="expand muted" aria-hidden="true">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </span>
       </button>
 
       <p class="tags">
@@ -178,7 +180,7 @@ function Session({ session, anyFirstFrame }: { session: SessionRow; anyFirstFram
             </ol>
           )}
           {session.more_events ? (
-            <p class="muted">Showing earliest 100 events only.</p>
+            <p class="muted">First 100 events.</p>
           ) : null}
           <p class="muted mono">Session {session.id}</p>
         </div>

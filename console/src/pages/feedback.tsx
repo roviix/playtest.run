@@ -37,8 +37,8 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
         }
-        title="No feedback collected yet"
-        description="When players try your build and leave impressions or bug reports on the door page, their quotes will appear here."
+        title="No feedback yet"
+        description="Feedback left on the door page appears here."
       />
     );
   }
@@ -58,9 +58,7 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
   return (
     <>
       <p class="tab-lead muted">
-        {feedbackPublic
-          ? "Public feedback is on: Door page displays the 3 latest entries."
-          : "Public feedback is off: Only you can see feedback."}
+        {feedbackPublic ? "Public feedback on · the door page shows the 3 latest." : "Public feedback off."}
       </p>
       {failed ? <p class="notice">{failed}</p> : null}
       <ul class="quotes">
@@ -70,7 +68,7 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
             <li key={item.id} class={`quote-card ${item.status}`}>
               <p class="quote">{item.text}</p>
               <p class="muted quote-meta">
-                <b class="who">{item.name ?? `A ${audience(site.kind)}`}</b> · v{item.version} · {moment(item.ts)} ·{" "}
+                <b class="who">{item.name ?? audience(site.kind)}</b> · v{item.version} · {moment(item.ts)} ·{" "}
                 {label(item.device)} {label(item.browser)}
                 {item.seconds_in !== undefined ? ` · In ${seconds(item.seconds_in)}` : ""}
               </p>
@@ -102,7 +100,7 @@ export function FeedbackTab({ slug, site }: { slug: string; site: Site }) {
                     {item.public ? "Hide" : "Unhide"}
                   </button>
                 ) : null}
-                <a href={href({ name: "site", slug, tab: "roster", version: item.version })}>View roster for this version →</a>
+                <a href={href({ name: "site", slug, tab: "roster", version: item.version })}>Roster v{item.version} →</a>
               </p>
             </li>
           );
