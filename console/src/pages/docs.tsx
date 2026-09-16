@@ -401,7 +401,7 @@ export function DocsPage({ section }: { section: DocSection }) {
                     <td><code>playtest login</code> {t("（终端打码，浏览器一键授权）", "(device code, one-click browser authorize)")}</td>
                     <td>{t("永久有效", "Permanent")}</td>
                     <td>{t("个人日常开发、网页控制台查看反馈与版本管理", "Daily development, web console analytics & management")}</td>
-                    <td><b>{t("自动迁移！", "Automatic migration!")}</b> {t("本机未过期的匿名作品自动归入账号，原链接与二维码完全不变", "All active anonymous works on device are linked into account, URLs stay identical")}</td>
+                    <td><b>{t("自动迁移", "Automatic migration")}</b> {t("本机未过期的匿名作品自动归入账号，原链接与二维码完全不变", "All active anonymous works on device are linked into account, URLs stay identical")}</td>
                   </tr>
                   <tr>
                     <td><b>{t("自动化令牌", "API Token")}</b></td>

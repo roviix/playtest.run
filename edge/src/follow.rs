@@ -315,17 +315,17 @@ pub fn result_page(outcome: &Outcome, sub: &Submission, back: &str) -> (StatusCo
         }
         Outcome::Answered(FollowResponse::Subscribed) if plaza => (
             StatusCode::OK,
-            "You are all set! We will notify you when new projects arrive.".to_string(),
+            "Done. We will let you know when new projects arrive.".to_string(),
             "",
         ),
         Outcome::Answered(FollowResponse::Subscribed) if collection => (
             StatusCode::OK,
-            "You are all set! We will send you a weekly digest of new submissions.".to_string(),
+            "Done. We will send you a weekly digest of new submissions.".to_string(),
             "",
         ),
         Outcome::Answered(FollowResponse::Subscribed) => (
             StatusCode::OK,
-            "You are all set! We will notify you when a new version is released.".to_string(),
+            "Done. We will let you know when a new version is out.".to_string(),
             "",
         ),
         Outcome::Answered(FollowResponse::AlreadyFollowing) => (
@@ -860,9 +860,7 @@ mod tests {
         assert!(!html.contains("zhong@example.com"));
 
         let (_, html) = result_page(&Outcome::Answered(FollowResponse::Subscribed), &sub, "/");
-        assert!(
-            html.contains("You are all set! We will notify you when a new version is released.")
-        );
+        assert!(html.contains("Done. We will let you know when a new version is out."));
         let (_, html) = result_page(
             &Outcome::Answered(FollowResponse::AlreadyFollowing),
             &sub,
@@ -882,7 +880,7 @@ mod tests {
 
         let plaza = parse("target=plaza&email=a%40b.co", None, None).unwrap();
         let (_, html) = result_page(&Outcome::Answered(FollowResponse::Subscribed), &plaza, "/");
-        assert!(html.contains("You are all set! We will notify you when new projects arrive."));
+        assert!(html.contains("Done. We will let you know when new projects arrive."));
     }
 
     #[test]

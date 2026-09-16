@@ -492,7 +492,7 @@ async fn following_a_work_from_its_own_gate() {
         .await;
     assert!(reply
         .text()
-        .contains("You are all set! We will notify you when a new version is released."));
+        .contains("Done. We will let you know when a new version is out."));
 
     *api.answer.lock().unwrap() = Answer::Follow(FollowResponse::AlreadyFollowing);
     let reply = site
@@ -932,7 +932,7 @@ async fn following_from_the_wall_comes_back_to_the_wall() {
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply
         .text()
-        .contains("You are all set! We will notify you when new projects arrive."));
+        .contains("Done. We will let you know when new projects arrive."));
     // 有钥匙就用钥匙，不再问邮箱。
     let (path, body) = api.last();
     assert_eq!(path, routes::FOLLOW);

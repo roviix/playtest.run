@@ -45,3 +45,9 @@ jobs:
         working-directory: sdk
       # SDK 的产物进仓库、边缘编进二进制：构建结果必须和提交的一致，否则线上跑的不是源码里的那份。
       - run: git diff --exit-code -- sdk/dist
+      # 文档与控制台讲的是不是同一个产品：章节、免登录路由、三种发布方式、每条示范命令都真的解析得了。
+      # 这个检查曾经在仓库里坏了一整天没人知道——因为它不在这里。
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p playtest
+      - run: node scripts/check-console-docs.mjs

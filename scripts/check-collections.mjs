@@ -201,7 +201,7 @@ try {
   await until(() => evaluate("!!document.querySelector('#publish-dialog[open]')"), "发布弹窗打开");
   shots.push(await screenshot("publish-dialog-desktop"));
   await click('[data-copy-command]');
-  await until(() => evaluate("document.querySelector('.copy-text')?.textContent==='已复制'"), "已复制状态");
+  await until(() => evaluate("document.querySelector('.copy-text')?.textContent==='Copied'"), "已复制状态");
   const hasScrollbar = await evaluate("(() => { const sheet = document.querySelector('.publish-sheet'); return sheet.scrollHeight > sheet.clientHeight; })()");
   assert.equal(hasScrollbar, false, "发布弹窗不应出现滚动条");
   shots.push(await screenshot("publish-dialog-copied-desktop"));
@@ -224,14 +224,14 @@ try {
   await until(() => evaluate("!!document.querySelector('#challenge-prompt')"), "挑战页");
   assert.equal(await evaluate("document.querySelectorAll('.collection-entries article').length"), 5);
   await click('[data-copy-prompt]');
-  await until(() => evaluate("document.querySelector('[data-collection-status]').textContent.includes('复制')"), "复制题目状态");
+  await until(() => evaluate("document.querySelector('[data-collection-status]').textContent.includes('Prompt copied')"), "复制题目状态");
   shots.push(await screenshot("challenge-desktop"));
   await fill('input[name="q"]', "慢一点"); await click('.discover-search button[type="submit"]');
   await until(() => evaluate("document.querySelectorAll('.collection-entries article').length===1"), "无脚本兼容搜索提交");
   assert.ok(await evaluate("location.search.includes('q=')"));
   await click('.collection-entries .tile');
   await until(() => evaluate("!!document.querySelector('.collection-context')"), "邀请函合集上下文");
-  assert.ok(await evaluate("document.querySelector('.collection-context').innerText.includes('返回')"));
+  assert.ok(await evaluate("document.querySelector('.collection-context').innerText.includes('Back to')"));
   shots.push(await screenshot("invitation-desktop"));
   for (const [width, height] of [[1920, 1080], [960, 800], [860, 800], [390, 844], [320, 740]]) {
     await viewport(width, height);
@@ -280,7 +280,7 @@ try {
   await click('.chat-send');
   await until(() => evaluate("document.body.innerText.includes('骑自行车的动画太丝滑了')"), "原声流即时上屏");
   await click('[data-sticker="🎨 美术惊艳"]');
-  await until(() => evaluate("document.body.innerText.includes('美术惊艳')"), "贴纸点击即时上屏");
+  await until(() => evaluate("document.body.innerText.includes('Gorgeous art')"), "贴纸点击即时上屏");
   await until(() => evaluate("!document.querySelector('.feedback-status') || document.querySelector('.feedback-status').hidden"), "反馈无报错提示");
   shots.push(await screenshot("invitation-chat-submitted-desktop"));
   await viewport(390, 844);
@@ -300,11 +300,11 @@ try {
   await command("Emulation.setScriptExecutionDisabled", { value: false });
   await navigate(consoleBase);
   await evaluate(`localStorage.setItem('playtest.token',${JSON.stringify(tokens[2])}); location.hash='#/collections/pelican-bicycle'; location.reload()`);
-  await until(() => evaluate("document.body.innerText.includes('把我的作品放进来')"), "控制台真实令牌读取");
+  await until(() => evaluate("document.body.innerText.includes('Submit my project')"), "控制台真实令牌读取");
   await viewport(1440, 1040);
   await evaluate(`(() => {const select=document.querySelector('.collection-panel select'); select.value='local-pelican-5';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   await click('.collection-panel form button[type="submit"]');
-  await until(() => evaluate("document.body.innerText.includes('作品已加入')"), "通过控制台提交作品");
+  await until(() => evaluate("document.body.innerText.includes('Project added')"), "通过控制台提交作品");
   shots.push(await screenshot("console-submit"));
   const actual = await api("GET", "/v1/collections/pelican-bicycle", tokens[2]);
   assert.equal(actual.entries.length, 6);
@@ -315,7 +315,7 @@ try {
   await click('.collection-actions details.tell>summary');
   await fill('input[type="email"]', "viewer@example.com");
   await click('.collection-actions details.tell button[type="submit"]');
-  await until(() => evaluate("document.body.innerText.includes('确认')"), "关注结果");
+  await until(() => evaluate("document.body.innerText.includes('Confirmation email sent')"), "关注结果");
   const notification = await until(async () => {
     const row = sql("SELECT body FROM notifications WHERE kind='confirm' ORDER BY id DESC LIMIT 1");
     return row.includes("/me/confirm/") ? row : null;

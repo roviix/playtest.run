@@ -17,7 +17,7 @@ for (const section of sections) {
   assert.equal([...docs.matchAll(new RegExp(`<Chapter name="${section}">`, "g"))].length, 1);
 }
 assert.ok(app.indexOf('route.name === "docs"') < app.indexOf('!me'));
-const publishCommands = [...publish.matchAll(/command: "([^"\n]+)"/g)].map((match) => match[1]);
+const publishCommands = [...publish.matchAll(/commandText: "([^"\n]+)"/g)].map((match) => match[1]);
 const publishModes = publishCommands.filter((command) => command.startsWith("playtest"));
 assert.equal(publishModes.length, 3, "all three publish modes remain available");
 assert.ok(publishModes.every((command) => !command.includes("--public")), "default publish must not opt into plaza");

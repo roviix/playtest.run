@@ -8,7 +8,7 @@ const AI_PROMPT_TEXT = `Build and publish this project to playtest.run:
 3. Hand back the playable link and QR code.`;
 
 interface Mode {
-  id: "ai" | "static" | "local" | "install";
+  id: "ai" | "static" | "local" | "backend" | "install";
   label: string;
   commandText: string;
   hint: string;
@@ -32,6 +32,12 @@ const modes: Mode[] = [
     label: "Local Port",
     commandText: "playtest 3000",
     hint: "Start your local dev server, and keep your terminal open during sharing.",
+  },
+  {
+    id: "backend",
+    label: "With Backend",
+    commandText: "playtest ./dist --backend 8000",
+    hint: "Upload the build; paths it does not contain reach the port on your machine.",
   },
   {
     id: "install",
@@ -143,6 +149,11 @@ export function Publish() {
             {selected.id === "local" && (
               <div class="codebox selected" tabIndex={0} role="region" aria-label="Publish command">
                 <b aria-hidden="true">$</b><code><span class="k">playtest</span> <span class="a">3000</span></code>
+              </div>
+            )}
+            {selected.id === "backend" && (
+              <div class="codebox selected" tabIndex={0} role="region" aria-label="Publish command">
+                <b aria-hidden="true">$</b><code><span class="k">playtest</span> <span class="a">./dist</span> <span class="f">--backend</span> <span class="a">8000</span></code>
               </div>
             )}
             {selected.id === "install" && (
