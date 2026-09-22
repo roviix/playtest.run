@@ -129,6 +129,10 @@ See [`deploy/README.md`](deploy/README.md) for running your own instance. Design
 
 Report vulnerabilities through GitHub's private advisory form — see [`SECURITY.md`](SECURITY.md). `playtest` opens a tunnel from your machine and hosts other people's work, so we treat security reports as product defects, not PR problems.
 
+## Thanks
+
+- 本项目积极参与并认可 [LINUX DO 社区](https://linux.do)
+
 ## License
 
 - CLI and SDK: [Apache-2.0](LICENSE)
